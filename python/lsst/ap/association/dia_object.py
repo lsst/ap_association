@@ -22,6 +22,14 @@
 
 from __future__ import absolute_import, division, print_function
 
+import lsst.afw.table as afwTable
+
+
+def make_mimimal_dia_object_schema():
+    """
+    """
+    pass
+
 
 class DIAObject(object):
     """ A class specifying a collection of single frame difference image
@@ -68,15 +76,17 @@ class DIAObject(object):
         """
 
         self.source_catalog = source_catalog
-        self.initialized = False
+        self.updated = False
 
         if object_source_record is None:
-            self.initialize()
+            self.dia_object_record = afwTable.SourceRecord(
+                make_mimimal_dia_object_schema())
+            self.update()
         else:
             self.dia_object_record = object_source_record
-            self.initialized = True
+            self.upated = True
 
-    def initilize(self):
+    def update(self):
         """ Compute all summary statistics given the current catalog of
         DIASources asigned to this DIAObject.
 
@@ -89,17 +99,17 @@ class DIAObject(object):
         None
         """
 
-        self.initialized = False
+        self._upated = False
 
         # compute all summary statistics on the catalog of DIASources.
 
         self.compute_summary_statistics()
 
-        self.initialized = True
+        self._upated = True
 
         return None
 
-    def isInitialized(self):
+    def is_updated(self):
         """ Return the current state of this DIAObject.
 
         If True is returned this DIAObject has computed all of it's summary
@@ -110,7 +120,7 @@ class DIAObject(object):
         bool
         """
 
-        return self.initialized
+        return self.upated
 
     def append_dia_source(self, input_dia_source):
         """ Append the input_dia_source to the source_catalog attribute
@@ -137,21 +147,6 @@ class DIAObject(object):
 
         return None
 
-    def compute_light_curve(self):
-        """ Retreve the precomputed light curve of  fluxes for the DIASources
-        that make up this DIAObject.
-
-        Returns
-        -------
-        An array like object specifying the light curve for this object.
-        """
-
-        # Loop through DIASources and return the "light curve"
-        # I'm keeping this separate from coupte summary statistics for the
-        # moment.
-
-        Raise(NotImplementedError)
-
     def compute_summary_statistics(self):
         """ Retrive properties from DIASourceCatalog attribute and update the
         summary statistics that represent this DIAObject
@@ -166,7 +161,8 @@ class DIAObject(object):
 
         Raise(NotImplementedError)
 
-    def get_object_record(self):
+    @property
+    def object_record(self):
         """ Retrive the SourceRecord that represents the summary statistics on
         this DIAObject's set of DIASources.
 
@@ -180,6 +176,79 @@ class DIAObject(object):
         """ Retrive the SourceCatalog that represents the DIASources that make
         up this DIAObject.
 
+        Return
+        ------
         A lsst.afw.table.SourceCatalog
         """
         return self.source_catalog
+
+    def get_light_curve(self):
+        """ Retreve the light curve of fluxes for the DIASources that make up
+        this DIAObject.
+
+        Returns
+        -------
+        An array like object specifying the light curve for this object.
+        """
+
+        # Loop through DIASources and return the "light curve"
+        # I'm keeping this separate from coupte summary statistics for the
+        # moment.
+
+        Raise(NotImplementedError)
+
+    @property
+    def RA(self):
+        """ Get the RA of this DIAObject.
+
+        Return
+        ------
+        A lsst.afw.geom.angle.angle.Angle
+        """
+        return self.dia_object_record.getRa()
+
+    def DEC(self):
+        """ Get the DEC of this DIAObject.
+
+        Return
+        ------
+        A lsst.afw.geom.angle.angle.Angle
+        """
+        return self.dia_object_record.getDec()
+
+    def coord(self):
+        """ Get the Coordinate of this DIAObject.
+
+        Return
+        ------
+        A lsst.afw.coord._coord.IcrsCoord
+        """
+        return self.dia_object_record.getCoord()
+
+    def ID(self):
+        """ Get the unique catalog identifier for this object.
+
+        Return
+        ------
+        int
+        """
+        return self.dia_object_record.getId()
+
+    def schema(self):
+        """ Return the schema of the DIAObject record.
+
+        Returns
+        -------
+        lsst.afw.table.schema.schema.Schema
+        """
+        return self.dia_object_record.schema
+
+    def source_catalog_schema(self):
+        """ Return the schema of the DIASourceCatalog associated with this
+        DIAObject.
+
+        Returns
+        -------
+        lsst.afw.table.schema.schema.Schema
+        """
+        return self.source_catalog.schema
