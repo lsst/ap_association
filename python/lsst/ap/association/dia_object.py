@@ -26,9 +26,13 @@ import lsst.afw.table as afwTable
 
 
 def make_mimimal_dia_object_schema():
+    """ Define and create the minimal schema required for a DIAObject.
+
+    Return
+    ------
+    lsst.afw.table.schema.schema.Schema
     """
-    """
-    pass
+    Raise(NotImplementedError)
 
 
 class DIAObject(object):
@@ -37,14 +41,14 @@ class DIAObject(object):
 
     Attributes
     ----------
-    dia_object_record : lsst.afw.table.SourceRecord
+    _dia_object_record : lsst.afw.table.SourceRecord
         A SourceRecord object containing the summary statistics for the
         collection of DIASources this DIAObject represents (e.g. median
         RA/DEC position).
-    source_catalog : lsst.afw.table.SourceCatalog
+    _dia_source_catalog : lsst.afw.table.SourceCatalog
         A set of SourceRecords specifying the DIA sources that make up
         this DIAObject.
-    initialized : bool
+    _updated : bool
         boolean specifying if the summary statistics for this DIAObject have
         been updated with the current set of DIASources in the SourceCatalog.
         This variable should be set to false whenever a the SourceCatalog
@@ -52,7 +56,7 @@ class DIAObject(object):
         run.
     """
 
-    def __init__(self, source_catalog, object_source_record=None):
+    def __init__(self, dia_source_catalog, object_source_record=None):
         """  Create a DIAObject given an input SourceCatalog of
         DIASources.
 
@@ -64,7 +68,7 @@ class DIAObject(object):
 
         Parameters
         ----------
-        source_catalog : lsst.afw.table.SourceCatalog
+        dia_source_catalog : lsst.afw.table.SourceCatalog
             SourceCatalog of DIASource associated to this DIAObject
         object_source_record : lsst.afw.table.SourceRecord, optional
             Optional input SourceRecord containing summary statistics on
@@ -75,16 +79,43 @@ class DIAObject(object):
         A DIAObject instance
         """
 
-        self.source_catalog = source_catalog
-        self.updated = False
+        self._dia_source_catalog = dia_source_catalog
+        self._updated = False
 
         if object_source_record is None:
-            self.dia_object_record = afwTable.SourceRecord(
+            self._dia_object_record = afwTable.SourceRecord(
                 make_mimimal_dia_object_schema())
+            self._generate_property_methods()
             self.update()
         else:
-            self.dia_object_record = object_source_record
-            self.upated = True
+            self._dia_object_record = object_source_record
+            self._generate_property_methods()
+            self._upated = True
+
+    def _generate_property_methods(self):
+        """ Generate methods for accessing stored in the dia_object_record
+        as properties.
+
+        The getter properties intialized by this method will have the same
+        names as the columns of the dia_object_record schema. See the
+        `make_mimimal_dia_object_schema` function in this file for the
+        names in the minimal schema.
+
+        Example property names: ra, dec...
+
+        Returns
+        -------
+        None
+        """
+
+        for field in self._dia_object_record.schema:
+            name = field.name
+
+            def getter(x):
+                return x._dia_object_record.get(name)
+            self.__setattr__(name, property(getter, None))
+
+        return None
 
     def update(self):
         """ Compute all summary statistics given the current catalog of
@@ -92,7 +123,7 @@ class DIAObject(object):
 
         Store these summaries (e.g. median RA/DEC position, fluxes...) in
         the object_source_record attribute and set the class variable
-        intialized to True
+        udated to True
 
         Returns
         -------
@@ -109,6 +140,7 @@ class DIAObject(object):
 
         return None
 
+    @property
     def is_updated(self):
         """ Return the current state of this DIAObject.
 
@@ -120,12 +152,12 @@ class DIAObject(object):
         bool
         """
 
-        return self.upated
+        return self._upated
 
     def append_dia_source(self, input_dia_source):
-        """ Append the input_dia_source to the source_catalog attribute
+        """ Append the input_dia_source to the dia_source_catalog attribute.
 
-        Additionally set initialized to False.
+        Additionally set udated boolean to False.
 
         Parameters
         ----------
@@ -141,7 +173,7 @@ class DIAObject(object):
         # Since we are adding to the SourceCatalog our summary statistics are
         # no longer valid. We set this to false and hold off on recomputing
         # them until we are finished adding sources.
-        self.initialized = False
+        self._updated = False
 
         # Do stuff to append this SourceRecord.
 
@@ -161,27 +193,6 @@ class DIAObject(object):
 
         Raise(NotImplementedError)
 
-    @property
-    def object_record(self):
-        """ Retrive the SourceRecord that represents the summary statistics on
-        this DIAObject's set of DIASources.
-
-        Return
-        ------
-        A lsst.afw.table.SourceRecord
-        """
-        return self.dia_object_record
-
-    def get_dia_source_catalog(self):
-        """ Retrive the SourceCatalog that represents the DIASources that make
-        up this DIAObject.
-
-        Return
-        ------
-        A lsst.afw.table.SourceCatalog
-        """
-        return self.source_catalog
-
     def get_light_curve(self):
         """ Retreve the light curve of fluxes for the DIASources that make up
         this DIAObject.
@@ -198,42 +209,28 @@ class DIAObject(object):
         Raise(NotImplementedError)
 
     @property
-    def RA(self):
-        """ Get the RA of this DIAObject.
+    def dia_object_record(self):
+        """ Retrive the SourceRecord that represents the summary statistics on
+        this DIAObject's set of DIASources.
 
         Return
         ------
-        A lsst.afw.geom.angle.angle.Angle
+        A lsst.afw.table.SourceRecord
         """
-        return self.dia_object_record.getRa()
+        return self._dia_object_record
 
-    def DEC(self):
-        """ Get the DEC of this DIAObject.
+    @property
+    def dia_source_catalog(self):
+        """ Retrive the SourceCatalog that represents the DIASources that make
+        up this DIAObject.
 
         Return
         ------
-        A lsst.afw.geom.angle.angle.Angle
+        A lsst.afw.table.SourceCatalog
         """
-        return self.dia_object_record.getDec()
+        return self._dia_source_catalog
 
-    def coord(self):
-        """ Get the Coordinate of this DIAObject.
-
-        Return
-        ------
-        A lsst.afw.coord._coord.IcrsCoord
-        """
-        return self.dia_object_record.getCoord()
-
-    def ID(self):
-        """ Get the unique catalog identifier for this object.
-
-        Return
-        ------
-        int
-        """
-        return self.dia_object_record.getId()
-
+    @property
     def schema(self):
         """ Return the schema of the DIAObject record.
 
@@ -241,8 +238,9 @@ class DIAObject(object):
         -------
         lsst.afw.table.schema.schema.Schema
         """
-        return self.dia_object_record.schema
+        return self._dia_object_record.schema
 
+    @property
     def source_catalog_schema(self):
         """ Return the schema of the DIASourceCatalog associated with this
         DIAObject.
@@ -251,4 +249,44 @@ class DIAObject(object):
         -------
         lsst.afw.table.schema.schema.Schema
         """
-        return self.source_catalog.schema
+        return self._dia_source_catalog.schema
+
+    @property
+    def ra(self):
+        """ Get the RA of this DIAObject.
+
+        Return
+        ------
+        A lsst.afw.geom.angle.angle.Angle
+        """
+        return self._dia_object_record.getRa()
+
+    @property
+    def dec(self):
+        """ Get the DEC of this DIAObject.
+
+        Return
+        ------
+        A lsst.afw.geom.angle.angle.Angle
+        """
+        return self._dia_object_record.getDec()
+
+    @property
+    def coord(self):
+        """ Get the Coordinate of this DIAObject.
+
+        Return
+        ------
+        A lsst.afw.coord._coord.IcrsCoord
+        """
+        return self._dia_object_record.getCoord()
+
+    @property
+    def id(self):
+        """ Get the unique catalog identifier for this object.
+
+        Return
+        ------
+        int
+        """
+        return self._dia_object_record.getId()
