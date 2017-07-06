@@ -46,12 +46,12 @@ class DIAObject(object):
         collection of DIASources this DIAObject represents (e.g. median
         RA/DEC position).
     _dia_source_catalog : lsst.afw.table.SourceCatalog
-        A set of SourceRecords specifying the DIA sources that make up
+        A set of SourceRecords specifying the DIASources that make up
         this DIAObject.
     _updated : bool
         boolean specifying if the summary statistics for this DIAObject have
         been updated with the current set of DIASources in the SourceCatalog.
-        This variable should be set to false whenever a the SourceCatalog
+        This variable should be set to false whenever the SourceCatalog
         of DIASources changes and set to true when the initialize method is
         run.
     """
@@ -62,14 +62,14 @@ class DIAObject(object):
 
         Takes as input an lsst.afw.table.SourceCatalog object specifying a
         collection of DIASources that make up this DIAObject. The optional
-        input object_source_record should contain summary statictics on the
+        input object_source_record should contain summary statistics on the
         SourceCatalog of DIASources. Using this optional input escapes the
-        need to recompute the summary statictis when not nessisary.
+        need to recompute the summary statistics when not necessary.
 
         Parameters
         ----------
         dia_source_catalog : lsst.afw.table.SourceCatalog
-            SourceCatalog of DIASource associated to this DIAObject
+            SourceCatalog of DIASources associated to this DIAObject
         object_source_record : lsst.afw.table.SourceRecord, optional
             Optional input SourceRecord containing summary statistics on
             the input SourceCatalog.
@@ -90,11 +90,11 @@ class DIAObject(object):
         else:
             self._dia_object_record = object_source_record
             self._generate_property_methods()
-            self._upated = True
+            self._updated = True
 
     def _generate_property_methods(self):
-        """ Generate methods for accessing stored in the dia_object_record
-        as properties.
+        """ Generate methods for accessing values stored in the
+        dia_object_record.
 
         The getter properties intialized by this method will have the same
         names as the columns of the dia_object_record schema. See the
@@ -123,20 +123,20 @@ class DIAObject(object):
 
         Store these summaries (e.g. median RA/DEC position, fluxes...) in
         the object_source_record attribute and set the class variable
-        udated to True
+        updated to True
 
         Returns
         -------
         None
         """
 
-        self._upated = False
+        self._updated = False
 
         # compute all summary statistics on the catalog of DIASources.
 
         self.compute_summary_statistics()
 
-        self._upated = True
+        self._updated = True
 
         return None
 
@@ -144,20 +144,20 @@ class DIAObject(object):
     def is_updated(self):
         """ Return the current state of this DIAObject.
 
-        If True is returned this DIAObject has computed all of it's summary
-        statistics for the current collection of DIAObjects that make it up.
+        If True is returned this DIAObject has computed all of its summary
+        statistics for the current collection of DIASources that make it up.
 
         Return
         ------
         bool
         """
 
-        return self._upated
+        return self._updated
 
     def append_dia_source(self, input_dia_source):
         """ Append the input_dia_source to the dia_source_catalog attribute.
 
-        Additionally set udated boolean to False.
+        Additionally set update boolean to False.
 
         Parameters
         ----------
