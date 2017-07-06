@@ -39,7 +39,7 @@ def make_minimal_dia_object_schema():
     """
 
     schema = afwTable.SourceTable.makeMinimalSchema()
-    schema.addField(name="coord_rms", doc="rms position in ra/dec",
+    schema.addField(name="coord_ra_rms", doc="rms position in ra/dec",
                     type="Angle")
     schema.addField(name="coord_dec_rms", doc="rms position in ra/dec",
                     type="Angle")
