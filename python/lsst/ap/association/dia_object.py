@@ -22,6 +22,8 @@
 
 from __future__ import absolute_import, division, print_function
 
+import numpy as np
+
 import lsst.afw.table as afwTable
 
 
@@ -32,7 +34,14 @@ def make_mimimal_dia_object_schema():
     ------
     lsst.afw.table.schema.schema.Schema
     """
-    Raise(NotImplementedError)
+
+    schema = afwTable.SourceTable.makeMinimalSchema()
+    schema.addField(name="coord_ra_rms", doc="rms position in ra/dec",
+                    type="Angle")
+    schema.addField(name="coord_dec_rms", doc="rms position in ra/dec",
+                    type="Angle")
+
+    return schema
 
 
 class DIAObject(object):
@@ -60,7 +69,7 @@ class DIAObject(object):
         """  Create a DIAObject given an input SourceCatalog of
         DIASources.
 
-        Takes as input an lsst.afw.table.SourceCatalog object specifying a
+        Takes as input an lsst.afw.table.SourceCaatlog object specifying a
         collection of DIASources that make up this DIAObject. The optional
         input object_source_record should contain summary statistics on the
         SourceCatalog of DIASources. Using this optional input escapes the
@@ -83,8 +92,9 @@ class DIAObject(object):
         self._updated = False
 
         if object_source_record is None:
-            self._dia_object_record = afwTable.SourceRecord(
-                make_mimimal_dia_object_schema())
+            self._dia_object_record = afwTable.SourceTable.makeRecord(
+                afwTable.SourceTable.make(
+                    make_mimimal_dia_object_schema()))
             self._generate_property_methods()
             self.update()
         else:
@@ -132,7 +142,12 @@ class DIAObject(object):
 
         self._updated = False
 
-        # compute all summary statistics on the catalog of DIASources.
+        # To quickly compute the summary statistics we check if the catalog
+        # is currently contious and if not we make a deep copy.
+        if self._dia_source_catalog.isContiguous():
+            tmp_dia_source_catalog = self._dia_source_catalog.copy(deep=True)
+            del self._dia_source_catalog
+            self._dia_source_catalog = tmp_dia_source_catalog
 
         self.compute_summary_statistics()
 
@@ -154,7 +169,7 @@ class DIAObject(object):
 
         return self._updated
 
-    def append_dia_source(self, input_dia_source):
+    def append_dia_source(self, input_dia_source_record):
         """ Append the input_dia_source to the dia_source_catalog attribute.
 
         Additionally set update boolean to False.
@@ -175,7 +190,7 @@ class DIAObject(object):
         # them until we are finished adding sources.
         self._updated = False
 
-        # Do stuff to append this SourceRecord.
+        self._dia_source_catalog.append(input_dia_source_record)
 
         return None
 
@@ -191,7 +206,16 @@ class DIAObject(object):
         # Loop through DIASources, compute summary statistics (TBD) and store
         # them in dia_object_record attribute.
 
-        Raise(NotImplementedError)
+        self._dia_object_record['coord_ra'] = np.mean(
+            self._dia_source_catalog['coord_ra'])
+        self._dia_object_record['coord_dec'] = np.mean(
+            self._dia_source_catalog['coord_dec'])
+        self._dia_object_record['coord_ra_rms'] = np.std(
+            self._dia_source_catalog['coord_ra_rms'])
+        self._dia_object_record['coord_dec_rms'] = np.std(
+            self._dia_source_catalog['coord_dec_rms'])
+
+        return None
 
     def get_light_curve(self):
         """ Retreve the light curve of fluxes for the DIASources that make up
@@ -203,10 +227,10 @@ class DIAObject(object):
         """
 
         # Loop through DIASources and return the "light curve"
-        # I'm keeping this separate from coupte summary statistics for the
-        # moment.
+        # Right now I'm making this the same as returning the
+        # dia_source_catalog.
 
-        Raise(NotImplementedError)
+        return self.dia_source_catalog()
 
     @property
     def dia_object_record(self):
