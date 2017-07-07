@@ -25,9 +25,12 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 
 import lsst.afw.table as afwTable
+import lsst.afw.geom as afwGeom
+
+__all__ = ["DIAObject", "make_minimal_dia_object_schema"]
 
 
-def make_mimimal_dia_object_schema():
+def make_minimal_dia_object_schema():
     """ Define and create the minimal schema required for a DIAObject.
 
     Return
@@ -36,7 +39,7 @@ def make_mimimal_dia_object_schema():
     """
 
     schema = afwTable.SourceTable.makeMinimalSchema()
-    schema.addField(name="coord_ra_rms", doc="rms position in ra/dec",
+    schema.addField(name="coord_rms", doc="rms position in ra/dec",
                     type="Angle")
     schema.addField(name="coord_dec_rms", doc="rms position in ra/dec",
                     type="Angle")
@@ -95,6 +98,9 @@ class DIAObject(object):
             self._dia_object_record = afwTable.SourceTable.makeRecord(
                 afwTable.SourceTable.make(
                     make_mimimal_dia_object_schema()))
+            # If we are creating the DIAObject we set its id to that of the
+            # first record in the DIASource catalog.
+            self._dia_object_record.setId(self_.dia_source_catalog[0].getId())
             self._generate_property_methods()
             self.update()
         else:
@@ -149,25 +155,36 @@ class DIAObject(object):
             del self._dia_source_catalog
             self._dia_source_catalog = tmp_dia_source_catalog
 
-        self.compute_summary_statistics()
+        self._compute_summary_statistics()
 
         self._updated = True
 
         return None
 
-    @property
-    def is_updated(self):
-        """ Return the current state of this DIAObject.
+    def _compute_summary_statistics(self):
+        """ Retrive properties from DIASourceCatalog attribute and update the
+        summary statistics that represent this DIAObject
 
-        If True is returned this DIAObject has computed all of its summary
-        statistics for the current collection of DIASources that make it up.
-
-        Return
-        ------
-        bool
+        Returns
+        -------
+        None
         """
 
-        return self._updated
+        # Loop through DIASources, compute summary statistics (TBD) and store
+        # them in dia_object_record attribute.
+
+        for field in self.schema:
+            name == field.name
+            if name[-3:] == 'rms':
+                continue
+
+            self._dia_object_record[name] = np.mean(
+                self._dia_source_catalog[name])
+            if self.n_dia_sources > 1:
+                self._dia_object_record[name + '_rms'] = np.std(
+                self._dia_source_catalog[name])
+
+        return None
 
     def append_dia_source(self, input_dia_source_record):
         """ Append the input_dia_source to the dia_source_catalog attribute.
@@ -194,29 +211,6 @@ class DIAObject(object):
 
         return None
 
-    def compute_summary_statistics(self):
-        """ Retrive properties from DIASourceCatalog attribute and update the
-        summary statistics that represent this DIAObject
-
-        Returns
-        -------
-        None
-        """
-
-        # Loop through DIASources, compute summary statistics (TBD) and store
-        # them in dia_object_record attribute.
-
-        self._dia_object_record['coord_ra'] = np.mean(
-            self._dia_source_catalog['coord_ra'])
-        self._dia_object_record['coord_dec'] = np.mean(
-            self._dia_source_catalog['coord_dec'])
-        self._dia_object_record['coord_ra_rms'] = np.std(
-            self._dia_source_catalog['coord_ra_rms'])
-        self._dia_object_record['coord_dec_rms'] = np.std(
-            self._dia_source_catalog['coord_dec_rms'])
-
-        return None
-
     def get_light_curve(self):
         """ Retreve the light curve of fluxes for the DIASources that make up
         this DIAObject.
@@ -231,6 +225,20 @@ class DIAObject(object):
         # dia_source_catalog.
 
         return self.dia_source_catalog()
+
+    @property
+    def is_updated(self):
+        """ Return the current state of this DIAObject.
+
+        If True is returned this DIAObject has computed all of its summary
+        statistics for the current collection of DIASources that make it up.
+
+        Return
+        ------
+        bool
+        """
+
+        return self._updated
 
     @property
     def dia_object_record(self):
@@ -253,6 +261,16 @@ class DIAObject(object):
         A lsst.afw.table.SourceCatalog
         """
         return self._dia_source_catalog
+
+    @property
+    def n_dia_sources(self):
+        """ Return the number of DIASources currently associated with this
+        object.
+
+        Return
+        ------
+        """
+        return len(self._dia_source_catalog)
 
     @property
     def schema(self):

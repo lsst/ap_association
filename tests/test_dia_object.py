@@ -21,27 +21,138 @@
 #
 
 import unittest
+
+from lsst.ap.association.dia_object import *
+import lsst.afw.table as afwTable
+import lsst.afw.geom as afwGeom
 import lsst.utils.tests
+
+
+def create_test_dia_sources(n_sources=5):
+    """ Create dummy DIASources for use in our tests.
+
+    Parameters
+    ----------
+    n_sources : int (optional)
+        Number of fake sources to create for testing.
+
+    Returns
+    -------
+    A lsst.afw.SourceCatalog
+    """
+    sources = afwTable.SourceCatalog(afwTable.SourceTable.makeMinimalSchema())
+
+    for src_idx in range(n_sources):
+        src = sources.addNew()
+        src['id'] = src_idx
+        src['coord_ra'] = afwGeom.Angle(0.0 + 1. * src_idx,
+                                        units=afwGeom.degrees)
+        src['coord_dec'] = afwGeom.Angle(0.0 + 1. * src_idx,
+                                         units=afwGeom.degrees)
+        # Add a flux at some point.
+    
+    return sources
 
 
 class TestDIAObject(unittest.TestCase):
 
     def setUp(self):
-        pass
+        """ Create the DIAObjct schema we will use throughout these tests.
+        """
+        self.dia_obj_schema = make_minimal_dia_object_schema()
 
     def tearDown(self):
-        pass
+        """ Delete the schema when we are done.
+        """
+        del self.dia_obj_schema
 
-    def test_initialization(self):
-        pass
+    def test_init(self):
+        """ Test DIAObject creation and if we can properly instantiate a
+        DIAObject from an already create dia_object_record.
+        """
+        single_source = create_test_dia_sources(1)
 
-    def test_dia_source_append(self):
-        pass
+        dia_obj = DIAObject(single_source, None)
+        dia_obj_dup = DIAObject(single_source, dia_obj.dia_object_record)
 
-    def compute_light_curve(self):
-        pass
+        self._compare_values(dia_obj, 0, 0.0, np.nan)
+        self._compare_values(dia_obj_dup, dia_obj.id, 0.0, np.nan)
 
-    def compute_summary_statistics(self):
+    def _compare_dia_object_values(self, dia_object, expected_id,
+                                   expected_mean, expected_std):
+        """ Compare values computed in the compute_summary_statistics
+        DIAObject class method with those expected.
+
+        Parameters
+        ----------
+        dia_object : lsst.ap.association.DIAObject
+            Input DIAObect to test
+        expected_id : int
+            Expected id of the DIAObject
+        expected_mean : float
+            Expected mean value of the parameters to be tested.
+        expected_std : float
+            Expected standard diviation of the DIAObject.
+
+        Return
+        ------
+        None
+        """
+
+        for field in self.dia_obj_shcema:
+            name = field.name
+            if name == 'id':
+                self.assertEqual(getattr(dia_object, name), expected_id)
+                continue
+
+            if name[-3:] != 'rms':
+                self.assertAlmostEqual(getattr(dia_object, name),
+                                       expected_mean)
+            elif name[-3:] == 'rms' and np.isfinite(expected_std):
+                self.assertAlmostEqual(getattr(dia_object, name),
+                                       expected_std)
+            elif name[-3:] == 'rms' and not np.isfinite(expected_std):
+                self.assertFalse(np.isfinite(getattr(dia_object, name)))
+
+        return None
+
+    def test_update(self):
+        """ If we instantiate the class with a set of DIASources we test to
+        make sure that the DIAObject is intantiated correctly and that we
+        compute the summary statistics in the expected way.
+        """
+        sources = create_test_dia_sources(5)
+        dia_obj = DIAObject(sources, None)
+
+        self._compare_values(dia_obj, 0, 2.0, 1.4142135623730951)
+
+    def test_dia_source_append_and_update(self):
+        """ Test the appending of a DIASource to a DIAObject. We also
+        test that the update function works properly and that the summary
+        statistics are computed as expected.
+        """
+        single_source = create_test_dia_sources(1)
+        dia_obj = DIAObject(single_source, None)
+        self.assertEqual(dia_obj.id, single_source.getId())
+        self.assertTrue(dia_obj.is_updated)
+
+        sources = create_test_dia_sources(2)
+        dia_obj.append_dia_source(sources[1])
+        self.assertFalse(dia_obj.is_updated)
+
+        associated_sources = dia_object.dia_source_catalog
+        self.assertEqual(len(associated_sources), 2)
+        self.assertEqual(associated_sources[-1].getId(),
+                         sources[-1].getId())
+        self.assertEqual(associated_sources[-1].getCoord(),
+                         sources[-1].getCoord())
+        
+        dia_obj.update()
+        self._compare_dia_object_values(dia_obj, 0.5, 0.5)
+
+    def test_compute_light_curve(self):
+        """ Not implemented yet.
+        """
         pass
 
 
