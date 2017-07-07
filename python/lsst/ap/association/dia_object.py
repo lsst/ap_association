@@ -39,9 +39,12 @@ def make_minimal_dia_object_schema():
     """
 
     schema = afwTable.SourceTable.makeMinimalSchema()
-    schema.addField(name="coord_ra_rms", doc="rms position in ra/dec",
+
+    # For the MVP/S we currently only care about the scatter on the possition
+    # so we add those.
+    schema.addField("coord_ra_rms", doc="rms position in ra/dec",
                     type="Angle")
-    schema.addField(name="coord_dec_rms", doc="rms position in ra/dec",
+    schema.addField("coord_dec_rms", doc="rms position in ra/dec",
                     type="Angle")
 
     return schema
@@ -67,7 +70,6 @@ class DIAObject(object):
         of DIASources changes and set to true when the initialize method is
         run.
     """
-
     def __init__(self, dia_source_catalog, object_source_record=None):
         """  Create a DIAObject given an input SourceCatalog of
         DIASources.
@@ -97,41 +99,32 @@ class DIAObject(object):
         if object_source_record is None:
             self._dia_object_record = afwTable.SourceTable.makeRecord(
                 afwTable.SourceTable.make(
-                    make_mimimal_dia_object_schema()))
-            # If we are creating the DIAObject we set its id to that of the
-            # first record in the DIASource catalog.
-            self._dia_object_record.setId(self_.dia_source_catalog[0].getId())
-            self._generate_property_methods()
+                    make_minimal_dia_object_schema()))
+            # For now we copy the first DIASource's object id as our DIAObject
+            # id.
+            self._dia_object_record.set(
+                'id', self._dia_source_catalog[0].getId())
             self.update()
         else:
             self._dia_object_record = object_source_record
-            self._generate_property_methods()
             self._updated = True
 
-    def _generate_property_methods(self):
-        """ Generate methods for accessing values stored in the
+    def get(self, name):
+        """ Return the data stored in column name within the internal
         dia_object_record.
 
-        The getter properties intialized by this method will have the same
-        names as the columns of the dia_object_record schema. See the
-        `make_mimimal_dia_object_schema` function in this file for the
-        names in the minimal schema.
+        Parameters
+        ----------
+        name : str or lsst.afw.table.Key
 
-        Example property names: ra, dec...
-
-        Returns
-        -------
-        None
+        Return
+        ------
+        An lsst.afw data type
         """
 
-        for field in self._dia_object_record.schema:
-            name = field.name
-
-            def getter(x):
-                return x._dia_object_record.get(name)
-            self.__setattr__(name, property(getter, None))
-
-        return None
+        # This will in the future be replaced with a overwritting of __getattr
+        # and __dir__ for this class.
+        return self._dia_object_record.get(name)
 
     def update(self):
         """ Compute all summary statistics given the current catalog of
@@ -150,7 +143,7 @@ class DIAObject(object):
 
         # To quickly compute the summary statistics we check if the catalog
         # is currently contious and if not we make a deep copy.
-        if self._dia_source_catalog.isContiguous():
+        if not self._dia_source_catalog.isContiguous():
             tmp_dia_source_catalog = self._dia_source_catalog.copy(deep=True)
             del self._dia_source_catalog
             self._dia_source_catalog = tmp_dia_source_catalog
@@ -173,16 +166,22 @@ class DIAObject(object):
         # Loop through DIASources, compute summary statistics (TBD) and store
         # them in dia_object_record attribute.
 
-        for field in self.schema:
-            name == field.name
-            if name[-3:] == 'rms':
+        for name in self.schema.getNames():
+            # For the MVP/S we are only dealing with angles so we skip over
+            # everything that isn't coord_ra or coord_dec.
+            if name != 'coord_ra' and name != 'coord_dec':
                 continue
 
-            self._dia_object_record[name] = np.mean(
-                self._dia_source_catalog[name])
+            mean_value = np.mean(self._dia_source_catalog[name])
+            # Currently hard coded to work with angles.
+            self._dia_object_record.set(name, afwGeom.Angle(mean_value))
+            # If we only have 1 source we can't compute an rms and hence we
+            # set the the rms variables to NaN.
             if self.n_dia_sources > 1:
-                self._dia_object_record[name + '_rms'] = np.std(
-                self._dia_source_catalog[name])
+                self._dia_object_record[name + '_rms'] = afwGeom.Angle(
+                    np.std(self._dia_source_catalog[name]))
+            else:
+                self._dia_object_record[name + '_rms'] = afwGeom.Angle(np.nan)
 
         return None
 

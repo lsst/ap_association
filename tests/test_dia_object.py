@@ -20,9 +20,10 @@
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
 
+import numpy as np
 import unittest
 
-from lsst.ap.association.dia_object import *
+from lsst.ap.association import *
 import lsst.afw.table as afwTable
 import lsst.afw.geom as afwGeom
 import lsst.utils.tests
@@ -49,8 +50,8 @@ def create_test_dia_sources(n_sources=5):
                                         units=afwGeom.degrees)
         src['coord_dec'] = afwGeom.Angle(0.0 + 1. * src_idx,
                                          units=afwGeom.degrees)
-        # Add a flux at some point.
-    
+        # Add a flux at some point
+
     return sources
 
 
@@ -75,8 +76,8 @@ class TestDIAObject(unittest.TestCase):
         dia_obj = DIAObject(single_source, None)
         dia_obj_dup = DIAObject(single_source, dia_obj.dia_object_record)
 
-        self._compare_values(dia_obj, 0, 0.0, np.nan)
-        self._compare_values(dia_obj_dup, dia_obj.id, 0.0, np.nan)
+        self._compare_dia_object_values(dia_obj, 0, 0.0, np.nan)
+        self._compare_dia_object_values(dia_obj_dup, dia_obj.id, 0.0, np.nan)
 
     def _compare_dia_object_values(self, dia_object, expected_id,
                                    expected_mean, expected_std):
@@ -99,20 +100,21 @@ class TestDIAObject(unittest.TestCase):
         None
         """
 
-        for field in self.dia_obj_shcema:
-            name = field.name
+        for name in self.dia_obj_schema.getNames():
+            if name == 'parent':
+                continue
             if name == 'id':
-                self.assertEqual(getattr(dia_object, name), expected_id)
+                self.assertEqual(dia_object.get(name), expected_id)
                 continue
 
             if name[-3:] != 'rms':
-                self.assertAlmostEqual(getattr(dia_object, name),
+                self.assertAlmostEqual(dia_object.get(name).asDegrees(),
                                        expected_mean)
             elif name[-3:] == 'rms' and np.isfinite(expected_std):
-                self.assertAlmostEqual(getattr(dia_object, name),
+                self.assertAlmostEqual(dia_object.get(name).asDegrees(),
                                        expected_std)
             elif name[-3:] == 'rms' and not np.isfinite(expected_std):
-                self.assertFalse(np.isfinite(getattr(dia_object, name)))
+                self.assertFalse(np.isfinite(dia_object.get(name).asDegrees()))
 
         return None
 
@@ -124,7 +126,7 @@ class TestDIAObject(unittest.TestCase):
         sources = create_test_dia_sources(5)
         dia_obj = DIAObject(sources, None)
 
-        self._compare_values(dia_obj, 0, 2.0, 1.4142135623730951)
+        self._compare_dia_object_values(dia_obj, 0, 2.0, 1.4142135623730951)
 
     def test_dia_source_append_and_update(self):
         """ Test the appending of a DIASource to a DIAObject. We also
@@ -133,22 +135,22 @@ class TestDIAObject(unittest.TestCase):
         """
         single_source = create_test_dia_sources(1)
         dia_obj = DIAObject(single_source, None)
-        self.assertEqual(dia_obj.id, single_source.getId())
+        self.assertEqual(dia_obj.id, single_source[0].getId())
         self.assertTrue(dia_obj.is_updated)
 
         sources = create_test_dia_sources(2)
         dia_obj.append_dia_source(sources[1])
         self.assertFalse(dia_obj.is_updated)
 
-        associated_sources = dia_object.dia_source_catalog
+        associated_sources = dia_obj.dia_source_catalog
         self.assertEqual(len(associated_sources), 2)
         self.assertEqual(associated_sources[-1].getId(),
                          sources[-1].getId())
         self.assertEqual(associated_sources[-1].getCoord(),
                          sources[-1].getCoord())
-        
+
         dia_obj.update()
-        self._compare_dia_object_values(dia_obj, 0.5, 0.5)
+        self._compare_dia_object_values(dia_obj, 0, 0.5, 0.5)
 
     def test_compute_light_curve(self):
         """ Not implemented yet.
