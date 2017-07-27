@@ -37,8 +37,9 @@ class DIAObjectCollection(object):
         List of DIAObjects representing this collection the current (e.g.)
         visit.
     is_updated : bool
-        Bool representing that the internal summary statistics of each DIAObject
-        has been computed for the current set of DIASources it contains.
+        Bool representing that the internal summary statistics of each
+        DIAObject has been computed for the current set of DIASources it
+        contains.
     is_valid_tree : bool
         Bool represetnting that the internal spatial tree structure is valid
         for the current set of DIAObjects.
@@ -61,7 +62,7 @@ class DIAObjectCollection(object):
         -------
         A DIAObjectCollection instance
         """
-        self._dia_objects = dia_objects
+        self.dia_objects = dia_objects
         self._is_updated = False
         self._is_valid_tree = False
         self.update_dia_objects()
@@ -91,7 +92,7 @@ class DIAObjectCollection(object):
         """
         self._is_updated = False
 
-        for dia_object in self._dia_objects:
+        for dia_object in self.dia_objects:
             if not dia_object.is_updated or force:
                 dia_object.update()
                 self._is_valid_tree = False
@@ -115,7 +116,6 @@ class DIAObjectCollection(object):
 
         return None
 
-
     def append(self, dia_object):
         """ Add a new DIAObject to this collection.
 
@@ -132,7 +132,7 @@ class DIAObjectCollection(object):
         self._is_updated = False
         self._is_valid_tree = False
 
-        self._dia_objects.append(dia_object)
+        self.dia_objects.append(dia_object)
 
         return None
 
@@ -178,3 +178,29 @@ class DIAObjectCollection(object):
         Indices of newly updated and created DIAObjects
         """
         pass
+
+    @property
+    def is_updated(self):
+        """ Return the status of the internal DIAObjects and if their summary
+        statistics have been properly updated.
+
+        Return
+        ------
+        bool
+        """
+
+        return self._is_updated
+
+    @property
+    def is_valid_tree(self):
+        """ Return the status of the internal spatial search tree.
+
+        If the tree has not been updated with the current positions of
+        all DIAObjects internal to this collection we return false.
+
+        Return
+        ------
+        bool
+        """
+
+        return self._is_valid_tree
