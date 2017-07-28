@@ -57,16 +57,6 @@ def create_test_dia_sources(n_sources=5):
 
 class TestDIAObject(unittest.TestCase):
 
-    def setUp(self):
-        """ Create the DIAObjct schema we will use throughout these tests.
-        """
-        self.dia_obj_schema = make_minimal_dia_object_schema()
-
-    def tearDown(self):
-        """ Delete the schema when we are done.
-        """
-        del self.dia_obj_schema
-
     def test_init(self):
         """ Test DIAObject creation and if we can properly instantiate a
         DIAObject from an already create dia_object_record.
@@ -76,11 +66,17 @@ class TestDIAObject(unittest.TestCase):
         dia_obj = DIAObject(single_source, None)
         dia_obj_dup = DIAObject(single_source, dia_obj.dia_object_record)
 
-        self._compare_dia_object_values(dia_obj, 0, 0.0, np.nan)
-        self._compare_dia_object_values(dia_obj_dup, dia_obj.id, 0.0, np.nan)
+        compare_values = {
+            "coord_ra": 0.0,
+            "coord_dec": 0.0
+        }
+
+        self._compare_dia_object_values(dia_obj, 0, compare_values)
+        self._compare_dia_object_values(dia_obj_dup, dia_obj.id,
+                                        compare_values)
 
     def _compare_dia_object_values(self, dia_object, expected_id,
-                                   expected_mean, expected_std):
+                                   expected_dict):
         """ Compare values computed in the compute_summary_statistics
         DIAObject class method with those expected.
 
@@ -90,33 +86,18 @@ class TestDIAObject(unittest.TestCase):
             Input DIAObect to test
         expected_id : int
             Expected id of the DIAObject
-        expected_mean : float
-            Expected mean value of the parameters to be tested.
-        expected_std : float
-            Expected standard diviation of the DIAObject.
-
-        Return
-        ------
-        None
+        expected_dict : dict
+            Dictionary of field name and expected value
         """
 
-        for name in self.dia_obj_schema.getNames():
-            if name == 'parent':
-                continue
-            if name == 'id':
-                self.assertEqual(dia_object.get(name), expected_id)
-                continue
-
-            if name[-3:] != 'rms':
-                self.assertAlmostEqual(dia_object.get(name).asDegrees(),
-                                       expected_mean)
-            elif name[-3:] == 'rms' and np.isfinite(expected_std):
-                self.assertAlmostEqual(dia_object.get(name).asDegrees(),
-                                       expected_std)
-            elif name[-3:] == 'rms' and not np.isfinite(expected_std):
-                self.assertFalse(np.isfinite(dia_object.get(name).asDegrees()))
-
-        return None
+        self.assertEqual(dia_object.get('id'), expected_id)
+        for key in expected_dict.keys():
+            if isinstance(dia_object.get(key), afwGeom.Angle):
+                self.assertAlmostEqual(dia_object.get(key).asDegrees(),
+                                       expected_dict[key])
+            else:
+                self.assertAlmostEqual(dia_object.get(key),
+                                       expected_dict[key])
 
     def test_update(self):
         """ If we instantiate the class with a set of DIASources we test to
@@ -126,7 +107,12 @@ class TestDIAObject(unittest.TestCase):
         sources = create_test_dia_sources(5)
         dia_obj = DIAObject(sources, None)
 
-        self._compare_dia_object_values(dia_obj, 0, 2.0, 1.4142135623730951)
+        compare_values = {
+            "coord_ra": 1.9987807133764057,
+            "coord_dec": 2.000608742419802
+        }
+
+        self._compare_dia_object_values(dia_obj, 0, compare_values)
 
     def test_dia_source_append_and_update(self):
         """ Test the appending of a DIASource to a DIAObject. We also
@@ -149,8 +135,13 @@ class TestDIAObject(unittest.TestCase):
         self.assertEqual(associated_sources[-1].getCoord(),
                          sources[-1].getCoord())
 
+        compare_values = {
+            "coord_ra": 0.4999619199226218,
+            "coord_dec": 0.5000190382261059
+        }
+
         dia_obj.update()
-        self._compare_dia_object_values(dia_obj, 0, 0.5, 0.5)
+        self._compare_dia_object_values(dia_obj, 0, compare_values)
 
     def test_compute_light_curve(self):
         """ Not implemented yet.

@@ -26,6 +26,7 @@ import numpy as np
 
 import lsst.afw.table as afwTable
 import lsst.afw.geom as afwGeom
+from lsst.afw.coord import averageCoord
 
 __all__ = ["DIAObject", "make_minimal_dia_object_schema"]
 
@@ -39,13 +40,13 @@ def make_minimal_dia_object_schema():
     """
 
     schema = afwTable.SourceTable.makeMinimalSchema()
+    # For the MVP/S we currently only care about the position though
+    # in the future we will add summary computations for fluxes etc.
+    # as well as their errors.
 
-    # For the MVP/S we currently only care about the scatter on the possition
-    # so we add those.
-    schema.addField("coord_ra_rms", doc="rms position in ra/dec",
-                    type="Angle")
-    schema.addField("coord_dec_rms", doc="rms position in ra/dec",
-                    type="Angle")
+    # In the future we would like to store a covariance of the coordinate.
+    # This functionality is not defined in currenting in the stack, so we will
+    # hold off until it is implemented. This is to be addressed in DM-7101.
 
     return schema
 
@@ -54,27 +55,12 @@ class DIAObject(object):
     """ A class specifying a collection of single frame difference image
     sources and statistics on these collections.
 
-    Attributes
-    ----------
-    _dia_object_record : lsst.afw.table.SourceRecord
-        A SourceRecord object containing the summary statistics for the
-        collection of DIASources this DIAObject represents (e.g. median
-        RA/DEC position).
-    _dia_source_catalog : lsst.afw.table.SourceCatalog
-        A set of SourceRecords specifying the DIASources that make up
-        this DIAObject.
-    _updated : bool
-        boolean specifying if the summary statistics for this DIAObject have
-        been updated with the current set of DIASources in the SourceCatalog.
-        This variable should be set to false whenever the SourceCatalog
-        of DIASources changes and set to true when the initialize method is
-        run.
     """
     def __init__(self, dia_source_catalog, object_source_record=None):
         """  Create a DIAObject given an input SourceCatalog of
         DIASources.
 
-        Takes as input an lsst.afw.table.SourceCaatlog object specifying a
+        Takes as input an lsst.afw.table.SourceCatlog object specifying a
         collection of DIASources that make up this DIAObject. The optional
         input object_source_record should contain summary statistics on the
         SourceCatalog of DIASources. Using this optional input escapes the
@@ -110,8 +96,7 @@ class DIAObject(object):
             self._updated = True
 
     def get(self, name):
-        """ Return the data stored in column name within the internal
-        dia_object_record.
+        """ Retrieve a specific summary statistic from this DIAObject
 
         Parameters
         ----------
@@ -119,7 +104,7 @@ class DIAObject(object):
 
         Return
         ------
-        An lsst.afw data type
+        A SourceRecord column value
         """
 
         # This will in the future be replaced with a overwritting of __getattr
@@ -132,11 +117,7 @@ class DIAObject(object):
 
         Store these summaries (e.g. median RA/DEC position, fluxes...) in
         the object_source_record attribute and set the class variable
-        updated to True
-
-        Returns
-        -------
-        None
+        updated to True.
         """
 
         self._updated = False
@@ -145,45 +126,34 @@ class DIAObject(object):
         # is currently contious and if not we make a deep copy.
         if not self._dia_source_catalog.isContiguous():
             tmp_dia_source_catalog = self._dia_source_catalog.copy(deep=True)
-            del self._dia_source_catalog
             self._dia_source_catalog = tmp_dia_source_catalog
 
         self._compute_summary_statistics()
 
         self._updated = True
 
-        return None
-
     def _compute_summary_statistics(self):
-        """ Retrive properties from DIASourceCatalog attribute and update the
+        """ Retrieve properties from DIASourceCatalog attribute and update the
         summary statistics that represent this DIAObject
-
-        Returns
-        -------
-        None
         """
 
         # Loop through DIASources, compute summary statistics (TBD) and store
         # them in dia_object_record attribute.
 
-        for name in self.schema.getNames():
-            # For the MVP/S we are only dealing with angles so we skip over
-            # everything that isn't coord_ra or coord_dec.
-            if name != 'coord_ra' and name != 'coord_dec':
-                continue
+        self._compute_mean_coordinate()
 
-            mean_value = np.mean(self._dia_source_catalog[name])
-            # Currently hard coded to work with angles.
-            self._dia_object_record.set(name, afwGeom.Angle(mean_value))
-            # If we only have 1 source we can't compute an rms and hence we
-            # set the the rms variables to NaN.
-            if self.n_dia_sources > 1:
-                self._dia_object_record[name + '_rms'] = afwGeom.Angle(
-                    np.std(self._dia_source_catalog[name]))
-            else:
-                self._dia_object_record[name + '_rms'] = afwGeom.Angle(np.nan)
+        # In the future we will calculate covariances on this centroid,
+        # however generalized coordinate covariances are not defined (DM-7101)
+        # we also do not need them yet for the MVP/S
 
-        return None
+    def _compute_mean_coordinate(self):
+        """ Compute the mean coordinate of this DIAObject given the current
+        DIASources associated with it.
+        """
+
+        coord_list = [src.getCoord() for src in self._dia_source_catalog]
+        ave_coord = averageCoord(coord_list)
+        self._dia_object_record.setCoord(ave_coord)
 
     def append_dia_source(self, input_dia_source_record):
         """ Append the input_dia_source to the dia_source_catalog attribute.
@@ -195,10 +165,6 @@ class DIAObject(object):
         input_dia_source : lsst.afw.table.SourceRecord
             Single DIASource object to append to this DIAObject's source
             catalog.
-
-        Return
-        ------
-        None
         """
 
         # Since we are adding to the SourceCatalog our summary statistics are
@@ -206,12 +172,12 @@ class DIAObject(object):
         # them until we are finished adding sources.
         self._updated = False
 
-        self._dia_source_catalog.append(input_dia_source_record)
-
-        return None
+        self._dia_source_catalog.append(
+            self._dia_source_catalog.getTable().copyRecord(
+                input_dia_source_record))
 
     def get_light_curve(self):
-        """ Retreve the light curve of fluxes for the DIASources that make up
+        """ Retrieve the light curve of fluxes for the DIASources that make up
         this DIAObject.
 
         Returns
@@ -223,7 +189,9 @@ class DIAObject(object):
         # Right now I'm making this the same as returning the
         # dia_source_catalog.
 
-        return self.dia_source_catalog()
+        raise NotImplimentedError(
+            "Light curves not yet implimented. Use dia_source_catalog property"
+            "instead.")
 
     @property
     def is_updated(self):
