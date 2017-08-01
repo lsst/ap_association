@@ -128,7 +128,14 @@ class DIAObjectCollection(object):
         """
         self._is_valid_tree = False
 
-        # Create searchable spatial tree.
+        xyzs = np.empty((len(self.dia_object, 3)))
+        for obj_idx in range(len(self.dia_objects)):
+            tmp_coord = self.dia_objects.dia_record_object.getCoord()
+            tmp_vect = tmp_coord.getVector()
+            xyzs[obj_idx, 0] = tmp_vect[0]
+            xyzs[obj_idx, 1] = tmp_vect[1]
+            xyzs[obj_idx, 2] = tmp_vect[2]
+        self._spatial_tree = cKDtree(xyzs)
 
         self._is_valid_tree = True
 
@@ -177,7 +184,19 @@ class DIAObjectCollection(object):
         (N DIAObject by M DIASource) float array of between DIAObjects and
         DIASources.
         """
-        pass
+        if not self._is_valid_tree:
+            self.update_spatial_tree()
+        
+        scores = np.ones((len(self.dia_objects),
+                          len(dia_source_catalog))) * np.nan
+        for src_idx, dia_source in enumerate(dia_source_catalog):
+
+            src_point = dia_source.getCoord().getVector()
+            dists, indices = self._spatial_tree.query(
+                src_point, max_dist_arcsec)
+            scores[indices, src_idx] = dists
+
+        return scores
 
     def match(self, dia_source_catalog, scores):
         """ Append DIAsources to DIAObjects given a score and create new
@@ -196,7 +215,43 @@ class DIAObjectCollection(object):
         -------
         Indices of newly updated and created DIAObjects
         """
-        pass
+
+        used_dia_object = np.zeros(len(self.dia_objects), dtype=np.bool)
+        used_dia_source = np.zeros(len(self.dia_objects), dtype=np.bool)
+
+        updated_and_new_dia_objects = []
+
+        score_args = scores.argsort(axis=None)
+        score_indices = np.array(
+            [score_args % len(dia_source_catalog),
+             score_args % len(self.dia_objects)]).transpose()
+        for score_idx in score_indices:
+            if not np.isfinite(scores[score_idx]):
+                break
+            if used_dia_object[score_idx[0]] or /
+               used_dia_source[score_idx[1]]:
+                continue
+            used_dia_object[score_idx[0]] = True
+            used_dia_source[score_idx[1]] = True
+            updated_and_new_dia_objects.append(score_idx[0])
+
+            self.dia_objects[score_idx[0]].append(
+                dia_source_catalog[score_idx[1]])
+
+        n_new_objects = 0
+        for src_idx in np.argwhere(used_dia_source == False):
+            tmp_src_cat = afwTable.SourceCatalog(
+                dia_source_catalog.schema)
+            tmp_src_cat.Append(dia_source_catalog[src_idx])
+            self.append(DIAObject(tmp_src_cat))
+            used_dia_source[src_idx] = True
+            n_new_objects += 1
+
+        return np.concatenate(
+            [updated_and_new_dia_objects,
+             np.arange(len(self.dia_objects),
+                       len(self.dia_objects) + n_new_objects,
+                       dtype=np.int)])
 
     @property
     def is_updated(self):
