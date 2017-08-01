@@ -20,28 +20,132 @@
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
 
+import numpy as np
 import unittest
+
+from lsst.ap.association import *
+import lsst.afw.table as afwTable
+import lsst.afw.geom as afwGeom
 import lsst.utils.tests
+
+
+def create_test_dia_sources(n_sources=5):
+    """ Create dummy DIASources for use in our tests.
+
+    Parameters
+    ----------
+    n_sources : int (optional)
+        Number of fake sources to create for testing.
+
+    Returns
+    -------
+    A lsst.afw.SourceCatalog
+    """
+    sources = afwTable.SourceCatalog(afwTable.SourceTable.makeMinimalSchema())
+
+    for src_idx in range(n_sources):
+        src = sources.addNew()
+        src['id'] = src_idx
+        src['coord_ra'] = afwGeom.Angle(0.0 + 1. * src_idx,
+                                        units=afwGeom.degrees)
+        src['coord_dec'] = afwGeom.Angle(0.0 + 1. * src_idx,
+                                         units=afwGeom.degrees)
+        # Add a flux at some point
+
+    return sources
 
 
 class TestDIAObject(unittest.TestCase):
 
-    def setUp(self):
-        pass
+    def test_init(self):
+        """ Test DIAObject creation and if we can properly instantiate a
+        DIAObject from an already create dia_object_record.
+        """
+        single_source = create_test_dia_sources(1)
 
-    def tearDown(self):
-        pass
+        dia_obj = DIAObject(single_source, None)
+        dia_obj_dup = DIAObject(single_source, dia_obj.dia_object_record)
 
-    def test_initialization(self):
-        pass
+        compare_values = {
+            "coord_ra": 0.0,
+            "coord_dec": 0.0
+        }
 
-    def test_dia_source_append(self):
-        pass
+        self._compare_dia_object_values(dia_obj, 0, compare_values)
+        self._compare_dia_object_values(dia_obj_dup, dia_obj.id,
+                                        compare_values)
 
-    def compute_light_curve(self):
-        pass
+    def _compare_dia_object_values(self, dia_object, expected_id,
+                                   expected_dict):
+        """ Compare values computed in the compute_summary_statistics
+        DIAObject class method with those expected.
 
-    def compute_summary_statistics(self):
+        Parameters
+        ----------
+        dia_object : lsst.ap.association.DIAObject
+            Input DIAObect to test
+        expected_id : int
+            Expected id of the DIAObject
+        expected_dict : dict
+            Dictionary of field name and expected value
+        """
+
+        self.assertEqual(dia_object.get('id'), expected_id)
+        for key in expected_dict.keys():
+            if isinstance(dia_object.get(key), afwGeom.Angle):
+                self.assertAlmostEqual(dia_object.get(key).asDegrees(),
+                                       expected_dict[key])
+            else:
+                self.assertAlmostEqual(dia_object.get(key),
+                                       expected_dict[key])
+
+    def test_update(self):
+        """ If we instantiate the class with a set of DIASources we test to
+        make sure that the DIAObject is intantiated correctly and that we
+        compute the summary statistics in the expected way.
+        """
+        sources = create_test_dia_sources(5)
+        dia_obj = DIAObject(sources, None)
+
+        compare_values = {
+            "coord_ra": 1.9987807133764057,
+            "coord_dec": 2.000608742419802
+        }
+
+        self._compare_dia_object_values(dia_obj, 0, compare_values)
+
+    def test_dia_source_append_and_update(self):
+        """ Test the appending of a DIASource to a DIAObject. We also
+        test that the update function works properly and that the summary
+        statistics are computed as expected.
+        """
+        single_source = create_test_dia_sources(1)
+        dia_obj = DIAObject(single_source, None)
+        self.assertEqual(dia_obj.id, single_source[0].getId())
+        self.assertTrue(dia_obj.is_updated)
+
+        sources = create_test_dia_sources(2)
+        dia_obj.append_dia_source(sources[1])
+        self.assertFalse(dia_obj.is_updated)
+
+        associated_sources = dia_obj.dia_source_catalog
+        self.assertEqual(len(associated_sources), 2)
+        self.assertEqual(associated_sources[-1].getId(),
+                         sources[-1].getId())
+        self.assertEqual(associated_sources[-1].getCoord(),
+                         sources[-1].getCoord())
+
+        compare_values = {
+            "coord_ra": 0.4999619199226218,
+            "coord_dec": 0.5000190382261059
+        }
+
+        dia_obj.update()
+        self._compare_dia_object_values(dia_obj, 0, compare_values)
+
+    def test_compute_light_curve(self):
+        """ Not implemented yet.
+        """
         pass
 
 
