@@ -54,7 +54,7 @@ class DIAObjectCollection(object):
         ----------
         dia_objects : a list of DIAObjects
             List of DIAObjects that represent the collection of variable
-            objects for this visit. Each DIAOjbect will be individually
+            objects for this visit. Each DIAObject will be individually
             updated if not already currently updated with the latest
             DIASources.
 
@@ -63,6 +63,9 @@ class DIAObjectCollection(object):
         A DIAObjectCollection instance
         """
         self.dia_objects = dia_objects
+        self._id_to_index = {}
+        for idx, dia_object in enumerate(self.dia_objects):
+            self._id_to_index[dia_object.getId()] = idx
         self._is_updated = False
         self._is_valid_tree = False
         self.update_dia_objects()
@@ -70,6 +73,21 @@ class DIAObjectCollection(object):
 
         # Run internal method to create a spatial index on the dia_objects
         # in this collection for fast pair searching later.
+
+    def get_dia_object(self, id):
+        """ Retrive an individual DIAObject from this collection using its
+        catalog id.
+
+        Parameters
+        ----------
+        id : int
+            id of the DIAObject to retrive
+        
+        Return
+        ------
+        A DIAObject
+        """
+        return self.dia_objects[self._id_to_index[key]]
 
     def update_dia_objects(self, force=False):
         """ Update the summary statistics of all DIAObjects in this
@@ -132,6 +150,7 @@ class DIAObjectCollection(object):
         self._is_updated = False
         self._is_valid_tree = False
 
+        self._id_to_index[dia_object.getId()] = len(self.dia_objects)
         self.dia_objects.append(dia_object)
 
         return None
@@ -147,7 +166,7 @@ class DIAObjectCollection(object):
         Parameters
         ----------
         dia_source_catalog : an lsst.afw.SourceCatalog
-            A contiguous catalo of dia_sources to "score" based on distance
+            A contiguous catalog of dia_sources to "score" based on distance
             and (in the future) other metrics.
         max_dist_arcsec : float
             Maximum allowed distance to compute a score for a given DIAObject
@@ -161,13 +180,13 @@ class DIAObjectCollection(object):
         pass
 
     def match(self, dia_source_catalog, scores):
-        """ Append DIAsources to DIAObjectds given a score and create new
+        """ Append DIAsources to DIAObjects given a score and create new
         DIAObjects in this collection from DIASources with poor scores.
 
         Parameters
         ----------
         dia_source_catalog : an lsst.afw.SourceCatalog
-            A contiguous catalo of dia_sources for which the set of scores
+            A contiguous catalog of dia_sources for which the set of scores
             has been computed on with DIAObjectCollection.score.
         scores : (N DIAObject by M DIASource) float array
             A ndarray containing the scores between each DIAObject and
