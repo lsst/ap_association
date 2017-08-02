@@ -22,9 +22,10 @@
 
 from __future__ import absolute_import, division, print_function
 
-from scipy.spatial import cKDtree
+import numpy as np
+from scipy.spatial import cKDTree
 
-import .dia_object
+import lsst.afw.table as afwTable
 
 
 class DIAObjectCollection(object):
@@ -65,7 +66,7 @@ class DIAObjectCollection(object):
         self.dia_objects = dia_objects
         self._id_to_index = {}
         for idx, dia_object in enumerate(self.dia_objects):
-            self._id_to_index[dia_object.getId()] = idx
+            self._id_to_index[dia_object.get('id')] = idx
         self._is_updated = False
         self._is_valid_tree = False
         self.update_dia_objects()
@@ -87,7 +88,21 @@ class DIAObjectCollection(object):
         ------
         A DIAObject
         """
-        return self.dia_objects[self._id_to_index[key]]
+        return self.dia_objects[self._id_to_index[id]]
+
+    def get_dia_object_ids(self):
+        """ Retrive the ids of the DIAObjects stored in this collection.
+
+        Parameters
+        ----------
+        id : int
+            id of the DIAObject to retrive
+        
+        Return
+        ------
+        A DIAObject
+        """
+        return self._id_to_index.keys()
 
     def update_dia_objects(self, force=False):
         """ Update the summary statistics of all DIAObjects in this
@@ -95,7 +110,7 @@ class DIAObjectCollection(object):
 
         Loop through the DIAObjects that make up this DIAObjectCollection and
         update them as needed. Optional `force` variable forces the DIAObjects
-        within the collelection to be updated regardless of their `is_updated`
+        within the collelection to be updated regardless of their `is_updated
         state.
 
         Parameters
@@ -106,7 +121,7 @@ class DIAObjectCollection(object):
 
         Returns
         -------
-        None
+        bool successfully updated
         """
         self._is_updated = False
 
@@ -115,31 +130,33 @@ class DIAObjectCollection(object):
                 dia_object.update()
                 self._is_valid_tree = False
 
-        self._is_updated
+        self._is_updated = True
 
-        return None
+        return self._is_updated
 
     def update_spatial_tree(self):
         """ Update the internal searchable spatial tree on the DIAObjects.
 
         Returns
         -------
-        None
+        bool successfully updated
         """
         self._is_valid_tree = False
+        if not self._is_updated:
+            return self._is_valid_tree
 
-        xyzs = np.empty((len(self.dia_object, 3)))
+        xyzs = np.empty((len(self.dia_objects), 3))
         for obj_idx in range(len(self.dia_objects)):
-            tmp_coord = self.dia_objects.dia_record_object.getCoord()
+            tmp_coord = self.dia_objects[obj_idx].dia_object_record.getCoord()
             tmp_vect = tmp_coord.getVector()
             xyzs[obj_idx, 0] = tmp_vect[0]
             xyzs[obj_idx, 1] = tmp_vect[1]
             xyzs[obj_idx, 2] = tmp_vect[2]
-        self._spatial_tree = cKDtree(xyzs)
+        self._spatial_tree = cKDTree(xyzs)
 
         self._is_valid_tree = True
 
-        return None
+        return self._is_valid_tree
 
     def append(self, dia_object):
         """ Add a new DIAObject to this collection.
@@ -157,12 +174,12 @@ class DIAObjectCollection(object):
         self._is_updated = False
         self._is_valid_tree = False
 
-        self._id_to_index[dia_object.getId()] = len(self.dia_objects)
+        self._id_to_index[dia_object.get('id')] = len(self.dia_objects)
         self.dia_objects.append(dia_object)
 
         return None
 
-    def score(self, dia_source_catalog, max_dist_arcsec):
+    def score(self, dia_source_catalog, max_dist):
         """ Compute a quality score for each dia_source/dia_object pair
         between this collection and an input diat_source catalog.
 
@@ -175,7 +192,7 @@ class DIAObjectCollection(object):
         dia_source_catalog : an lsst.afw.SourceCatalog
             A contiguous catalog of dia_sources to "score" based on distance
             and (in the future) other metrics.
-        max_dist_arcsec : float
+        max_dist : lsst.afw.geom.Angle
             Maximum allowed distance to compute a score for a given DIAObject
             DIASource pair.
 
@@ -193,8 +210,9 @@ class DIAObjectCollection(object):
 
             src_point = dia_source.getCoord().getVector()
             dists, indices = self._spatial_tree.query(
-                src_point, max_dist_arcsec)
-            scores[indices, src_idx] = dists
+                src_point, k=3)
+            scores[indices, src_idx] = np.where(dists < max_dist.asRadians(), 
+                                                dists, np.nan)
 
         return scores
 
@@ -226,23 +244,30 @@ class DIAObjectCollection(object):
             [score_args % len(dia_source_catalog),
              score_args % len(self.dia_objects)]).transpose()
         for score_idx in score_indices:
-            if not np.isfinite(scores[score_idx]):
+            print(score_idx)
+            print(scores[score_idx])
+            if not np.isfinite(scores[score_idx[0], score_idx[1]]):
                 break
-            if used_dia_object[score_idx[0]] or /
+            if used_dia_object[score_idx[0]] or \
                used_dia_source[score_idx[1]]:
                 continue
             used_dia_object[score_idx[0]] = True
             used_dia_source[score_idx[1]] = True
             updated_and_new_dia_objects.append(score_idx[0])
 
-            self.dia_objects[score_idx[0]].append(
+            self.dia_objects[score_idx[0]].append_dia_source(
                 dia_source_catalog[score_idx[1]])
 
+        print(used_dia_source)
+        print(used_dia_object)
+
         n_new_objects = 0
+        print(np.argwhere(used_dia_source == False))
         for src_idx in np.argwhere(used_dia_source == False):
             tmp_src_cat = afwTable.SourceCatalog(
                 dia_source_catalog.schema)
-            tmp_src_cat.Append(dia_source_catalog[src_idx])
+            print(type(dia_source_catalog[src_idx]))
+            tmp_src_cat.append(dia_source_catalog[src_idx])
             self.append(DIAObject(tmp_src_cat))
             used_dia_source[src_idx] = True
             n_new_objects += 1
