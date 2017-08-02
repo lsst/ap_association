@@ -32,7 +32,11 @@ from scipy.spatial import cKDTree
 import lsst.afw.table as afwTable
 import lsst.pipe.base as pipeBase
 
+<<<<<<< HEAD
 from .dia_object import DIAObject
+=======
+from .dia_object import *
+>>>>>>> 6c014a3... Finished unittest and matching implementation.
 
 
 class DIAObjectCollection(object):
@@ -107,7 +111,7 @@ class DIAObjectCollection(object):
 
         Return
         ------
-        A DIAObject
+        A list of ints
         """
         return self._id_to_index.keys()
 
@@ -248,7 +252,7 @@ class DIAObjectCollection(object):
             * scores: array of floats of match quality
             * indices: index in DIAObjectCollection that source matched to
             Default values for these arrays are NaN and the number of
-            DIAObjects in this collection, respectively.
+            DIAObjects in this collection, respectively..
 
         Returns
         -------
@@ -285,6 +289,9 @@ class DIAObjectCollection(object):
             dia_obj_idx = score_struct.indices[score_idx]
             self.dia_objects[dia_obj_idx].append_dia_source(
                 dia_source_catalog[score_idx])
+
+        print(used_dia_source)
+        print(used_dia_object)
 
         n_new_objects = 0
         # Argwhere returns a array shape (N, 1) so we access the index

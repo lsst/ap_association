@@ -40,7 +40,7 @@ def create_test_dia_sources(n_sources=5):
     -------
     A lsst.afw.SourceCatalog
     """
-    sources = afwTable.SourceCatalog(afwTable.SourceTable.makeMinimalSchema())
+    sources = afwTable.SourceCatalog(make_minimal_dia_source_schema())
 
     for src_idx in range(n_sources):
         src = sources.addNew()
