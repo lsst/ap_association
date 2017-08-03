@@ -26,6 +26,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 import lsst.afw.table as afwTable
+import lsst.pipe.base as pipeBase
 
 
 class DIAObjectCollection(object):
@@ -198,25 +199,27 @@ class DIAObjectCollection(object):
 
         Returns
         -------
-        (N DIAObject by M DIASource) float array of between DIAObjects and
-        DIASources.
+        lsst.pipe.base.struct
+            Contains two arrays: scores DIAObjects, indices of DIAObject
+            mached to.
         """
         if not self._is_valid_tree:
             self.update_spatial_tree()
         
-        scores = np.ones((len(self.dia_objects),
-                          len(dia_source_catalog))) * np.nan
+        scores = np.ones(len(dia_source_catalog)) * np.nan
+        obj_indices = np.ones(len(dia_source_catalog), dtype=np.int) * np.nan
         for src_idx, dia_source in enumerate(dia_source_catalog):
 
             src_point = dia_source.getCoord().getVector()
-            dists, indices = self._spatial_tree.query(
-                src_point, k=3)
-            scores[indices, src_idx] = np.where(dists < max_dist.asRadians(), 
-                                                dists, np.nan)
+            dist, obj_idx = self._spatial_tree.query(src_point)
+            scores[src_idx] = dist
+            obj_indices[src_idx] = obj_idx
 
-        return scores
+        return pipeBase.Struct(
+            scores=scores,
+            indices=obj_indices)
 
-    def match(self, dia_source_catalog, scores):
+    def match(self, dia_source_catalog, score_struct):
         """ Append DIAsources to DIAObjects given a score and create new
         DIAObjects in this collection from DIASources with poor scores.
 
@@ -225,9 +228,10 @@ class DIAObjectCollection(object):
         dia_source_catalog : an lsst.afw.SourceCatalog
             A contiguous catalog of dia_sources for which the set of scores
             has been computed on with DIAObjectCollection.score.
-        scores : (N DIAObject by M DIASource) float array
-            A ndarray containing the scores between each DIAObject and
-            each DIASource.
+        score_struce : lsst.pipe.base.Struct
+            A struct containing two arrays: scores DIAObjects, indices of]
+            DIAObject mached to. Both arrays should be the same length as the
+            source catalog.
 
         Returns
         -------
@@ -235,41 +239,30 @@ class DIAObjectCollection(object):
         """
 
         used_dia_object = np.zeros(len(self.dia_objects), dtype=np.bool)
-        used_dia_source = np.zeros(len(self.dia_objects), dtype=np.bool)
 
         updated_and_new_dia_objects = []
 
-        score_args = scores.argsort(axis=None)
-        score_indices = np.array(
-            [score_args % len(dia_source_catalog),
-             score_args % len(self.dia_objects)]).transpose()
-        for score_idx in score_indices:
-            print(score_idx)
-            print(scores[score_idx])
-            if not np.isfinite(scores[score_idx[0], score_idx[1]]):
+        score_args = score_struct.scores.argsort(axis=None)
+        for score_idx in score_args:
+            if not np.isfinite(score_struct.scores[score_idx]):
                 break
-            if used_dia_object[score_idx[0]] or \
-               used_dia_source[score_idx[1]]:
+            if used_dia_object[score_idx]:
                 continue
-            used_dia_object[score_idx[0]] = True
-            used_dia_source[score_idx[1]] = True
-            updated_and_new_dia_objects.append(score_idx[0])
+            used_dia_object[score_struct.indices[score_idx]] = True
+            updated_and_new_dia_objects.append(
+                score_struct.indices[score_idx])
 
-            self.dia_objects[score_idx[0]].append_dia_source(
-                dia_source_catalog[score_idx[1]])
-
-        print(used_dia_source)
-        print(used_dia_object)
+            self.dia_objects[
+                score_struct.indices[score_idx]].append_dia_source(
+                    dia_source_catalog[score_idx])
 
         n_new_objects = 0
         print(np.argwhere(used_dia_source == False))
-        for src_idx in np.argwhere(used_dia_source == False):
+        for src_idx in np.argwhere(used_dia_source == False).flatten():
             tmp_src_cat = afwTable.SourceCatalog(
                 dia_source_catalog.schema)
-            print(type(dia_source_catalog[src_idx]))
             tmp_src_cat.append(dia_source_catalog[src_idx])
             self.append(DIAObject(tmp_src_cat))
-            used_dia_source[src_idx] = True
             n_new_objects += 1
 
         return np.concatenate(
