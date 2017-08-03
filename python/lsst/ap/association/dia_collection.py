@@ -28,6 +28,8 @@ from scipy.spatial import cKDTree
 import lsst.afw.table as afwTable
 import lsst.pipe.base as pipeBase
 
+from .dia_object import *
+
 
 class DIAObjectCollection(object):
     """ A collection of DIAObjects with convenience functions for scoring and
@@ -84,7 +86,7 @@ class DIAObjectCollection(object):
         ----------
         id : int
             id of the DIAObject to retrive
-        
+
         Return
         ------
         A DIAObject
@@ -98,7 +100,7 @@ class DIAObjectCollection(object):
         ----------
         id : int
             id of the DIAObject to retrive
-        
+
         Return
         ------
         A DIAObject
@@ -205,15 +207,17 @@ class DIAObjectCollection(object):
         """
         if not self._is_valid_tree:
             self.update_spatial_tree()
-        
+
         scores = np.ones(len(dia_source_catalog)) * np.nan
-        obj_indices = np.ones(len(dia_source_catalog), dtype=np.int) * np.nan
+        obj_indices = (np.ones(len(dia_source_catalog), dtype=np.int) *
+                       len(self.dia_objects))
         for src_idx, dia_source in enumerate(dia_source_catalog):
 
             src_point = dia_source.getCoord().getVector()
             dist, obj_idx = self._spatial_tree.query(src_point)
-            scores[src_idx] = dist
-            obj_indices[src_idx] = obj_idx
+            if dist < max_dist.asRadians():
+                scores[src_idx] = dist
+                obj_indices[src_idx] = obj_idx
 
         return pipeBase.Struct(
             scores=scores,
@@ -228,7 +232,7 @@ class DIAObjectCollection(object):
         dia_source_catalog : an lsst.afw.SourceCatalog
             A contiguous catalog of dia_sources for which the set of scores
             has been computed on with DIAObjectCollection.score.
-        score_struce : lsst.pipe.base.Struct
+        score_struct : lsst.pipe.base.Struct
             A struct containing two arrays: scores DIAObjects, indices of]
             DIAObject mached to. Both arrays should be the same length as the
             source catalog.
@@ -239,6 +243,9 @@ class DIAObjectCollection(object):
         """
 
         used_dia_object = np.zeros(len(self.dia_objects), dtype=np.bool)
+        used_dia_source = np.zeros(len(dia_source_catalog), dtype=np.bool)
+
+        n_previous_objects = len(self.dia_objects)
 
         updated_and_new_dia_objects = []
 
@@ -249,6 +256,7 @@ class DIAObjectCollection(object):
             if used_dia_object[score_idx]:
                 continue
             used_dia_object[score_struct.indices[score_idx]] = True
+            used_dia_source[score_idx] = True
             updated_and_new_dia_objects.append(
                 score_struct.indices[score_idx])
 
@@ -257,7 +265,6 @@ class DIAObjectCollection(object):
                     dia_source_catalog[score_idx])
 
         n_new_objects = 0
-        print(np.argwhere(used_dia_source == False))
         for src_idx in np.argwhere(used_dia_source == False).flatten():
             tmp_src_cat = afwTable.SourceCatalog(
                 dia_source_catalog.schema)
@@ -267,8 +274,8 @@ class DIAObjectCollection(object):
 
         return np.concatenate(
             [updated_and_new_dia_objects,
-             np.arange(len(self.dia_objects),
-                       len(self.dia_objects) + n_new_objects,
+             np.arange(n_previous_objects,
+                       n_previous_objects + n_new_objects,
                        dtype=np.int)])
 
     @property

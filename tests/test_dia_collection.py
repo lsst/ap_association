@@ -54,7 +54,7 @@ def create_test_dia_objects(n_objects=5, n_src=5, scatter_arcsec=1.0,
         src_cat = create_test_dia_sources(n_src)
         for src_idx in range(n_src):
             edit_source_record(
-                src_cat[src_idx], start_id + src_idx * obj_idx + src_idx,
+                src_cat[src_idx], start_id + n_src * obj_idx + src_idx,
                 start_angle_degrees + 0.1 * obj_idx,
                 start_angle_degrees + 0.1 * obj_idx,
                 scatter_arcsec)
@@ -62,7 +62,7 @@ def create_test_dia_objects(n_objects=5, n_src=5, scatter_arcsec=1.0,
     return output_dia_objects
 
 
-def edit_source_record(src, id, ra_degrees, dec_degrees, scatter_arcsec):
+def edit_source_record(src, src_id, ra_degrees, dec_degrees, scatter_arcsec):
     """ Edit the center coordinate and id of a source record in place.
 
     Parameters
@@ -78,7 +78,7 @@ def edit_source_record(src, id, ra_degrees, dec_degrees, scatter_arcsec):
     scatter_arcsec : float
         Arcsecond scatter to add to the position of the source record coord.
     """
-    coord = Coord(afwGeom.Angle(ra_degrees, units=afwGeom.degrees), 
+    coord = Coord(afwGeom.Angle(ra_degrees, units=afwGeom.degrees),
                   afwGeom.Angle(dec_degrees, units=afwGeom.degrees))
     if scatter_arcsec > 0.0:
         coord.offset(
@@ -86,7 +86,7 @@ def edit_source_record(src, id, ra_degrees, dec_degrees, scatter_arcsec):
             afwGeom.Angle(np.random.rand() * scatter_arcsec,
                           units=afwGeom.arcseconds))
     src.setCoord(coord)
-    src.setId(id)
+    src['id'] = src_id
 
 
 class TestDIAObjectCollection(unittest.TestCase):
@@ -100,7 +100,7 @@ class TestDIAObjectCollection(unittest.TestCase):
 
         self.assertTrue(obj_collection.is_updated)
         self.assertTrue(obj_collection.is_valid_tree)
-        
+
         self.assertEqual(obj_collection.get_dia_object_ids()[0], 0)
         self.assertEqual(obj_collection.get_dia_object(0).get('id'), 0)
 
@@ -124,7 +124,6 @@ class TestDIAObjectCollection(unittest.TestCase):
         self.assertEqual(len(obj_collection.get_dia_object_ids()), 2)
         self.assertEqual(obj_collection.get_dia_object(1).get('id'), 1)
 
-
     def test_score_and_match(self):
         """ Test association between a set of sources and an existing
         DIAObjectCollection.
@@ -139,23 +138,25 @@ class TestDIAObjectCollection(unittest.TestCase):
         for src_idx, src in enumerate(src_cat):
             edit_source_record(
                 src, src_idx + 4, 0.1 * src_idx, 0.1 * src_idx, -1)
-        scores = obj_collection.score(src_cat, afwGeom.Angle(1.0, units=afwGeom.arcseconds))
-        print(scores.shape)
+        score_struct = obj_collection.score(
+            src_cat,  afwGeom.Angle(1.0, units=afwGeom.arcseconds))
 
-        self.assertTrue(np.all(np.logical_not(np.isfinite(scores[:, -1]))))
+        self.assertFalse(np.isfinite(score_struct.scores[-1]))
         for src_idx in range(4):
-            self.assertAlmostEqual(scores[src_idx, src_idx], 0.0, places=9)
+            self.assertAlmostEqual(score_struct.scores[src_idx], 0.0,
+                                   places=9)
 
-        updated_indices = obj_collection.match(src_cat, scores)
+        updated_indices = obj_collection.match(src_cat, score_struct)
+        self.assertEqual(len(obj_collection.dia_objects), 5)
 
-        for idx in range(5):
+        for idx, obj_id in enumerate(obj_collection.get_dia_object_ids()):
             self.assertEqual(idx, updated_indices[idx])
             if idx != 4:
                 self.assertEqual(
-                    obj_collection.get_dia_object(idx).n_dia_sources(), 2)
+                    obj_collection.get_dia_object(obj_id).n_dia_sources, 2)
             else:
                 self.assertEqual(
-                    obj_collection.get_dia_object(idx).n_dia_sources(), 1)
+                    obj_collection.get_dia_object(obj_id).n_dia_sources, 1)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
@@ -169,4 +170,3 @@ if __name__ == "__main__":
 
     lsst.utils.tests.init()
     unittest.main()
-
