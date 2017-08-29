@@ -27,6 +27,8 @@ __all__ = ["AssociationDBSqliteConfig", "AssociationDBSqliteTask"]
 import sqlite3
 
 from lsst.meas.algorithms.indexerRegistry import IndexerRegistry
+import lsst.afw.table as afwTable
+import lsst.afw.geom as afwGeom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 from .dia_collection import *
@@ -175,7 +177,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
             self._db_cursor.execute(
                 "CREATE TABLE dia_objects_to_dia_soruces "
-                "(obj_id INTEGER, src_id INTEGER PRIMARY KEY)")
+                "(src_id INTEGER PRIMARY KEY, obj_id INTEGER)")
 
             self._db_connection.commit()
 
@@ -199,19 +201,39 @@ class AssociationDBSqliteTask(pipeBase.Task):
         indexer_indices, on_boundry = self.indexer.get_pixel_ids(
             ctr_coord, radius)
 
-        dia_object_records = get_dia_object_records(indexer_indices)
-        dia_object_list = []
+        dia_objects = self.get_dia_objects(indexer_indices)
 
-        for dia_object_record in dia_objects:
-            dia_sources = self.get_dia_sources(dia_object_record.getId())
-            dia_object_list.append(DIAObject(dia_sources, dia_object_record))
-
-        dia_colletion = DIAObjectCollection(dia_object_list)
+        dia_collection = DIAObjectCollection(dia_objects)
 
         return dia_collection
 
     @pipeBase.timeMethod
-    def store(self, dia_collection, updated_indices):
+    def store(self, dia_collection, compute_spatial_index=False):
+        """ Store all DIAObjects and DIASources in this dia_collection.
+
+        Parameters
+        ----------
+        dia_collection : lsst.ap.association.DIAObjectCollection
+            Collection DIAObjects to store. Also stores the DIASources
+            associated with these DIAObjects.
+        compute_spatial_index : bool
+            If True, compute the spatial search indices using the
+            indexer specified at class creation.
+        """
+        for dia_object in dia_collection.dia_objects:
+            if compute_spatial_index:
+                dia_object.dia_object_record.set(
+                    'indexer_id', self.indexer.index_points(
+                        [dia_object.ra], [dia_object.dec])[0])
+            self.store_dia_object(dia_object)
+            for dia_source in dia_object.dia_source_catalog:
+                self.store_dia_source(dia_source)
+                self.store_dia_object_source_pair(
+                    dia_object.get('id'), dia_source.getId())
+        self.commit()
+
+    @pipeBase.timeMethod
+    def store_updated(self, dia_collection, updated_indices):
         """ Store new DIAObjects and sources in the sqlite database.
 
         Parameters
@@ -228,10 +250,14 @@ class AssociationDBSqliteTask(pipeBase.Task):
                     'indexer_id', self.indexer.index_points(
                         [dia_object.ra], [dia_object.dec])[0])
             self.store_dia_object(dia_object)
+            self.store_dia_source(dia_object.dia_source_catalog[-1])
+            self.store_dia_object_source_pair(
+                dia_object.get('id'),
+                dia_object.dia_source_catalog[-1].getId())
 
         self.commit()
 
-    def get_dia_object_records(self, indexer_indices):
+    def get_dia_objects(self, indexer_indices):
         """ Retrive the DIAObjects from the database whose HTM indices
         are within the specified range.
 
@@ -246,54 +272,107 @@ class AssociationDBSqliteTask(pipeBase.Task):
         """
         output_dia_objects = []
 
-        self._db_cursor.excecutemany(
-            "SELECT * FROM dia_objects WHERE indexer_id = ?",
-            indexer_indices)
-
-        rows = self._db_cursor.fetchall()
-
         dia_object_schema = make_minimal_dia_object_schema()
-        for row in rows:
-            dia_object_record = afwTable.SourceTable.makeRecord(
-                afwTable.SourceTable.make(dia_object_schema))
-            self._edit_source_record(row, dia_object_record,
-                                     dia_object_schema)
-            dia_sources = self.get_dia_sources(dia_object_record.getId())
-            output_dia_objects.append(
-                DIAObject(dia_sources, dia_object_record))
+        for indexer_idx in indexer_indices:
+            self._db_cursor.execute(
+                "SELECT * FROM dia_objects WHERE indexer_id = ?",
+                (indexer_idx,))
+            rows = self._db_cursor.fetchall()
+            for row in rows:
+                dia_object_record = afwTable.SourceTable.makeRecord(
+                    afwTable.SourceTable.make(dia_object_schema))
+                self._edit_source_record(row, dia_object_record,
+                                         dia_object_schema)
+                dia_sources = self.get_associated_dia_sources(
+                    dia_object_record.getId())
+                output_dia_objects.append(
+                    DIAObject(dia_sources, dia_object_record))
 
         return output_dia_objects
 
-    def get_dia_sources(self, dia_obj_id):
-        """ Retrive the DIASources association with the specified DIAObject
-        id.
+    def get_dia_object_records(self, indexer_indices):
+        """ Retrive the SourceRecord objects representing the DIAObjects
+        in the catalog.
+        
+        Retrives the SourceRecords that are covered by the pixels with
+        indices, indexer_indices. Use this to retrive the summary statistics
+        of the DIAObjects themselves rather than taking the extra overhead
+        of loading the associated DIASources as well.
+
+        Parameters
+        ----------
+        indexer_indices : list of ints
+            Pixelized indexer indices from which to load.
+
+        Returns
+        -------
+        a lsst.afw.table.SourceCatalog
+        """
+        dia_object_schema =  make_minimal_dia_object_schema()
+        output_dia_objects = afwTable.SourceCatalog(dia_object_schema)
+
+        dia_object_schema = make_minimal_dia_object_schema()
+        for indexer_idx in indexer_indices:
+            self._db_cursor.execute(
+                "SELECT * FROM dia_objects WHERE indexer_id = ?",
+                (indexer_idx,))
+            rows = self._db_cursor.fetchall()
+            for row in rows:
+                dia_object_record = afwTable.SourceTable.makeRecord(
+                    afwTable.SourceTable.make(dia_object_schema))
+                self._edit_source_record(row, dia_object_record,
+                                         dia_object_schema)
+                output_dia_objects.push_back(dia_object_record)
+        
+        return output_dia_objects
+
+    def get_associated_dia_sources(self, dia_obj_id):
+        """ Retrive all DIASources associated with this DIAObject.
 
         Parameters
         ----------
         dia_obj_id : int
-            Load the DIASource association with the DIAObject with id
-            dia_obj_id
+            Id of 
 
         Returns
         -------
         lsst.afw.table.SourceCatalog
             SourceCatalog of DIASources associated with the DIAObject
         """
-        self._db_cursor.excecute(
-            "SELECT dia_source_id FROM dia_objects_to_dia_soruces "
-            "WHERE dia_object_id = ?",
-            dia_obj_id)
+        self._db_cursor.execute(
+            "SELECT src_id FROM dia_objects_to_dia_soruces "
+            "WHERE obj_id = ?",
+            (dia_obj_id,))
         src_ids = self._db_cursor.fetchall()
+
+        return self.get_dia_sources(np.array(src_ids, dtype=np.int).flatten())
+
+    def get_dia_sources(self, dia_source_ids):
+        """ Retrive the DIASources from the database
+
+        Parameters
+        ----------
+        dia_source_id : list of ints
+            Ids of the DIASources to load.
+
+        Returns
+        -------
+        lsst.afw.table.SourceCatalog
+            SourceCatalog of DIASources associated with the DIAObject
+        """
 
         dia_source_schema =  make_minimal_dia_source_schema()
         output_dia_sources = afwTable.SourceCatalog(dia_source_schema)
-        output_dia_sources.reserve(len(src_ids))
+        output_dia_sources.reserve(len(dia_source_ids))
 
-        self._db_cursor.excecutemany(
-            "SELECT * FROM dia_soucres WHERE id = ?", src_ids)
-        for src_idx, row in self._db_cursor.fetchall():
-            self._edit_source_record(row, output_dia_sources[src_idx],
-                                     dia_source_schema)
+        for src_idx, dia_source_id in enumerate(dia_source_ids):
+            self._db_cursor.execute(
+                "SELECT * FROM dia_sources WHERE id=?", (dia_source_id,))
+            for row in self._db_cursor.fetchall():
+                output_dia_sources.addNew()
+                self._edit_source_record(row, output_dia_sources[src_idx],
+                                         dia_source_schema) 
+
         return output_dia_sources
 
     def _edit_source_record(self, db_row, src_record, schema):
@@ -309,7 +388,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
             Schema defining the columns in src_record.
         """
         for sub_schema, value in zip(schema, db_row):
-            if sub_schema.getField().getTypeString() == 'Anlge':
+            if sub_schema.getField().getTypeString() == 'Angle':
                 src_record.set(
                     sub_schema.getKey(),
                     afwGeom.Angle(value, units=afwGeom.degrees))
@@ -317,6 +396,19 @@ class AssociationDBSqliteTask(pipeBase.Task):
                 src_record.set(
                     sub_schema.getKey(), value)
 
+    def store_dia_object_source_pair(self, obj_id, src_id):
+        """ Store a link between a DIAObject id and a DIASource.
+
+        Parameters
+        ----------
+        obj_id : int
+            Id of DIAObject
+        src_id : int
+            Id of DIASource
+        """
+        self._db_cursor.execute(
+            "INSERT OR REPLACE INTO dia_objects_to_dia_soruces "
+            "VALUES (?, ?)", (src_id, obj_id))
 
     def store_dia_object(self, dia_object):
         """ Store an individual DIAObject into the database.
@@ -330,11 +422,6 @@ class AssociationDBSqliteTask(pipeBase.Task):
             exists it is replaced in the database with the updated centroids,
             fluxes, etc.
         """
-
-        self._db_cursor.execute(
-            "INSERT INTO dia_objects_to_dia_soruces VALUES (?, ?)",
-            (dia_object.get('id'), dia_object.dia_source_catalog[-1].getId()))
-
         insert_string = ""
         values = []
         for sub_schema in dia_object.dia_object_record.getSchema():
@@ -350,8 +437,6 @@ class AssociationDBSqliteTask(pipeBase.Task):
             "INSERT OR REPLACE INTO dia_objects VALUES (%s)" % insert_string,
             values)
 
-        self.store_dia_source(dia_object.dia_source_catalog[-1])
-
     def store_dia_source(self, dia_source):
         """ Store this DIASource in the database.
 
@@ -360,7 +445,6 @@ class AssociationDBSqliteTask(pipeBase.Task):
         dia_soruce : lsst.afw.table.SourceRecord
             DIASource object whose values we would like to store.
         """
-
         insert_string = ""
         values = []
         for sub_schema in dia_source.getSchema():
@@ -373,5 +457,5 @@ class AssociationDBSqliteTask(pipeBase.Task):
         insert_string = insert_string[:-2]
 
         self._db_cursor.execute(
-            "INSERT INTO dia_sources VALUES (%s)" % insert_string,
+            "INSERT OR REPLACE INTO dia_sources VALUES (%s)" % insert_string,
             values)
