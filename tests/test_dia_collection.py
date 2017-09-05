@@ -25,15 +25,15 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 import unittest
 
-from lsst.ap.association import *
+from lsst.ap.association import DIAObject, DIAObjectCollection
 from lsst.afw.coord import Coord
 import lsst.afw.geom as afwGeom
 import lsst.utils.tests
 from test_dia_object import create_test_dia_sources
 
 
-def create_test_dia_objects(n_objects=5, n_src=5, scatter_arcsec=1.0,
-                            start_id=0, start_angle_degrees=0.0):
+def create_test_dia_objects(n_objects=5, n_sources=5, start_id=0,
+                            start_angle_degrees=0.0, scatter_arcsec=1.0):
     """ Create DIAObjects with a specified number of DIASources attached.
 
     Parameters
@@ -42,6 +42,13 @@ def create_test_dia_objects(n_objects=5, n_src=5, scatter_arcsec=1.0,
         Number of DIAObjects to generate.
     n_src : int
         Number of DIASources to generate for each DIAObject.
+    start_id : int
+        Starting index to increment the created DIAObjects from.
+    start_angle_degrees : float
+        Starting position of the objects. Additional objects are
+        incremented from this position by 0.1 degrees. The position
+        of the first object will be RA=start_angle_degrees,
+        DEC=start_angle_degrees
     scatter_arcsec : float
         Scatter to add to the position of each DIASource.
 
@@ -51,10 +58,11 @@ def create_test_dia_objects(n_objects=5, n_src=5, scatter_arcsec=1.0,
     """
     output_dia_objects = []
     for obj_idx in range(n_objects):
-        src_cat = create_test_dia_sources(n_src)
-        for src_idx in range(n_src):
-            edit_source_record(
-                src_cat[src_idx], start_id + n_src * obj_idx + src_idx,
+        src_cat = create_test_dia_sources(n_sources)
+        for src_idx in range(n_sources):
+            edit_and_offset_source_record(
+                src_cat[src_idx],
+                start_id + n_sources * obj_idx + src_idx,
                 start_angle_degrees + 0.1 * obj_idx,
                 start_angle_degrees + 0.1 * obj_idx,
                 scatter_arcsec)
@@ -62,7 +70,8 @@ def create_test_dia_objects(n_objects=5, n_src=5, scatter_arcsec=1.0,
     return output_dia_objects
 
 
-def edit_source_record(src, src_id, ra_degrees, dec_degrees, scatter_arcsec):
+def edit_and_offset_source_record(src, src_id, ra_degrees, dec_degrees,
+                                  scatter_arcsec):
     """ Edit the center coordinate and id of a source record in place.
 
     Parameters
@@ -95,68 +104,97 @@ class TestDIAObjectCollection(unittest.TestCase):
         """ Test that we can properly create a DIAObjectCollection from a list
         of DIAObjects.
         """
-        obj_list = create_test_dia_objects(1, 1, 0.1)
+        obj_list = create_test_dia_objects(n_objects=1, n_sources=1,
+                                           start_id=0)
         obj_collection = DIAObjectCollection(obj_list)
 
         self.assertTrue(obj_collection.is_updated)
         self.assertTrue(obj_collection.is_valid_tree)
 
-        self.assertEqual(obj_collection.get_dia_object_ids()[0], 0)
+        self.assertEqual(obj_collection.get_dia_object_ids(), [0, ])
         self.assertEqual(obj_collection.get_dia_object(0).get('id'), 0)
 
     def test_append_and_update(self):
         """ Test that we can add a new DIAObject to an existing
         DIAObjectCollection.
         """
-        obj_list = create_test_dia_objects(1, 1, 0.1)
+        obj_list = create_test_dia_objects(n_objects=1, n_sources=1, start_id=0)
         obj_collection = DIAObjectCollection(obj_list)
 
-        new_dia_obj = create_test_dia_objects(1, 1, 0.1, 1, 0.1)[0]
+        new_dia_obj = create_test_dia_objects(n_objects=1,
+                                              n_sources=1,
+                                              start_id=1,
+                                              start_angle_degrees=0.1)[0]
         obj_collection.append(new_dia_obj)
         self.assertFalse(obj_collection.is_updated)
         self.assertFalse(obj_collection.is_valid_tree)
 
         obj_collection.update_dia_objects()
         self.assertTrue(obj_collection.is_updated)
+        self.assertFalse(obj_collection.is_valid_tree)
+
         obj_collection.update_spatial_tree()
+        self.assertTrue(obj_collection.is_updated)
         self.assertTrue(obj_collection.is_valid_tree)
 
-        self.assertEqual(len(obj_collection.get_dia_object_ids()), 2)
-        self.assertEqual(obj_collection.get_dia_object(1).get('id'), 1)
+        self.assertEqual(obj_collection.get_dia_object_ids(), [0, 1])
 
     def test_score_and_match(self):
         """ Test association between a set of sources and an existing
         DIAObjectCollection.
 
         This also tests that a DIASource that can't be associated within
-        tolerance is addpended to the DIAObjectCollection as a new
+        tolerance is appended to the DIAObjectCollection as a new
         DIAObject.
         """
+        # Create a set of DIAObjects that contain only one DIASource
         obj_collection = DIAObjectCollection(
-            create_test_dia_objects(4, 1, -1))
+            create_test_dia_objects(n_objects=4,
+                                    n_sources=1,
+                                    start_id=0,
+                                    start_angle_degrees=0.0,
+                                    scatter_arcsec=-1.))
+        # We create a set of sources that should associate to each of
+        # our current DIAObjects in the collection. We also create
+        # an extra DIASource that does not associate to any of the current
+        # DIAObjects to test the creation of a new DIAObject for this
+        # DIASource.
         src_cat = create_test_dia_sources(5)
         for src_idx, src in enumerate(src_cat):
-            edit_source_record(
-                src, src_idx + 4, 0.1 * src_idx, 0.1 * src_idx, -1)
+            edit_and_offset_source_record(
+                src,
+                src_idx + 4,
+                0.1 * src_idx,
+                0.1 * src_idx,
+                -1)
         score_struct = obj_collection.score(
-            src_cat,  afwGeom.Angle(1.0, units=afwGeom.arcseconds))
+            src_cat, afwGeom.Angle(1.0, units=afwGeom.arcseconds))
 
         self.assertFalse(np.isfinite(score_struct.scores[-1]))
         for src_idx in range(4):
+            # Our scores should be extremely close to 0 but not exactly so due
+            # to machine noise.
             self.assertAlmostEqual(score_struct.scores[src_idx], 0.0,
-                                   places=9)
+                                   places=16)
 
+        # After matching each DIAObject should now contain 2 DIASources
+        # except the last DIAObject in this collection which should be
+        # newly created during the matching step and contain only one
+        # DIASource.
         updated_indices = obj_collection.match(src_cat, score_struct)
         self.assertEqual(len(obj_collection.dia_objects), 5)
 
         for idx, obj_id in enumerate(obj_collection.get_dia_object_ids()):
             self.assertEqual(idx, updated_indices[idx])
-            if idx != 4:
-                self.assertEqual(
-                    obj_collection.get_dia_object(obj_id).n_dia_sources, 2)
-            else:
+            # We created a new DIAObject in the collection hence the last
+            # DIAObject in this collection is new and contains only one
+            # DIASource.
+            if idx == len(obj_collection.dia_objects) - 1:
                 self.assertEqual(
                     obj_collection.get_dia_object(obj_id).n_dia_sources, 1)
+            else:
+                self.assertEqual(
+                    obj_collection.get_dia_object(obj_id).n_dia_sources, 2)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
@@ -166,7 +204,7 @@ class MemoryTester(lsst.utils.tests.MemoryTestCase):
 def setup_module(module):
     lsst.utils.tests.init()
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     lsst.utils.tests.init()
     unittest.main()

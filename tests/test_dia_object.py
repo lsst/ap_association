@@ -20,10 +20,9 @@
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
 
-import numpy as np
 import unittest
 
-from lsst.ap.association import *
+from lsst.ap.association import DIAObject
 import lsst.afw.table as afwTable
 import lsst.afw.geom as afwGeom
 import lsst.utils.tests

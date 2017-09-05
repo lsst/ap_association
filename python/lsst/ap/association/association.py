@@ -1,3 +1,12 @@
+#
+# LSST Data Management System
+# Copyright 2017 LSST/AURA.
+#
+# This product includes software developed by the
+# LSST Project (http://www.lsst.org/).
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
@@ -11,19 +20,26 @@
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
 
-from __future__ import absolute_import, division, print_function
+""" A simple implementation of source association task for ap_verify.
+"""
 
-__all__ = ["AssociationConfig", "AssociationTask"]
+from __future__ import absolute_import, division, print_function
 
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
+
+__all__ = ["AssociationConfig", "AssociationTask"]
+
+# TODO:
+#     To be finished in DM-11747
+
 
 class AssociationConfig(pexConfig.Config):
     pass
 
 
 class AssociationTask(pipeBase.Task):
-    
+
     ConfigClass = AssociationConfig
     _DefaultName = "associate_sources"
 

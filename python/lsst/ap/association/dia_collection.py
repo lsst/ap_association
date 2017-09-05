@@ -20,6 +20,10 @@
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
 
+""" Define collections of DIAObjects and how to associate them with
+DIASources.
+"""
+
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
@@ -28,7 +32,7 @@ from scipy.spatial import cKDTree
 import lsst.afw.table as afwTable
 import lsst.pipe.base as pipeBase
 
-from .dia_object import *
+from .dia_object import DIAObject
 
 
 class DIAObjectCollection(object):
@@ -69,7 +73,7 @@ class DIAObjectCollection(object):
         self.dia_objects = dia_objects
         self._id_to_index = {}
         for idx, dia_object in enumerate(self.dia_objects):
-            self._id_to_index[dia_object.get('id')] = idx
+            self._id_to_index[dia_object.id] = idx
         self._is_updated = False
         self._is_valid_tree = False
         self.update_dia_objects()
@@ -114,7 +118,9 @@ class DIAObjectCollection(object):
         Loop through the DIAObjects that make up this DIAObjectCollection and
         update them as needed. Optional `force` variable forces the DIAObjects
         within the collelection to be updated regardless of their `is_updated
-        state.
+        state. We set the the variable _is_updated to True after this is run
+        to assert that this method has been run and all summary statistics
+        in the DIAObejcts are valid for their current associated DIASources.
 
         Parameters
         ----------
@@ -124,7 +130,8 @@ class DIAObjectCollection(object):
 
         Returns
         -------
-        bool successfully updated
+        bool
+            Successfully updated
         """
         self._is_updated = False
 
@@ -142,7 +149,8 @@ class DIAObjectCollection(object):
 
         Returns
         -------
-        bool successfully updated
+        bool
+            Successfully updated
         """
         self._is_valid_tree = False
         if not self._is_updated:
@@ -177,7 +185,7 @@ class DIAObjectCollection(object):
         self._is_updated = False
         self._is_valid_tree = False
 
-        self._id_to_index[dia_object.get('id')] = len(self.dia_objects)
+        self._id_to_index[dia_object.id] = len(self.dia_objects)
         self.dia_objects.append(dia_object)
 
         return None
@@ -201,16 +209,19 @@ class DIAObjectCollection(object):
 
         Returns
         -------
-        lsst.pipe.base.struct
-            Contains two arrays: scores DIAObjects, indices of DIAObject
-            mached to.
+        lsst.pipe.base.Struct
+            struct containing:
+            * scores: array of floats of match quality
+            * indices: index in DIAObjectCollection that source matched to
+            Default values for these arrays are NaN and the number of
+            DIAObjects in this collection, respectively.
         """
         if not self._is_valid_tree:
             self.update_spatial_tree()
 
-        scores = np.ones(len(dia_source_catalog)) * np.nan
-        obj_indices = (np.ones(len(dia_source_catalog), dtype=np.int) *
-                       len(self.dia_objects))
+        scores = np.ones(len(dia_source_catalog)) * np.inf
+        obj_indices = np.ones(len(dia_source_catalog), dtype=np.int) * \
+            len(self.dia_objects)
         for src_idx, dia_source in enumerate(dia_source_catalog):
 
             src_point = dia_source.getCoord().getVector()
@@ -233,9 +244,11 @@ class DIAObjectCollection(object):
             A contiguous catalog of dia_sources for which the set of scores
             has been computed on with DIAObjectCollection.score.
         score_struct : lsst.pipe.base.Struct
-            A struct containing two arrays: scores DIAObjects, indices of]
-            DIAObject mached to. Both arrays should be the same length as the
-            source catalog.
+            struct containing:
+            * scores: array of floats of match quality
+            * indices: index in DIAObjectCollection that source matched to
+            Default values for these arrays are NaN and the number of
+            DIAObjects in this collection, respectively.
 
         Returns
         -------
@@ -249,9 +262,18 @@ class DIAObjectCollection(object):
 
         updated_and_new_dia_objects = []
 
+        # We sort from best match to worst to effectively perform a
+        # "handshake" match where both the DIASources and DIAObjects agree
+        # their the best match. By sorting this way, scores with NaN (those
+        # sources that have no match and will create new DIAObjects) will be
+        # placed at the end of the array.
         score_args = score_struct.scores.argsort(axis=None)
         for score_idx in score_args:
             if not np.isfinite(score_struct.scores[score_idx]):
+                # Thanks to the sorting the rest of the sources will be
+                # NaN for their score. We therefore exit the loop to append
+                # sources to a existing DIAObject, leaving these for
+                # the loop creating new objects.
                 break
             if used_dia_object[score_idx]:
                 continue
@@ -260,18 +282,23 @@ class DIAObjectCollection(object):
             updated_and_new_dia_objects.append(
                 score_struct.indices[score_idx])
 
-            self.dia_objects[
-                score_struct.indices[score_idx]].append_dia_source(
-                    dia_source_catalog[score_idx])
+            dia_obj_idx = score_struct.indices[score_idx]
+            self.dia_objects[dia_obj_idx].append_dia_source(
+                dia_source_catalog[score_idx])
 
         n_new_objects = 0
-        for src_idx in np.argwhere(used_dia_source == False).flatten():
-            tmp_src_cat = afwTable.SourceCatalog(
-                dia_source_catalog.schema)
+        # Argwhere returns a array shape (N, 1) so we access the index
+        # thusly to retreve the value rather than the tuple.
+        for (src_idx,) in np.argwhere(np.logical_not(used_dia_source)):
+            tmp_src_cat = afwTable.SourceCatalog(dia_source_catalog.schema)
             tmp_src_cat.append(dia_source_catalog[src_idx])
             self.append(DIAObject(tmp_src_cat))
             n_new_objects += 1
 
+        # Concatenate the indices of the DIAObjects that were matched with
+        # those that were appended. This produces a single array of the
+        # indices of DIAObjects in this collection that were updated or
+        # newly created in this matching process.
         return np.concatenate(
             [updated_and_new_dia_objects,
              np.arange(n_previous_objects,
