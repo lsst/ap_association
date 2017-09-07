@@ -20,12 +20,12 @@
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
 
+""" Definitions for DIAObject and a minimal schema for them.
+"""
+
 from __future__ import absolute_import, division, print_function
 
-import numpy as np
-
 import lsst.afw.table as afwTable
-import lsst.afw.geom as afwGeom
 from lsst.afw.coord import averageCoord
 
 __all__ = ["DIAObject", "make_minimal_dia_object_schema"]
@@ -189,7 +189,7 @@ class DIAObject(object):
         # Right now I'm making this the same as returning the
         # dia_source_catalog.
 
-        raise NotImplimentedError(
+        raise NotImplementedError(
             "Light curves not yet implimented. Use dia_source_catalog property"
             "instead.")
 
