@@ -25,12 +25,9 @@
 
 from __future__ import absolute_import, division, print_function
 
-import lsst.afw.geom as afwGeom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 from .assoc_db_sqlite import AssociationDBSqliteTask
-from .dia_collection import *
-from .dia_object import *
 
 __all__ = ["AssociationConfig", "AssociationTask"]
 
@@ -124,7 +121,7 @@ class AssociationTask(pipeBase.Task):
         wcs = exposure.wcs
         ctr_coord = wcs.pixelToSky(bbox.getCenter())
         max_radius = max(
-            ctrCoord.angularSeparation(wcs.pixelToSky(pp))
+            ctr_coord.angularSeparation(wcs.pixelToSky(pp))
             for pp in bbox.getCorners())
 
         dia_collection = self.level1_db.load(ctr_coord, max_radius)
