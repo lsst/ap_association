@@ -25,10 +25,14 @@
 
 from __future__ import absolute_import, division, print_function
 
+import numpy as np
+
 import lsst.afw.table as afwTable
 from lsst.afw.coord import averageCoord
 
-__all__ = ["DIAObject", "make_minimal_dia_object_schema"]
+__all__ = ["DIAObject",
+           "make_minimal_dia_object_schema",
+           "make_minimal_dia_source_schema"]
 
 
 def make_minimal_dia_object_schema():
@@ -47,6 +51,21 @@ def make_minimal_dia_object_schema():
     # In the future we would like to store a covariance of the coordinate.
     # This functionality is not defined in currenting in the stack, so we will
     # hold off until it is implemented. This is to be addressed in DM-7101.
+    schema.addField("indexer_id", type=np.int64)
+
+    return schema
+
+
+def make_minimal_dia_source_schema():
+    """ Define and create the minimal schema required for a DIASource.
+
+    Return
+    ------
+    lsst.afw.table.schema.schema.Schema
+    """
+
+    schema = afwTable.SourceTable.makeMinimalSchema()
+    schema.addField("indexer_id", type=np.int64)
 
     return schema
 

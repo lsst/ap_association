@@ -33,7 +33,8 @@ from test_dia_object import create_test_dia_sources
 
 
 def create_test_dia_objects(n_objects=5, n_sources=5, start_id=0,
-                            start_angle_degrees=0.0, scatter_arcsec=1.0):
+                            start_angle_degrees=0.0, increment_degrees=0.1,
+                            scatter_arcsec=1.0):
     """ Create DIAObjects with a specified number of DIASources attached.
 
     Parameters
@@ -48,7 +49,9 @@ def create_test_dia_objects(n_objects=5, n_sources=5, start_id=0,
         Starting position of the objects. Additional objects are
         incremented from this position by 0.1 degrees. The position
         of the first object will be RA=start_angle_degrees,
-        DEC=start_angle_degrees
+        DEC=start_angle_degreesi
+    increment_degrees : float
+        Ammount to increment RA and DEC by for each new DIAObject
     scatter_arcsec : float
         Scatter to add to the position of each DIASource.
 
@@ -63,8 +66,8 @@ def create_test_dia_objects(n_objects=5, n_sources=5, start_id=0,
             edit_and_offset_source_record(
                 src_cat[src_idx],
                 start_id + n_sources * obj_idx + src_idx,
-                start_angle_degrees + 0.1 * obj_idx,
-                start_angle_degrees + 0.1 * obj_idx,
+                start_angle_degrees + increment_degrees * obj_idx,
+                start_angle_degrees + increment_degrees * obj_idx,
                 scatter_arcsec)
         output_dia_objects.append(DIAObject(src_cat))
     return output_dia_objects

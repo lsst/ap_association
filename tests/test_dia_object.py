@@ -22,7 +22,9 @@
 
 import unittest
 
-from lsst.ap.association import DIAObject
+from lsst.ap.association import \
+    DIAObject, \
+    make_minimal_dia_source_schema
 import lsst.afw.table as afwTable
 import lsst.afw.geom as afwGeom
 import lsst.utils.tests
@@ -40,7 +42,7 @@ def create_test_dia_sources(n_sources=5):
     -------
     A lsst.afw.SourceCatalog
     """
-    sources = afwTable.SourceCatalog(afwTable.SourceTable.makeMinimalSchema())
+    sources = afwTable.SourceCatalog(make_minimal_dia_source_schema())
 
     for src_idx in range(n_sources):
         src = sources.addNew()

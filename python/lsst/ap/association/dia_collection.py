@@ -107,7 +107,7 @@ class DIAObjectCollection(object):
 
         Return
         ------
-        A DIAObject
+        A list of ints
         """
         return self._id_to_index.keys()
 
@@ -248,7 +248,7 @@ class DIAObjectCollection(object):
             * scores: array of floats of match quality
             * indices: index in DIAObjectCollection that source matched to
             Default values for these arrays are NaN and the number of
-            DIAObjects in this collection, respectively.
+            DIAObjects in this collection, respectively..
 
         Returns
         -------
