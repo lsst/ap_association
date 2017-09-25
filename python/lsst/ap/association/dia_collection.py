@@ -275,7 +275,7 @@ class DIAObjectCollection(object):
                 # sources to a existing DIAObject, leaving these for
                 # the loop creating new objects.
                 break
-            if used_dia_object[score_idx]:
+            if used_dia_object[score_struct.indices[score_idx]]:
                 continue
             used_dia_object[score_struct.indices[score_idx]] = True
             used_dia_source[score_idx] = True

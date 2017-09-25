@@ -27,12 +27,10 @@ from __future__ import absolute_import, division, print_function
 
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
+import lsst.afw.geom as afwGeom
 from .assoc_db_sqlite import AssociationDBSqliteTask
 
 __all__ = ["AssociationConfig", "AssociationTask"]
-
-# TODO:
-#     To be finished in DM-11747
 
 
 class AssociationConfig(pexConfig.Config):
@@ -102,6 +100,7 @@ class AssociationTask(pipeBase.Task):
     def __init__(self, **kwargs):
         """ Initialize the the association task and create the database link.
         """
+        pipeBase.Task.__init__(self, **kwargs)
         self.makeSubtask('level1_db')
 
     @pipeBase.timeMethod
@@ -148,7 +147,8 @@ class AssociationTask(pipeBase.Task):
         dia_sources : lsst.afw.table.SourceCatalog
             DIASources to associate into the DIAObjectCollection.
         """
-        scores = dia_collection.score(dia_sources)
+        scores = dia_collection.score(
+            dia_sources, self.config.maxDistArcSeconds * afwGeom.arcseconds)
         updated_dia_objects = dia_collection.match(dia_sources, scores)
 
         return pipeBase.Struct(
