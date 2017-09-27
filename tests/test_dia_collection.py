@@ -200,6 +200,8 @@ class TestDIAObjectCollection(unittest.TestCase):
                     obj_collection.get_dia_object(obj_id).n_dia_sources, 2)
 
     def test_empty_dia_collection(self):
+        """ Test the creation and appending to a empty DIAObjectCollection.
+        """
         dia_collection = DIAObjectCollection([])
         src_cat = create_test_dia_sources(5)
         for src_idx, src in enumerate(src_cat):

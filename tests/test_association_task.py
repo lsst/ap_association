@@ -57,7 +57,7 @@ def create_test_dia_objects(n_objects=1,
         Number of DIASources to generate for each DIAObject.
     start_id : int
         Starting index to increment the created DIAObjects from.
-    objecct_centers_degrees : (N, 2) list of floats
+    object_centers_degrees : (N, 2) list of floats
         Centers of each DIAObject to create.
     scatter_arcsec : float
         Scatter to add to the position of each DIASource.
@@ -87,6 +87,9 @@ def create_test_dia_sources(n_sources=5,
     ----------
     n_sources : int (optional)
         Number of fake sources to create for testing.
+    start_id : int (optional)
+        Unique id of the first object to create. The remaining sources are
+        incremented by one from the first id.
 
     Returns
     -------
@@ -114,7 +117,7 @@ class TestAssociationTask(unittest.TestCase):
         """ Create a sqlite3 database with default tables and schemas.
         """
         self.db_file = \
-            os.path.join(os.path.dirname(__file__), '/tmp_db.sqlite3')
+            os.path.join(os.path.dirname(__file__), 'tmp_db.sqlite3')
         assoc_db_config = AssociationDBSqliteConfig()
         assoc_db_config.db_name = self.db_file
         assoc_db = AssociationDBSqliteTask(config=assoc_db_config)
@@ -157,6 +160,8 @@ class TestAssociationTask(unittest.TestCase):
         os.remove(self.db_file)
         del self.db_file
         del self.metadata
+        del self.wcs
+        del self.exposure
 
     def test_run(self):
         """ Test the run method with a database that already exists and
@@ -202,11 +207,22 @@ class TestAssociationTask(unittest.TestCase):
             self.assertEqual(output_dia_object.n_dia_sources, 1)
             self.assertEqual(
                 output_dia_object.dia_source_catalog[-1].getId(),
-                obj_idx)
-            self.assertEqual(output_dia_object.id, obj_idx)
+                obj_idx + 10)
+            self.assertEqual(output_dia_object.id, obj_idx + 10)
 
     def _run_association_and_retrieve_objects(self, create_objects=False):
         """ Convienience method for testing the Association run method.
+
+        Parameters
+        ----------
+        create_objects : bool
+            Boolean specifing if seed DIAObjects and DIASources should be
+            inserted into the database before association.
+
+        Return
+        ------
+        dia_collection : lsst.ap.assoication.DIAObjectCollection
+            Final set of DIAObjects to be tested.
         """
         if create_objects:
             self._store_dia_objects_and_sources()
@@ -219,7 +235,7 @@ class TestAssociationTask(unittest.TestCase):
             n_sources=9,
             start_id=10,
             source_locs_deg=source_centers,
-            scatter_arcsec=1.0)
+            scatter_arcsec=0.0)
 
         assoc_config = AssociationConfig()
         assoc_config.level1_db.value.db_name = self.db_file
@@ -240,13 +256,16 @@ class TestAssociationTask(unittest.TestCase):
             for pp in bbox.getCorners())
 
         dia_collection = assoc_db.load(ctr_coord, max_radius)
+        assoc_db.close()
         return dia_collection
 
     def _store_dia_objects_and_sources(self):
+        """ Method for storing a set of test DIAObjects and sources into
+        the L1 database.
+        """
 
         n_objects = 5
         n_sources_per_object = 2
-        #
         object_centers = [
             [self.wcs.pixelToSky(idx, idx).getRa().asDegrees(),
              self.wcs.pixelToSky(idx, idx).getDec().asDegrees()]
@@ -256,14 +275,14 @@ class TestAssociationTask(unittest.TestCase):
             n_sources=n_sources_per_object,
             start_id=0,
             object_centers_degrees=object_centers,
-            scatter_arcsec=0.1)
+            scatter_arcsec=-1.)
         dia_collection = DIAObjectCollection(dia_objects)
 
         assoc_db_config = AssociationDBSqliteConfig()
         assoc_db_config.db_name = self.db_file
         assoc_db = AssociationDBSqliteTask(config=assoc_db_config)
         assoc_db.create_tables()
-        assoc_db.store(dia_collection)
+        assoc_db.store(dia_collection, True)
         assoc_db.close()
 
     def test_associate_sources(self):
@@ -275,8 +294,8 @@ class TestAssociationTask(unittest.TestCase):
         dia_objects = create_test_dia_objects(
             n_objects=n_objects,
             n_sources=n_sources_per_object,
-            source_locs_deg=[[0.04 * obj_idx, 0.04 * obj_idx]
-                             for obj_idx in range(5)],
+            object_centers_degrees=[[0.04 * obj_idx, 0.04 * obj_idx]
+                                    for obj_idx in range(5)],
             scatter_arcsec=0.1)
         dia_collection = DIAObjectCollection(dia_objects)
 

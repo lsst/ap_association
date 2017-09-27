@@ -294,14 +294,14 @@ class DIAObjectCollection(object):
 
             dia_obj_idx = score_struct.indices[score_idx]
             self.dia_objects[dia_obj_idx].append_dia_source(
-                dia_source_catalog[score_idx])
+                dia_source_catalog[int(score_idx)])
 
         n_new_objects = 0
         # Argwhere returns a array shape (N, 1) so we access the index
         # thusly to retreve the value rather than the tuple.
         for (src_idx,) in np.argwhere(np.logical_not(used_dia_source)):
             tmp_src_cat = afwTable.SourceCatalog(dia_source_catalog.schema)
-            tmp_src_cat.append(dia_source_catalog[src_idx])
+            tmp_src_cat.append(dia_source_catalog[int(src_idx)])
             self.append(DIAObject(tmp_src_cat))
             n_new_objects += 1
 
@@ -309,11 +309,12 @@ class DIAObjectCollection(object):
         # those that were appended. This produces a single array of the
         # indices of DIAObjects in this collection that were updated or
         # newly created in this matching process.
-        return np.concatenate(
-            [updated_and_new_dia_objects,
+        output_indices = np.concatenate(
+            (np.array(updated_and_new_dia_objects, dtype=np.int),
              np.arange(n_previous_objects,
                        n_previous_objects + n_new_objects,
-                       dtype=np.int)])
+                       dtype=np.int)))
+        return output_indices
 
     @property
     def is_updated(self):

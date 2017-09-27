@@ -34,10 +34,7 @@ __all__ = ["AssociationConfig", "AssociationTask"]
 
 
 class AssociationConfig(pexConfig.Config):
-    """!
-    \anchor AssociationConfig_
-
-    \brief Configuration parameters for the AssociationTask
+    """ Config class for AssociationTask.
     """
     level1_db = pexConfig.ConfigurableField(
         target=AssociationDBSqliteTask,
@@ -54,44 +51,17 @@ class AssociationConfig(pexConfig.Config):
 
 class AssociationTask(pipeBase.Task):
     """!
-    \anchor AssociationTask_
+    Associate DIAOSources into existing DIAObjects.
 
-    \brief Associate DIAOSources into existing DIAObjects.
-
-    \section ap_association_AssociationTask_Contents Contents
-      - \ref ap_association_AssociationTask_Purpose
-      - \ref ap_association_AssociationTask_Config
-      - \ref ap_association_AssociationTask_Run
-      - \ref ap_association_AssociationTask_Debug
-      - \ref ap_association_AssociationTask_Example
-
-    \section ap_association_AssociationTask_Purpose
-        Description
     This task performs the assocation of detected DIASources in a visit
     with the previous DIAObjects detected over time. It also creates new
     DIAObjects out of DIASources that cannot be associated with previously
     detected DIAObjects.
 
-    \section ap_association_AssociationTask_Initialize
-        Task initialization
-    \copydoc \_\_init\_\_
-
-    \section ap_association_AssociationTask_Run
-        Invoking the Task
-    \copydoc run
-
-    \section ap_association_AssociationTask_Config
-        Configuration parameters
-    See \ref AssociationDBSqliteConfig
-
-    \section ap_association_AssociationTask_Debug
-        Debug variables
-    This task has no debug variables
-
-    \section ap_association_AssociationTask_Example
-        Example of using AssociationDBSqliteTask
-    This task has no standalone example, however it is applied as a subtask of
-    ap.association.AssociationTask
+    Attributes
+    ----------
+    level1_db : lsst.ap.assoiation.AssoiationDBSqlite
+        A wrapper class for handling persitence of DIAObjects and DIASources.
     """
 
     ConfigClass = AssociationConfig
@@ -106,7 +76,7 @@ class AssociationTask(pipeBase.Task):
     @pipeBase.timeMethod
     def run(self, dia_sources, exposure):
         """ Load DIAObjects from the database, associate the sources, and
-        save the results.
+        persist the results into the L1 database.
 
         Parameters
         ----------
@@ -131,9 +101,7 @@ class AssociationTask(pipeBase.Task):
         dia_collection = association_result.dia_collection
         updated_obj_indices = association_result.updated_indices
 
-        self.level1_db.store(dia_collection, updated_obj_indices)
-
-        self.level1_db.commit()
+        self.level1_db.store_updated(dia_collection, updated_obj_indices)
 
     @pipeBase.timeMethod
     def associate_sources(self, dia_collection, dia_sources):
