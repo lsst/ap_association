@@ -26,9 +26,10 @@ import numpy as np
 import os
 import unittest
 
-import lsst.afw.table as afwTable
-import lsst.afw.geom as afwGeom
 from lsst.afw.coord import Coord
+import lsst.afw.geom as afwGeom
+import lsst.afw.image as afwImage
+import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
 from lsst.ap.association import \
     AssociationDBSqliteTask, \
@@ -36,12 +37,49 @@ from lsst.ap.association import \
     AssociationTask, \
     AssociationConfig, \
     DIAObjectCollection, \
+    DIAObject, \
     make_minimal_dia_source_schema
 import lsst.utils.tests
-from test_dia_collection import create_test_dia_objects
 
 
-def create_test_dia_sources(n_sources=5, start_id=0, source_locs_deg=[0.0],
+def create_test_dia_objects(n_objects=1,
+                            n_sources=1,
+                            start_id=0,
+                            object_centers_degrees=[[0.0, 0.0]],
+                            scatter_arcsec=1.0):
+    """ Create DIAObjects with a specified number of DIASources attached.
+
+    Parameters
+    ----------
+    n_objects : int
+        Number of DIAObjects to generate.
+    n_src : int
+        Number of DIASources to generate for each DIAObject.
+    start_id : int
+        Starting index to increment the created DIAObjects from.
+    objecct_centers_degrees : (N, 2) list of floats
+        Centers of each DIAObject to create.
+    scatter_arcsec : float
+        Scatter to add to the position of each DIASource.
+
+    Returns
+    -------
+    A list of DIAObjects
+    """
+    output_dia_objects = []
+    for obj_idx in range(n_objects):
+        src_cat = create_test_dia_sources(
+            n_sources,
+            start_id + obj_idx * n_sources,
+            [object_centers_degrees[obj_idx] for src_idx in range(n_sources)],
+            scatter_arcsec)
+        output_dia_objects.append(DIAObject(src_cat))
+    return output_dia_objects
+
+
+def create_test_dia_sources(n_sources=5,
+                            start_id=0,
+                            source_locs_deg=[[0.0, 0.0]],
                             scatter_arcsec=1.0):
     """ Create dummy DIASources for use in our tests.
 
@@ -59,8 +97,8 @@ def create_test_dia_sources(n_sources=5, start_id=0, source_locs_deg=[0.0],
     for src_idx in range(n_sources):
         src = sources.addNew()
         src['id'] = src_idx + start_id
-        coord = Coord(source_locs_deg[src_idx] * afwGeom.degrees,
-                      source_locs_deg[src_idx] * afwGeom.degrees)
+        coord = Coord(source_locs_deg[src_idx][0] * afwGeom.degrees,
+                      source_locs_deg[src_idx][1] * afwGeom.degrees)
         if scatter_arcsec > 0.0:
             coord.offset(
                 np.random.rand() * 360 * afwGeom.degrees,
@@ -108,13 +146,14 @@ class TestAssociationTask(unittest.TestCase):
         self.metadata.setDouble("CD2_2", -5.10281493481982E-05)
         self.metadata.setDouble("CD2_1", -8.27440751733828E-07)
 
-        self.assoc_task_config = AssociationConfig()
-        self.assoc_task = AssociationTask()
-    
+        self.wcs = afwImage.makeWcs(self.metadata)
+        self.exposure = afwImage.makeExposure(
+            afwImage.makeMaskedImageFromArrays(np.ones((1024, 1153))),
+            self.wcs)
+
     def tearDown(self):
         """ Delete the database after we are done with it.
         """
-        pass
         os.remove(self.db_file)
         del self.db_file
         del self.metadata
@@ -123,17 +162,109 @@ class TestAssociationTask(unittest.TestCase):
         """ Test the run method with a database that already exists and
         contains DIAObjects and Sources.
         """
-        pass
+        dia_collection = self._run_association_and_retrieve_objects(True)
+        not_updated_idx = 0
+        updated_idx_start = 1
+        new_idx_start = 5
+        total_expected_dia_objects = 10
+        self.assertEqual(len(dia_collection.dia_objects),
+                         total_expected_dia_objects)
+        for obj_idx, output_dia_object in \
+                enumerate(dia_collection.dia_objects):
+            if obj_idx == not_updated_idx:
+                # Test the DIAObject we expect to not be assocated with any
+                # new DIASources.
+                self.assertEqual(output_dia_object.n_dia_sources, 2)
+            elif updated_idx_start <= obj_idx < new_idx_start:
+                # Test that associating to the existing DIAObjects went
+                # as planned and test that the IDs of the newly associated
+                # DIASources is correct.
+                self.assertEqual(output_dia_object.n_dia_sources, 3)
+                self.assertEqual(
+                    output_dia_object.dia_source_catalog[-1].getId(),
+                    obj_idx - 1 + 10)
+            else:
+                self.assertEqual(output_dia_object.n_dia_sources, 1)
+                self.assertEqual(
+                    output_dia_object.dia_source_catalog[-1].getId(),
+                    obj_idx - 1 + 10)
+                self.assertEqual(output_dia_object.id, obj_idx + 5 + 4)
 
     def test_run_no_existing_objects(self):
         """ Test the run method with a completely empty database.
         """
-        pass
+        dia_collection = self._run_association_and_retrieve_objects(False)
+        total_expected_dia_objects = 9
+        self.assertEqual(len(dia_collection.dia_objects),
+                         total_expected_dia_objects)
+        for obj_idx, output_dia_object in \
+                enumerate(dia_collection.dia_objects):
+            self.assertEqual(output_dia_object.n_dia_sources, 1)
+            self.assertEqual(
+                output_dia_object.dia_source_catalog[-1].getId(),
+                obj_idx)
+            self.assertEqual(output_dia_object.id, obj_idx)
 
-    def _association_tester(self, create_objects=False):
+    def _run_association_and_retrieve_objects(self, create_objects=False):
         """ Convienience method for testing the Association run method.
         """
-        pass
+        if create_objects:
+            self._store_dia_objects_and_sources()
+
+        source_centers = [
+            [self.wcs.pixelToSky(idx, idx).getRa().asDegrees(),
+             self.wcs.pixelToSky(idx, idx).getDec().asDegrees()]
+            for idx in np.linspace(1, 1000, 10)[1:]]
+        dia_sources = create_test_dia_sources(
+            n_sources=9,
+            start_id=10,
+            source_locs_deg=source_centers,
+            scatter_arcsec=1.0)
+
+        assoc_config = AssociationConfig()
+        assoc_config.level1_db.value.db_name = self.db_file
+        assoc_task = AssociationTask(config=assoc_config)
+
+        assoc_task.run(dia_sources, self.exposure)
+        assoc_task.level1_db.close()
+
+        assoc_db_config = AssociationDBSqliteConfig()
+        assoc_db_config.db_name = self.db_file
+        assoc_db = AssociationDBSqliteTask(config=assoc_db_config)
+
+        bbox = afwGeom.Box2D(self.exposure.getBBox())
+        wcs = self.exposure.getWcs()
+        ctr_coord = wcs.pixelToSky(bbox.getCenter())
+        max_radius = max(
+            ctr_coord.angularSeparation(wcs.pixelToSky(pp))
+            for pp in bbox.getCorners())
+
+        dia_collection = assoc_db.load(ctr_coord, max_radius)
+        return dia_collection
+
+    def _store_dia_objects_and_sources(self):
+
+        n_objects = 5
+        n_sources_per_object = 2
+        #
+        object_centers = [
+            [self.wcs.pixelToSky(idx, idx).getRa().asDegrees(),
+             self.wcs.pixelToSky(idx, idx).getDec().asDegrees()]
+            for idx in np.linspace(1, 1000, 10)[:n_objects]]
+        dia_objects = create_test_dia_objects(
+            n_objects=n_objects,
+            n_sources=n_sources_per_object,
+            start_id=0,
+            object_centers_degrees=object_centers,
+            scatter_arcsec=0.1)
+        dia_collection = DIAObjectCollection(dia_objects)
+
+        assoc_db_config = AssociationDBSqliteConfig()
+        assoc_db_config.db_name = self.db_file
+        assoc_db = AssociationDBSqliteTask(config=assoc_db_config)
+        assoc_db.create_tables()
+        assoc_db.store(dia_collection)
+        assoc_db.close()
 
     def test_associate_sources(self):
         """ Test if performance of associate_sources method in
@@ -144,40 +275,49 @@ class TestAssociationTask(unittest.TestCase):
         dia_objects = create_test_dia_objects(
             n_objects=n_objects,
             n_sources=n_sources_per_object,
-            start_angle_degrees=0.0,
-            increment_degrees=0.04,
-            scatter_arcsec=0.0)
+            source_locs_deg=[[0.04 * obj_idx, 0.04 * obj_idx]
+                             for obj_idx in range(5)],
+            scatter_arcsec=0.1)
         dia_collection = DIAObjectCollection(dia_objects)
 
         dia_sources = create_test_dia_sources(
             n_sources=9,
             start_id=10,
-            source_locs_deg=[0.04 * (src_idx + 1) for src_idx in range(9)],
+            source_locs_deg=[
+                [0.04 * (src_idx + 1),
+                 0.04 * (src_idx + 1)]
+                for src_idx in range(9)],
             scatter_arcsec=1.0)
 
-        import pdb; pdb.set_trace()
-
         assoc_task = AssociationTask()
-        assoc_result = assoc_task.associate_sources(dia_collection,
-                                                    dia_sources)
+        assoc_result = assoc_task.associate_sources(
+            dia_collection, dia_sources)
 
         not_updated_idx = 0
         updated_idx_start = 1
         new_idx_start = 5
+        total_expected_dia_objects = 10
         self.assertEqual(len(assoc_result.dia_collection.dia_objects),
-                         10)
+                         total_expected_dia_objects)
         for obj_idx, output_dia_object in \
                 enumerate(assoc_result.dia_collection.dia_objects):
             if obj_idx == not_updated_idx:
+                # Test the DIAObject we expect to not be assocated with any
+                # new DIASources.
                 self.assertEqual(output_dia_object.n_dia_sources, 2)
             elif updated_idx_start <= obj_idx < new_idx_start:
+                # Test that associating to the existing DIAObjects went
+                # as planned and test that the IDs of the newly associated
+                # DIASources is correct.
                 self.assertEqual(output_dia_object.n_dia_sources, 3)
-                self.assertEqual(output_dia_object.dia_source_catalog[-1].getId(),
-                                 obj_idx - 1 + 10)
+                self.assertEqual(
+                    output_dia_object.dia_source_catalog[-1].getId(),
+                    obj_idx - 1 + n_objects * n_sources_per_object)
             else:
                 self.assertEqual(output_dia_object.n_dia_sources, 1)
-                self.assertEqual(output_dia_object.dia_source_catalog[-1].getId(),
-                                 obj_idx - 1 + 10)
+                self.assertEqual(
+                    output_dia_object.dia_source_catalog[-1].getId(),
+                    obj_idx - 1 + n_objects * n_sources_per_object)
                 self.assertEqual(output_dia_object.id, obj_idx + 5 + 4)
 
 

@@ -155,6 +155,10 @@ class DIAObjectCollection(object):
         self._is_valid_tree = False
         if not self._is_updated:
             return self._is_valid_tree
+        if len(self.dia_objects) == 0:
+            self._is_valid_tree = True
+            self._spatial_tree = None
+            return self._is_valid_tree
 
         xyzs = np.empty((len(self.dia_objects), 3))
         for obj_idx in range(len(self.dia_objects)):
@@ -222,6 +226,12 @@ class DIAObjectCollection(object):
         scores = np.ones(len(dia_source_catalog)) * np.inf
         obj_indices = np.ones(len(dia_source_catalog), dtype=np.int) * \
             len(self.dia_objects)
+
+        if len(self.dia_objects) == 0:
+            return pipeBase.Struct(
+                scores=scores,
+                indices=obj_indices)
+
         for src_idx, dia_source in enumerate(dia_source_catalog):
 
             src_point = dia_source.getCoord().getVector()

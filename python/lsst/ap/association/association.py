@@ -116,8 +116,8 @@ class AssociationTask(pipeBase.Task):
             Input exposure metadata containing the bounding box for this
             exposure.
         """
-        bbox = exposure.bbox
-        wcs = exposure.wcs
+        bbox = afwGeom.Box2D(exposure.getBBox())
+        wcs = exposure.getWcs()
         ctr_coord = wcs.pixelToSky(bbox.getCenter())
         max_radius = max(
             ctr_coord.angularSeparation(wcs.pixelToSky(pp))

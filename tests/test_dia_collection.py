@@ -199,6 +199,38 @@ class TestDIAObjectCollection(unittest.TestCase):
                 self.assertEqual(
                     obj_collection.get_dia_object(obj_id).n_dia_sources, 2)
 
+    def test_empty_dia_collection(self):
+        dia_collection = DIAObjectCollection([])
+        src_cat = create_test_dia_sources(5)
+        for src_idx, src in enumerate(src_cat):
+            edit_and_offset_source_record(
+                src,
+                src_idx + 4,
+                0.1 * src_idx,
+                0.1 * src_idx,
+                -1)
+
+        score_struct = dia_collection.score(
+            src_cat, afwGeom.Angle(1.0, units=afwGeom.arcseconds))
+        for src_idx in range(5):
+            # Our scores should be extremely close to 0 but not exactly so due
+            # to machine noise.
+            self.assertFalse(np.isfinite(score_struct.scores[src_idx]))
+
+        updated_indices = dia_collection.match(src_cat, score_struct)
+        self.assertEqual(len(updated_indices), 5)
+        self.assertEqual(len(dia_collection.dia_objects), 5)
+
+        for idx, obj_id in enumerate(dia_collection.get_dia_object_ids()):
+            self.assertEqual(idx, updated_indices[idx])
+            # We created a new DIAObject in the collection hence the last
+            # DIAObject in this collection is new and contains only one
+            # DIASource.
+            tmp_dia_obj = dia_collection.get_dia_object(obj_id)
+            self.assertEqual(tmp_dia_obj.n_dia_sources, 1)
+            self.assertEqual(tmp_dia_obj.id,
+                             tmp_dia_obj.dia_source_catalog[-1].getId())
+
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass
