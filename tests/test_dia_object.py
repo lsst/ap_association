@@ -60,7 +60,7 @@ class TestDIAObject(unittest.TestCase):
 
     def test_init(self):
         """ Test DIAObject creation and if we can properly instantiate a
-        DIAObject from an already create dia_object_record.
+        DIAObject from an already created dia_object_record.
         """
         single_source = create_test_dia_sources(1)
 
@@ -102,7 +102,7 @@ class TestDIAObject(unittest.TestCase):
 
     def test_update(self):
         """ If we instantiate the class with a set of DIASources we test to
-        make sure that the DIAObject is intantiated correctly and that we
+        make sure that the DIAObject is instantiated correctly and that we
         compute the summary statistics in the expected way.
         """
         sources = create_test_dia_sources(5)

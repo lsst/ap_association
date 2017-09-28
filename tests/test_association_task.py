@@ -24,6 +24,7 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import os
+import tempfile
 import unittest
 
 from lsst.afw.coord import Coord
@@ -85,11 +86,15 @@ def create_test_dia_sources(n_sources=5,
 
     Parameters
     ----------
-    n_sources : int (optional)
+    n_sources : int
         Number of fake sources to create for testing.
-    start_id : int (optional)
+    start_id : int
         Unique id of the first object to create. The remaining sources are
         incremented by one from the first id.
+    source_locs_deg : (N, 2) list of floats
+        Positions of the DIASources to create.
+    scatter_arcsec : float
+        Scatter to add to the position of each DIASource.
 
     Returns
     -------
@@ -116,8 +121,7 @@ class TestAssociationTask(unittest.TestCase):
     def setUp(self):
         """ Create a sqlite3 database with default tables and schemas.
         """
-        self.db_file = \
-            os.path.join(os.path.dirname(__file__), 'tmp_db.sqlite3')
+        (self.tmp_file, self.db_file) = tempfile.mkstemp(dir=os.path.dirname(__file__))
         assoc_db_config = AssociationDBSqliteConfig()
         assoc_db_config.db_name = self.db_file
         assoc_db = AssociationDBSqliteTask(config=assoc_db_config)
@@ -157,6 +161,7 @@ class TestAssociationTask(unittest.TestCase):
     def tearDown(self):
         """ Delete the database after we are done with it.
         """
+        del self.tmp_file
         os.remove(self.db_file)
         del self.db_file
         del self.metadata
@@ -177,7 +182,7 @@ class TestAssociationTask(unittest.TestCase):
         for obj_idx, output_dia_object in \
                 enumerate(dia_collection.dia_objects):
             if obj_idx == not_updated_idx:
-                # Test the DIAObject we expect to not be assocated with any
+                # Test the DIAObject we expect to not be associated with any
                 # new DIASources.
                 self.assertEqual(output_dia_object.n_dia_sources, 2)
             elif updated_idx_start <= obj_idx < new_idx_start:
@@ -211,17 +216,17 @@ class TestAssociationTask(unittest.TestCase):
             self.assertEqual(output_dia_object.id, obj_idx + 10)
 
     def _run_association_and_retrieve_objects(self, create_objects=False):
-        """ Convienience method for testing the Association run method.
+        """ Convenience method for testing the Association run method.
 
         Parameters
         ----------
         create_objects : bool
-            Boolean specifing if seed DIAObjects and DIASources should be
+            Boolean specifying if seed DIAObjects and DIASources should be
             inserted into the database before association.
 
         Return
         ------
-        dia_collection : lsst.ap.assoication.DIAObjectCollection
+        dia_collection : lsst.ap.association.DIAObjectCollection
             Final set of DIAObjects to be tested.
         """
         if create_objects:
@@ -286,7 +291,7 @@ class TestAssociationTask(unittest.TestCase):
         assoc_db.close()
 
     def test_associate_sources(self):
-        """ Test if performance of associate_sources method in
+        """ Test the performance of the associate_sources method in
         AssociationTask.
         """
         n_objects = 5
@@ -321,13 +326,13 @@ class TestAssociationTask(unittest.TestCase):
         for obj_idx, output_dia_object in \
                 enumerate(assoc_result.dia_collection.dia_objects):
             if obj_idx == not_updated_idx:
-                # Test the DIAObject we expect to not be assocated with any
+                # Test the DIAObject we expect to not be associated with any
                 # new DIASources.
                 self.assertEqual(output_dia_object.n_dia_sources, 2)
             elif updated_idx_start <= obj_idx < new_idx_start:
                 # Test that associating to the existing DIAObjects went
                 # as planned and test that the IDs of the newly associated
-                # DIASources is correct.
+                # DIASources are correct.
                 self.assertEqual(output_dia_object.n_dia_sources, 3)
                 self.assertEqual(
                     output_dia_object.dia_source_catalog[-1].getId(),

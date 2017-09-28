@@ -51,7 +51,7 @@ def create_test_dia_objects(n_objects=5, n_sources=5, start_id=0,
         of the first object will be RA=start_angle_degrees,
         DEC=start_angle_degreesi
     increment_degrees : float
-        Ammount to increment RA and DEC by for each new DIAObject
+        Amount to increment RA and DEC by for each new DIAObject
     scatter_arcsec : float
         Scatter to add to the position of each DIASource.
 
@@ -184,15 +184,14 @@ class TestDIAObjectCollection(unittest.TestCase):
         # except the last DIAObject in this collection which should be
         # newly created during the matching step and contain only one
         # DIASource.
-        updated_indices = obj_collection.match(src_cat, score_struct)
+        updated_ids = obj_collection.match(src_cat, score_struct)
         self.assertEqual(len(obj_collection.dia_objects), 5)
 
-        for idx, obj_id in enumerate(obj_collection.get_dia_object_ids()):
-            self.assertEqual(idx, updated_indices[idx])
-            # We created a new DIAObject in the collection hence the last
-            # DIAObject in this collection is new and contains only one
-            # DIASource.
-            if idx == len(obj_collection.dia_objects) - 1:
+        for updated_idx, obj_id in enumerate(updated_ids):
+            if updated_idx == len(updated_ids) - 1:
+                # We created a new DIAObject in the collection hence the last
+                # DIAObject in this collection is new and contains only one
+                # DIASource.
                 self.assertEqual(
                     obj_collection.get_dia_object(obj_id).n_dia_sources, 1)
             else:
@@ -207,7 +206,7 @@ class TestDIAObjectCollection(unittest.TestCase):
         for src_idx, src in enumerate(src_cat):
             edit_and_offset_source_record(
                 src,
-                src_idx + 4,
+                src_idx,
                 0.1 * src_idx,
                 0.1 * src_idx,
                 -1)
@@ -224,7 +223,7 @@ class TestDIAObjectCollection(unittest.TestCase):
         self.assertEqual(len(dia_collection.dia_objects), 5)
 
         for idx, obj_id in enumerate(dia_collection.get_dia_object_ids()):
-            self.assertEqual(idx, updated_indices[idx])
+            self.assertEqual(obj_id, updated_indices[idx])
             # We created a new DIAObject in the collection hence the last
             # DIAObject in this collection is new and contains only one
             # DIASource.

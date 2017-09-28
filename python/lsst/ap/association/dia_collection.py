@@ -49,7 +49,7 @@ class DIAObjectCollection(object):
         DIAObject has been computed for the current set of DIASources it
         contains.
     is_valid_tree : bool
-        Bool represetnting that the internal spatial tree structure is valid
+        Bool representing that the internal spatial tree structure is valid
         for the current set of DIAObjects.
     """
 
@@ -83,13 +83,13 @@ class DIAObjectCollection(object):
         # in this collection for fast pair searching later.
 
     def get_dia_object(self, id):
-        """ Retrive an individual DIAObject from this collection using its
+        """ Retrieve an individual DIAObject from this collection using its
         catalog id.
 
         Parameters
         ----------
         id : int
-            id of the DIAObject to retrive
+            id of the DIAObject to retrieve
 
         Return
         ------
@@ -98,12 +98,12 @@ class DIAObjectCollection(object):
         return self.dia_objects[self._id_to_index[id]]
 
     def get_dia_object_ids(self):
-        """ Retrive the ids of the DIAObjects stored in this collection.
+        """ Retrieve the ids of the DIAObjects stored in this collection.
 
         Parameters
         ----------
         id : int
-            id of the DIAObject to retrive
+            id of the DIAObject to retrieve
 
         Return
         ------
@@ -117,8 +117,8 @@ class DIAObjectCollection(object):
 
         Loop through the DIAObjects that make up this DIAObjectCollection and
         update them as needed. Optional `force` variable forces the DIAObjects
-        within the collelection to be updated regardless of their `is_updated
-        state. We set the the variable _is_updated to True after this is run
+        within the collection to be updated regardless of their `is_updated
+        state. We set the variable _is_updated to True after this is run
         to assert that this method has been run and all summary statistics
         in the DIAObejcts are valid for their current associated DIASources.
 
@@ -145,7 +145,7 @@ class DIAObjectCollection(object):
         return self._is_updated
 
     def update_spatial_tree(self):
-        """ Update the internal searchable spatial tree on the DIAObjects.
+        """ Update the internal search able spatial tree on the DIAObjects.
 
         Returns
         -------
@@ -198,7 +198,7 @@ class DIAObjectCollection(object):
         """ Compute a quality score for each dia_source/dia_object pair
         between this collection and an input diat_source catalog.
 
-        max_dist sets maximum seperation in arcseconds to consider a
+        max_dist sets maximum separation in arcseconds to consider a
         dia_source a possible match to a dia_object. If the pair is
         beyond this distance no score is computed.
 
@@ -216,21 +216,21 @@ class DIAObjectCollection(object):
         lsst.pipe.base.Struct
             struct containing:
             * scores: array of floats of match quality
-            * indices: index in DIAObjectCollection that source matched to
-            Default values for these arrays are NaN and the number of
-            DIAObjects in this collection, respectively.
+            * obj_ids: id of the DIAObject in thisDIAObjectCollection that
+                the given source matched.
+            Default values for these arrays are
+            INF and -1 respectively for unassociated sources.
         """
         if not self._is_valid_tree:
             self.update_spatial_tree()
 
         scores = np.ones(len(dia_source_catalog)) * np.inf
-        obj_indices = np.ones(len(dia_source_catalog), dtype=np.int) * \
-            len(self.dia_objects)
+        obj_ids = -1 * np.ones(len(dia_source_catalog), dtype=np.int)
 
         if len(self.dia_objects) == 0:
             return pipeBase.Struct(
                 scores=scores,
-                indices=obj_indices)
+                indices=obj_ids)
 
         for src_idx, dia_source in enumerate(dia_source_catalog):
 
@@ -238,11 +238,11 @@ class DIAObjectCollection(object):
             dist, obj_idx = self._spatial_tree.query(src_point)
             if dist < max_dist.asRadians():
                 scores[src_idx] = dist
-                obj_indices[src_idx] = obj_idx
+                obj_ids[src_idx] = self.dia_objects[obj_idx].id
 
         return pipeBase.Struct(
             scores=scores,
-            indices=obj_indices)
+            obj_ids=obj_ids)
 
     def match(self, dia_source_catalog, score_struct):
         """ Append DIAsources to DIAObjects given a score and create new
@@ -256,19 +256,18 @@ class DIAObjectCollection(object):
         score_struct : lsst.pipe.base.Struct
             struct containing:
             * scores: array of floats of match quality
-            * indices: index in DIAObjectCollection that source matched to
-            Default values for these arrays are NaN and the number of
-            DIAObjects in this collection, respectively..
+            * obj_ids: id of the DIAObject in thisDIAObjectCollection that
+                the given source matched.
+            Default values for these arrays are
+            INF and -1 respectively for unassociated sources.
 
         Returns
         -------
-        Indices of newly updated and created DIAObjects
+        Ids of newly updated and created DIAObjects
         """
 
         used_dia_object = np.zeros(len(self.dia_objects), dtype=np.bool)
         used_dia_source = np.zeros(len(dia_source_catalog), dtype=np.bool)
-
-        n_previous_objects = len(self.dia_objects)
 
         updated_and_new_dia_objects = []
 
@@ -285,36 +284,29 @@ class DIAObjectCollection(object):
                 # sources to a existing DIAObject, leaving these for
                 # the loop creating new objects.
                 break
-            if used_dia_object[score_struct.indices[score_idx]]:
+            dia_obj_idx = self._id_to_index[score_struct.obj_ids[score_idx]]
+            if used_dia_object[dia_obj_idx]:
                 continue
-            used_dia_object[score_struct.indices[score_idx]] = True
+            used_dia_object[dia_obj_idx] = True
             used_dia_source[score_idx] = True
-            updated_and_new_dia_objects.append(
-                score_struct.indices[score_idx])
+            updated_obj_id = score_struct.obj_ids[score_idx]
+            updated_and_new_dia_objects.append(updated_obj_id)
 
-            dia_obj_idx = score_struct.indices[score_idx]
             self.dia_objects[dia_obj_idx].append_dia_source(
                 dia_source_catalog[int(score_idx)])
 
-        n_new_objects = 0
         # Argwhere returns a array shape (N, 1) so we access the index
-        # thusly to retreve the value rather than the tuple.
+        # thusly to retrieve the value rather than the tuple.
         for (src_idx,) in np.argwhere(np.logical_not(used_dia_source)):
             tmp_src_cat = afwTable.SourceCatalog(dia_source_catalog.schema)
             tmp_src_cat.append(dia_source_catalog[int(src_idx)])
             self.append(DIAObject(tmp_src_cat))
-            n_new_objects += 1
+            updated_and_new_dia_objects.append(
+                self.dia_objects[-1].id)
 
-        # Concatenate the indices of the DIAObjects that were matched with
-        # those that were appended. This produces a single array of the
-        # indices of DIAObjects in this collection that were updated or
-        # newly created in this matching process.
-        output_indices = np.concatenate(
-            (np.array(updated_and_new_dia_objects, dtype=np.int),
-             np.arange(n_previous_objects,
-                       n_previous_objects + n_new_objects,
-                       dtype=np.int)))
-        return output_indices
+        # Return the ids of the DIAObjects in this DIAObjectCollection that
+        # were updated or newly created.
+        return updated_and_new_dia_objects
 
     @property
     def is_updated(self):

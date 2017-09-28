@@ -53,15 +53,15 @@ class AssociationTask(pipeBase.Task):
     """!
     Associate DIAOSources into existing DIAObjects.
 
-    This task performs the assocation of detected DIASources in a visit
+    This task performs the association of detected DIASources in a visit
     with the previous DIAObjects detected over time. It also creates new
     DIAObjects out of DIASources that cannot be associated with previously
     detected DIAObjects.
 
     Attributes
     ----------
-    level1_db : lsst.ap.assoiation.AssoiationDBSqlite
-        A wrapper class for handling persitence of DIAObjects and DIASources.
+    level1_db : lsst.ap.association.AssoiationDBSqlite
+        A wrapper class for handling persistence of DIAObjects and DIASources.
     """
 
     ConfigClass = AssociationConfig
@@ -100,9 +100,9 @@ class AssociationTask(pipeBase.Task):
                                                     dia_sources)
 
         dia_collection = association_result.dia_collection
-        updated_obj_indices = association_result.updated_indices
+        updated_obj_ids = association_result.updated_ids
 
-        self.level1_db.store_updated(dia_collection, updated_obj_indices)
+        self.level1_db.store_updated(dia_collection, updated_obj_ids)
 
     @pipeBase.timeMethod
     def associate_sources(self, dia_collection, dia_sources):
@@ -111,7 +111,7 @@ class AssociationTask(pipeBase.Task):
         Parameters
         ----------
         dia_collection : lsst.ap.association.DIAObjectCollection
-            Collection of DIAObjects to atempt to associate the input
+            Collection of DIAObjects to attempt to associate the input
             DIASources into.
         dia_sources : lsst.afw.table.SourceCatalog
             DIASources to associate into the DIAObjectCollection.
@@ -122,5 +122,5 @@ class AssociationTask(pipeBase.Task):
 
         return pipeBase.Struct(
             dia_collection=dia_collection,
-            updated_indices=updated_dia_objects
+            updated_ids=updated_dia_objects
         )
