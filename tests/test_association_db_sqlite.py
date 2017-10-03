@@ -106,6 +106,10 @@ class TestAssociationDBSqlite(unittest.TestCase):
             if sub_schema.getField().getTypeString() == 'L':
                 self.assertEqual(record_a[sub_schema.getKey()],
                                  record_b[sub_schema.getKey()])
+            elif sub_schema.getField().getTypeString() == 'Angle':
+                self.assertAlmostEqual(
+                    record_a[sub_schema.getKey()].asDegrees(),
+                    record_b[sub_schema.getKey()].asDegrees())
             else:
                 self.assertAlmostEqual(record_a[sub_schema.getKey()],
                                        record_b[sub_schema.getKey()])

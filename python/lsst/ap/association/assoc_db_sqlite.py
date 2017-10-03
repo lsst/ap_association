@@ -20,6 +20,11 @@
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
 
+""" Simple sqlite3 interface for storing and retriving DIAObjects and
+DIASources. This class is mainly for testing purposes in the context of
+ap_pipe/ap_verify.
+"""
+
 from __future__ import absolute_import, division, print_function
 
 import sqlite3
@@ -34,7 +39,6 @@ from .dia_object import \
     DIAObject, \
     make_minimal_dia_object_schema, \
     make_minimal_dia_source_schema
-
 
 __all__ = ["AssociationDBSqliteConfig",
            "AssociationDBSqliteTask",
@@ -302,7 +306,8 @@ class AssociationDBSqliteTask(pipeBase.Task):
             if compute_spatial_index:
                 dia_object.dia_object_record.set(
                     'indexer_id', self.indexer.index_points(
-                        [dia_object.ra], [dia_object.dec])[0])
+                        [dia_object.ra.asDegrees()],
+                        [dia_object.dec.asDegrees()])[0])
             self._store_record(
                 dia_object.dia_object_record,
                 self._dia_object_converter)
@@ -340,8 +345,8 @@ class AssociationDBSqliteTask(pipeBase.Task):
             dia_object = dia_collection.dia_objects[updated_collection_index]
             dia_object.dia_object_record.set(
                 'indexer_id',
-                self.indexer.index_points([dia_object.ra],
-                                          [dia_object.dec])[0])
+                self.indexer.index_points([dia_object.ra.asDegrees()],
+                                          [dia_object.dec.asDegrees()])[0])
             self._store_record(
                 dia_object.dia_object_record,
                 self._dia_object_converter)
@@ -405,7 +410,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         self._db_cursor.executemany(
             "INSERT OR REPLACE INTO tmp_indexer_indices VALUES (?)",
-            [(indexer_index,) for indexer_index in indexer_indices])
+            [(int(indexer_index),) for indexer_index in indexer_indices])
 
         self._db_cursor.execute(
             "SELECT o.* FROM dia_objects AS o "

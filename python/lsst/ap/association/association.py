@@ -27,19 +27,14 @@ from __future__ import absolute_import, division, print_function
 
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
+import lsst.afw.geom as afwGeom
 from .assoc_db_sqlite import AssociationDBSqliteTask
 
 __all__ = ["AssociationConfig", "AssociationTask"]
 
-# TODO:
-#     To be finished in DM-11747
-
 
 class AssociationConfig(pexConfig.Config):
-    """!
-    \anchor AssociationConfig_
-
-    \brief Configuration parameters for the AssociationTask
+    """ Config class for AssociationTask.
     """
     level1_db = pexConfig.ConfigurableField(
         target=AssociationDBSqliteTask,
@@ -56,44 +51,17 @@ class AssociationConfig(pexConfig.Config):
 
 class AssociationTask(pipeBase.Task):
     """!
-    \anchor AssociationTask_
+    Associate DIAOSources into existing DIAObjects.
 
-    \brief Associate DIAOSources into existing DIAObjects.
-
-    \section ap_association_AssociationTask_Contents Contents
-      - \ref ap_association_AssociationTask_Purpose
-      - \ref ap_association_AssociationTask_Config
-      - \ref ap_association_AssociationTask_Run
-      - \ref ap_association_AssociationTask_Debug
-      - \ref ap_association_AssociationTask_Example
-
-    \section ap_association_AssociationTask_Purpose
-        Description
     This task performs the assocation of detected DIASources in a visit
     with the previous DIAObjects detected over time. It also creates new
     DIAObjects out of DIASources that cannot be associated with previously
     detected DIAObjects.
 
-    \section ap_association_AssociationTask_Initialize
-        Task initialization
-    \copydoc \_\_init\_\_
-
-    \section ap_association_AssociationTask_Run
-        Invoking the Task
-    \copydoc run
-
-    \section ap_association_AssociationTask_Config
-        Configuration parameters
-    See \ref AssociationDBSqliteConfig
-
-    \section ap_association_AssociationTask_Debug
-        Debug variables
-    This task has no debug variables
-
-    \section ap_association_AssociationTask_Example
-        Example of using AssociationDBSqliteTask
-    This task has no standalone example, however it is applied as a subtask of
-    ap.association.AssociationTask
+    Attributes
+    ----------
+    level1_db : lsst.ap.assoiation.AssoiationDBSqlite
+        A wrapper class for handling persitence of DIAObjects and DIASources.
     """
 
     ConfigClass = AssociationConfig
@@ -102,12 +70,13 @@ class AssociationTask(pipeBase.Task):
     def __init__(self, **kwargs):
         """ Initialize the the association task and create the database link.
         """
+        pipeBase.Task.__init__(self, **kwargs)
         self.makeSubtask('level1_db')
 
     @pipeBase.timeMethod
     def run(self, dia_sources, exposure):
         """ Load DIAObjects from the database, associate the sources, and
-        save the results.
+        persist the results into the L1 database.
 
         Parameters
         ----------
@@ -117,8 +86,9 @@ class AssociationTask(pipeBase.Task):
             Input exposure metadata containing the bounding box for this
             exposure.
         """
-        bbox = exposure.bbox
-        wcs = exposure.wcs
+        # Assure we have a Box2D and can use the getCenter method.
+        bbox = afwGeom.Box2D(exposure.getBBox())
+        wcs = exposure.getWcs()
         ctr_coord = wcs.pixelToSky(bbox.getCenter())
         max_radius = max(
             ctr_coord.angularSeparation(wcs.pixelToSky(pp))
@@ -132,9 +102,7 @@ class AssociationTask(pipeBase.Task):
         dia_collection = association_result.dia_collection
         updated_obj_indices = association_result.updated_indices
 
-        self.level1_db.store(dia_collection, updated_obj_indices)
-
-        self.level1_db.commit()
+        self.level1_db.store_updated(dia_collection, updated_obj_indices)
 
     @pipeBase.timeMethod
     def associate_sources(self, dia_collection, dia_sources):
@@ -148,7 +116,8 @@ class AssociationTask(pipeBase.Task):
         dia_sources : lsst.afw.table.SourceCatalog
             DIASources to associate into the DIAObjectCollection.
         """
-        scores = dia_collection.score(dia_sources)
+        scores = dia_collection.score(
+            dia_sources, self.config.maxDistArcSeconds * afwGeom.arcseconds)
         updated_dia_objects = dia_collection.match(dia_sources, scores)
 
         return pipeBase.Struct(

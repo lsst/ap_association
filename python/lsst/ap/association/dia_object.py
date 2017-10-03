@@ -65,7 +65,6 @@ def make_minimal_dia_source_schema():
     """
 
     schema = afwTable.SourceTable.makeMinimalSchema()
-    schema.addField("indexer_id", type=np.int64)
 
     return schema
 
