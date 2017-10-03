@@ -109,7 +109,7 @@ class DIAObjectCollection(object):
         ------
         A list of ints
         """
-        return self._id_to_index.keys()
+        return list(self._id_to_index.keys())
 
     def update_dia_objects(self, force=False):
         """ Update the summary statistics of all DIAObjects in this

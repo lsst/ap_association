@@ -171,7 +171,7 @@ class TestDIAObjectCollection(unittest.TestCase):
                 0.1 * src_idx,
                 -1)
         score_struct = obj_collection.score(
-            src_cat, afwGeom.Angle(1.0, units=afwGeom.arcseconds))
+            src_cat, 1.0 * afwGeom.arcseconds)
 
         self.assertFalse(np.isfinite(score_struct.scores[-1]))
         for src_idx in range(4):
@@ -217,7 +217,7 @@ class TestDIAObjectCollection(unittest.TestCase):
         for src_idx in range(5):
             # Our scores should be extremely close to 0 but not exactly so due
             # to machine noise.
-            self.assertFalse(np.isfinite(score_struct.scores[src_idx]))
+            self.assertTrue(np.isinf(score_struct.scores[src_idx]))
 
         updated_indices = dia_collection.match(src_cat, score_struct)
         self.assertEqual(len(updated_indices), 5)

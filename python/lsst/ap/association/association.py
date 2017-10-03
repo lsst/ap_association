@@ -86,6 +86,7 @@ class AssociationTask(pipeBase.Task):
             Input exposure metadata containing the bounding box for this
             exposure.
         """
+        # Assure we have a Box2D and can use the getCenter method.
         bbox = afwGeom.Box2D(exposure.getBBox())
         wcs = exposure.getWcs()
         ctr_coord = wcs.pixelToSky(bbox.getCenter())
