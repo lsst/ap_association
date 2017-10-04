@@ -20,7 +20,7 @@
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
 
-""" Simple sqlite3 interface for storing and retriving DIAObjects and
+""" Simple sqlite3 interface for storing and retrieving DIAObjects and
 DIASources. This class is mainly for testing purposes in the context of
 ap_pipe/ap_verify.
 """
@@ -47,7 +47,7 @@ __all__ = ["AssociationDBSqliteConfig",
 
 class SqliteDBConverter(object):
     """ Class for defining conversions to and from an sqlite database and
-    afw SourceRecord bjects.
+    afw SourceRecord objects.
 
     Attributes
     ----------
@@ -112,7 +112,7 @@ class SqliteDBConverter(object):
         Parameters
         ----------
         db_row : list of values
-            Database values retived to write into the sr_record
+            Retrieved values from the database to convert into a SourceRecord.
 
         Return
         ------
@@ -177,7 +177,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
     Create a simple sqlite database and implement wrappers to store and
     retrieve DIAObjects and DIASources from within that database. This task
     functions as a testing ground for the L1 database and should mimic this
-    database's eventual functionaly. This specific database implementation is
+    database's eventual functionality. This specific database implementation is
     useful for the verification packages which may not be run with access to
     L1 database.
 
@@ -258,7 +258,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
     @pipeBase.timeMethod
     def load(self, ctr_coord, radius):
         """ Load all DIAObjects and associated DIASources within
-        the specified cirlce.
+        the specified circle.
 
         This method is approximate to the input circle as it will
         return the DIAObjects that are contained within the pixels
@@ -269,7 +269,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         ctr_coord : lsst.afw.geom.SpherePoint
             Center position of the circle on the sky to load.
         radius : lsst.afw.geom.Angle
-            Distance from ctr_coord defining a cirlce on the sky
+            Distance from ctr_coord defining a circle on the sky
             within which to load DIAObjects and associated DIASources.
 
         Returns
@@ -321,7 +321,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
     @pipeBase.timeMethod
     def store_updated(self, dia_collection,
-                      updated_dia_collection_indices):
+                      updated_dia_collection_ids):
         """ Store new DIAObjects and sources in the sqlite database.
 
         This method is intended to be used on a per-visit basis with the
@@ -334,15 +334,12 @@ class AssociationDBSqliteTask(pipeBase.Task):
             A collection of DIAObjects that contains newly created or updated
             DIAObjects. Only the new or updated DIAObjects are stored.
         updated_dia_collection_indices : int ndarray
-            Indices within the set DIAObjectCollection that should be stored
-            as updated DIAObjects in the database.
-
-        TODO:
-            Change updated_dia_collection_indices to updated_dia_object_ids.
-            DM-11921
+            Ids of DIAObjects within the set DIAObjectCollection that should
+            be stored as updated DIAObjects in the database.
         """
-        for updated_collection_index in updated_dia_collection_indices:
-            dia_object = dia_collection.dia_objects[updated_collection_index]
+        for updated_collection_id in updated_dia_collection_ids:
+            dia_object = dia_collection.get_dia_object(
+                updated_collection_id)
             dia_object.dia_object_record.set(
                 'indexer_id',
                 self.indexer.index_points([dia_object.ra.asDegrees()],
@@ -359,14 +356,12 @@ class AssociationDBSqliteTask(pipeBase.Task):
         self._commit()
 
     def _get_dia_objects(self, indexer_indices):
-        """ Retrive the DIAObjects from the database whose indexer indices
+        """ Retrieve the DIAObjects from the database whose indexer indices
         are with the specified list of indices.
 
-        Retrives a list of DIAObjects that are covered by the pixels with
-        indices, indexer_indices. Use this to retrive the complete DIAObject
-        including the associated sources. Using this method instead of `load`
-        will avoid the overhead of creating a DIAObjectCollection if that is
-        desired.
+        Retrieves a list of DIAObjects that are covered by the pixels with
+        indices, indexer_indices. Use this to retrieve the complete DIAObject
+        including the associated sources.
 
         Parameters
         ----------
@@ -425,11 +420,11 @@ class AssociationDBSqliteTask(pipeBase.Task):
         return output_rows
 
     def _get_dia_object_records(self, indexer_indices):
-        """ Retrive the SourceCatalog of objects representing the DIAObjects
+        """ Retrieve the SourceCatalog of objects representing the DIAObjects
         in the spatial indices specified.
 
-        Retrives the SourceRecords that are covered by the pixels with
-        indices, indexer_indices. Use this to retrive the summary statistics
+        Retrieves the SourceRecords that are covered by the pixels with
+        indices, indexer_indices. Use this to retrieve the summary statistics
         of the DIAObjects themselves rather than taking the extra overhead
         of loading the associated DIASources as well.
 
@@ -453,12 +448,12 @@ class AssociationDBSqliteTask(pipeBase.Task):
         return output_dia_objects
 
     def _get_dia_sources(self, dia_obj_id):
-        """ Retrive all DIASources associated with this DIAObject id.
+        """ Retrieve all DIASources associated with this DIAObject id.
 
         Parameters
         ----------
         dia_obj_id : int
-            Id of the DIAObject that is asssociated with the DIASources
+            Id of the DIAObject that is associated with the DIASources
             of interest.
 
         Returns
@@ -504,7 +499,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         Parameters
         ----------
         source_record : lsst.afw.table.SourcRecord
-            SourceRecord to store in the database table spcified by
+            SourceRecord to store in the database table specified by
             converter.
         converter : lsst.ap.association.SqliteDBConverter
             A converter object specifying the correct database table to write

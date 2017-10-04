@@ -49,7 +49,7 @@ def make_minimal_dia_object_schema():
     # as well as their errors.
 
     # In the future we would like to store a covariance of the coordinate.
-    # This functionality is not defined in currenting in the stack, so we will
+    # This functionality is not defined in currently in the stack, so we will
     # hold off until it is implemented. This is to be addressed in DM-7101.
     schema.addField("indexer_id", type=np.int64)
 
@@ -125,13 +125,13 @@ class DIAObject(object):
         A SourceRecord column value
         """
 
-        # This will in the future be replaced with a overwritting of __getattr
+        # This will in the future be replaced with a overwriting of __getattr
         # and __dir__ for this class.
         return self._dia_object_record.get(name)
 
     def update(self):
         """ Compute all summary statistics given the current catalog of
-        DIASources asigned to this DIAObject.
+        DIASources assigned to this DIAObject.
 
         Store these summaries (e.g. median RA/DEC position, fluxes...) in
         the object_source_record attribute and set the class variable
@@ -141,7 +141,7 @@ class DIAObject(object):
         self._updated = False
 
         # To quickly compute the summary statistics we check if the catalog
-        # is currently contious and if not we make a deep copy.
+        # is currently continuous and if not we make a deep copy.
         if not self._dia_source_catalog.isContiguous():
             tmp_dia_source_catalog = self._dia_source_catalog.copy(deep=True)
             self._dia_source_catalog = tmp_dia_source_catalog
@@ -208,7 +208,7 @@ class DIAObject(object):
         # dia_source_catalog.
 
         raise NotImplementedError(
-            "Light curves not yet implimented. Use dia_source_catalog property"
+            "Light curves not yet implemented. Use dia_source_catalog property"
             "instead.")
 
     @property
@@ -227,7 +227,7 @@ class DIAObject(object):
 
     @property
     def dia_object_record(self):
-        """ Retrive the SourceRecord that represents the summary statistics on
+        """ Retrieve the SourceRecord that represents the summary statistics on
         this DIAObject's set of DIASources.
 
         Return
@@ -238,7 +238,7 @@ class DIAObject(object):
 
     @property
     def dia_source_catalog(self):
-        """ Retrive the SourceCatalog that represents the DIASources that make
+        """ Retrieve the SourceCatalog that represents the DIASources that make
         up this DIAObject.
 
         Return

@@ -95,7 +95,8 @@ class TestAssociationDBSqlite(unittest.TestCase):
     def _compare_source_records(self, record_a, record_b):
         """ Compare the values stored in two source records.
 
-        This comparisons assumes the two schema are identical.
+        This comparison assumes that the schema for record_a is a
+        subset of or equal to the schema of record_b.
 
         Parameters
         ----------
@@ -126,7 +127,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         self._test_store_index_option(False)
 
     def _test_store_index_option(self, update_spatial_index):
-        """ Convience function for testing the store method.
+        """ Convenience function for testing the store method.
 
         Parameters
         ---------
@@ -140,7 +141,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
             start_angle_degrees=0.1,
             scatter_arcsec=0.0)
         if not update_spatial_index:
-            # Set the spatial index to some arbitray value
+            # Set the spatial index to some arbitrary value
             dia_objects[0].dia_object_record.set('indexer_id', 10)
         dia_collection = DIAObjectCollection(dia_objects)
 
@@ -150,7 +151,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
             "SELECT * FROM dia_objects")
         for row in self.assoc_db._db_cursor.fetchall():
             if update_spatial_index:
-                # Index is HTM cell number at level=7, RA,DEC=0.1
+                # Value is HTM cell number at level=7, RA,DEC=0.1
                 dia_objects[0].dia_object_record.set('indexer_id', 253952)
             round_trip_object = \
                 self.assoc_db._dia_object_converter.source_record_from_db_row(
@@ -301,7 +302,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
             self._compare_source_records(dia_source, created_source)
 
     def test_store_dia_object_dia_source_pair(self):
-        """ Test storing the ids of assocated DIAObjects and DIASources.
+        """ Test storing the ids of associated DIAObjects and DIASources.
         """
         for obj_id in range(2):
             for src_id in range(5):
@@ -338,8 +339,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
     def _store_and_retrieve_source_record(self,
                                           source_record,
                                           converter):
-        """ Convenience method for round tripping a soruce
-        record object.
+        """ Convenience method for round tripping a source record object.
 
         Parameters
         ----------
