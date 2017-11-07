@@ -52,6 +52,7 @@ def make_minimal_dia_object_schema():
     # This functionality is not defined in currently in the stack, so we will
     # hold off until it is implemented. This is to be addressed in DM-7101.
     schema.addField("indexer_id", type=np.int64)
+    schema.addField("n_dia_sources", type=np.int64)
 
     return schema
 
@@ -157,12 +158,18 @@ class DIAObject(object):
 
         # Loop through DIASources, compute summary statistics (TBD) and store
         # them in dia_object_record attribute.
-
+        self._store_n_associated_sources()
         self._compute_mean_coordinate()
 
         # In the future we will calculate covariances on this centroid,
         # however generalized coordinate covariances are not defined (DM-7101)
         # we also do not need them yet for the MVP/S
+
+    def _store_n_associated_sources(self):
+        """ Store the number of DIASources associated with the DIAObject.
+        """
+
+        self._dia_object_record.set("n_dia_sources", self.n_dia_sources)
 
     def _compute_mean_coordinate(self):
         """ Compute the mean coordinate of this DIAObject given the current
