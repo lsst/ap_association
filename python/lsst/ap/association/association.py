@@ -89,12 +89,8 @@ class AssociationTask(pipeBase.Task):
         # Assure we have a Box2D and can use the getCenter method.
         bbox = afwGeom.Box2D(exposure.getBBox())
         wcs = exposure.getWcs()
-        ctr_coord = wcs.pixelToSky(bbox.getCenter())
-        max_radius = max(
-            ctr_coord.angularSeparation(wcs.pixelToSky(pp))
-            for pp in bbox.getCorners())
 
-        dia_collection = self.level1_db.load(ctr_coord, max_radius)
+        dia_collection = self.level1_db.load(bbox, wcs)
 
         association_result = self.associate_sources(dia_collection,
                                                     dia_sources)

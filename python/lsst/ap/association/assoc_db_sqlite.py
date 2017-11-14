@@ -256,7 +256,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         return True
 
     @pipeBase.timeMethod
-    def load(self, ctr_coord, radius):
+    def load(self, bbox, wcs):
         """ Load all DIAObjects and associated DIASources within
         the specified circle.
 
@@ -276,10 +276,9 @@ class AssociationDBSqliteTask(pipeBase.Task):
         -------
         lsst.ap.association.DIAObjectCollection
         """
-        indexer_indices, on_boundry = self.indexer.get_pixel_ids(
-            ctr_coord, radius)
+        indexer_indices, on_boundry = self.indexer.get_pixel_ids(bbox, wcs)
 
-        dia_objects = self._get_dia_objects(indexer_indices)
+        dia_objects = self._get_dia_objects(indexer_indices, bbox, wcs)
 
         dia_collection = DIAObjectCollection(dia_objects)
 
@@ -355,7 +354,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
                 dia_object.dia_source_catalog[-1].getId())
         self._commit()
 
-    def _get_dia_objects(self, indexer_indices):
+    def _get_dia_objects(self, indexer_indices, expMd=None):
         """ Retrieve the DIAObjects from the database whose indexer indices
         are with the specified list of indices.
 
@@ -377,6 +376,9 @@ class AssociationDBSqliteTask(pipeBase.Task):
         for row in self._query_dia_objects(indexer_indices):
             dia_object_record = \
                 self._dia_object_converter.source_record_from_db_row(row)
+            if not self._check_dia_object_possition(dia_object_record,
+                                                    bbox, wcs):
+                continue
             dia_sources = self._get_dia_sources(
                 dia_object_record.getId())
             output_dia_objects.append(
@@ -418,6 +420,13 @@ class AssociationDBSqliteTask(pipeBase.Task):
         self._commit()
 
         return output_rows
+
+    def _check_dia_object_possition(dia_object_record, bbox, wcs):
+        """ Check the RA, DEC position of the current dia_object_record against
+        the bounding box of the exposure.
+        """
+        point = wcs.skyToPixel(dia_object_record.getCoord())
+        return bbox.contains(point)
 
     def _get_dia_object_records(self, indexer_indices):
         """ Retrieve the SourceCatalog of objects representing the DIAObjects
