@@ -30,7 +30,7 @@ import lsst.afw.geom as afwGeom
 import lsst.utils.tests
 
 
-def create_test_dia_sources(n_sources=5):
+def create_test_dia_sources(n_sources=5, schema=None):
     """ Create dummy DIASources for use in our tests.
 
     Parameters
@@ -42,6 +42,9 @@ def create_test_dia_sources(n_sources=5):
     -------
     A lsst.afw.SourceCatalog
     """
+    if schema is None:
+        schema = schema
+
     sources = afwTable.SourceCatalog(make_minimal_dia_source_schema())
 
     for src_idx in range(n_sources):
@@ -126,6 +129,40 @@ class TestDIAObject(unittest.TestCase):
         self.assertTrue(dia_obj.is_updated)
 
         sources = create_test_dia_sources(2)
+        dia_obj.append_dia_source(sources[1])
+        self.assertFalse(dia_obj.is_updated)
+
+        associated_sources = dia_obj.dia_source_catalog
+        self.assertEqual(len(associated_sources), 2)
+        self.assertEqual(associated_sources[-1].getId(),
+                         sources[-1].getId())
+        self.assertEqual(associated_sources[-1].getCoord(),
+                         sources[-1].getCoord())
+
+        compare_values = {
+            "coord_ra": 0.4999619199226218,
+            "coord_dec": 0.5000190382261059
+        }
+
+        dia_obj.update()
+        self._compare_dia_object_values(dia_obj, 0, compare_values)
+
+    def test_dia_source_append_different_schema(self):
+        """ Test the appending of a DIASource to a DIAObject where the DIASource
+        has a more complex schema.
+
+        We also test that the update function works properly and that the
+        summary statistics are computed as expected.
+        """
+        single_source = create_test_dia_sources(1)
+        dia_obj = DIAObject(single_source, None)
+        self.assertEqual(dia_obj.id, single_source[0].getId())
+        self.assertTrue(dia_obj.is_updated)
+
+        extended_schema = make_minimal_dia_source_schema()
+        extended_schema.addField('test', type=float)
+
+        sources = create_test_dia_sources(2, schema=extended_schema)
         dia_obj.append_dia_source(sources[1])
         self.assertFalse(dia_obj.is_updated)
 

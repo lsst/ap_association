@@ -99,6 +99,7 @@ class DIAObject(object):
         """
 
         self._dia_source_catalog = dia_source_catalog
+        self._dia_source_schema = self._dia_source_catalog.getSchema()
         self._updated = False
 
         if object_source_record is None:
@@ -197,9 +198,27 @@ class DIAObject(object):
         # them until we are finished adding sources.
         self._updated = False
 
-        self._dia_source_catalog.append(
-            self._dia_source_catalog.getTable().copyRecord(
-                input_dia_source_record))
+        # We need to test that schema of the source to appended lines up with
+        # the schema specified in the catalog of dia_sources associated with
+        # this dia_object. If not we attempt to access the those that overlap
+        # assuming that the schema defined in this dia_object is a subset of
+        # of the input source's schema.
+        input_schema = input_dia_source_record.getSchema()
+        if input_schema == self._dia_source_schema:
+            self._dia_source_catalog.append(
+                self._dia_source_catalog.getTable().copyRecord(
+                    input_dia_source_record))
+        else:
+            tmp_source_record = afwTable.SourceTable.makeRecord(
+                afwTable.SourceTable.make(self._dia_source_schema))
+            for name in self._dia_source_schema.getNames():
+                tmp_source_record.set(
+                    self._dia_source_schema[name].asKey(),
+                    input_dia_source_record.getSchema()[name].asKey())
+
+            self._dia_source_catalog.append(
+                self._dia_source_catalog.getTable().copyRecord(
+                    tmp_source_record))
 
     def get_light_curve(self):
         """ Retrieve the light curve of fluxes for the DIASources that make up
@@ -253,6 +272,17 @@ class DIAObject(object):
         A lsst.afw.table.SourceCatalog
         """
         return self._dia_source_catalog
+
+    @property
+    def dia_source_schema(self):
+        """ Retrieve the SourceCatalog that represents the DIASources that make
+        up this DIAObject.
+
+        Return
+        ------
+        A lsst.afw.table.SourceCatalog
+        """
+        return self._dia_source_schema
 
     @property
     def n_dia_sources(self):
