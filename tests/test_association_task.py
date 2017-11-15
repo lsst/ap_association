@@ -32,6 +32,7 @@ import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
+import lsst.pipe.base as pipeBase
 from lsst.ap.association import \
     AssociationDBSqliteTask, \
     AssociationDBSqliteConfig, \
@@ -255,12 +256,11 @@ class TestAssociationTask(unittest.TestCase):
 
         bbox = afwGeom.Box2D(self.exposure.getBBox())
         wcs = self.exposure.getWcs()
-        ctr_coord = wcs.pixelToSky(bbox.getCenter())
-        max_radius = max(
-            ctr_coord.angularSeparation(wcs.pixelToSky(pp))
-            for pp in bbox.getCorners())
+        expMd = pipeBase.Struct(
+            bbox=bbox,
+            wcs=wcs,)
 
-        dia_collection = assoc_db.load(ctr_coord, max_radius)
+        dia_collection = assoc_db.load(expMd)
         assoc_db.close()
         return dia_collection
 

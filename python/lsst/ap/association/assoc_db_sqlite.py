@@ -431,7 +431,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         return output_rows
 
-    def _check_dia_object_possition(dia_object_record, bbox, wcs):
+    def _check_dia_object_possition(self, dia_object_record, bbox, wcs):
         """ Check the RA, DEC position of the current dia_object_record against
         the bounding box of the exposure.
 

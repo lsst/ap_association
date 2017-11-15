@@ -28,13 +28,12 @@ import unittest
 from lsst.ap.association import \
     AssociationDBSqliteTask, \
     DIAObjectCollection
-from lsst.afw.coord import Coord
 import lsst.afw.image as afwImage
 import lsst.afw.geom as afwGeom
 import lsst.daf.base as dafBase
 import lsst.pipe.base as pipeBase
 import lsst.utils.tests
-from test_dia_collection import create_test_dia_objects
+from test_association_task import create_test_dia_objects
 
 
 class TestAssociationDBSqlite(unittest.TestCase):
@@ -173,7 +172,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         dia_objects = create_test_dia_objects(
             n_objects=1,
             n_sources=1,
-            start_angle_degrees=0.1,
+            object_centers_degrees=[[0.1, 0.1]],
             scatter_arcsec=0.0)
         if not update_spatial_index:
             # Set the spatial index to some arbitrary value
@@ -202,17 +201,18 @@ class TestAssociationDBSqlite(unittest.TestCase):
             n_objects=1,
             n_sources=1,
             start_id=0,
-            start_angle_degrees=0.0)
+            object_centers_degrees=[[0.0, 0.0]])
         dia_collection = DIAObjectCollection(dia_objects)
 
         self.assoc_db.store(dia_collection, True)
         self.assoc_db._commit()
 
+        # Create a new object in a different location.
         new_dia_object = create_test_dia_objects(
             n_objects=1,
             n_sources=1,
             start_id=1,
-            start_angle_degrees=0.1)
+            object_centers_degrees=[[0.1, 0.1]])
         dia_collection.append(new_dia_object[0])
 
         # We grab a new source to append to our first source.
@@ -220,7 +220,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
             n_objects=1,
             n_sources=1,
             start_id=2,
-            start_angle_degrees=0.0)
+            object_centers_degrees=[[0.0, 0.0]])
         new_src = tmp_dia_objects[0].dia_source_catalog[0]
         dia_collection.dia_objects[0].append_dia_source(new_src)
 
@@ -264,7 +264,10 @@ class TestAssociationDBSqlite(unittest.TestCase):
         """ Test the retrieval of DIAObjects from the database.
         """
         dia_objects = create_test_dia_objects(
-            n_objects=2, n_sources=2, scatter_arcsec=0.0)
+            n_objects=2,
+            n_sources=2,
+            object_centers_degrees=[[0.0, 0.0], [0.1, 0.1]],
+            scatter_arcsec=0.0)
         dia_collection = DIAObjectCollection(dia_objects)
         self.assoc_db.store(dia_collection, True)
 
@@ -301,8 +304,13 @@ class TestAssociationDBSqlite(unittest.TestCase):
         """ Test the retrieval of SourceRecord objects representing the
         summarized DIAObjects from the database.
         """
+        n_objects = 5
         dia_objects = create_test_dia_objects(
-            n_objects=5, n_sources=1, scatter_arcsec=0.0)
+            n_objects=5,
+            n_sources=1,
+            object_centers_degrees=[[0.1 * idx, 0.1 * idx]
+                                    for idx in range(n_objects)],
+            scatter_arcsec=0.0)
         dia_collection = DIAObjectCollection(dia_objects)
         self.assoc_db.store(dia_collection, True)
 
