@@ -198,27 +198,23 @@ class DIAObject(object):
         # them until we are finished adding sources.
         self._updated = False
 
-        # We need to test that schema of the source to appended lines up with
-        # the schema specified in the catalog of dia_sources associated with
-        # this dia_object. If not we attempt to access the those that overlap
-        # assuming that the schema defined in this dia_object is a subset of
-        # of the input source's schema.
+        # We need to test that schema of the source to be appended lines up
+        # with the schema specified in the catalog of dia_sources associated
+        # with this dia_object. If not we attempt to access the those that
+        # overlap assuming that the schema defined in this dia_object is a
+        # subset of the input source's schema.
         input_schema = input_dia_source_record.getSchema()
-        if input_schema == self._dia_source_schema:
-            self._dia_source_catalog.append(
-                self._dia_source_catalog.getTable().copyRecord(
-                    input_dia_source_record))
-        else:
-            tmp_source_record = afwTable.SourceTable.makeRecord(
-                afwTable.SourceTable.make(self._dia_source_schema))
+        if input_schema != self._dia_source_schema:
+            tmp_source_record = self._dia_source_catalog.makeRecord()
             for name in self._dia_source_schema.getNames():
                 tmp_source_record.set(
                     self._dia_source_schema[name].asKey(),
-                    input_dia_source_record.getSchema()[name].asKey())
+                    input_dia_source_record.get(input_schema[name].asKey()))
+        else:
+            tmp_source_record = self._dia_source_catalog.getTable().copyRecord(
+                input_dia_source_record)
 
-            self._dia_source_catalog.append(
-                self._dia_source_catalog.getTable().copyRecord(
-                    tmp_source_record))
+        self._dia_source_catalog.append(tmp_source_record)
 
     def get_light_curve(self):
         """ Retrieve the light curve of fluxes for the DIASources that make up
