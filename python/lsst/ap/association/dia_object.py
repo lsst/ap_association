@@ -52,6 +52,7 @@ def make_minimal_dia_object_schema():
     # This functionality is not defined in currently in the stack, so we will
     # hold off until it is implemented. This is to be addressed in DM-7101.
     schema.addField("indexer_id", type=np.int64)
+    schema.addField("n_dia_sources", type=np.int64)
 
     return schema
 
@@ -98,6 +99,7 @@ class DIAObject(object):
         """
 
         self._dia_source_catalog = dia_source_catalog
+        self._dia_source_schema = self._dia_source_catalog.getSchema()
         self._updated = False
 
         if object_source_record is None:
@@ -157,12 +159,18 @@ class DIAObject(object):
 
         # Loop through DIASources, compute summary statistics (TBD) and store
         # them in dia_object_record attribute.
-
+        self._store_n_associated_sources()
         self._compute_mean_coordinate()
 
         # In the future we will calculate covariances on this centroid,
         # however generalized coordinate covariances are not defined (DM-7101)
         # we also do not need them yet for the MVP/S
+
+    def _store_n_associated_sources(self):
+        """ Store the number of DIASources associated with the DIAObject.
+        """
+
+        self._dia_object_record.set("n_dia_sources", self.n_dia_sources)
 
     def _compute_mean_coordinate(self):
         """ Compute the mean coordinate of this DIAObject given the current
@@ -190,9 +198,23 @@ class DIAObject(object):
         # them until we are finished adding sources.
         self._updated = False
 
-        self._dia_source_catalog.append(
-            self._dia_source_catalog.getTable().copyRecord(
-                input_dia_source_record))
+        # We need to test that schema of the source to be appended lines up
+        # with the schema specified in the catalog of dia_sources associated
+        # with this dia_object. If not we attempt to access the those that
+        # overlap assuming that the schema defined in this dia_object is a
+        # subset of the input source's schema.
+        input_schema = input_dia_source_record.getSchema()
+        if input_schema != self._dia_source_schema:
+            tmp_source_record = self._dia_source_catalog.makeRecord()
+            for name in self._dia_source_schema.getNames():
+                tmp_source_record.set(
+                    self._dia_source_schema[name].asKey(),
+                    input_dia_source_record.get(input_schema[name].asKey()))
+        else:
+            tmp_source_record = self._dia_source_catalog.getTable().copyRecord(
+                input_dia_source_record)
+
+        self._dia_source_catalog.append(tmp_source_record)
 
     def get_light_curve(self):
         """ Retrieve the light curve of fluxes for the DIASources that make up
@@ -246,6 +268,17 @@ class DIAObject(object):
         A lsst.afw.table.SourceCatalog
         """
         return self._dia_source_catalog
+
+    @property
+    def dia_source_schema(self):
+        """ Retrieve the SourceCatalog that represents the DIASources that make
+        up this DIAObject.
+
+        Return
+        ------
+        A lsst.afw.table.SourceCatalog
+        """
+        return self._dia_source_schema
 
     @property
     def n_dia_sources(self):
