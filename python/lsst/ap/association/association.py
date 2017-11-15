@@ -82,15 +82,19 @@ class AssociationTask(pipeBase.Task):
         ----------
         dia_sources : lsst.afw.table.SourceCatalog
             DIASources to be associated with existing DIAObjects.
-        expMd : lsst.daf.base.PropertySet
-            Input exposure metadata containing the bounding box for this
-            exposure.
+        exposure : lsst.afw.image
+            Input exposure representing the region of the sky the dia_sources
+            were detected on. Should contain both the solved WCS and a bounding
+            box of the ccd.
         """
         # Assure we have a Box2D and can use the getCenter method.
         bbox = afwGeom.Box2D(exposure.getBBox())
         wcs = exposure.getWcs()
+        expMd = pipeBase.Struct(
+            bbox=bbox,
+            wcs=wcs,)
 
-        dia_collection = self.level1_db.load(bbox, wcs)
+        dia_collection = self.level1_db.load(expMd)
 
         association_result = self.associate_sources(dia_collection,
                                                     dia_sources)
