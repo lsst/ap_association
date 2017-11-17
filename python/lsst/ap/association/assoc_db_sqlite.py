@@ -385,14 +385,11 @@ class AssociationDBSqliteTask(pipeBase.Task):
         for row in self._query_dia_objects(indexer_indices):
             dia_object_record = \
                 self._dia_object_converter.source_record_from_db_row(row)
-            if expMd is not None and \
-               not self._check_dia_object_possition(dia_object_record,
-                                                    expMd.bbox, expMd.wcs):
-                continue
-            dia_sources = self._get_dia_sources(
-                dia_object_record.getId())
-            output_dia_objects.append(
-                DIAObject(dia_sources, dia_object_record))
+            if self._check_dia_object_position(dia_object_record, expMd):
+                dia_sources = self._get_dia_sources(
+                    dia_object_record.getId())
+                output_dia_objects.append(
+                    DIAObject(dia_sources, dia_object_record))
 
         return output_dia_objects
 
@@ -431,7 +428,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         return output_rows
 
-    def _check_dia_object_possition(self, dia_object_record, bbox, wcs):
+    def _check_dia_object_position(self, dia_object_record, expMd):
         """ Check the RA, DEC position of the current dia_object_record against
         the bounding box of the exposure.
 
@@ -449,8 +446,10 @@ class AssociationDBSqliteTask(pipeBase.Task):
         ------
         bool
         """
-        point = wcs.skyToPixel(dia_object_record.getCoord())
-        return bbox.contains(point)
+        if expMd is None:
+            return True
+        point = expMd.wcs.skyToPixel(dia_object_record.getCoord())
+        return expMd.bbox.contains(point)
 
     def _get_dia_object_records(self, indexer_indices):
         """ Retrieve the SourceCatalog of objects representing the DIAObjects
