@@ -28,10 +28,12 @@ import unittest
 from lsst.ap.association import \
     AssociationDBSqliteTask, \
     DIAObjectCollection
-from lsst.afw.coord import Coord
+import lsst.afw.image as afwImage
 import lsst.afw.geom as afwGeom
+import lsst.daf.base as dafBase
+import lsst.pipe.base as pipeBase
 import lsst.utils.tests
-from test_dia_collection import create_test_dia_objects
+from test_association_task import create_test_dia_objects
 
 
 class TestAssociationDBSqlite(unittest.TestCase):
@@ -43,6 +45,33 @@ class TestAssociationDBSqlite(unittest.TestCase):
         self.assoc_db.create_tables()
         self.assoc_db._commit()
 
+        self.metadata = dafBase.PropertySet()
+
+        self.metadata.set("SIMPLE", "T")
+        self.metadata.set("BITPIX", -32)
+        self.metadata.set("NAXIS", 2)
+        self.metadata.set("NAXIS1", 1024)
+        self.metadata.set("NAXIS2", 1153)
+        self.metadata.set("RADECSYS", 'FK5')
+        self.metadata.set("EQUINOX", 2000.)
+
+        self.metadata.setDouble("CRVAL1", 215.604025685476)
+        self.metadata.setDouble("CRVAL2", 53.1595451514076)
+        self.metadata.setDouble("CRPIX1", 1109.99981456774)
+        self.metadata.setDouble("CRPIX2", 560.018167811613)
+        self.metadata.set("CTYPE1", 'RA---SIN')
+        self.metadata.set("CTYPE2", 'DEC--SIN')
+
+        self.metadata.setDouble("CD1_1", 5.10808596133527E-05)
+        self.metadata.setDouble("CD1_2", 1.85579539217196E-07)
+        self.metadata.setDouble("CD2_2", -5.10281493481982E-05)
+        self.metadata.setDouble("CD2_1", -8.27440751733828E-07)
+
+        self.wcs = afwImage.makeWcs(self.metadata)
+        self.exposure = afwImage.makeExposure(
+            afwImage.makeMaskedImageFromArrays(np.ones((1024, 1153))),
+            self.wcs)
+
     def tearDown(self):
         """ Close the database connection and delete the object.
         """
@@ -53,23 +82,28 @@ class TestAssociationDBSqlite(unittest.TestCase):
         """ Test loading of DIAObjects.
         """
 
+        n_objects = 5
         n_sources_per_object = 2
+        object_centers = [
+            [self.wcs.pixelToSky(idx, idx).getRa().asDegrees(),
+             self.wcs.pixelToSky(idx, idx).getDec().asDegrees()]
+            for idx in np.linspace(1, 1000, 10)[:n_objects]]
         dia_objects = create_test_dia_objects(
-            n_objects=5,
+            n_objects=n_objects,
             n_sources=n_sources_per_object,
-            increment_degrees=0.04,
-            scatter_arcsec=0.0)
+            start_id=0,
+            object_centers_degrees=object_centers,
+            scatter_arcsec=-1.)
         dia_collection = DIAObjectCollection(dia_objects)
 
         self.assoc_db.store(dia_collection, True)
 
-        mean_pos_of_objs = 0.08
-        max_obj_dist = 0.2
-        ctr_point = Coord(
-            mean_pos_of_objs * afwGeom.degrees,
-            mean_pos_of_objs * afwGeom.degrees)
-        output_dia_collection = self.assoc_db.load(
-            ctr_point, max_obj_dist * afwGeom.degrees)
+        bbox = afwGeom.Box2D(self.exposure.getBBox())
+        wcs = self.exposure.getWcs()
+        expMd = pipeBase.Struct(
+            bbox=bbox,
+            wcs=wcs,)
+        output_dia_collection = self.assoc_db.load(expMd)
 
         for obj_idx in range(5):
             self.assertEqual(
@@ -138,7 +172,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         dia_objects = create_test_dia_objects(
             n_objects=1,
             n_sources=1,
-            start_angle_degrees=0.1,
+            object_centers_degrees=[[0.1, 0.1]],
             scatter_arcsec=0.0)
         if not update_spatial_index:
             # Set the spatial index to some arbitrary value
@@ -167,17 +201,18 @@ class TestAssociationDBSqlite(unittest.TestCase):
             n_objects=1,
             n_sources=1,
             start_id=0,
-            start_angle_degrees=0.0)
+            object_centers_degrees=[[0.0, 0.0]])
         dia_collection = DIAObjectCollection(dia_objects)
 
         self.assoc_db.store(dia_collection, True)
         self.assoc_db._commit()
 
+        # Create a new object in a different location.
         new_dia_object = create_test_dia_objects(
             n_objects=1,
             n_sources=1,
             start_id=1,
-            start_angle_degrees=0.1)
+            object_centers_degrees=[[0.1, 0.1]])
         dia_collection.append(new_dia_object[0])
 
         # We grab a new source to append to our first source.
@@ -185,7 +220,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
             n_objects=1,
             n_sources=1,
             start_id=2,
-            start_angle_degrees=0.0)
+            object_centers_degrees=[[0.0, 0.0]])
         new_src = tmp_dia_objects[0].dia_source_catalog[0]
         dia_collection.dia_objects[0].append_dia_source(new_src)
 
@@ -229,7 +264,10 @@ class TestAssociationDBSqlite(unittest.TestCase):
         """ Test the retrieval of DIAObjects from the database.
         """
         dia_objects = create_test_dia_objects(
-            n_objects=2, n_sources=2, scatter_arcsec=0.0)
+            n_objects=2,
+            n_sources=2,
+            object_centers_degrees=[[0.0, 0.0], [0.1, 0.1]],
+            scatter_arcsec=0.0)
         dia_collection = DIAObjectCollection(dia_objects)
         self.assoc_db.store(dia_collection, True)
 
@@ -266,8 +304,13 @@ class TestAssociationDBSqlite(unittest.TestCase):
         """ Test the retrieval of SourceRecord objects representing the
         summarized DIAObjects from the database.
         """
+        n_objects = 5
         dia_objects = create_test_dia_objects(
-            n_objects=5, n_sources=1, scatter_arcsec=0.0)
+            n_objects=5,
+            n_sources=1,
+            object_centers_degrees=[[0.1 * idx, 0.1 * idx]
+                                    for idx in range(n_objects)],
+            scatter_arcsec=0.0)
         dia_collection = DIAObjectCollection(dia_objects)
         self.assoc_db.store(dia_collection, True)
 

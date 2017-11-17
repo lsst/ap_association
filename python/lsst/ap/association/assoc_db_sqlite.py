@@ -256,7 +256,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         return True
 
     @pipeBase.timeMethod
-    def load(self, ctr_coord, radius):
+    def load(self, expMd):
         """ Load all DIAObjects and associated DIASources within
         the specified circle.
 
@@ -266,20 +266,24 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         Parameters
         ----------
-        ctr_coord : lsst.afw.geom.SpherePoint
-            Center position of the circle on the sky to load.
-        radius : lsst.afw.geom.Angle
-            Distance from ctr_coord defining a circle on the sky
-            within which to load DIAObjects and associated DIASources.
+        expMd : lsst.pipe.base.Struct
+            A struct object containing:
+               bbox : A lsst.afw.geom.Box2D.
+               wcs : A lsst.afw Wcs object.
 
         Returns
         -------
         lsst.ap.association.DIAObjectCollection
         """
-        indexer_indices, on_boundry = self.indexer.get_pixel_ids(
-            ctr_coord, radius)
+        ctr_coord = expMd.wcs.pixelToSky(expMd.bbox.getCenter())
+        max_radius = max(
+            ctr_coord.angularSeparation(expMd.wcs.pixelToSky(pp))
+            for pp in expMd.bbox.getCorners())
 
-        dia_objects = self._get_dia_objects(indexer_indices)
+        indexer_indices, on_boundry = self.indexer.get_pixel_ids(
+            ctr_coord, max_radius)
+
+        dia_objects = self._get_dia_objects(indexer_indices, expMd)
 
         dia_collection = DIAObjectCollection(dia_objects)
 
@@ -355,7 +359,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
                 dia_object.dia_source_catalog[-1].getId())
         self._commit()
 
-    def _get_dia_objects(self, indexer_indices):
+    def _get_dia_objects(self, indexer_indices, expMd=None):
         """ Retrieve the DIAObjects from the database whose indexer indices
         are with the specified list of indices.
 
@@ -367,6 +371,10 @@ class AssociationDBSqliteTask(pipeBase.Task):
         ----------
         indexer_indices : array like of ints
             Pixelized indexer indices from which to load.
+        expMd : lsst.pipe.base.Struct
+            A struct object containing:
+               bbox : A lsst.afw.geom.Box2D.
+               wcs : A lsst.afw Wcs object.
 
         Returns
         -------
@@ -377,10 +385,11 @@ class AssociationDBSqliteTask(pipeBase.Task):
         for row in self._query_dia_objects(indexer_indices):
             dia_object_record = \
                 self._dia_object_converter.source_record_from_db_row(row)
-            dia_sources = self._get_dia_sources(
-                dia_object_record.getId())
-            output_dia_objects.append(
-                DIAObject(dia_sources, dia_object_record))
+            if self._check_dia_object_position(dia_object_record, expMd):
+                dia_sources = self._get_dia_sources(
+                    dia_object_record.getId())
+                output_dia_objects.append(
+                    DIAObject(dia_sources, dia_object_record))
 
         return output_dia_objects
 
@@ -418,6 +427,29 @@ class AssociationDBSqliteTask(pipeBase.Task):
         self._commit()
 
         return output_rows
+
+    def _check_dia_object_position(self, dia_object_record, expMd):
+        """ Check the RA, DEC position of the current dia_object_record against
+        the bounding box of the exposure.
+
+        Parameters
+        ----------
+        dia_object_record : lsst.afw.table.SourceRecord
+            A SourceRecord object containing the DIAObject we would like to
+            test against our bounding box.
+        expMd : lsst.pipe.base.Struct
+            A struct object containing:
+               bbox : A lsst.afw.geom.Box2D.
+               wcs : A lsst.afw Wcs object.
+
+        Return
+        ------
+        bool
+        """
+        if expMd is None:
+            return True
+        point = expMd.wcs.skyToPixel(dia_object_record.getCoord())
+        return expMd.bbox.contains(point)
 
     def _get_dia_object_records(self, indexer_indices):
         """ Retrieve the SourceCatalog of objects representing the DIAObjects
