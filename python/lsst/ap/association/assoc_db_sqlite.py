@@ -268,8 +268,8 @@ class AssociationDBSqliteTask(pipeBase.Task):
         ----------
         expMd : lsst.pipe.base.Struct
             A struct object containing:
-               bbox : A lsst.afw.geom.Box2D.
-               wcs : A lsst.afw Wcs object.
+            * bbox : A lsst.afw.geom.Box2D.
+            * wcs : A lsst.afw Wcs object.
 
         Returns
         -------

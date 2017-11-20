@@ -184,8 +184,12 @@ class TestDIAObjectCollection(unittest.TestCase):
         # except the last DIAObject in this collection which should be
         # newly created during the matching step and contain only one
         # DIASource.
-        updated_ids = obj_collection.match(src_cat, score_struct)
+        match_result = obj_collection.match(src_cat, score_struct)
+        updated_ids = match_result.updated_and_new_dia_object_ids
         self.assertEqual(len(obj_collection.dia_objects), 5)
+        self.assertEqual(match_result.n_updated_dia_objects, 4)
+        self.assertEqual(match_result.n_new_dia_objects, 1)
+        self.assertEqual(match_result.n_unassociated_dia_objects, 0)
 
         for updated_idx, obj_id in enumerate(updated_ids):
             if updated_idx == len(updated_ids) - 1:

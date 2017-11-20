@@ -263,13 +263,24 @@ class DIAObjectCollection(object):
 
         Returns
         -------
-        Ids of newly updated and created DIAObjects
+        pipeBase.Struct
+            A struct containing the following data:
+            * updated_and_new_dia_object_ids : list of ints specifying the ids
+                new and updated dia_objects in the collection.
+            * n_updated_dia_objects : number of previously know dia_objects with
+               newly associated DIASources.
+            * n_new_dia_objects : Number of newly created DIAObjects from
+                unassociated DIASources
+            * n_unupdated_dia_objects : number of previous DIAObjects that were
+                not associated to a new DIASource.
         """
 
-        used_dia_object = np.zeros(len(self.dia_objects), dtype=np.bool)
+        n_previous_dia_objects = len(self.dia_objects)
+        used_dia_object = np.zeros(n_previous_dia_objects, dtype=np.bool)
         used_dia_source = np.zeros(len(dia_source_catalog), dtype=np.bool)
 
-        updated_and_new_dia_objects = []
+        updated_dia_objects = []
+        new_dia_objects = []
 
         # We sort from best match to worst to effectively perform a
         # "handshake" match where both the DIASources and DIAObjects agree
@@ -290,7 +301,7 @@ class DIAObjectCollection(object):
             used_dia_object[dia_obj_idx] = True
             used_dia_source[score_idx] = True
             updated_obj_id = score_struct.obj_ids[score_idx]
-            updated_and_new_dia_objects.append(updated_obj_id)
+            updated_dia_objects.append(updated_obj_id)
 
             self.dia_objects[dia_obj_idx].append_dia_source(
                 dia_source_catalog[int(score_idx)])
@@ -301,12 +312,20 @@ class DIAObjectCollection(object):
             tmp_src_cat = afwTable.SourceCatalog(dia_source_catalog.schema)
             tmp_src_cat.append(dia_source_catalog[int(src_idx)])
             self.append(DIAObject(tmp_src_cat))
-            updated_and_new_dia_objects.append(
+            new_dia_objects.append(
                 self.dia_objects[-1].id)
 
         # Return the ids of the DIAObjects in this DIAObjectCollection that
         # were updated or newly created.
-        return updated_and_new_dia_objects
+        n_updated_dia_objects = len(updated_dia_objects)
+        n_unassociated_dia_objects = \
+            n_previous_dia_objects - n_updated_dia_objects
+        return pipeBase.Struct(
+            updated_and_new_dia_object_ids=np.concatenate([updated_dia_objects,
+                                                           new_dia_objects]),
+            n_updated_dia_objects=n_updated_dia_objects,
+            n_new_dia_objects=len(new_dia_objects),
+            n_unassociated_dia_objects=n_unassociated_dia_objects,)
 
     @property
     def is_updated(self):
