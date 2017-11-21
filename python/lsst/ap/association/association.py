@@ -74,9 +74,6 @@ class AssociationTask(pipeBase.Task):
         """
         pipeBase.Task.__init__(self, **kwargs)
         self.makeSubtask('level1_db')
-        self.metadata.add(name='numUpdatedDIAObjects', value=np.nan)
-        self.metadata.add(name='numUnassociatedDIAObjects', value=np.nan)
-        self.metadata.add(name='numNewDIAObjects', value=np.nan)
 
     @pipeBase.timeMethod
     def run(self, dia_sources, exposure):
@@ -125,22 +122,23 @@ class AssociationTask(pipeBase.Task):
             dia_sources, self.config.maxDistArcSeconds * afwGeom.arcseconds)
         match_result = dia_collection.match(dia_sources, scores)
 
+        self._add_association_meta_data(match_result)
+
         return pipeBase.Struct(
             dia_collection=dia_collection,
             updated_ids=match_result.updated_and_new_dia_object_ids,
         )
 
-    def _set_association_meta_data(self, match_result):
+    def _add_association_meta_data(self, match_result):
         """ Store summaries of the association step in the task metadata.
 
         Parameters
         ----------
         match_result : lsst.pipe.base.Struct
         """
-
-        self.metadata.set('numUpdatedDIAObjects',
+        self.metadata.add('numUpdatedDIAObjects',
                           match_result.n_updated_dia_objects)
-        self.metadata.set('numUnassociatedDIAObjects',
+        self.metadata.add('numUnassociatedDIAObjects',
                           match_result.n_updated_dia_objects)
-        self.metadata.set('numNewDIAObjects',
+        self.metadata.add('numNewDIAObjects',
                           match_result.n_updated_dia_objects)
