@@ -136,7 +136,7 @@ class AssociationTask(pipeBase.Task):
         """
         self.metadata.add('numUpdatedDIAObjects',
                           match_result.n_updated_dia_objects)
-        self.metadata.add('numUnassociatedDIAObjects',
-                          match_result.n_updated_dia_objects)
         self.metadata.add('numNewDIAObjects',
-                          match_result.n_updated_dia_objects)
+                          match_result.n_new_dia_objects)
+        self.metadata.add('numUnassociatedDIAObjects',
+                          match_result.n_unassociated_dia_objects)
