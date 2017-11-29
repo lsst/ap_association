@@ -134,9 +134,9 @@ class AssociationTask(pipeBase.Task):
         ----------
         match_result : lsst.pipe.base.Struct
         """
-        self.metadata.add('numUpdatedDIAObjects',
+        self.metadata.add('numUpdatedDiaObjects',
                           match_result.n_updated_dia_objects)
-        self.metadata.add('numNewDIAObjects',
+        self.metadata.add('numNewDiaObjects',
                           match_result.n_new_dia_objects)
-        self.metadata.add('numUnassociatedDIAObjects',
+        self.metadata.add('numUnassociatedDiaObjects',
                           match_result.n_unassociated_dia_objects)
