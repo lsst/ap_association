@@ -320,9 +320,9 @@ class DIAObjectCollection(object):
         n_updated_dia_objects = len(updated_dia_objects)
         n_unassociated_dia_objects = \
             n_previous_dia_objects - n_updated_dia_objects
+        updated_dia_objects.extend(new_dia_objects)
         return pipeBase.Struct(
-            updated_and_new_dia_object_ids=np.concatenate([updated_dia_objects,
-                                                           new_dia_objects]),
+            updated_and_new_dia_object_ids=updated_dia_objects,
             n_updated_dia_objects=n_updated_dia_objects,
             n_new_dia_objects=len(new_dia_objects),
             n_unassociated_dia_objects=n_unassociated_dia_objects,)
