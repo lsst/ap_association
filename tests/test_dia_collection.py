@@ -184,8 +184,12 @@ class TestDIAObjectCollection(unittest.TestCase):
         # except the last DIAObject in this collection which should be
         # newly created during the matching step and contain only one
         # DIASource.
-        updated_ids = obj_collection.match(src_cat, score_struct)
+        match_result = obj_collection.match(src_cat, score_struct)
+        updated_ids = match_result.updated_and_new_dia_object_ids
         self.assertEqual(len(obj_collection.dia_objects), 5)
+        self.assertEqual(match_result.n_updated_dia_objects, 4)
+        self.assertEqual(match_result.n_new_dia_objects, 1)
+        self.assertEqual(match_result.n_unassociated_dia_objects, 0)
 
         for updated_idx, obj_id in enumerate(updated_ids):
             if updated_idx == len(updated_ids) - 1:
@@ -218,12 +222,15 @@ class TestDIAObjectCollection(unittest.TestCase):
             # to machine noise.
             self.assertTrue(np.isinf(score_struct.scores[src_idx]))
 
-        updated_indices = dia_collection.match(src_cat, score_struct)
-        self.assertEqual(len(updated_indices), 5)
+        match_result = dia_collection.match(src_cat, score_struct)
+        updated_ids = match_result.updated_and_new_dia_object_ids
         self.assertEqual(len(dia_collection.dia_objects), 5)
+        self.assertEqual(match_result.n_updated_dia_objects, 0)
+        self.assertEqual(match_result.n_new_dia_objects, 5)
+        self.assertEqual(match_result.n_unassociated_dia_objects, 0)
 
         for idx, obj_id in enumerate(dia_collection.get_dia_object_ids()):
-            self.assertEqual(obj_id, updated_indices[idx])
+            self.assertEqual(obj_id, updated_ids[idx])
             # We created a new DIAObject in the collection hence the last
             # DIAObject in this collection is new and contains only one
             # DIASource.

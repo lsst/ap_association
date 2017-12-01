@@ -118,9 +118,25 @@ class AssociationTask(pipeBase.Task):
         """
         scores = dia_collection.score(
             dia_sources, self.config.maxDistArcSeconds * afwGeom.arcseconds)
-        updated_dia_objects = dia_collection.match(dia_sources, scores)
+        match_result = dia_collection.match(dia_sources, scores)
+
+        self._add_association_meta_data(match_result)
 
         return pipeBase.Struct(
             dia_collection=dia_collection,
-            updated_ids=updated_dia_objects
+            updated_ids=match_result.updated_and_new_dia_object_ids,
         )
+
+    def _add_association_meta_data(self, match_result):
+        """ Store summaries of the association step in the task metadata.
+
+        Parameters
+        ----------
+        match_result : lsst.pipe.base.Struct
+        """
+        self.metadata.add('numUpdatedDiaObjects',
+                          match_result.n_updated_dia_objects)
+        self.metadata.add('numNewDiaObjects',
+                          match_result.n_new_dia_objects)
+        self.metadata.add('numUnassociatedDiaObjects',
+                          match_result.n_unassociated_dia_objects)
