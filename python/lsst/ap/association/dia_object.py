@@ -28,7 +28,6 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 
 import lsst.afw.table as afwTable
-from lsst.afw.coord import averageCoord
 
 __all__ = ["DIAObject",
            "make_minimal_dia_object_schema",
