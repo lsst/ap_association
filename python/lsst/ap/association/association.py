@@ -102,6 +102,8 @@ class AssociationTask(pipeBase.Task):
         dia_collection = association_result.dia_collection
         updated_obj_ids = association_result.updated_ids
 
+        dia_collection.update_dia_objects()
+
         self.level1_db.store_updated(dia_collection, updated_obj_ids)
 
     @pipeBase.timeMethod

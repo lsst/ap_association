@@ -28,7 +28,6 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 
 import lsst.afw.table as afwTable
-from lsst.afw.coord import averageCoord
 
 __all__ = ["DIAObject",
            "make_minimal_dia_object_schema",
@@ -160,7 +159,7 @@ class DIAObject(object):
         # Loop through DIASources, compute summary statistics (TBD) and store
         # them in dia_object_record attribute.
         self._store_n_associated_sources()
-        self._compute_mean_coordinate()
+        self._update_coordinate()
 
         # In the future we will calculate covariances on this centroid,
         # however generalized coordinate covariances are not defined (DM-7101)
@@ -172,14 +171,12 @@ class DIAObject(object):
 
         self._dia_object_record.set("n_dia_sources", self.n_dia_sources)
 
-    def _compute_mean_coordinate(self):
-        """ Compute the mean coordinate of this DIAObject given the current
-        DIASources associated with it.
+    def _update_coordinate(self):
+        """ Update the DIAObject coordinate with that of the most recent
+        DIASource associated with it.
         """
-
-        coord_list = [src.getCoord() for src in self._dia_source_catalog]
-        ave_coord = averageCoord(coord_list)
-        self._dia_object_record.setCoord(ave_coord)
+        self._dia_object_record.setCoord(
+            self._dia_source_catalog[-1].getCoord())
 
     def append_dia_source(self, input_dia_source_record):
         """ Append the input_dia_source to the dia_source_catalog attribute.

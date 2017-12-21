@@ -25,7 +25,6 @@ import unittest
 from lsst.ap.association import \
     DIAObject, \
     make_minimal_dia_source_schema
-from lsst.afw.coord import averageCoord
 import lsst.afw.table as afwTable
 import lsst.afw.geom as afwGeom
 import lsst.utils.tests
@@ -58,21 +57,6 @@ def create_test_dia_sources(n_sources=5, schema=None):
         # Add a flux at some point
 
     return sources
-
-
-def source_catalog_to_coord_list(source_catalog):
-    """ Return a list of coord objects from a source catalog.
-
-    Parameters
-    ----------
-    source_catalog : lsst.afw.table.SourceCatalog
-        Input source catalog to retrieve coordinates from.
-
-    Returns
-    -------
-    A list of lsst.afw.coord objects
-    """
-    return [src.getCoord() for src in source_catalog]
 
 
 class TestDIAObject(unittest.TestCase):
@@ -127,11 +111,9 @@ class TestDIAObject(unittest.TestCase):
         sources = create_test_dia_sources(5)
         dia_obj = DIAObject(sources, None)
 
-        ave_coord = averageCoord(source_catalog_to_coord_list(sources))
-        # Expected average positions of the DIASources in the DIAObject.
         compare_values = {
-            "coord_ra": ave_coord.getLongitude().asDegrees(),
-            "coord_dec": ave_coord.getLatitude().asDegrees()
+            "coord_ra": sources[-1].getCoord().getLongitude().asDegrees(),
+            "coord_dec": sources[-1].getCoord().getLatitude().asDegrees()
         }
 
         self._compare_dia_object_values(dia_obj, 0, compare_values)
@@ -157,13 +139,9 @@ class TestDIAObject(unittest.TestCase):
         self.assertEqual(associated_sources[-1].getCoord(),
                          sources[-1].getCoord())
 
-        # Expected average positions of the DIASources in the DIAObject.
-        tmp_coord_list = source_catalog_to_coord_list(single_source)
-        tmp_coord_list.extend(source_catalog_to_coord_list(sources))
-        ave_coord = averageCoord(tmp_coord_list)
         compare_values = {
-            "coord_ra": ave_coord.getLongitude().asDegrees(),
-            "coord_dec": ave_coord.getLatitude().asDegrees()
+            "coord_ra": sources[-1].getCoord().getLongitude().asDegrees(),
+            "coord_dec": sources[-1].getCoord().getLatitude().asDegrees()
         }
 
         dia_obj.update()
@@ -195,13 +173,9 @@ class TestDIAObject(unittest.TestCase):
         self.assertEqual(associated_sources[-1].getCoord(),
                          sources[-1].getCoord())
 
-        # Expected average positions of the DIASources in the DIAObject.
-        tmp_coord_list = source_catalog_to_coord_list(single_source)
-        tmp_coord_list.extend(source_catalog_to_coord_list(sources))
-        ave_coord = averageCoord(tmp_coord_list)
         compare_values = {
-            "coord_ra": ave_coord.getLongitude().asDegrees(),
-            "coord_dec": ave_coord.getLatitude().asDegrees()
+            "coord_ra": sources[-1].getCoord().getLongitude().asDegrees(),
+            "coord_dec": sources[-1].getCoord().getLatitude().asDegrees()
         }
 
         dia_obj.update()
