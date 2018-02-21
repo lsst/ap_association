@@ -142,66 +142,6 @@ class TestDIAObjectCollection(unittest.TestCase):
 
         self.assertEqual(obj_collection.get_dia_object_ids(), [0, 1])
 
-    def test_score_and_match(self):
-        """ Test association between a set of sources and an existing
-        DIAObjectCollection.
-
-        This also tests that a DIASource that can't be associated within
-        tolerance is appended to the DIAObjectCollection as a new
-        DIAObject.
-        """
-        # Create a set of DIAObjects that contain only one DIASource
-        obj_collection = DIAObjectCollection(
-            create_test_dia_objects(n_objects=4,
-                                    n_sources=1,
-                                    start_id=0,
-                                    start_angle_degrees=0.0,
-                                    scatter_arcsec=-1.))
-        # We create a set of sources that should associate to each of
-        # our current DIAObjects in the collection. We also create
-        # an extra DIASource that does not associate to any of the current
-        # DIAObjects to test the creation of a new DIAObject for this
-        # DIASource.
-        src_cat = create_test_dia_sources(5)
-        for src_idx, src in enumerate(src_cat):
-            edit_and_offset_source_record(
-                src,
-                src_idx + 4,
-                0.1 * src_idx,
-                0.1 * src_idx,
-                -1)
-        score_struct = obj_collection.score(
-            src_cat, 1.0 * afwGeom.arcseconds)
-
-        self.assertFalse(np.isfinite(score_struct.scores[-1]))
-        for src_idx in range(4):
-            # Our scores should be extremely close to 0 but not exactly so due
-            # to machine noise.
-            self.assertAlmostEqual(score_struct.scores[src_idx], 0.0,
-                                   places=16)
-
-        # After matching each DIAObject should now contain 2 DIASources
-        # except the last DIAObject in this collection which should be
-        # newly created during the matching step and contain only one
-        # DIASource.
-        match_result = obj_collection.match(src_cat, score_struct)
-        updated_ids = match_result.updated_and_new_dia_object_ids
-        self.assertEqual(len(obj_collection.dia_objects), 5)
-        self.assertEqual(match_result.n_updated_dia_objects, 4)
-        self.assertEqual(match_result.n_new_dia_objects, 1)
-        self.assertEqual(match_result.n_unassociated_dia_objects, 0)
-
-        for updated_idx, obj_id in enumerate(updated_ids):
-            if updated_idx == len(updated_ids) - 1:
-                # We created a new DIAObject in the collection hence the last
-                # DIAObject in this collection is new and contains only one
-                # DIASource.
-                self.assertEqual(
-                    obj_collection.get_dia_object(obj_id).n_dia_sources, 1)
-            else:
-                self.assertEqual(
-                    obj_collection.get_dia_object(obj_id).n_dia_sources, 2)
-
     def test_empty_dia_collection(self):
         """ Test the creation and appending to a empty DIAObjectCollection.
         """
