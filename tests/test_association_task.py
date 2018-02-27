@@ -154,7 +154,7 @@ class TestAssociationTask(unittest.TestCase):
         self.metadata.setDouble("CD2_2", -5.10281493481982E-05)
         self.metadata.setDouble("CD2_1", -8.27440751733828E-07)
 
-        self.wcs = afwImage.makeWcs(self.metadata)
+        self.wcs = afwGeom.makeSkyWcs(self.metadata)
         self.exposure = afwImage.makeExposure(
             afwImage.makeMaskedImageFromArrays(np.ones((1024, 1153))),
             self.wcs)
@@ -343,6 +343,66 @@ class TestAssociationTask(unittest.TestCase):
                     output_dia_object.dia_source_catalog[-1].getId(),
                     obj_idx - 1 + n_objects * n_sources_per_object)
                 self.assertEqual(output_dia_object.id, obj_idx + 5 + 4)
+
+    def test_score_and_match(self):
+        """ Test association between a set of sources and an existing
+        DIAObjectCollection.
+
+        This also tests that a DIASource that can't be associated within
+        tolerance is appended to the DIAObjectCollection as a new
+        DIAObject.
+        """
+
+        assoc_task = AssociationTask()
+        # Create a set of DIAObjects that contain only one DIASource
+        n_objects = 5
+        n_sources_per_object = 1
+        dia_objects = create_test_dia_objects(
+            n_objects=n_objects,
+            n_sources=n_sources_per_object,
+            object_centers_degrees=[[0.04 * obj_idx, 0.04 * obj_idx]
+                                    for obj_idx in range(5)],
+            scatter_arcsec=-1)
+        dia_collection = DIAObjectCollection(dia_objects)
+
+        dia_sources = create_test_dia_sources(
+            n_sources=5,
+            start_id=5,
+            source_locs_deg=[
+                [0.04 * (src_idx + 1),
+                 0.04 * (src_idx + 1)]
+                for src_idx in range(5)],
+            scatter_arcsec=-1)
+
+        score_struct = assoc_task.score(dia_collection,
+                                        dia_sources,
+                                        1.0 * afwGeom.arcseconds)
+        self.assertFalse(np.isfinite(score_struct.scores[-1]))
+        for src_idx in range(4):
+            # Our scores should be extremely close to 0 but not exactly so due
+            # to machine noise.
+            self.assertAlmostEqual(score_struct.scores[src_idx], 0.0,
+                                   places=16)
+
+        # After matching each DIAObject should now contain 2 DIASources
+        # except the last DIAObject in this collection which should be
+        # newly created during the matching step and contain only one
+        # DIASource.
+        match_result = dia_collection.match(dia_sources, score_struct)
+        updated_ids = match_result.updated_and_new_dia_object_ids
+        self.assertEqual(len(dia_collection.dia_objects), 6)
+        self.assertEqual(match_result.n_updated_dia_objects, 4)
+        self.assertEqual(match_result.n_new_dia_objects, 1)
+        self.assertEqual(match_result.n_unassociated_dia_objects, 1)
+
+        # We created a new DIAObject in the collection hence the last
+        # DIAObject in this collection is new and contains only one
+        # DIASource. All others contain two.
+        self.assertEqual(
+            dia_collection.get_dia_object(updated_ids[-1]).n_dia_sources, 1)
+        for obj_id in updated_ids[0:-1]:
+            self.assertEqual(
+                dia_collection.get_dia_object(obj_id).n_dia_sources, 2)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

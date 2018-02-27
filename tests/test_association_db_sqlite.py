@@ -67,7 +67,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         self.metadata.setDouble("CD2_2", -5.10281493481982E-05)
         self.metadata.setDouble("CD2_1", -8.27440751733828E-07)
 
-        self.wcs = afwImage.makeWcs(self.metadata)
+        self.wcs = afwGeom.makeSkyWcs(self.metadata)
         self.exposure = afwImage.makeExposure(
             afwImage.makeMaskedImageFromArrays(np.ones((1024, 1153))),
             self.wcs)

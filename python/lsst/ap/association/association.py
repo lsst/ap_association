@@ -25,10 +25,14 @@
 
 from __future__ import absolute_import, division, print_function
 
+import numpy as np
+
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.afw.geom as afwGeom
+import lsst.afw.table as afwTable
 from .assoc_db_sqlite import AssociationDBSqliteTask
+from .dia_object import DIAObject
 
 __all__ = ["AssociationConfig", "AssociationTask"]
 
@@ -117,10 +121,21 @@ class AssociationTask(pipeBase.Task):
             DIASources into.
         dia_sources : lsst.afw.table.SourceCatalog
             DIASources to associate into the DIAObjectCollection.
+
+        Returns
+        -------
+        lsst.pipe.base.Struct
+            struct containing:
+            * dia_collection: A DIAObjectCollectoin containing the new and
+                updated DIAObjects.
+            * updated_ids: id of the DIAObject in this DIAObjectCollection that
+                the given source matched.
         """
-        scores = dia_collection.score(
-            dia_sources, self.config.maxDistArcSeconds * afwGeom.arcseconds)
-        match_result = dia_collection.match(dia_sources, scores)
+
+        scores = self.score(
+            dia_collection, dia_sources,
+            self.config.maxDistArcSeconds * afwGeom.arcseconds)
+        match_result = self.match(dia_collection, dia_sources, scores)
 
         self._add_association_meta_data(match_result)
 
@@ -128,6 +143,144 @@ class AssociationTask(pipeBase.Task):
             dia_collection=dia_collection,
             updated_ids=match_result.updated_and_new_dia_object_ids,
         )
+
+    def score(self, dia_collection, dia_source_catalog, max_dist):
+        """ Compute a quality score for each dia_source/dia_object pair
+        between this collection and an input diat_source catalog.
+
+        max_dist sets maximum separation in arcseconds to consider a
+        dia_source a possible match to a dia_object. If the pair is
+        beyond this distance no score is computed.
+
+        Parameters
+        ----------
+        dia_object_collection : an lsst.ap.association.DIAObjectCollection
+            A DIAObjectCollection to score against dia_sources.
+        dia_source_catalog : an lsst.afw.SourceCatalog
+            A contiguous catalog of dia_sources to "score" based on distance
+            and (in the future) other metrics.
+        max_dist : lsst.afw.geom.Angle
+            Maximum allowed distance to compute a score for a given DIAObject
+            DIASource pair.
+
+        Returns
+        -------
+        lsst.pipe.base.Struct
+            struct containing:
+            * scores: array of floats of match quality
+            * obj_ids: id of the DIAObject in thisDIAObjectCollection that
+                the given source matched.
+            Default values for these arrays are
+            INF and -1 respectively for unassociated sources.
+        """
+        if not dia_collection._is_valid_tree:
+            dia_collection.update_spatial_tree()
+
+        scores = np.ones(len(dia_source_catalog)) * np.inf
+        obj_ids = -1 * np.ones(len(dia_source_catalog), dtype=np.int)
+
+        if len(dia_collection.dia_objects) == 0:
+            return pipeBase.Struct(
+                scores=scores,
+                obj_ids=obj_ids)
+
+        for src_idx, dia_source in enumerate(dia_source_catalog):
+
+            src_point = dia_source.getCoord().getVector()
+            dist, obj_idx = dia_collection._spatial_tree.query(src_point)
+            if dist < max_dist.asRadians():
+                scores[src_idx] = dist
+                obj_ids[src_idx] = dia_collection.dia_objects[obj_idx].id
+
+        return pipeBase.Struct(
+            scores=scores,
+            obj_ids=obj_ids)
+
+    def match(self, dia_collection, dia_source_catalog, score_struct):
+        """ Append DIAsources to DIAObjects given a score and create new
+        DIAObjects in this collection from DIASources with poor scores.
+
+        Parameters
+        ----------
+        dia_object_collection : an lsst.ap.association.DIAObjectCollection
+            A DIAObjectCollection to associate to dia_sources.
+        dia_source_catalog : an lsst.afw.SourceCatalog
+            A contiguous catalog of dia_sources for which the set of scores
+            has been computed on with DIAObjectCollection.score.
+        score_struct : lsst.pipe.base.Struct
+            struct containing:
+            * scores: array of floats of match quality
+            * obj_ids: id of the DIAObject in thisDIAObjectCollection that
+                the given source matched.
+            Default values for these arrays are
+            INF and -1 respectively for unassociated sources.
+
+        Returns
+        -------
+        pipeBase.Struct
+            A struct containing the following data:
+            * updated_and_new_dia_object_ids : list of ints specifying the ids
+                new and updated dia_objects in the collection.
+            * n_updated_dia_objects : number of previously know dia_objects with
+               newly associated DIASources.
+            * n_new_dia_objects : Number of newly created DIAObjects from
+                unassociated DIASources
+            * n_unupdated_dia_objects : number of previous DIAObjects that were
+                not associated to a new DIASource.
+        """
+
+        n_previous_dia_objects = len(dia_collection.dia_objects)
+        used_dia_object = np.zeros(n_previous_dia_objects, dtype=np.bool)
+        used_dia_source = np.zeros(len(dia_source_catalog), dtype=np.bool)
+
+        updated_dia_objects = []
+        new_dia_objects = []
+
+        # We sort from best match to worst to effectively perform a
+        # "handshake" match where both the DIASources and DIAObjects agree
+        # their the best match. By sorting this way, scores with NaN (those
+        # sources that have no match and will create new DIAObjects) will be
+        # placed at the end of the array.
+        score_args = score_struct.scores.argsort(axis=None)
+        for score_idx in score_args:
+            if not np.isfinite(score_struct.scores[score_idx]):
+                # Thanks to the sorting the rest of the sources will be
+                # NaN for their score. We therefore exit the loop to append
+                # sources to a existing DIAObject, leaving these for
+                # the loop creating new objects.
+                break
+            dia_obj_idx = dia_collection._id_to_index[
+                score_struct.obj_ids[score_idx]]
+            if used_dia_object[dia_obj_idx]:
+                continue
+            used_dia_object[dia_obj_idx] = True
+            used_dia_source[score_idx] = True
+            updated_obj_id = score_struct.obj_ids[score_idx]
+            updated_dia_objects.append(updated_obj_id)
+
+            dia_collection.dia_objects[dia_obj_idx].append_dia_source(
+                dia_source_catalog[int(score_idx)])
+
+        # Argwhere returns a array shape (N, 1) so we access the index
+        # thusly to retrieve the value rather than the tuple.
+        for (src_idx,) in np.argwhere(np.logical_not(used_dia_source)):
+            tmp_src_cat = afwTable.SourceCatalog(dia_source_catalog.schema)
+            tmp_src_cat.append(dia_source_catalog[int(src_idx)])
+            dia_collection.append(DIAObject(tmp_src_cat))
+            new_dia_objects.append(
+                dia_collection.dia_objects[-1].id)
+
+        # Return the ids of the DIAObjects in this DIAObjectCollection that
+        # were updated or newly created.
+        n_updated_dia_objects = len(updated_dia_objects)
+        n_unassociated_dia_objects = \
+            n_previous_dia_objects - n_updated_dia_objects
+        updated_dia_objects.extend(new_dia_objects)
+        return pipeBase.Struct(
+            updated_and_new_dia_object_ids=updated_dia_objects,
+            n_updated_dia_objects=n_updated_dia_objects,
+            n_new_dia_objects=len(new_dia_objects),
+            n_unassociated_dia_objects=n_unassociated_dia_objects,)
 
     def _add_association_meta_data(self, match_result):
         """ Store summaries of the association step in the task metadata.
