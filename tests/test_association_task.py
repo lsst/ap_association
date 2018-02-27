@@ -395,16 +395,14 @@ class TestAssociationTask(unittest.TestCase):
         self.assertEqual(match_result.n_new_dia_objects, 1)
         self.assertEqual(match_result.n_unassociated_dia_objects, 1)
 
-        for updated_idx, obj_id in enumerate(updated_ids):
-            if updated_idx == len(updated_ids) - 1:
-                # We created a new DIAObject in the collection hence the last
-                # DIAObject in this collection is new and contains only one
-                # DIASource.
-                self.assertEqual(
-                    dia_collection.get_dia_object(obj_id).n_dia_sources, 1)
-            else:
-                self.assertEqual(
-                    dia_collection.get_dia_object(obj_id).n_dia_sources, 2)
+        # We created a new DIAObject in the collection hence the last
+        # DIAObject in this collection is new and contains only one
+        # DIASource. All others contain two.
+        self.assertEqual(
+            dia_collection.get_dia_object(updated_ids[-1]).n_dia_sources, 1)
+        for obj_id in updated_ids[0:-1]:
+            self.assertEqual(
+                dia_collection.get_dia_object(obj_id).n_dia_sources, 2)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

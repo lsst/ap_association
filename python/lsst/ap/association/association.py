@@ -124,7 +124,12 @@ class AssociationTask(pipeBase.Task):
 
         Returns
         -------
-        lsst.pipe.base.Struc
+        lsst.pipe.base.Struct
+            struct containing:
+            * dia_collection: A DIAObjectCollectoin containing the new and
+                updated DIAObjects.
+            * updated_ids: id of the DIAObject in this DIAObjectCollection that
+                the given source matched.
         """
 
         scores = self.score(
