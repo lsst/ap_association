@@ -277,7 +277,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         """
         ctr_coord = expMd.wcs.pixelToSky(expMd.bbox.getCenter())
         max_radius = max(
-            ctr_coord.angularSeparation(expMd.wcs.pixelToSky(pp))
+            ctr_coord.separation(expMd.wcs.pixelToSky(pp))
             for pp in expMd.bbox.getCorners())
 
         indexer_indices, on_boundry = self.indexer.get_pixel_ids(
