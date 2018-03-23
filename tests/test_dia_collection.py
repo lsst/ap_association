@@ -26,7 +26,6 @@ import numpy as np
 import unittest
 
 from lsst.ap.association import DIAObject, DIAObjectCollection
-from lsst.afw.coord import Coord
 import lsst.afw.geom as afwGeom
 import lsst.utils.tests
 from test_dia_object import create_test_dia_sources
@@ -90,13 +89,11 @@ def edit_and_offset_source_record(src, src_id, ra_degrees, dec_degrees,
     scatter_arcsec : float
         Arcsecond scatter to add to the position of the source record coord.
     """
-    coord = Coord(afwGeom.Angle(ra_degrees, units=afwGeom.degrees),
-                  afwGeom.Angle(dec_degrees, units=afwGeom.degrees))
+    coord = lsst.afw.geom.SpherePoint(ra_degrees, dec_degrees, afwGeom.degrees)
     if scatter_arcsec > 0.0:
-        coord.offset(
-            afwGeom.Angle(np.random.rand() * 360, units=afwGeom.degrees),
-            afwGeom.Angle(np.random.rand() * scatter_arcsec,
-                          units=afwGeom.arcseconds))
+        coord = coord.offset(
+            np.random.rand() * 360 * afwGeom.degrees,
+            np.random.rand() * scatter_arcsec * afwGeom.arcseconds)
     src.setCoord(coord)
     src['id'] = src_id
 

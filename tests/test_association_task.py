@@ -27,7 +27,6 @@ import os
 import tempfile
 import unittest
 
-from lsst.afw.coord import Coord
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
@@ -106,10 +105,9 @@ def create_test_dia_sources(n_sources=5,
     for src_idx in range(n_sources):
         src = sources.addNew()
         src['id'] = src_idx + start_id
-        coord = Coord(source_locs_deg[src_idx][0] * afwGeom.degrees,
-                      source_locs_deg[src_idx][1] * afwGeom.degrees)
+        coord = afwGeom.SpherePoint(source_locs_deg[src_idx][0], source_locs_deg[src_idx][1], afwGeom.degrees)
         if scatter_arcsec > 0.0:
-            coord.offset(
+            coord = coord.offset(
                 np.random.rand() * 360 * afwGeom.degrees,
                 np.random.rand() * scatter_arcsec * afwGeom.arcseconds)
         src.setCoord(coord)

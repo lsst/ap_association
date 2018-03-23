@@ -334,7 +334,7 @@ class DIAObject(object):
 
         Return
         ------
-        A lsst.afw.coord._coord.IcrsCoord
+        A lsst.afw.geom.SpherePoint
         """
         return self._dia_object_record.getCoord()
 
