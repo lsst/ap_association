@@ -38,7 +38,12 @@ __all__ = ["AssociationConfig", "AssociationTask"]
 
 
 class AssociationConfig(pexConfig.Config):
+<<<<<<< HEAD
     """Config class for AssociationTask.
+=======
+    """
+    Config class for AssociationTask.
+>>>>>>> ae74366... Debug Sphnix docs.
     """
     level1_db = pexConfig.ConfigurableField(
         target=AssociationDBSqliteTask,
@@ -54,7 +59,12 @@ class AssociationConfig(pexConfig.Config):
 
 
 class AssociationTask(pipeBase.Task):
+<<<<<<< HEAD
     """Associate DIAOSources into existing DIAObjects.
+=======
+    """
+    Associate DIAOSources into existing DIAObjects.
+>>>>>>> ae74366... Debug Sphnix docs.
 
     This task performs the association of detected DIASources in a visit
     with the previous DIAObjects detected over time. It also creates new
@@ -149,9 +159,15 @@ class AssociationTask(pipeBase.Task):
 
         Parameters
         ----------
+<<<<<<< HEAD
         dia_object_collection : `lsst.ap.association.DIAObjectCollection`
             A DIAObjectCollection to score against dia_sources.
         dia_source_catalog : `lsst.afw.table.SourceCatalog`
+=======
+        dia_object_collection : lsst.ap.association.DIAObjectCollection
+            A DIAObjectCollection to score against dia_sources.
+        dia_source_catalog : lsst.afw.SourceCatalog
+>>>>>>> ae74366... Debug Sphnix docs.
             A contiguous catalog of dia_sources to "score" based on distance
             and (in the future) other metrics.
         max_dist : `lsst.afw.geom.Angle`
@@ -199,9 +215,15 @@ class AssociationTask(pipeBase.Task):
 
         Parameters
         ----------
+<<<<<<< HEAD
         dia_object_collection : `lsst.ap.association.DIAObjectCollection`
             A DIAObjectCollection to associate to dia_sources.
         dia_source_catalog : `lsst.afw.table.SourceCatalog`
+=======
+        dia_object_collection : lsst.ap.association.DIAObjectCollection
+            A DIAObjectCollection to associate to dia_sources.
+        dia_source_catalog : lsst.afw.SourceCatalog
+>>>>>>> ae74366... Debug Sphnix docs.
             A contiguous catalog of dia_sources for which the set of scores
             has been computed on with DIAObjectCollection.score.
         score_struct : `lsst.pipe.base.Struct`

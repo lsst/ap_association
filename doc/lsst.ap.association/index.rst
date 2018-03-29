@@ -11,4 +11,5 @@ lsst.ap.association
 Python API reference
 ====================
 
-.. automodapi:: lsst.ap.association
+.. automodapi:: lsst.ap.association.association
+.. automodapi:: lsst.ap.association.dia_object
