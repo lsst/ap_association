@@ -86,7 +86,6 @@ class DIAObject(object):
     object_source_record : `lsst.afw.table.SourceRecord` (optional)
         Optional input SourceRecord containing summary statistics on
         the input SourceCatalog.
-
     """
     def __init__(self, dia_source_catalog, object_source_record=None):
 
@@ -213,7 +212,6 @@ class DIAObject(object):
         Returns
         -------
         light_curve : `ndarry` of `float`s
-            An array like object specifying the light curve for this object.
         """
 
         # Loop through DIASources and return the "light curve"
@@ -230,10 +228,6 @@ class DIAObject(object):
 
         If True is returned this DIAObject has computed all of its summary
         statistics for the current collection of DIASources that make it up.
-
-        Return
-        ------
-        is_updated : `bool`
         """
 
         return self._updated
@@ -242,10 +236,6 @@ class DIAObject(object):
     def dia_object_record(self):
         """Retrieve the SourceRecord that represents the summary statistics on
         this DIAObject's set of DIASources.
-
-        Return
-        ------
-        dia_object_record : `lsst.afw.table.SourceRecord`
         """
         return self._dia_object_record
 
@@ -253,10 +243,6 @@ class DIAObject(object):
     def dia_source_catalog(self):
         """Retrieve the SourceCatalog that represents the DIASources that make
         up this DIAObject.
-
-        Return
-        ------
-        dia_source_catalog : `lsst.afw.table.SourceCatalog`
         """
         return self._dia_source_catalog
 
@@ -264,10 +250,6 @@ class DIAObject(object):
     def dia_source_schema(self):
         """Retrieve the SourceCatalog that represents the DIASources that make
         up this DIAObject.
-
-        Return
-        ------
-        dia_source_schema : `lsst.afw.table.SourceCatalog`
         """
         return self._dia_source_schema
 
@@ -275,10 +257,6 @@ class DIAObject(object):
     def n_dia_sources(self):
         """Return the number of DIASources currently associated with this
         object.
-
-        Return
-        ------
-        n_dia_sources : `int`
         """
         return len(self._dia_source_catalog)
 
