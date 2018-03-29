@@ -39,7 +39,11 @@ def make_minimal_dia_object_schema():
 
     Return
     ------
+<<<<<<< HEAD
+    dia_object_schema : `lsst.afw.table.Schema`
+=======
     `lsst.afw.table.Schema`
+>>>>>>> c8d554a... Clean numpydocs.
     """
 
     schema = afwTable.SourceTable.makeMinimalSchema()
@@ -61,7 +65,11 @@ def make_minimal_dia_source_schema():
 
     Return
     ------
+<<<<<<< HEAD
+    dia_source_schema : `lsst.afw.table.Schema`
+=======
     `lsst.afw.table.Schema`
+>>>>>>> c8d554a... Clean numpydocs.
     """
 
     schema = afwTable.SourceTable.makeMinimalSchema()
@@ -78,6 +86,7 @@ class DIAObject(object):
     input object_source_record should contain summary statistics on the
     SourceCatalog of DIASources. Using this optional input escapes the
     need to recompute the summary statistics when not necessary.
+<<<<<<< HEAD
 
     Parameters
     ----------
@@ -87,6 +96,17 @@ class DIAObject(object):
         Optional input SourceRecord containing summary statistics on
         the input SourceCatalog.
 
+=======
+
+    Parameters
+    ----------
+    dia_source_catalog : `lsst.afw.table.SourceCatalog`
+        SourceCatalog of DIASources associated to this DIAObject
+    object_source_record : `lsst.afw.table.SourceRecord` (optional)
+        Optional input SourceRecord containing summary statistics on
+        the input SourceCatalog.
+
+>>>>>>> c8d554a... Clean numpydocs.
     """
     def __init__(self, dia_source_catalog, object_source_record=None):
 
@@ -113,10 +133,15 @@ class DIAObject(object):
         Parameters
         ----------
         name : `str` or `lsst.afw.table.Key`
+            Name of the column to retrieve the value from.
 
         Return
         ------
+<<<<<<< HEAD
+        value : ``record value``
+=======
         ``record value``
+>>>>>>> c8d554a... Clean numpydocs.
         """
 
         # This will in the future be replaced with a overwriting of __getattr
@@ -212,7 +237,7 @@ class DIAObject(object):
 
         Returns
         -------
-        `ndarry` of `float`s
+        light_curve : `ndarry` of `float`s
             An array like object specifying the light curve for this object.
         """
 
@@ -233,7 +258,7 @@ class DIAObject(object):
 
         Return
         ------
-        `bool`
+        is_updated : `bool`
         """
 
         return self._updated
@@ -245,7 +270,7 @@ class DIAObject(object):
 
         Return
         ------
-        `lsst.afw.table.SourceRecord`
+        dia_object_record : `lsst.afw.table.SourceRecord`
         """
         return self._dia_object_record
 
@@ -256,7 +281,7 @@ class DIAObject(object):
 
         Return
         ------
-        `lsst.afw.table.SourceCatalog`
+        dia_source_catalog : `lsst.afw.table.SourceCatalog`
         """
         return self._dia_source_catalog
 
@@ -267,7 +292,7 @@ class DIAObject(object):
 
         Return
         ------
-        A lsst.afw.table.SourceCatalog
+        dia_source_schema : `lsst.afw.table.SourceCatalog`
         """
         return self._dia_source_schema
 
@@ -278,17 +303,13 @@ class DIAObject(object):
 
         Return
         ------
-        `int`
+        n_dia_sources : `int`
         """
         return len(self._dia_source_catalog)
 
     @property
     def schema(self):
         """Return the schema of the DIAObject record.
-
-        Returns
-        -------
-        `lsst.afw.table.schema.schema.Schema`
         """
         return self._dia_object_record.schema
 
@@ -296,49 +317,29 @@ class DIAObject(object):
     def source_catalog_schema(self):
         """Return the schema of the DIASourceCatalog associated with this
         DIAObject.
-
-        Returns
-        -------
-        `lsst.afw.table.Schema`
         """
         return self._dia_source_catalog.schema
 
     @property
     def ra(self):
         """Get the RA of this DIAObject.
-
-        Return
-        ------
-        `lsst.afw.geom.Angle`
         """
         return self._dia_object_record.getRa()
 
     @property
     def dec(self):
         """Get the DEC of this DIAObject.
-
-        Return
-        ------
-        `lsst.afw.geom.Angle`
         """
         return self._dia_object_record.getDec()
 
     @property
     def coord(self):
         """Get the Coordinate of this DIAObject.
-
-        Return
-        ------
-        `lsst.afw.geom.SpherePoint`
         """
         return self._dia_object_record.getCoord()
 
     @property
     def id(self):
         """Get the unique catalog identifier for this object.
-
-        Return
-        ------
-        `int`
         """
         return self._dia_object_record.getId()
