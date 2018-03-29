@@ -20,7 +20,7 @@
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
 
-""" Define collections of DIAObjects and how to associate them with
+"""Define collections of DIAObjects and how to associate them with
 DIASources.
 """
 
@@ -35,26 +35,30 @@ import lsst.pipe.base as pipeBase
 from .dia_object import DIAObject
 
 
+__all__ = ["DIAObjectCollection"]
+
+
 class DIAObjectCollection(object):
-    """ A collection of DIAObjects with convenience functions for scoring and
+<<<<<<< HEAD
+    """A collection of DIAObjects with convenience functions for scoring and
+=======
+    """
+    A collection of DIAObjects with convenience functions for scoring and
+>>>>>>> ae74366... Debug Sphnix docs.
     matching DIASources into the collection of DIAObjects.
 
     Attributes
     ----------
-    dia_objects : a list of DIAObjects
+    dia_objects : `list` of `lsst.ap.association.DIAObjects`
         List of DIAObjects representing this collection the current (e.g.)
         visit.
-    is_updated : bool
-        Bool representing that the internal summary statistics of each
-        DIAObject has been computed for the current set of DIASources it
-        contains.
-    is_valid_tree : bool
-        Bool representing that the internal spatial tree structure is valid
-        for the current set of DIAObjects.
     """
 
     def __init__(self, dia_objects):
-        """ Initialize a collection of dia_objects.
+<<<<<<< HEAD
+=======
+        """
+        Initialize a collection of dia_objects.
 
         Store and update a list of dia_objects in the collection.
 
@@ -70,6 +74,7 @@ class DIAObjectCollection(object):
         -------
         A DIAObjectCollection instance
         """
+>>>>>>> ae74366... Debug Sphnix docs.
         self.dia_objects = dia_objects
         self._id_to_index = {}
         for idx, dia_object in enumerate(self.dia_objects):
@@ -83,36 +88,46 @@ class DIAObjectCollection(object):
         # in this collection for fast pair searching later.
 
     def get_dia_object(self, id):
-        """ Retrieve an individual DIAObject from this collection using its
+<<<<<<< HEAD
+        """Retrieve an individual DIAObject from this collection using its
+=======
+        """
+        Retrieve an individual DIAObject from this collection using its
+>>>>>>> ae74366... Debug Sphnix docs.
         catalog id.
 
         Parameters
         ----------
-        id : int
+        id : `int`
             id of the DIAObject to retrieve
 
         Return
         ------
-        A DIAObject
+        `lsst.ap.association.DIAObject`
         """
         return self.dia_objects[self._id_to_index[id]]
 
     def get_dia_object_ids(self):
-        """ Retrieve the ids of the DIAObjects stored in this collection.
+<<<<<<< HEAD
+        """Retrieve the ids of the DIAObjects stored in this collection.
+=======
+        """
+        Retrieve the ids of the DIAObjects stored in this collection.
+>>>>>>> ae74366... Debug Sphnix docs.
 
         Parameters
         ----------
-        id : int
+        id : `int`
             id of the DIAObject to retrieve
 
         Return
         ------
-        A list of ints
+        `list` of `int`s
         """
         return list(self._id_to_index.keys())
 
     def update_dia_objects(self, force=False):
-        """ Update the summary statistics of all DIAObjects in this
+        """Update the summary statistics of all DIAObjects in this
         collection.
 
         Loop through the DIAObjects that make up this DIAObjectCollection and
@@ -124,13 +139,13 @@ class DIAObjectCollection(object):
 
         Parameters
         ----------
-        force : bool (optional)
+        force : `bool` (optional)
             Force the DIAObjects to update regardless of their internal
             `is_updated` status.
 
         Returns
         -------
-        bool
+        `bool`
             Successfully updated
         """
         self._is_updated = False
@@ -145,7 +160,12 @@ class DIAObjectCollection(object):
         return self._is_updated
 
     def update_spatial_tree(self):
-        """ Update the internal search able spatial tree on the DIAObjects.
+<<<<<<< HEAD
+        """Update the internal search able spatial tree on the DIAObjects.
+=======
+        """
+        Update the internal search able spatial tree on the DIAObjects.
+>>>>>>> ae74366... Debug Sphnix docs.
 
         Returns
         -------
@@ -174,11 +194,16 @@ class DIAObjectCollection(object):
         return self._is_valid_tree
 
     def append(self, dia_object):
-        """ Add a new DIAObject to this collection.
+<<<<<<< HEAD
+        """Add a new DIAObject to this collection.
+=======
+        """
+        Add a new DIAObject to this collection.
+>>>>>>> ae74366... Debug Sphnix docs.
 
         Parameters
         ----------
-        dia_object : A DIAObject class instance
+        dia_object : `lsst.ap.association.DIAObject`
             Input dia_object to append to this collection.
 
         Returns
@@ -195,7 +220,12 @@ class DIAObjectCollection(object):
         return None
 
     def score(self, dia_source_catalog, max_dist):
-        """ Compute a quality score for each dia_source/dia_object pair
+<<<<<<< HEAD
+        """Compute a quality score for each dia_source/dia_object pair
+=======
+        """
+        Compute a quality score for each dia_source/dia_object pair
+>>>>>>> ae74366... Debug Sphnix docs.
         between this collection and an input diat_source catalog.
 
         max_dist sets maximum separation in arcseconds to consider a
@@ -204,20 +234,24 @@ class DIAObjectCollection(object):
 
         Parameters
         ----------
-        dia_source_catalog : an lsst.afw.SourceCatalog
+        dia_object_collection : `lsst.ap.association.DIAObjectCollection`
+            A DIAObjectCollection to score against dia_sources.
+        dia_source_catalog : `lsst.afw.table.SourceCatalog`
             A contiguous catalog of dia_sources to "score" based on distance
             and (in the future) other metrics.
-        max_dist : lsst.afw.geom.Angle
+        max_dist : `lsst.afw.geom.Angle`
             Maximum allowed distance to compute a score for a given DIAObject
             DIASource pair.
 
         Returns
         -------
-        lsst.pipe.base.Struct
-            struct containing:
-            * scores: array of floats of match quality
-            * obj_ids: id of the DIAObject in thisDIAObjectCollection that
-                the given source matched.
+        result : `lsst.pipe.base.Struct`
+            Results struct with components:
+
+            - ``scores``: array of floats of match quality
+                updated DIAObjects (`ndarray` of `float`s).
+            - ``obj_ids``: array of floats of match quality
+                updated DIAObjects (`ndarray` of `ints`s).
             Default values for these arrays are
             INF and -1 respectively for unassociated sources.
         """
@@ -245,34 +279,44 @@ class DIAObjectCollection(object):
             obj_ids=obj_ids)
 
     def match(self, dia_source_catalog, score_struct):
-        """ Append DIAsources to DIAObjects given a score and create new
+<<<<<<< HEAD
+        """Append DIAsources to DIAObjects given a score and create new
+=======
+        """
+        Append DIAsources to DIAObjects given a score and create new
+>>>>>>> ae74366... Debug Sphnix docs.
         DIAObjects in this collection from DIASources with poor scores.
 
         Parameters
         ----------
-        dia_source_catalog : an lsst.afw.SourceCatalog
+        dia_object_collection : `lsst.ap.association.DIAObjectCollection`
+            A DIAObjectCollection to associate to dia_sources.
+        dia_source_catalog : `lsst.afw.table.SourceCatalog`
             A contiguous catalog of dia_sources for which the set of scores
             has been computed on with DIAObjectCollection.score.
-        score_struct : lsst.pipe.base.Struct
-            struct containing:
-            * scores: array of floats of match quality
-            * obj_ids: id of the DIAObject in thisDIAObjectCollection that
-                the given source matched.
+        score_struct : `lsst.pipe.base.Struct`
+            Results struct with components:
+
+            - ``scores``: array of floats of match quality
+                updated DIAObjects (`ndarray` of `float`s).
+            - ``obj_ids``: array of floats of match quality
+                updated DIAObjects (`ndarray` of `ints`s).
             Default values for these arrays are
             INF and -1 respectively for unassociated sources.
 
         Returns
         -------
-        pipeBase.Struct
-            A struct containing the following data:
-            * updated_and_new_dia_object_ids : list of ints specifying the ids
-                new and updated dia_objects in the collection.
-            * n_updated_dia_objects : number of previously know dia_objects with
-               newly associated DIASources.
-            * n_new_dia_objects : Number of newly created DIAObjects from
-                unassociated DIASources
-            * n_unupdated_dia_objects : number of previous DIAObjects that were
-                not associated to a new DIASource.
+        result : `lsst.pipeBase.Struct`
+            Results struct with components:
+
+            - ``updated_and_new_dia_object_ids`` : ids new and updated
+              dia_objects in the collection (`list` of `int`s).
+            - ``n_updated_dia_objects`` : Number of previously know dia_objects
+              with newly associated DIASources. (`int`).
+            - ``n_new_dia_objects`` : Number of newly created DIAObjects from
+              unassociated DIASources (`int`).
+            - ``n_unupdated_dia_objects`` : Number of previous DIAObjects that
+              were not associated to a new DIASource (`int`).
         """
 
         n_previous_dia_objects = len(self.dia_objects)
@@ -329,26 +373,28 @@ class DIAObjectCollection(object):
 
     @property
     def is_updated(self):
-        """ Return the status of the internal DIAObjects and if their summary
+<<<<<<< HEAD
+        """Return the status of the internal DIAObjects and if their summary
+=======
+        """
+        Return the status of the internal DIAObjects and if their summary
+>>>>>>> ae74366... Debug Sphnix docs.
         statistics have been properly updated.
-
-        Return
-        ------
-        bool
         """
 
         return self._is_updated
 
     @property
     def is_valid_tree(self):
-        """ Return the status of the internal spatial search tree.
+<<<<<<< HEAD
+        """Return the status of the internal spatial search tree.
+=======
+        """
+        Return the status of the internal spatial search tree.
+>>>>>>> ae74366... Debug Sphnix docs.
 
         If the tree has not been updated with the current positions of
         all DIAObjects internal to this collection we return false.
-
-        Return
-        ------
-        bool
         """
 
         return self._is_valid_tree

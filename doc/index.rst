@@ -1,6 +1,6 @@
-{{ "#" * (cookiecutter.package_name|length + 22) }}
-{{ cookiecutter.package_name}} documentation preview
-{{ "#" * (cookiecutter.package_name|length + 22) }}
+####################################
+ap_association documentation preview
+####################################
 
 .. This page is for local development only. It isn't published to pipelines.lsst.io.
 
@@ -9,5 +9,5 @@
 .. toctree::
    :maxdepth: 1
 
-   {{ cookiecutter.package_name }}/index
-   {{ cookiecutter.python_module }}/index
+   ap_association/index
+   lsst.ap.association/index
