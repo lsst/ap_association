@@ -73,7 +73,7 @@ class DIAObjectCollection(object):
 
         Return
         ------
-        `lsst.ap.association.DIAObject`
+        dia_object : `lsst.ap.association.DIAObject`
         """
         return self.dia_objects[self._id_to_index[id]]
 
@@ -87,7 +87,7 @@ class DIAObjectCollection(object):
 
         Return
         ------
-        `list` of `int`s
+        dia_object_ids : `list` of `int`s
         """
         return list(self._id_to_index.keys())
 
@@ -110,7 +110,7 @@ class DIAObjectCollection(object):
 
         Returns
         -------
-        `bool`
+        is_updated : `bool`
             Successfully updated
         """
         self._is_updated = False
@@ -129,7 +129,7 @@ class DIAObjectCollection(object):
 
         Returns
         -------
-        `bool`
+        is_updated : `bool`
             Successfully updated
         """
         self._is_valid_tree = False
@@ -160,10 +160,6 @@ class DIAObjectCollection(object):
         ----------
         dia_object : `lsst.ap.association.DIAObject`
             Input dia_object to append to this collection.
-
-        Returns
-        -------
-        `None`
         """
 
         self._is_updated = False
