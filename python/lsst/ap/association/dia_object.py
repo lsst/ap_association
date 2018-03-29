@@ -20,7 +20,7 @@
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
 
-""" Definitions for DIAObject and a minimal schema for them.
+"""Definitions for DIAObject and a minimal schema for them.
 """
 
 from __future__ import absolute_import, division, print_function
@@ -35,11 +35,11 @@ __all__ = ["DIAObject",
 
 
 def make_minimal_dia_object_schema():
-    """ Define and create the minimal schema required for a DIAObject.
+    """Define and create the minimal schema required for a DIAObject.
 
     Return
     ------
-    lsst.afw.table.schema.schema.Schema
+    `lsst.afw.table.Schema`
     """
 
     schema = afwTable.SourceTable.makeMinimalSchema()
@@ -57,11 +57,11 @@ def make_minimal_dia_object_schema():
 
 
 def make_minimal_dia_source_schema():
-    """ Define and create the minimal schema required for a DIASource.
+    """Define and create the minimal schema required for a DIASource.
 
     Return
     ------
-    lsst.afw.table.schema.schema.Schema
+    `lsst.afw.table.Schema`
     """
 
     schema = afwTable.SourceTable.makeMinimalSchema()
@@ -70,32 +70,25 @@ def make_minimal_dia_source_schema():
 
 
 class DIAObject(object):
-    """ A class specifying a collection of single frame difference image
+    """A class specifying a collection of single frame difference image
     sources and statistics on these collections.
+
+    Takes as input an lsst.afw.table.SourceCatlog object specifying a
+    collection of DIASources that make up this DIAObject. The optional
+    input object_source_record should contain summary statistics on the
+    SourceCatalog of DIASources. Using this optional input escapes the
+    need to recompute the summary statistics when not necessary.
+
+    Parameters
+    ----------
+    dia_source_catalog : `lsst.afw.table.SourceCatalog`
+        SourceCatalog of DIASources associated to this DIAObject
+    object_source_record : `lsst.afw.table.SourceRecord` (optional)
+        Optional input SourceRecord containing summary statistics on
+        the input SourceCatalog.
 
     """
     def __init__(self, dia_source_catalog, object_source_record=None):
-        """  Create a DIAObject given an input SourceCatalog of
-        DIASources.
-
-        Takes as input an lsst.afw.table.SourceCatlog object specifying a
-        collection of DIASources that make up this DIAObject. The optional
-        input object_source_record should contain summary statistics on the
-        SourceCatalog of DIASources. Using this optional input escapes the
-        need to recompute the summary statistics when not necessary.
-
-        Parameters
-        ----------
-        dia_source_catalog : lsst.afw.table.SourceCatalog
-            SourceCatalog of DIASources associated to this DIAObject
-        object_source_record : lsst.afw.table.SourceRecord, optional
-            Optional input SourceRecord containing summary statistics on
-            the input SourceCatalog.
-
-        Returns
-        -------
-        A DIAObject instance
-        """
 
         self._dia_source_catalog = dia_source_catalog
         self._dia_source_schema = self._dia_source_catalog.getSchema()
@@ -115,15 +108,15 @@ class DIAObject(object):
             self._updated = True
 
     def get(self, name):
-        """ Retrieve a specific summary statistic from this DIAObject
+        """Retrieve a specific summary statistic from this DIAObject
 
         Parameters
         ----------
-        name : str or lsst.afw.table.Key
+        name : `str` or `lsst.afw.table.Key`
 
         Return
         ------
-        A SourceRecord column value
+        ``record value``
         """
 
         # This will in the future be replaced with a overwriting of __getattr
@@ -131,7 +124,7 @@ class DIAObject(object):
         return self._dia_object_record.get(name)
 
     def update(self):
-        """ Compute all summary statistics given the current catalog of
+        """Compute all summary statistics given the current catalog of
         DIASources assigned to this DIAObject.
 
         Store these summaries (e.g. median RA/DEC position, fluxes...) in
@@ -152,7 +145,7 @@ class DIAObject(object):
         self._updated = True
 
     def _compute_summary_statistics(self):
-        """ Retrieve properties from DIASourceCatalog attribute and update the
+        """Retrieve properties from DIASourceCatalog attribute and update the
         summary statistics that represent this DIAObject
         """
 
@@ -166,26 +159,26 @@ class DIAObject(object):
         # we also do not need them yet for the MVP/S
 
     def _store_n_associated_sources(self):
-        """ Store the number of DIASources associated with the DIAObject.
+        """Store the number of DIASources associated with the DIAObject.
         """
 
         self._dia_object_record.set("n_dia_sources", self.n_dia_sources)
 
     def _update_coordinate(self):
-        """ Update the DIAObject coordinate with that of the most recent
+        """Update the DIAObject coordinate with that of the most recent
         DIASource associated with it.
         """
         self._dia_object_record.setCoord(
             self._dia_source_catalog[-1].getCoord())
 
     def append_dia_source(self, input_dia_source_record):
-        """ Append the input_dia_source to the dia_source_catalog attribute.
+        """Append the input_dia_source to the dia_source_catalog attribute.
 
         Additionally set update boolean to False.
 
         Parameters
         ----------
-        input_dia_source : lsst.afw.table.SourceRecord
+        input_dia_source : `lsst.afw.table.SourceRecord`
             Single DIASource object to append to this DIAObject's source
             catalog.
         """
@@ -214,12 +207,13 @@ class DIAObject(object):
         self._dia_source_catalog.append(tmp_source_record)
 
     def get_light_curve(self):
-        """ Retrieve the light curve of fluxes for the DIASources that make up
+        """Retrieve the light curve of fluxes for the DIASources that make up
         this DIAObject.
 
         Returns
         -------
-        An array like object specifying the light curve for this object.
+        `ndarry` of `float`s
+            An array like object specifying the light curve for this object.
         """
 
         # Loop through DIASources and return the "light curve"
@@ -232,43 +226,43 @@ class DIAObject(object):
 
     @property
     def is_updated(self):
-        """ Return the current state of this DIAObject.
+        """Return the current state of this DIAObject.
 
         If True is returned this DIAObject has computed all of its summary
         statistics for the current collection of DIASources that make it up.
 
         Return
         ------
-        bool
+        `bool`
         """
 
         return self._updated
 
     @property
     def dia_object_record(self):
-        """ Retrieve the SourceRecord that represents the summary statistics on
+        """Retrieve the SourceRecord that represents the summary statistics on
         this DIAObject's set of DIASources.
 
         Return
         ------
-        A lsst.afw.table.SourceRecord
+        `lsst.afw.table.SourceRecord`
         """
         return self._dia_object_record
 
     @property
     def dia_source_catalog(self):
-        """ Retrieve the SourceCatalog that represents the DIASources that make
+        """Retrieve the SourceCatalog that represents the DIASources that make
         up this DIAObject.
 
         Return
         ------
-        A lsst.afw.table.SourceCatalog
+        `lsst.afw.table.SourceCatalog`
         """
         return self._dia_source_catalog
 
     @property
     def dia_source_schema(self):
-        """ Retrieve the SourceCatalog that represents the DIASources that make
+        """Retrieve the SourceCatalog that represents the DIASources that make
         up this DIAObject.
 
         Return
@@ -279,71 +273,72 @@ class DIAObject(object):
 
     @property
     def n_dia_sources(self):
-        """ Return the number of DIASources currently associated with this
+        """Return the number of DIASources currently associated with this
         object.
 
         Return
         ------
+        `int`
         """
         return len(self._dia_source_catalog)
 
     @property
     def schema(self):
-        """ Return the schema of the DIAObject record.
+        """Return the schema of the DIAObject record.
 
         Returns
         -------
-        lsst.afw.table.schema.schema.Schema
+        `lsst.afw.table.schema.schema.Schema`
         """
         return self._dia_object_record.schema
 
     @property
     def source_catalog_schema(self):
-        """ Return the schema of the DIASourceCatalog associated with this
+        """Return the schema of the DIASourceCatalog associated with this
         DIAObject.
 
         Returns
         -------
-        lsst.afw.table.schema.schema.Schema
+        `lsst.afw.table.Schema`
         """
         return self._dia_source_catalog.schema
 
     @property
     def ra(self):
-        """ Get the RA of this DIAObject.
+        """Get the RA of this DIAObject.
 
         Return
         ------
-        A lsst.afw.geom.angle.angle.Angle
+        `lsst.afw.geom.Angle`
         """
         return self._dia_object_record.getRa()
 
     @property
     def dec(self):
-        """ Get the DEC of this DIAObject.
+        """Get the DEC of this DIAObject.
 
         Return
         ------
-        A lsst.afw.geom.angle.angle.Angle
+        `lsst.afw.geom.Angle`
         """
         return self._dia_object_record.getDec()
 
     @property
     def coord(self):
-        """ Get the Coordinate of this DIAObject.
+        """Get the Coordinate of this DIAObject.
 
         Return
         ------
-        A lsst.afw.geom.SpherePoint
+        `lsst.afw.geom.SpherePoint`
         """
         return self._dia_object_record.getCoord()
 
     @property
     def id(self):
-        """ Get the unique catalog identifier for this object.
+        """Get the unique catalog identifier for this object.
 
         Return
         ------
-        int
+        `int`
         """
         return self._dia_object_record.getId()
