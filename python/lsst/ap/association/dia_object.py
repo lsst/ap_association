@@ -112,6 +112,7 @@ class DIAObject(object):
         Parameters
         ----------
         name : `str` or `lsst.afw.table.Key`
+            Name of the column to retrieve the value from.
 
         Return
         ------

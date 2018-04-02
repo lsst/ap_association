@@ -34,7 +34,6 @@ import lsst.pipe.base as pipeBase
 
 from .dia_object import DIAObject
 
-
 __all__ = ["DIAObjectCollection"]
 
 
@@ -106,7 +105,7 @@ class DIAObjectCollection(object):
         ----------
         force : `bool` (optional)
             Force the DIAObjects to update regardless of their internal
-            `is_updated` status.
+            ``is_updated`` status.
 
         Returns
         -------
@@ -180,8 +179,6 @@ class DIAObjectCollection(object):
 
         Parameters
         ----------
-        dia_object_collection : `lsst.ap.association.DIAObjectCollection`
-            A DIAObjectCollection to score against dia_sources.
         dia_source_catalog : `lsst.afw.table.SourceCatalog`
             A contiguous catalog of dia_sources to "score" based on distance
             and (in the future) other metrics.
@@ -230,8 +227,6 @@ class DIAObjectCollection(object):
 
         Parameters
         ----------
-        dia_object_collection : `lsst.ap.association.DIAObjectCollection`
-            A DIAObjectCollection to associate to dia_sources.
         dia_source_catalog : `lsst.afw.table.SourceCatalog`
             A contiguous catalog of dia_sources for which the set of scores
             has been computed on with DIAObjectCollection.score.
