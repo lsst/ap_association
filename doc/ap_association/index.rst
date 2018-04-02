@@ -8,7 +8,7 @@ ap_association
 
 .. Sentence/short paragraph describing what the package is for.
 
-The ``ap_association`` package provides [...].
+The ``ap_association`` package provides tools for association DIAObjects to DIASources, persisting this association, and computing DIAObject summary statistics.
 
 Project info
 ============
