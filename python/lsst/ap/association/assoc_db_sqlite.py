@@ -85,8 +85,8 @@ class SqliteDBConverter(object):
         table_name : `str`
             Name of the new table to create
 
-        Return
-        ------
+        Returns
+        -------
         sql_query : `str`
             A string of the query command to create the new table in sqlite.
         """
@@ -110,9 +110,10 @@ class SqliteDBConverter(object):
         db_row : `list` of ``values``
             Retrieved values from the database to convert into a SourceRecord.
 
-        Return
-        ------
+        Returns
+        -------
         record : `lsst.afw.table.SourceRecord`
+            Converted source record.
         """
 
         output_source_record = afwTable.SourceTable.makeRecord(
@@ -135,9 +136,10 @@ class SqliteDBConverter(object):
         source_record : `lsst.afw.table.SourceRecord`
             SourceRecord to convert.
 
-        Return
-        ------
+        Returns
+        -------
         source_list : `list` of ``values``
+            Extracted values from ``source_record`` in `list` form.
         """
         values = []
         for sub_schema in self._schema:
@@ -265,6 +267,8 @@ class AssociationDBSqliteTask(pipeBase.Task):
         Returns
         -------
         dia_objects : `lsst.ap.association.DIAObjectCollection`
+            Collection of DIAObjects that are contained with the the bounding
+            box defined by expMd.
         """
         ctr_coord = expMd.wcs.pixelToSky(expMd.bbox.getCenter())
         max_radius = max(
@@ -328,7 +332,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         dia_collection : `lsst.ap.association.DIAObjectCollection`
             A collection of DIAObjects that contains newly created or updated
             DIAObjects. Only the new or updated DIAObjects are stored.
-        updated_dia_collection_indices : `ndarray` of `int`s
+        updated_dia_collection_indices : array-like of `int`s
             Ids of DIAObjects within the set DIAObjectCollection that should
             be stored as updated DIAObjects in the database.
         """
@@ -360,9 +364,9 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         Parameters
         ----------
-        indexer_indices : `ndarray` of `int`s
+        indexer_indices : array-like of `int`s
             Pixelized indexer indices from which to load.
-        expMd : `lsst.pipe.base.Struct`
+        expMd : `lsst.pipe.base.Struct` (optional)
             Results struct with commponents:
 
             - ``bbox``: Bounding box of exposure (`lsst.afw.geom.Box2D`).
@@ -371,6 +375,8 @@ class AssociationDBSqliteTask(pipeBase.Task):
         Returns
         -------
         dia_objects : `list` of `lsst.ap.association.DIAObjects`
+            List of DIAObjects with the specified indexer index and contained
+            within the expMd bounding box.
         """
         output_dia_objects = []
 
@@ -395,8 +401,8 @@ class AssociationDBSqliteTask(pipeBase.Task):
             Spatial indices in the indexer specifying the area on the sky
             to load DIAObjects for.
 
-        Return
-        ------
+        Returns
+        -------
         dia_objects : `list` of `tuples`
             Query result containing the values representing DIAObjects
         """
@@ -435,9 +441,11 @@ class AssociationDBSqliteTask(pipeBase.Task):
             - ``bbox``: Bounding box of exposure (`lsst.afw.geom.Box2D`).
             - ``wcs``: WCS of exposure (`lsst.afw.geom.SkyWcs`).
 
-        Return
-        ------
+        Returns
+        -------
         is_contained : `bool`
+            The location of defined in dia_object_record is contained within
+            the bounding box of expMd.
         """
         if expMd is None:
             return True

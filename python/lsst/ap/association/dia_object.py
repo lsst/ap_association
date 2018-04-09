@@ -37,13 +37,10 @@ __all__ = ["DIAObject",
 def make_minimal_dia_object_schema():
     """Define and create the minimal schema required for a DIAObject.
 
-    Return
-    ------
-<<<<<<< HEAD
+    Returns
+    -------
     dia_object_schema : `lsst.afw.table.Schema`
-=======
-    `lsst.afw.table.Schema`
->>>>>>> c8d554a... Clean numpydocs.
+        Schema of DIAObjects
     """
 
     schema = afwTable.SourceTable.makeMinimalSchema()
@@ -63,13 +60,10 @@ def make_minimal_dia_object_schema():
 def make_minimal_dia_source_schema():
     """Define and create the minimal schema required for a DIASource.
 
-    Return
-    ------
-<<<<<<< HEAD
+    Returns
+    -------
     dia_source_schema : `lsst.afw.table.Schema`
-=======
-    `lsst.afw.table.Schema`
->>>>>>> c8d554a... Clean numpydocs.
+       Schema of DIASources
     """
 
     schema = afwTable.SourceTable.makeMinimalSchema()
@@ -86,7 +80,6 @@ class DIAObject(object):
     input object_source_record should contain summary statistics on the
     SourceCatalog of DIASources. Using this optional input escapes the
     need to recompute the summary statistics when not necessary.
-<<<<<<< HEAD
 
     Parameters
     ----------
@@ -95,18 +88,6 @@ class DIAObject(object):
     object_source_record : `lsst.afw.table.SourceRecord` (optional)
         Optional input SourceRecord containing summary statistics on
         the input SourceCatalog.
-
-=======
-
-    Parameters
-    ----------
-    dia_source_catalog : `lsst.afw.table.SourceCatalog`
-        SourceCatalog of DIASources associated to this DIAObject
-    object_source_record : `lsst.afw.table.SourceRecord` (optional)
-        Optional input SourceRecord containing summary statistics on
-        the input SourceCatalog.
-
->>>>>>> c8d554a... Clean numpydocs.
     """
     def __init__(self, dia_source_catalog, object_source_record=None):
 
@@ -135,13 +116,10 @@ class DIAObject(object):
         name : `str` or `lsst.afw.table.Key`
             Name of the column to retrieve the value from.
 
-        Return
-        ------
-<<<<<<< HEAD
+        Returns
+        -------
         value : ``record value``
-=======
-        ``record value``
->>>>>>> c8d554a... Clean numpydocs.
+            Column value stored in this DIAObject.
         """
 
         # This will in the future be replaced with a overwriting of __getattr
@@ -238,7 +216,7 @@ class DIAObject(object):
         Returns
         -------
         light_curve : `ndarry` of `float`s
-            An array like object specifying the light curve for this object.
+            An array-like object specifying the light curve for this object.
         """
 
         # Loop through DIASources and return the "light curve"
@@ -255,10 +233,6 @@ class DIAObject(object):
 
         If True is returned this DIAObject has computed all of its summary
         statistics for the current collection of DIASources that make it up.
-
-        Return
-        ------
-        is_updated : `bool`
         """
 
         return self._updated
@@ -267,10 +241,6 @@ class DIAObject(object):
     def dia_object_record(self):
         """Retrieve the SourceRecord that represents the summary statistics on
         this DIAObject's set of DIASources.
-
-        Return
-        ------
-        dia_object_record : `lsst.afw.table.SourceRecord`
         """
         return self._dia_object_record
 
@@ -278,10 +248,6 @@ class DIAObject(object):
     def dia_source_catalog(self):
         """Retrieve the SourceCatalog that represents the DIASources that make
         up this DIAObject.
-
-        Return
-        ------
-        dia_source_catalog : `lsst.afw.table.SourceCatalog`
         """
         return self._dia_source_catalog
 
@@ -289,10 +255,6 @@ class DIAObject(object):
     def dia_source_schema(self):
         """Retrieve the SourceCatalog that represents the DIASources that make
         up this DIAObject.
-
-        Return
-        ------
-        dia_source_schema : `lsst.afw.table.SourceCatalog`
         """
         return self._dia_source_schema
 
@@ -300,10 +262,6 @@ class DIAObject(object):
     def n_dia_sources(self):
         """Return the number of DIASources currently associated with this
         object.
-
-        Return
-        ------
-        n_dia_sources : `int`
         """
         return len(self._dia_source_catalog)
 

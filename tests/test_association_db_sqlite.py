@@ -391,9 +391,9 @@ class TestAssociationDBSqlite(unittest.TestCase):
         converter : lsst.ap.association.SqliteDBConverter
             converter defining the table and schema to store.
 
-        Return
-        ------
-        lsst.afw.table.SourceRecord
+        Returns
+        -------
+        `lsst.afw.table.SourceRecord`
         """
         self.assoc_db._store_record(
             source_record, converter)

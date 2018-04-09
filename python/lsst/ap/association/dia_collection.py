@@ -70,9 +70,10 @@ class DIAObjectCollection(object):
         id : `int`
             id of the DIAObject to retrieve
 
-        Return
-        ------
+        Returns
+        -------
         dia_object : `lsst.ap.association.DIAObject`
+            DIAObject with the ``id`` specified
         """
         return self.dia_objects[self._id_to_index[id]]
 
@@ -84,9 +85,10 @@ class DIAObjectCollection(object):
         id : `int`
             id of the DIAObject to retrieve
 
-        Return
-        ------
+        Returns
+        -------
         dia_object_ids : `list` of `int`s
+            List of the ``ids`` of all DIAObjects contained in this collection.
         """
         return list(self._id_to_index.keys())
 
