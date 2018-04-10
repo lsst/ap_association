@@ -259,7 +259,7 @@ class TestAssociationTask(unittest.TestCase):
             start_id=0,
             schema=make_minimal_dia_object_schema(),
             point_locs_deg=[[0.04 * obj_idx, 0.04 * obj_idx]
-                            for obj_idx in range(5)],
+                            for obj_idx in range(n_objects)],
             scatter_arcsec=-1,)
 
         n_sources = 5
@@ -269,7 +269,7 @@ class TestAssociationTask(unittest.TestCase):
             point_locs_deg=[
                 [0.04 * (src_idx + 1),
                  0.04 * (src_idx + 1)]
-                for src_idx in range(5)],
+                for src_idx in range(n_sources)],
             scatter_arcsec=0.1)
 
         assoc_task = AssociationTask()

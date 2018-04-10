@@ -112,7 +112,6 @@ class AssociationTask(pipeBase.Task):
 
         # Store newly associated DIASources.
         self.level1_db.store_dia_sources(dia_sources, updated_obj_ids)
-        self.level1_db._db_cursor.execute("select * from dia_sources")
         # Update previously existing DIAObjects with the information from their
         # newly association DIASources.
         self.update_dia_objects(updated_obj_ids)

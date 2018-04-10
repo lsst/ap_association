@@ -268,9 +268,15 @@ class AssociationDBSqliteTask(pipeBase.Task):
                 self._dia_object_converter.make_table_from_afw_schema(
                     "dia_objects"))
             self._commit()
+            self._db_cursor.execut(
+                "CREATE INDEX indexer_id_index ON dia_objects(indexer_id)")
+            self._commit()
             self._db_cursor.execute(
                 self._dia_source_converter.make_table_from_afw_schema(
                     "dia_sources"))
+            self._commit()
+            self._db_cursor.execut(
+                "CREATE INDEX diaObjectId_index ON dia_sources(diaObjectId)")
             self._commit()
 
             # Create linkage table between associated dia_objects and
@@ -385,7 +391,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         are with the specified list of indices.
 
         Retrieves a list of DIAObjects that are covered by the pixels with
-        indices, indexer_indices. Use this to retrieve the complete DIAObject.
+        indices, indexer_indices. Use this to retrieve complete DIAObjects.
 
         Parameters
         ----------
