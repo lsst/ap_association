@@ -162,7 +162,7 @@ class AssociationTask(pipeBase.Task):
             Ids of the dia_objects that should be updated.
         """
         updated_dia_objects = afwTable.SourceCatalog(
-            self._dia_object_converter.schema)
+            self.level1_db.get_dia_object_schema())
         updated_dia_objects.reserve(len(updated_obj_ids))
         for obj_id in updated_obj_ids:
             dia_object = updated_dia_objects.addNew()

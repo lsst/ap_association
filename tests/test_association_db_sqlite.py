@@ -258,7 +258,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         for dia_source, created_source in zip(src_cat, dia_sources):
             self._compare_source_records(dia_source, created_source)
 
-    def test_store_record_objects(self):
+    def test_store_catalog_objects(self):
         """Test storing a SourceRecord object in either the dia_objects and
         dia_sources table.
         """
@@ -311,7 +311,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         source_catalog : `lsst.afw.table.SourceCatalog`
             SourceCatalog of the requested objects.
         """
-        self.assoc_db._store_record(
+        self.assoc_db._store_catalog(
             source_catalog, converter)
         self.assoc_db._commit()
 
@@ -319,9 +319,9 @@ class TestAssociationDBSqlite(unittest.TestCase):
             "SELECT * FROM %s" % converter.table_name)
 
         rows = self.assoc_db._db_cursor.fetchall()
-        source_catalog = afwTable.SourceCatalog(converter.schema)
+        output_source_catalog = afwTable.SourceCatalog(converter.schema)
         for row in rows:
-            source_catalog.push_back(converter.source_record_from_db_row(row))
+            output_source_catalog.append(converter.source_record_from_db_row(row))
 
         return source_catalog
 
