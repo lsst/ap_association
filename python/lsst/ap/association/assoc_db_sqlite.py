@@ -273,7 +273,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
             self._db_cursor.execute(
                 self._dia_source_converter.make_table_from_afw_schema(
                     "dia_sources"))
-            self._db_cursor.execut(
+            self._db_cursor.execute(
                 "CREATE INDEX diaObjectId_index ON dia_sources(diaObjectId)")
             self._commit()
 
