@@ -44,7 +44,7 @@ def create_test_points(n_points=5,
                        scatter_arcsec=1.0,
                        indexer_ids=None,
                        associated_ids=None):
-    """ Create dummy DIASources or DIAObjects for use in our tests.
+    """Create dummy DIASources or DIAObjects for use in our tests.
 
     Parameters
     ----------
@@ -55,7 +55,7 @@ def create_test_points(n_points=5,
         incremented by one from the first id.
     schema : `lsst.afw.table.Schema`
         Schema of the objects to create. Defaults to the DIASource schema.
-    point_locs_deg : `list` of `float`s
+    point_locs_deg : array-like (N, 2) of `float`s
         Positions of the test points to create.
     scatter_arcsec : `float`
         Scatter to add to the position of each DIASource.
@@ -66,7 +66,8 @@ def create_test_points(n_points=5,
 
     Returns
     -------
-    `lsst.afw.table.SourceCatalog`
+    test_points : `lsst.afw.table.SourceCatalog`
+        Catalog of points to test.
     """
     if schema is None:
         schema = make_minimal_dia_source_schema()
@@ -224,7 +225,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
             self._compare_source_records(dia_object, created_object)
 
     def test_store_and_load_dia_sources(self):
-        """Test the retrieval of DIASources from the database.
+        """Test the storage and retrieval of DIASources from the database.
         """
         n_sources = 5
         dia_sources = create_test_points(

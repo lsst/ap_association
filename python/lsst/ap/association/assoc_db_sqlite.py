@@ -43,13 +43,13 @@ __all__ = ["AssociationDBSqliteConfig",
 
 
 def make_minimal_dia_object_schema():
-    """ Define and create the minimal schema required for a DIAObject.
+    """Define and create the minimal schema required for a DIAObject.
 
     Return
     ------
-    lsst.afw.table.schema.schema.Schema
+    schema : `lsst.afw.table.Schema`
+        Minimal schema for DIAObjects.
     """
-
     schema = afwTable.SourceTable.makeMinimalSchema()
     # For the MVP/S we currently only care about the position though
     # in the future we will add summary computations for fluxes etc.
@@ -69,9 +69,9 @@ def make_minimal_dia_source_schema():
 
     Return
     ------
-    lsst.afw.table.schema.schema.Schema
+    schema : `lsst.afw.table.Schema`
+        Minimal schema for DIAObjects.
     """
-
     schema = afwTable.SourceTable.makeMinimalSchema()
     schema.addField("diaObjectId", type='L')
     return schema
@@ -161,14 +161,14 @@ class SqliteDBConverter(object):
         return output_source_record
 
     def source_record_to_value_list(self, source_record, obj_id=None):
-        """ Convert a source record object into a list of its internal values.
+        """Convert a source record object into a list of its internal values.
 
         Parameters
         ----------
         source_record : `lsst.afw.table.SourceRecord`
             SourceRecord to convert.
         obj_id : `int` (optional)
-            Force set a value of diaObjectId for a DIASource.
+            Force the value of diaObjectId for a DIASource.
 
         Returns
         -------
@@ -267,14 +267,12 @@ class AssociationDBSqliteTask(pipeBase.Task):
             self._db_cursor.execute(
                 self._dia_object_converter.make_table_from_afw_schema(
                     "dia_objects"))
-            self._commit()
-            self._db_cursor.execut(
+            self._db_cursor.execute(
                 "CREATE INDEX indexer_id_index ON dia_objects(indexer_id)")
             self._commit()
             self._db_cursor.execute(
                 self._dia_source_converter.make_table_from_afw_schema(
                     "dia_sources"))
-            self._commit()
             self._db_cursor.execut(
                 "CREATE INDEX diaObjectId_index ON dia_sources(diaObjectId)")
             self._commit()
@@ -326,7 +324,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         Returns
         -------
-        `lsst.afw.table.SourceCatalog`
+        dia_sources : `lsst.afw.table.SourceCatalog`
             SourceCatalog of DIASources
         """
 
@@ -398,7 +396,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         indexer_indices : array-like of `int`s
             Pixelized indexer indices from which to load.
         expMd : `lsst.pipe.base.Struct` (optional)
-            Results struct with commponents:
+            Results struct with components:
 
             - ``bbox``: Bounding box of exposure (`lsst.afw.geom.Box2D`).
             - ``wcs``: WCS of exposure (`lsst.afw.geom.SkyWcs`).
@@ -429,7 +427,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         Parameters
         ----------
-        indexer_indices : `list` of `int`s
+        indexer_indices : array-like of `int`s
             Spatial indices in the indexer specifying the area on the sky
             to load DIAObjects for.
 
@@ -464,17 +462,19 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         Parameters
         ----------
-        dia_object_record : lsst.afw.table.SourceRecord
+        dia_object_record : `lsst.afw.table.SourceRecord`
             A SourceRecord object containing the DIAObject we would like to
             test against our bounding box.
-        expMd : lsst.pipe.base.Struct
-            A struct object containing:
-               bbox : A lsst.afw.geom.Box2D.
-               wcs : A lsst.afw Wcs object.
+        expMd : `lsst.pipe.base.Struct` (optional)
+            Results struct with components:
+
+            - ``bbox``: Bounding box of exposure (`lsst.afw.geom.Box2D`).
+            - ``wcs``: WCS of exposure (`lsst.afw.geom.SkyWcs`).
 
         Return
         ------
-        bool
+        is_contained : `bool`
+            Object position is contained within the bounding box of expMd.
         """
         if expMd is None:
             return True
@@ -487,14 +487,14 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         Parameters
         ----------
-        dia_object_ids : `list` of `int`s
+        dia_object_ids : array-like of `int`s
             Spatial indices in the indexer specifying the area on the sky
             to load DIAObjects for.
 
         Return
         ------
-        `list` of `tuples`
-            Query result containing the values representing DIAObjects
+        dia_objects : `list` of `tuples`
+            Query result containing the values representing DIASources
         """
         self._db_cursor.execute(
             "CREATE TEMPORARY TABLE tmp_object_ids "
@@ -544,6 +544,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         Returns
         -------
         schema : `lsst.afw.table.Schema`
+            Schema of the DIAObjects in this database.
         """
         return self._dia_object_converter.schema
 
@@ -553,5 +554,6 @@ class AssociationDBSqliteTask(pipeBase.Task):
         Returns
         -------
         schema : `lsst.afw.table.Schema`
+            Schema of the DIASources in this database.
         """
         return self._dia_source_converter.schema
