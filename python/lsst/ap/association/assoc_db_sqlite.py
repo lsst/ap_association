@@ -43,13 +43,13 @@ __all__ = ["AssociationDBSqliteConfig",
 
 
 def make_minimal_dia_object_schema():
-    """ Define and create the minimal schema required for a DIAObject.
+    """Define and create the minimal schema required for a DIAObject.
 
     Return
     ------
-    lsst.afw.table.schema.schema.Schema
+    schema : `lsst.afw.table.Schema`
+        Minimal schema for DIAObjects.
     """
-
     schema = afwTable.SourceTable.makeMinimalSchema()
     # For the MVP/S we currently only care about the position though
     # in the future we will add summary computations for fluxes etc.
@@ -69,9 +69,9 @@ def make_minimal_dia_source_schema():
 
     Return
     ------
-    lsst.afw.table.schema.schema.Schema
+    schema : `lsst.afw.table.Schema`
+        Minimal schema for DIAObjects.
     """
-
     schema = afwTable.SourceTable.makeMinimalSchema()
     schema.addField("diaObjectId", type='L')
     return schema
@@ -161,14 +161,14 @@ class SqliteDBConverter(object):
         return output_source_record
 
     def source_record_to_value_list(self, source_record, obj_id=None):
-        """ Convert a source record object into a list of its internal values.
+        """Convert a source record object into a list of its internal values.
 
         Parameters
         ----------
         source_record : `lsst.afw.table.SourceRecord`
             SourceRecord to convert.
         obj_id : `int` (optional)
-            Force set a value of diaObjectId for a DIASource.
+            Force the value of diaObjectId for a DIASource.
 
         Returns
         -------
@@ -267,10 +267,14 @@ class AssociationDBSqliteTask(pipeBase.Task):
             self._db_cursor.execute(
                 self._dia_object_converter.make_table_from_afw_schema(
                     "dia_objects"))
+            self._db_cursor.execute(
+                "CREATE INDEX indexer_id_index ON dia_objects(indexer_id)")
             self._commit()
             self._db_cursor.execute(
                 self._dia_source_converter.make_table_from_afw_schema(
                     "dia_sources"))
+            self._db_cursor.execute(
+                "CREATE INDEX diaObjectId_index ON dia_sources(diaObjectId)")
             self._commit()
 
             # Create linkage table between associated dia_objects and
@@ -309,8 +313,9 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         return dia_objects
 
+    @pipeBase.timeMethod
     def load_dia_sources(self, dia_obj_ids):
-        """ Retrieve all DIASources associated with this DIAObject id.
+        """Retrieve all DIASources associated with this DIAObject id.
 
         Parameters
         ----------
@@ -320,7 +325,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         Returns
         -------
-        `lsst.afw.table.SourceCatalog`
+        dia_sources : `lsst.afw.table.SourceCatalog`
             SourceCatalog of DIASources
         """
 
@@ -348,19 +353,34 @@ class AssociationDBSqliteTask(pipeBase.Task):
             If True, compute the spatial search indices using the
             indexer specified at class instantiation.
         """
-        for dia_object in dia_objects:
-            if compute_spatial_index:
+        if compute_spatial_index:
+            for dia_object in dia_objects:
                 sphPoint = dia_object.getCoord()
-                indexer_id = self.indexer.index_points(
-                    [sphPoint.getRa().asDegrees()],
-                    [sphPoint.getDec().asDegrees()])[0]
-                dia_object.set('indexer_id', indexer_id)
-            self._store_record(dia_object, self._dia_object_converter)
+                dia_object.set('indexer_id',
+                               self.compute_indexer_id(sphPoint))
+        self._store_catalog(dia_objects, self._dia_object_converter, None)
         self._commit()
+
+    def compute_indexer_id(self, sphere_point):
+        """Compute the pixel index of the given point.
+
+        Parameters
+        ----------
+        sphere_point : `lsst.afw.geom.SpherePoint`
+            Point to compute pixel index for.
+
+        Returns
+        -------
+        index : `int`
+            Index of the pixel the point is contained in.
+        """
+        return self.indexer.index_points(
+            [sphere_point.getRa().asDegrees()],
+            [sphere_point.getDec().asDegrees()])[0]
 
     @pipeBase.timeMethod
     def store_dia_sources(self, dia_sources, associated_ids=None):
-        """ Store all DIASources in this SourceCatalog.
+        """Store all DIASources in this SourceCatalog.
 
         Parameters
         ----------
@@ -369,15 +389,9 @@ class AssociationDBSqliteTask(pipeBase.Task):
         associated_ids : array-like of `int`s (optional)
             DIAObject ids that have been associated with these DIASources
         """
-        for src_idx, dia_source in enumerate(dia_sources):
-            if associated_ids is not None:
-                self._store_record(dia_source,
-                                   self._dia_source_converter,
-                                   associated_ids[src_idx])
-            else:
-                self._store_record(dia_source,
-                                   self._dia_source_converter,
-                                   None)
+        self._store_catalog(dia_sources,
+                            self._dia_source_converter,
+                            associated_ids)
         self._commit()
 
     def _get_dia_object_catalog(self, indexer_indices, expMd=None):
@@ -385,14 +399,14 @@ class AssociationDBSqliteTask(pipeBase.Task):
         are with the specified list of indices.
 
         Retrieves a list of DIAObjects that are covered by the pixels with
-        indices, indexer_indices. Use this to retrieve the complete DIAObject.
+        indices, indexer_indices. Use this to retrieve complete DIAObjects.
 
         Parameters
         ----------
         indexer_indices : array-like of `int`s
             Pixelized indexer indices from which to load.
         expMd : `lsst.pipe.base.Struct` (optional)
-            Results struct with commponents:
+            Results struct with components:
 
             - ``bbox``: Bounding box of exposure (`lsst.afw.geom.Box2D`).
             - ``wcs``: WCS of exposure (`lsst.afw.geom.SkyWcs`).
@@ -418,19 +432,19 @@ class AssociationDBSqliteTask(pipeBase.Task):
         return output_dia_objects
 
     def _query_dia_objects(self, indexer_indices):
-        """ Query the database for the stored DIAObjects given a set of
+        """Query the database for the stored DIAObjects given a set of
         indices in the indexer.
 
         Parameters
         ----------
-        indexer_indices : `list` of `int`s
+        indexer_indices : array-like of `int`s
             Spatial indices in the indexer specifying the area on the sky
             to load DIAObjects for.
 
         Returns
         -------
-        dia_objects : `list` of `tuples`
-            Query result containing the values representing DIAObjects
+        dia_objects : `list` of `tuples` containing ``dia_object`` ``values``
+            Query result containing the catalog values of the DIAObject.
         """
         self._db_cursor.execute(
             "CREATE TEMPORARY TABLE tmp_indexer_indices "
@@ -453,22 +467,24 @@ class AssociationDBSqliteTask(pipeBase.Task):
         return output_rows
 
     def _check_dia_object_position(self, dia_object_record, expMd):
-        """ Check the RA, DEC position of the current dia_object_record against
+        """Check the RA, DEC position of the current dia_object_record against
         the bounding box of the exposure.
 
         Parameters
         ----------
-        dia_object_record : lsst.afw.table.SourceRecord
+        dia_object_record : `lsst.afw.table.SourceRecord`
             A SourceRecord object containing the DIAObject we would like to
             test against our bounding box.
-        expMd : lsst.pipe.base.Struct
-            A struct object containing:
-               bbox : A lsst.afw.geom.Box2D.
-               wcs : A lsst.afw Wcs object.
+        expMd : `lsst.pipe.base.Struct` (optional)
+            Results struct with components:
+
+            - ``bbox``: Bounding box of exposure (`lsst.afw.geom.Box2D`).
+            - ``wcs``: WCS of exposure (`lsst.afw.geom.SkyWcs`).
 
         Return
         ------
-        bool
+        is_contained : `bool`
+            Object position is contained within the bounding box of expMd.
         """
         if expMd is None:
             return True
@@ -476,19 +492,19 @@ class AssociationDBSqliteTask(pipeBase.Task):
         return expMd.bbox.contains(point)
 
     def _query_dia_sources(self, dia_object_ids):
-        """ Query the database for the stored DIASources given a set of
+        """Query the database for the stored DIASources given a set of
         DIAObject ids.
 
         Parameters
         ----------
-        dia_object_ids : `list` of `int`s
+        dia_object_ids : array-like of `int`s
             Spatial indices in the indexer specifying the area on the sky
             to load DIAObjects for.
 
         Return
         ------
-        `list` of `tuples`
-            Query result containing the values representing DIAObjects
+        dia_objects : `list` of `tuples`
+            Query result containing the values representing DIASources
         """
         self._db_cursor.execute(
             "CREATE TEMPORARY TABLE tmp_object_ids "
@@ -510,42 +526,51 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         return output_rows
 
-    def _store_record(self, source_record, converter, obj_id=None):
-        """ Store an individual SourceRecord into the database.
+    def _store_catalog(self, source_catalog, converter, obj_ids=None):
+        """ Store a SourceCatalog into the database.
 
         Parameters
         ----------
-        source_record : `lsst.afw.table.SourcRecord`
-            SourceRecord to store in the database table specified by
+        source_catalog : `lsst.afw.table.SourceCatalog`
+            SourceCatalog to store in the database table specified by
             converter.
         converter : `lsst.ap.association.SqliteDBConverter`
             A converter object specifying the correct database table to write
             into.
-        obj_id : `int` (optional)
-            Id of the DIAObject this record is associated with. Use only when
-            storing DIASources.
+        obj_idd : array-like of `int`s (optional)
+            Ids of the DIAObjects these objects are associated with. Use only
+            when storing DIASources.
         """
-        values = converter.source_record_to_value_list(source_record, obj_id)
-        insert_string = ("?," * len(values))[:-1]
+        values = []
+        for src_idx, source_record in enumerate(source_catalog):
+            if obj_ids is not None:
+                values.append(converter.source_record_to_value_list(
+                    source_record, obj_ids[src_idx]))
+            else:
+                values.append(converter.source_record_to_value_list(
+                    source_record, None))
+        insert_string = ("?," * len(values[0]))[:-1]
 
-        self._db_cursor.execute(
+        self._db_cursor.executemany(
             "INSERT OR REPLACE INTO %s VALUES (%s)" %
             (converter.table_name, insert_string), values)
 
     def get_dia_object_schema(self):
-        """Retrieve the SourceSchema of the DIAObjects in this database.
+        """Retrieve the Schema of the DIAObjects in this database.
 
         Returns
         -------
         schema : `lsst.afw.table.Schema`
+            Schema of the DIAObjects in this database.
         """
         return self._dia_object_converter.schema
 
     def get_dia_source_schema(self):
-        """Retrieve the SourceSchema of the DIASources in this database.
+        """Retrieve the Schema of the DIASources in this database.
 
         Returns
         -------
         schema : `lsst.afw.table.Schema`
+            Schema of the DIASources in this database.
         """
         return self._dia_source_converter.schema

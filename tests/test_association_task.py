@@ -160,10 +160,9 @@ class TestAssociationTask(unittest.TestCase):
              self.wcs.pixelToSky(idx, idx).getDec().asDegrees()]
             for idx in np.linspace(1, 1000, 10)[1:]]
         dia_sources = create_test_points(
-            n_points=9,
-            start_id=10,
             point_locs_deg=source_centers,
-            scatter_arcsec=0.0)
+            start_id=10,
+            scatter_arcsec=-1)
 
         assoc_config = AssociationConfig()
         assoc_config.level1_db.value.db_name = self.db_file
@@ -190,19 +189,16 @@ class TestAssociationTask(unittest.TestCase):
              self.wcs.pixelToSky(idx, idx).getDec().asDegrees()]
             for idx in np.linspace(1, 1000, 10)])
         dia_objects = create_test_points(
-            n_points=n_objects,
+            point_locs_deg=object_centers[:n_objects],
             start_id=0,
             schema=make_minimal_dia_object_schema(),
-            point_locs_deg=object_centers[:n_objects],
             scatter_arcsec=-1,)
         for dia_object in dia_objects:
             dia_object['n_dia_sources'] = 1
 
-        n_sources = 5
         dia_sources = create_test_points(
-            n_points=n_sources,
-            start_id=0,
             point_locs_deg=object_centers[:n_objects],
+            start_id=0,
             scatter_arcsec=-1)
 
         assoc_db_config = AssociationDBSqliteConfig()
@@ -223,9 +219,8 @@ class TestAssociationTask(unittest.TestCase):
              self.wcs.pixelToSky(idx, idx).getDec().asDegrees()]
             for idx in np.linspace(1, 1000, 10)])
         dia_sources = create_test_points(
-            n_points=n_sources,
-            start_id=n_sources,
             point_locs_deg=object_centers[1:(n_sources + 1)],
+            start_id=n_sources,
             scatter_arcsec=0.1)
         assoc_db_config = AssociationDBSqliteConfig()
         assoc_db_config.db_name = self.db_file
@@ -255,21 +250,19 @@ class TestAssociationTask(unittest.TestCase):
         """
         n_objects = 5
         dia_objects = create_test_points(
-            n_points=n_objects,
+            point_locs_deg=[[0.04 * obj_idx, 0.04 * obj_idx]
+                            for obj_idx in range(n_objects)],
             start_id=0,
             schema=make_minimal_dia_object_schema(),
-            point_locs_deg=[[0.04 * obj_idx, 0.04 * obj_idx]
-                            for obj_idx in range(5)],
             scatter_arcsec=-1,)
 
         n_sources = 5
         dia_sources = create_test_points(
-            n_points=n_sources,
-            start_id=n_objects,
             point_locs_deg=[
                 [0.04 * (src_idx + 1),
                  0.04 * (src_idx + 1)]
-                for src_idx in range(5)],
+                for src_idx in range(n_sources)],
+            start_id=n_objects,
             scatter_arcsec=0.1)
 
         assoc_task = AssociationTask()
@@ -292,21 +285,19 @@ class TestAssociationTask(unittest.TestCase):
         # Create a set of DIAObjects that contain only one DIASource
         n_objects = 5
         dia_objects = create_test_points(
-            n_points=n_objects,
+            point_locs_deg=[[0.04 * obj_idx, 0.04 * obj_idx]
+                            for obj_idx in range(n_objects)],
             start_id=0,
             schema=make_minimal_dia_object_schema(),
-            point_locs_deg=[[0.04 * obj_idx, 0.04 * obj_idx]
-                            for obj_idx in range(5)],
             scatter_arcsec=-1,)
 
         n_sources = 5
         dia_sources = create_test_points(
-            n_points=n_sources,
-            start_id=n_objects,
             point_locs_deg=[
                 [0.04 * (src_idx + 1),
                  0.04 * (src_idx + 1)]
-                for src_idx in range(5)],
+                for src_idx in range(n_sources)],
+            start_id=n_objects,
             scatter_arcsec=-1)
 
         score_struct = assoc_task.score(dia_objects,
