@@ -40,7 +40,7 @@ def create_test_dia_sources(n_sources=5, schema=None):
 
     Returns
     -------
-    A lsst.afw.SourceCatalog
+    `lsst.afw.SourceCatalog`
     """
     if schema is None:
         schema = make_minimal_dia_source_schema()

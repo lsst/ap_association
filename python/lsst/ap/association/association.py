@@ -20,7 +20,7 @@
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
 
-""" A simple implementation of source association task for ap_verify.
+"""A simple implementation of source association task for ap_verify.
 """
 
 from __future__ import absolute_import, division, print_function
@@ -38,7 +38,7 @@ __all__ = ["AssociationConfig", "AssociationTask"]
 
 
 class AssociationConfig(pexConfig.Config):
-    """ Config class for AssociationTask.
+    """Config class for AssociationTask.
     """
     level1_db = pexConfig.ConfigurableField(
         target=AssociationDBSqliteTask,
@@ -54,39 +54,31 @@ class AssociationConfig(pexConfig.Config):
 
 
 class AssociationTask(pipeBase.Task):
-    """!
-    Associate DIAOSources into existing DIAObjects.
+    """Associate DIAOSources into existing DIAObjects.
 
     This task performs the association of detected DIASources in a visit
     with the previous DIAObjects detected over time. It also creates new
     DIAObjects out of DIASources that cannot be associated with previously
     detected DIAObjects.
-
-    Attributes
-    ----------
-    level1_db : lsst.ap.association.AssoiationDBSqlite
-        A wrapper class for handling persistence of DIAObjects and DIASources.
     """
 
     ConfigClass = AssociationConfig
     _DefaultName = "association"
 
     def __init__(self, **kwargs):
-        """ Initialize the the association task and create the database link.
-        """
         pipeBase.Task.__init__(self, **kwargs)
         self.makeSubtask('level1_db')
 
     @pipeBase.timeMethod
     def run(self, dia_sources, exposure):
-        """ Load DIAObjects from the database, associate the sources, and
+        """Load DIAObjects from the database, associate the sources, and
         persist the results into the L1 database.
 
         Parameters
         ----------
-        dia_sources : lsst.afw.table.SourceCatalog
+        dia_sources : `lsst.afw.table.SourceCatalog`
             DIASources to be associated with existing DIAObjects.
-        exposure : lsst.afw.image
+        exposure : `lsst.afw.image`
             Input exposure representing the region of the sky the dia_sources
             were detected on. Should contain both the solved WCS and a bounding
             box of the ccd.
@@ -112,24 +104,25 @@ class AssociationTask(pipeBase.Task):
 
     @pipeBase.timeMethod
     def associate_sources(self, dia_collection, dia_sources):
-        """ Associate the input DIASources in to the collection of DIAObjects.
+        """Associate the input DIASources in to the collection of DIAObjects.
 
         Parameters
         ----------
-        dia_collection : lsst.ap.association.DIAObjectCollection
+        dia_collection : `lsst.ap.association.DIAObjectCollection`
             Collection of DIAObjects to attempt to associate the input
             DIASources into.
-        dia_sources : lsst.afw.table.SourceCatalog
+        dia_sources : `lsst.afw.table.SourceCatalog`
             DIASources to associate into the DIAObjectCollection.
 
         Returns
         -------
-        lsst.pipe.base.Struct
-            struct containing:
-            * dia_collection: A DIAObjectCollectoin containing the new and
-                updated DIAObjects.
-            * updated_ids: id of the DIAObject in this DIAObjectCollection that
-                the given source matched.
+        result : `lsst.pipe.base.Struct`
+            Results struct with components:
+
+            - ``dia_collection``: A DIAObjectCollectoin containing the new and
+              updated DIAObjects (`lsst.ap.association.DIACollection`).
+            - ``updated_ids``: id of the DIAObject in this DIAObjectCollection
+              that the given source matched. (`list` of `int`s).
         """
 
         scores = self.score(
@@ -145,7 +138,7 @@ class AssociationTask(pipeBase.Task):
         )
 
     def score(self, dia_collection, dia_source_catalog, max_dist):
-        """ Compute a quality score for each dia_source/dia_object pair
+        """Compute a quality score for each dia_source/dia_object pair
         between this collection and an input diat_source catalog.
 
         max_dist sets maximum separation in arcseconds to consider a
@@ -154,22 +147,24 @@ class AssociationTask(pipeBase.Task):
 
         Parameters
         ----------
-        dia_object_collection : an lsst.ap.association.DIAObjectCollection
+        dia_object_collection : `lsst.ap.association.DIAObjectCollection`
             A DIAObjectCollection to score against dia_sources.
-        dia_source_catalog : an lsst.afw.SourceCatalog
+        dia_source_catalog : `lsst.afw.table.SourceCatalog`
             A contiguous catalog of dia_sources to "score" based on distance
             and (in the future) other metrics.
-        max_dist : lsst.afw.geom.Angle
+        max_dist : `lsst.afw.geom.Angle`
             Maximum allowed distance to compute a score for a given DIAObject
             DIASource pair.
 
         Returns
         -------
-        lsst.pipe.base.Struct
-            struct containing:
-            * scores: array of floats of match quality
-            * obj_ids: id of the DIAObject in thisDIAObjectCollection that
-                the given source matched.
+        result : `lsst.pipe.base.Struct`
+            Results struct with components:
+
+            - ``scores``: array of floats of match quality
+                updated DIAObjects (`ndarray` of `float`s).
+            - ``obj_ids``: array of floats of match quality
+                updated DIAObjects (`ndarray` of `ints`s).
             Default values for these arrays are
             INF and -1 respectively for unassociated sources.
         """
@@ -197,36 +192,39 @@ class AssociationTask(pipeBase.Task):
             obj_ids=obj_ids)
 
     def match(self, dia_collection, dia_source_catalog, score_struct):
-        """ Append DIAsources to DIAObjects given a score and create new
+        """Append DIAsources to DIAObjects given a score and create new
         DIAObjects in this collection from DIASources with poor scores.
 
         Parameters
         ----------
-        dia_object_collection : an lsst.ap.association.DIAObjectCollection
+        dia_object_collection : `lsst.ap.association.DIAObjectCollection`
             A DIAObjectCollection to associate to dia_sources.
-        dia_source_catalog : an lsst.afw.SourceCatalog
+        dia_source_catalog : `lsst.afw.table.SourceCatalog`
             A contiguous catalog of dia_sources for which the set of scores
             has been computed on with DIAObjectCollection.score.
-        score_struct : lsst.pipe.base.Struct
-            struct containing:
-            * scores: array of floats of match quality
-            * obj_ids: id of the DIAObject in thisDIAObjectCollection that
-                the given source matched.
+        score_struct : `lsst.pipe.base.Struct`
+            Results struct with components:
+
+            - ``scores``: array of floats of match quality
+                updated DIAObjects (`ndarray` of `float`s).
+            - ``obj_ids``: array of floats of match quality
+                updated DIAObjects (`ndarray` of `ints`s).
             Default values for these arrays are
             INF and -1 respectively for unassociated sources.
 
         Returns
         -------
-        pipeBase.Struct
-            A struct containing the following data:
-            * updated_and_new_dia_object_ids : list of ints specifying the ids
-                new and updated dia_objects in the collection.
-            * n_updated_dia_objects : number of previously know dia_objects with
-               newly associated DIASources.
-            * n_new_dia_objects : Number of newly created DIAObjects from
-                unassociated DIASources
-            * n_unupdated_dia_objects : number of previous DIAObjects that were
-                not associated to a new DIASource.
+        result : `lsst.pipeBase.Struct`
+            Results struct with components:
+
+            - ``updated_and_new_dia_object_ids`` : ids new and updated
+              dia_objects in the collection (`list` of `int`s).
+            - ``n_updated_dia_objects`` : Number of previously know dia_objects
+              with newly associated DIASources. (`int`).
+            - ``n_new_dia_objects`` : Number of newly created DIAObjects from
+              unassociated DIASources (`int`).
+            - ``n_unupdated_dia_objects`` : Number of previous DIAObjects that
+              were not associated to a new DIASource (`int`).
         """
 
         n_previous_dia_objects = len(dia_collection.dia_objects)
@@ -283,11 +281,21 @@ class AssociationTask(pipeBase.Task):
             n_unassociated_dia_objects=n_unassociated_dia_objects,)
 
     def _add_association_meta_data(self, match_result):
-        """ Store summaries of the association step in the task metadata.
+        """Store summaries of the association step in the task metadata.
 
         Parameters
         ----------
-        match_result : lsst.pipe.base.Struct
+        match_result : `lsst.pipeBase.Struct`
+            Results struct with components:
+
+            - ``updated_and_new_dia_object_ids`` : ids new and updated
+              dia_objects in the collection (`list` of `int`s).
+            - ``n_updated_dia_objects`` : Number of previously know dia_objects
+              with newly associated DIASources. (`int`).
+            - ``n_new_dia_objects`` : Number of newly created DIAObjects from
+              unassociated DIASources (`int`).
+            - ``n_unupdated_dia_objects`` : Number of previous DIAObjects that
+              were not associated to a new DIASource (`int`).
         """
         self.metadata.add('numUpdatedDiaObjects',
                           match_result.n_updated_dia_objects)

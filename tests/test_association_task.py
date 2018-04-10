@@ -65,7 +65,7 @@ def create_test_dia_objects(n_objects=1,
 
     Returns
     -------
-    A list of DIAObjects
+    `list` of `lsst.ap.association.DIAObjects`
     """
     output_dia_objects = []
     for obj_idx in range(n_objects):
@@ -98,7 +98,7 @@ def create_test_dia_sources(n_sources=5,
 
     Returns
     -------
-    A lsst.afw.SourceCatalog
+    `lsst.afw.table.SourceCatalog`
     """
     sources = afwTable.SourceCatalog(make_minimal_dia_source_schema())
 
@@ -219,13 +219,13 @@ class TestAssociationTask(unittest.TestCase):
 
         Parameters
         ----------
-        create_objects : bool
+        create_objects : `bool`
             Boolean specifying if seed DIAObjects and DIASources should be
             inserted into the database before association.
 
-        Return
-        ------
-        dia_collection : lsst.ap.association.DIAObjectCollection
+        Returns
+        -------
+        dia_collection : `lsst.ap.association.DIAObjectCollection`
             Final set of DIAObjects to be tested.
         """
         if create_objects:

@@ -56,7 +56,7 @@ def create_test_dia_objects(n_objects=5, n_sources=5, start_id=0,
 
     Returns
     -------
-    A list of DIAObjects
+    `list` of `lsst.ap.association.DIAObjects`
     """
     output_dia_objects = []
     for obj_idx in range(n_objects):
