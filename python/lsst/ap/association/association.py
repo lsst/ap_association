@@ -47,10 +47,17 @@ def _set_mean_position(dia_object_record, dia_sources):
         SourceRecord of the DIAObject to edit.
     dia_sources : `lsst.afw.table.SourceCatalog`
         Catalog of DIASources to compute a mean position from.
+
+    Returns
+    -------
+    ave_coord : `lsst.afw.geom.SpherePoint`
+        Average position of the dia_sources.
     """
     coord_list = [src.getCoord() for src in dia_sources]
     ave_coord = afwGeom.averageSpherePoint(coord_list)
     dia_object_record.setCoord(ave_coord)
+
+    return ave_coord
 
 
 class AssociationConfig(pexConfig.Config):
@@ -117,28 +124,6 @@ class AssociationTask(pipeBase.Task):
         self.update_dia_objects(updated_obj_ids)
 
     @pipeBase.timeMethod
-    def update_dia_objects(self, updated_obj_ids):
-        """Update select dia_objects currently stored within the database or
-        create new ones.
-
-        Parameters
-        ----------
-        updated_obj_ids : array like of `int`s
-            Ids of the dia_objects that should be updated.
-        """
-        for obj_id in updated_obj_ids:
-            tmp_dia_object_record = afwTable.SourceTable.makeRecord(
-                afwTable.SourceTable.make(
-                    self.level1_db.get_dia_object_schema()))
-            tmp_dia_object_record.set('id', obj_id)
-
-            dia_sources = self.level1_db.load_dia_sources([obj_id])
-            tmp_dia_object_record.set('n_dia_sources', len(dia_sources))
-            _set_mean_position(tmp_dia_object_record, dia_sources)
-
-            self.level1_db.store_dia_objects([tmp_dia_object_record], True)
-
-    @pipeBase.timeMethod
     def associate_sources(self, dia_objects, dia_sources):
         """Associate the input DIASources with the catalog of DIAObjects.
 
@@ -165,6 +150,30 @@ class AssociationTask(pipeBase.Task):
         self._add_association_meta_data(match_result)
 
         return match_result.associated_dia_object_ids
+
+    @pipeBase.timeMethod
+    def update_dia_objects(self, updated_obj_ids):
+        """Update select dia_objects currently stored within the database or
+        create new ones.
+
+        Parameters
+        ----------
+        updated_obj_ids : array like of `int`s
+            Ids of the dia_objects that should be updated.
+        """
+        updated_dia_objects = afwTable.SourceCatalog(
+            self._dia_object_converter.schema)
+        updated_dia_objects.reserve(len(updated_obj_ids))
+        for obj_id in updated_obj_ids:
+            dia_object = updated_dia_objects.addNew()
+            dia_object.set('id', obj_id)
+
+            dia_sources = self.level1_db.load_dia_sources([obj_id])
+            dia_object.set('n_dia_sources', len(dia_sources))
+            ave_coord = _set_mean_position(dia_object, dia_sources)
+            indexer_id = self.level1_db.compute_indexer_id(ave_coord)
+            dia_object.set('indexer_id', indexer_id)
+        self.level1_db.store_dia_objects(updated_dia_objects, False)
 
     def score(self, dia_objects, dia_sources, max_dist):
         """Compute a quality score for each dia_source/dia_object pair
@@ -199,9 +208,9 @@ class AssociationTask(pipeBase.Task):
             Default values for these arrays are
             INF, -1, and -1 respectively for unassociated sources.
         """
-        scores = np.ones(len(dia_sources)) * np.inf
-        obj_idxs = -1 * np.ones(len(dia_sources), dtype=np.int)
-        obj_ids = -1 * np.ones(len(dia_sources), dtype=np.int)
+        scores = np.full(len(dia_sources), np.inf, dtype=np.float64)
+        obj_idxs = np.full(len(dia_sources), -1, dtype=np.int)
+        obj_ids = np.full(len(dia_sources), -1, dtype=np.int)
 
         if len(dia_objects) == 0:
             return pipeBase.Struct(

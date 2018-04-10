@@ -313,6 +313,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         return dia_objects
 
+    @pipeBase.timeMethod
     def load_dia_sources(self, dia_obj_ids):
         """ Retrieve all DIASources associated with this DIAObject id.
 
@@ -352,15 +353,30 @@ class AssociationDBSqliteTask(pipeBase.Task):
             If True, compute the spatial search indices using the
             indexer specified at class instantiation.
         """
-        for dia_object in dia_objects:
-            if compute_spatial_index:
+        if compute_spatial_index:
+            for dia_object in dia_objects:
                 sphPoint = dia_object.getCoord()
-                indexer_id = self.indexer.index_points(
-                    [sphPoint.getRa().asDegrees()],
-                    [sphPoint.getDec().asDegrees()])[0]
-                dia_object.set('indexer_id', indexer_id)
-            self._store_record(dia_object, self._dia_object_converter)
+                dia_object.set('indexer_id',
+                               self.compute_indexer_id(sphPoint))
+        self._store_catalog(dia_objects, self._dia_object_converter, None)
         self._commit()
+
+    def compute_indexer_id(self, sphere_point):
+        """Compute the pixel index of the given point.
+
+        Parameters
+        ----------
+        sphere_point : `lsst.afw.geom.SpherePoint`
+            Point to compute pixel index for.
+
+        Returns
+        -------
+        index : `int`
+            Index of the pixel the point is contained in.
+        """
+        return self.indexer.index_points(
+            [sphere_point.getRa().asDegrees()],
+            [sphere_point.getDec().asDegrees()])[0]
 
     @pipeBase.timeMethod
     def store_dia_sources(self, dia_sources, associated_ids=None):
@@ -373,15 +389,9 @@ class AssociationDBSqliteTask(pipeBase.Task):
         associated_ids : array-like of `int`s (optional)
             DIAObject ids that have been associated with these DIASources
         """
-        for src_idx, dia_source in enumerate(dia_sources):
-            if associated_ids is not None:
-                self._store_record(dia_source,
-                                   self._dia_source_converter,
-                                   associated_ids[src_idx])
-            else:
-                self._store_record(dia_source,
-                                   self._dia_source_converter,
-                                   None)
+        self._store_catalog(dia_sources,
+                            self._dia_source_converter,
+                            associated_ids)
         self._commit()
 
     def _get_dia_object_catalog(self, indexer_indices, expMd=None):
@@ -433,8 +443,8 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         Returns
         -------
-        dia_objects : `list` of `tuples`
-            Query result containing the values representing DIAObjects
+        dia_objects : `list` of `tuples` containing ``dia_object`` ``values``
+            Query result containing the catalog values of the DIAObject.
         """
         self._db_cursor.execute(
             "CREATE TEMPORARY TABLE tmp_indexer_indices "
@@ -516,30 +526,37 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         return output_rows
 
-    def _store_record(self, source_record, converter, obj_id=None):
+    def _store_catalog(self, source_catalog, converter, obj_ids=None):
         """ Store an individual SourceRecord into the database.
 
         Parameters
         ----------
-        source_record : `lsst.afw.table.SourcRecord`
-            SourceRecord to store in the database table specified by
+        source_catalog : `lsst.afw.table.SourceCatalog`
+            SourceCatalog to store in the database table specified by
             converter.
         converter : `lsst.ap.association.SqliteDBConverter`
             A converter object specifying the correct database table to write
             into.
-        obj_id : `int` (optional)
-            Id of the DIAObject this record is associated with. Use only when
-            storing DIASources.
+        obj_idd : array-like of `int`s (optional)
+            Ids of the DIAObjects these objects are associated with. Use only
+            when storing DIASources.
         """
-        values = converter.source_record_to_value_list(source_record, obj_id)
-        insert_string = ("?," * len(values))[:-1]
+        values = []
+        for src_idx, source_record in enumerate(source_catalog):
+            if obj_ids is not None:
+                values.append(converter.source_record_to_value_list(
+                    source_record, obj_ids[src_idx]))
+            else:
+                values.append(converter.source_record_to_value_list(
+                    source_record, None))
+        insert_string = ("?," * len(values[0]))[:-1]
 
-        self._db_cursor.execute(
+        self._db_cursor.executemany(
             "INSERT OR REPLACE INTO %s VALUES (%s)" %
             (converter.table_name, insert_string), values)
 
     def get_dia_object_schema(self):
-        """Retrieve the SourceSchema of the DIAObjects in this database.
+        """Retrieve the Schema of the DIAObjects in this database.
 
         Returns
         -------
@@ -549,7 +566,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         return self._dia_object_converter.schema
 
     def get_dia_source_schema(self):
-        """Retrieve the SourceSchema of the DIASources in this database.
+        """Retrieve the Schema of the DIASources in this database.
 
         Returns
         -------

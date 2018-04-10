@@ -263,56 +263,67 @@ class TestAssociationDBSqlite(unittest.TestCase):
         dia_sources table.
         """
         dia_objects = create_test_points(
-            n_points=1,
+            n_points=2,
             start_id=0,
             schema=make_minimal_dia_object_schema(),
-            point_locs_deg=[[0.0, 0.0]],
+            point_locs_deg=[[0.0, 0.0],
+                            [1.0, 1.0]],
             scatter_arcsec=1.0,
             associated_ids=None)
         dia_sources = create_test_points(
-            n_points=1,
+            n_points=2,
             start_id=0,
             schema=make_minimal_dia_source_schema(),
-            point_locs_deg=[[0.0, 0.0]],
+            point_locs_deg=[[0.0, 0.0],
+                            [1.0, 1.0]],
             scatter_arcsec=1.0,
-            associated_ids=[0])
+            associated_ids=[0, 1])
 
-        dia_object_record = self._store_and_retrieve_source_record(
-            dia_objects[0],
+        dia_object_catalog = self._store_and_retrieve_source_catalog(
+            dia_objects,
             self.assoc_db._dia_object_converter)
 
-        dia_source_record = self._store_and_retrieve_source_record(
-            dia_sources[0],
+        dia_source_catalog = self._store_and_retrieve_source_catalog(
+            dia_sources,
             self.assoc_db._dia_source_converter)
 
-        self._compare_source_records(dia_object_record, dia_objects[0])
-        self._compare_source_records(dia_source_record, dia_sources[0])
+        for stored_dia_object, dia_object in zip(dia_object_catalog,
+                                                 dia_objects):
+            self._compare_source_records(stored_dia_object, dia_object)
+        for stored_dia_source, dia_source in zip(dia_source_catalog,
+                                                 dia_sources):
+            self._compare_source_records(stored_dia_source, dia_source)
 
-    def _store_and_retrieve_source_record(self,
-                                          source_record,
-                                          converter):
+    def _store_and_retrieve_source_catalog(self,
+                                           source_catalog,
+                                           converter):
         """Convenience method for round tripping a source record object.
 
         Parameters
         ----------
-        source_record : `lsst.afw.table.SourceRecord`
-            SourceRecord to store.
+        source_catalog : `lsst.afw.table.SourceCatalog`
+            SourceCatalog to store.
         converter : `lsst.ap.association.SqliteDBConverter`
             converter defining the table and schema to store.
 
         Returns
         -------
-        source_record : `lsst.afw.table.SourceRecord`
-            SourceRecord of the requested object.
+        source_catalog : `lsst.afw.table.SourceCatalog`
+            SourceCatalog of the requested objects.
         """
         self.assoc_db._store_record(
-            source_record, converter)
+            source_catalog, converter)
         self.assoc_db._commit()
 
         self.assoc_db._db_cursor.execute(
             "SELECT * FROM %s" % converter.table_name)
-        return converter.source_record_from_db_row(
-            self.assoc_db._db_cursor.fetchone())
+
+        rows = self.assoc_db._db_cursor.fetchall()
+        source_catalog = afwTable.SourceCatalog(converter.schema)
+        for row in rows:
+            source_catalog.push_back(converter.source_record_from_db_row(row))
+
+        return source_catalog
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
