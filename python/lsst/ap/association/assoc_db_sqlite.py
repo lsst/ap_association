@@ -315,7 +315,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
     @pipeBase.timeMethod
     def load_dia_sources(self, dia_obj_ids):
-        """ Retrieve all DIASources associated with this DIAObject id.
+        """Retrieve all DIASources associated with this DIAObject id.
 
         Parameters
         ----------
@@ -380,7 +380,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
     @pipeBase.timeMethod
     def store_dia_sources(self, dia_sources, associated_ids=None):
-        """ Store all DIASources in this SourceCatalog.
+        """Store all DIASources in this SourceCatalog.
 
         Parameters
         ----------
@@ -432,7 +432,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         return output_dia_objects
 
     def _query_dia_objects(self, indexer_indices):
-        """ Query the database for the stored DIAObjects given a set of
+        """Query the database for the stored DIAObjects given a set of
         indices in the indexer.
 
         Parameters
@@ -467,7 +467,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         return output_rows
 
     def _check_dia_object_position(self, dia_object_record, expMd):
-        """ Check the RA, DEC position of the current dia_object_record against
+        """Check the RA, DEC position of the current dia_object_record against
         the bounding box of the exposure.
 
         Parameters
@@ -492,7 +492,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         return expMd.bbox.contains(point)
 
     def _query_dia_sources(self, dia_object_ids):
-        """ Query the database for the stored DIASources given a set of
+        """Query the database for the stored DIASources given a set of
         DIAObject ids.
 
         Parameters
@@ -527,7 +527,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         return output_rows
 
     def _store_catalog(self, source_catalog, converter, obj_ids=None):
-        """ Store an individual SourceRecord into the database.
+        """ Store a SourceCatalog into the database.
 
         Parameters
         ----------

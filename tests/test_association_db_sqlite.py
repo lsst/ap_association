@@ -37,10 +37,9 @@ import lsst.pipe.base as pipeBase
 import lsst.utils.tests
 
 
-def create_test_points(n_points=5,
+def create_test_points(point_locs_deg,
                        start_id=0,
                        schema=None,
-                       point_locs_deg=[[0.0, 0.0]],
                        scatter_arcsec=1.0,
                        indexer_ids=None,
                        associated_ids=None):
@@ -48,21 +47,21 @@ def create_test_points(n_points=5,
 
     Parameters
     ----------
-    n_points : `int`
-        Number of fake sources to create for testing.
+    point_locs_deg : array-like (N, 2) of `float`s
+        Positions of the test points to create in RA, DEC.
     start_id : `int`
         Unique id of the first object to create. The remaining sources are
         incremented by one from the first id.
     schema : `lsst.afw.table.Schema`
         Schema of the objects to create. Defaults to the DIASource schema.
-    point_locs_deg : array-like (N, 2) of `float`s
-        Positions of the test points to create.
     scatter_arcsec : `float`
         Scatter to add to the position of each DIASource.
     indexer_ids : `list` of `ints`s
-        Id numbers of pixelization indexer to store.
+        Id numbers of pixelization indexer to store. Must be the same length
+        as the first dimension of point_locs_deg.
     associated_ids : `list` of `ints`s
-        Id numbers of associated DIAObjects to store..
+        Id numbers of associated DIAObjects to store. Must be the same length
+        as the first dimension of point_locs_deg.
 
     Returns
     -------
@@ -73,12 +72,10 @@ def create_test_points(n_points=5,
         schema = make_minimal_dia_source_schema()
     sources = afwTable.SourceCatalog(schema)
 
-    for src_idx in range(n_points):
+    for src_idx, ra, dec in enumerate(point_locs_deg):
         src = sources.addNew()
         src['id'] = src_idx + start_id
-        coord = afwGeom.SpherePoint(point_locs_deg[src_idx][0],
-                                    point_locs_deg[src_idx][1],
-                                    afwGeom.degrees)
+        coord = afwGeom.SpherePoint(ra, dec, afwGeom.degrees)
         if scatter_arcsec > 0.0:
             coord = coord.offset(
                 np.random.rand() * 360 * afwGeom.degrees,
@@ -166,10 +163,9 @@ class TestAssociationDBSqlite(unittest.TestCase):
              self.wcs.pixelToSky(idx, idx).getDec().asDegrees()]
             for idx in np.linspace(1, 1000, 10)[:n_objects]]
         dia_objects = create_test_points(
-            n_points=n_objects,
+            point_locs_deg=object_centers,
             start_id=0,
             schema=make_minimal_dia_object_schema(),
-            point_locs_deg=object_centers,
             scatter_arcsec=0.0)
 
         self.assoc_db.store_dia_objects(dia_objects, True)
@@ -190,10 +186,9 @@ class TestAssociationDBSqlite(unittest.TestCase):
 
         # Test overwrite and storage with empty indexer_ids
         dia_objects = create_test_points(
-            n_points=n_objects,
+            point_locs_deg=object_centers,
             start_id=0,
             schema=make_minimal_dia_object_schema(),
-            point_locs_deg=object_centers,
             scatter_arcsec=1.0,
             indexer_ids=[0 for idx in range(n_objects)],)
         self.assoc_db.store_dia_objects(dia_objects, False)
@@ -210,10 +205,9 @@ class TestAssociationDBSqlite(unittest.TestCase):
         """
         n_objects = 5
         dia_objects = create_test_points(
-            n_points=n_objects,
+            point_locs_deg=[[0.0, 0.0] for idx in range(n_objects)],
             start_id=0,
             schema=make_minimal_dia_object_schema(),
-            point_locs_deg=[[0.0, 0.0] for idx in range(n_objects)],
             scatter_arcsec=1.0,
             indexer_ids=[0 for idx in range(n_objects)],)
 
@@ -229,10 +223,9 @@ class TestAssociationDBSqlite(unittest.TestCase):
         """
         n_sources = 5
         dia_sources = create_test_points(
-            n_points=n_sources,
+            point_locs_deg=[[0.1, 0.1] for idx in range(n_sources)],
             start_id=0,
             schema=make_minimal_dia_source_schema(),
-            point_locs_deg=[[0.1, 0.1] for idx in range(n_sources)],
             scatter_arcsec=1.0,
             associated_ids=[0 for idx in range(n_sources)])
 
@@ -244,10 +237,9 @@ class TestAssociationDBSqlite(unittest.TestCase):
             self._compare_source_records(dia_source, created_source)
 
         dia_sources = create_test_points(
-            n_points=n_sources,
-            start_id=5,
-            schema=make_minimal_dia_source_schema(),
             point_locs_deg=[[0.0, 0.0] for idx in range(n_sources)],
+            start_id=n_sources,
+            schema=make_minimal_dia_source_schema(),
             scatter_arcsec=1.0,
             associated_ids=[1 for idx in range(n_sources)])
 
@@ -263,19 +255,17 @@ class TestAssociationDBSqlite(unittest.TestCase):
         dia_sources table.
         """
         dia_objects = create_test_points(
-            n_points=2,
-            start_id=0,
-            schema=make_minimal_dia_object_schema(),
             point_locs_deg=[[0.0, 0.0],
                             [1.0, 1.0]],
+            start_id=0,
+            schema=make_minimal_dia_object_schema(),
             scatter_arcsec=1.0,
             associated_ids=None)
         dia_sources = create_test_points(
-            n_points=2,
-            start_id=0,
-            schema=make_minimal_dia_source_schema(),
             point_locs_deg=[[0.0, 0.0],
                             [1.0, 1.0]],
+            start_id=0,
+            schema=make_minimal_dia_source_schema(),
             scatter_arcsec=1.0,
             associated_ids=[0, 1])
 
@@ -297,7 +287,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
     def _store_and_retrieve_source_catalog(self,
                                            source_catalog,
                                            converter):
-        """Convenience method for round tripping a source record object.
+        """Convenience method for round tripping a source catalog object.
 
         Parameters
         ----------
