@@ -72,7 +72,7 @@ def create_test_points(point_locs_deg,
         schema = make_minimal_dia_source_schema()
     sources = afwTable.SourceCatalog(schema)
 
-    for src_idx, ra, dec in enumerate(point_locs_deg):
+    for src_idx, (ra, dec,) in enumerate(point_locs_deg):
         src = sources.addNew()
         src['id'] = src_idx + start_id
         coord = afwGeom.SpherePoint(ra, dec, afwGeom.degrees)
