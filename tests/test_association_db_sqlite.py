@@ -124,6 +124,11 @@ class TestAssociationDBSqlite(unittest.TestCase):
         self.exposure = afwImage.makeExposure(
             afwImage.makeMaskedImageFromArrays(np.ones((1024, 1153))),
             self.wcs)
+        bbox = afwGeom.Box2D(self.exposure.getBBox())
+        wcs = self.exposure.getWcs()
+        self.expMd = pipeBase.Struct(
+            bbox=bbox,
+            wcs=wcs,)
 
     def tearDown(self):
         """Close the database connection and delete the object.
@@ -154,9 +159,10 @@ class TestAssociationDBSqlite(unittest.TestCase):
                 self.assertAlmostEqual(record_a[sub_schema.getKey()],
                                        record_b[sub_schema.getKey()])
 
-    def test_store_and_load_dia_objects(self):
-        """Test the storage and retrieval of DIAObjects from the database.
+    def test_load_dia_objects(self):
+        """Test the retrieval of DIAObjects from the database.
         """
+        # Create DIAObjects with real positions on the sky.
         n_objects = 5
         object_centers = [
             [self.wcs.pixelToSky(idx, idx).getRa().asDegrees(),
@@ -166,61 +172,143 @@ class TestAssociationDBSqlite(unittest.TestCase):
             point_locs_deg=object_centers,
             start_id=0,
             schema=make_minimal_dia_object_schema(),
-            scatter_arcsec=0.0)
+            scatter_arcsec=-1)
 
+        # Store the DIAObjects.
         self.assoc_db.store_dia_objects(dia_objects, True)
 
-        # Get exposure bounding box and load data.
-        bbox = afwGeom.Box2D(self.exposure.getBBox())
-        wcs = self.exposure.getWcs()
-        expMd = pipeBase.Struct(
-            bbox=bbox,
-            wcs=wcs,)
-        output_dia_objects = self.assoc_db.load_dia_objects(expMd)
-
+        # Load the DIAObjects using the bounding box and WCS associated with
+        # them.
+        output_dia_objects = self.assoc_db.load_dia_objects(self.expMd)
         self.assertEqual(len(output_dia_objects), len(dia_objects))
         for dia_object, created_object in zip(output_dia_objects, dia_objects):
-            # HTM trixel for this CCD.
+            # HTM trixel for this CCD at level 7.
             created_object["indexer_id"] = 225823
             self._compare_source_records(dia_object, created_object)
 
-        # Test overwrite and storage with empty indexer_ids
+        # Add new DIAObjects outside of the CCD area and test that they are
+        # not loaded.
+        n_objects = 5
+        object_centers = [
+            [self.wcs.pixelToSky(idx, idx).getRa().asDegrees(),
+             self.wcs.pixelToSky(idx, idx).getDec().asDegrees()]
+            for idx in np.linspace(-100, 0, 10)[:n_objects]]
+        outside_dia_objects = create_test_points(
+            point_locs_deg=object_centers,
+            start_id=0,
+            schema=make_minimal_dia_object_schema(),
+            scatter_arcsec=-1)
+
+        # Store the DIAObjects.
+        self.assoc_db.store_dia_objects(outside_dia_objects, True)
+        output_dia_objects = self.assoc_db.load_dia_objects(self.expMd)
+
+        # The DIAObjects loaded should be the same as previously stored
+        # objects.
+        self.assertEqual(len(output_dia_objects), len(dia_objects))
+        for dia_object, created_object in zip(output_dia_objects, dia_objects):
+            # HTM trixel for this CCD at level 7.
+            created_object["indexer_id"] = 225823
+            self._compare_source_records(dia_object, created_object)
+
+    def test_store_dia_objects(self):
+        """Test the storage and retrieval of DIAObjects from the database.
+        """
+        # Create DIAObjects with real positions on the sky.
+        n_objects = 5
+        object_centers = [
+            [self.wcs.pixelToSky(idx, idx).getRa().asDegrees(),
+             self.wcs.pixelToSky(idx, idx).getDec().asDegrees()]
+            for idx in np.linspace(1, 1000, 10)[:n_objects]]
         dia_objects = create_test_points(
             point_locs_deg=object_centers,
             start_id=0,
             schema=make_minimal_dia_object_schema(),
-            scatter_arcsec=1.0,
-            indexer_ids=[0 for idx in range(n_objects)],)
+            scatter_arcsec=1.0)
+
+        # Store their values and test if they are preserved after round tripping
+        # to the DB.
         self.assoc_db.store_dia_objects(dia_objects, False)
-
-        # This should load an empty catalog.
-        output_dia_objects = self.assoc_db.load_dia_objects(expMd)
-        self.assertEqual(0, len(output_dia_objects))
-        # This should load all objects.
-        output_dia_objects = self.assoc_db._get_dia_object_catalog([0])
-        self.assertEqual(n_objects, len(output_dia_objects))
-
-    def test_store_and_get_dia_object_catalog(self):
-        """Test the storage and retrieval of DIAObjects from the database.
-        """
-        n_objects = 5
-        dia_objects = create_test_points(
-            point_locs_deg=[[0.0, 0.0] for idx in range(n_objects)],
-            start_id=0,
-            schema=make_minimal_dia_object_schema(),
-            scatter_arcsec=1.0,
-            indexer_ids=[0 for idx in range(n_objects)],)
-
-        self.assoc_db.store_dia_objects(dia_objects, False)
-
-        output_dia_objects = self.assoc_db._get_dia_object_catalog([0])
-        self.assertEqual(len(output_dia_objects), n_objects)
+        output_dia_objects = self._retrieve_source_catalog(
+            self.assoc_db._dia_object_converter)
+        self.assertEqual(len(output_dia_objects), len(dia_objects))
         for dia_object, created_object in zip(output_dia_objects, dia_objects):
             self._compare_source_records(dia_object, created_object)
 
-    def test_store_and_load_dia_sources(self):
-        """Test the storage and retrieval of DIASources from the database.
+        # Store and overwrite the same sources this time updating their HTM
+        # index.
+        self.assoc_db.store_dia_objects(dia_objects, True)
+
+        # Retrieve the DIAObjects again and test that their HTM index has
+        # been updated properly.
+        output_dia_objects = self._retrieve_source_catalog(
+            self.assoc_db._dia_object_converter)
+        self.assertEqual(len(output_dia_objects), len(dia_objects))
+        for dia_object, created_object in zip(output_dia_objects, dia_objects):
+            # HTM trixel for this CCD at level 7.
+            created_object["indexer_id"] = 225823
+            self._compare_source_records(dia_object, created_object)
+
+    def test_indexer_ids(self):
+        """Test that the returned HTM pixel indices are returned as expected.
         """
+        n_objects = 5
+        object_centers = [[0.1 * idx, 0.1 * idx] for idx in range(n_objects)]
+        dia_objects = create_test_points(
+            point_locs_deg=object_centers,
+            start_id=0,
+            schema=make_minimal_dia_object_schema(),
+            scatter_arcsec=-1)
+        for obj in dia_objects:
+            print(self.assoc_db.compute_indexer_id(obj.getCoord()))
+
+    def test_load_dia_sources(self):
+        """Test the retrieval of DIASources from the database.
+        """
+        n_sources = 5
+        dia_sources = create_test_points(
+            point_locs_deg=[[0.1, 0.1] for idx in range(n_sources)],
+            start_id=0,
+            schema=make_minimal_dia_source_schema(),
+            scatter_arcsec=1.0)
+
+        # Store the first set of DIASources and retrieve them using their
+        # associated DIAObject id.
+        self.assoc_db.store_dia_sources(dia_sources, [0] * n_sources)
+        stored_dia_sources = self.assoc_db.load_dia_sources([0])
+        self.assertEqual(len(stored_dia_sources), n_sources)
+        for dia_source, created_source in zip(stored_dia_sources, dia_sources):
+            self._compare_source_records(dia_source, created_source)
+
+        # Test that asking for an id that has no associated sources returns
+        # and empty catalog.
+        empty_dia_sources = self.assoc_db.load_dia_sources([1])
+        self.assertEqual(len(empty_dia_sources), 0)
+
+        # Create new DIASoures associated with a different DIAObject id.
+        dia_sources = create_test_points(
+            point_locs_deg=[[0.1, 0.1] for idx in range(n_sources)],
+            start_id=n_sources,
+            schema=make_minimal_dia_source_schema(),
+            scatter_arcsec=1.0)
+        self.assoc_db.store_dia_sources(dia_sources, [1] * n_sources)
+
+        # Load all the associated DIASources and test that the returned catalog
+        # is the correct length.
+        stored_dia_sources = self.assoc_db.load_dia_sources([0, 1])
+        self.assertEqual(len(stored_dia_sources), 2 * n_sources)
+
+        # Load the DIASources associated with the second DIAObject and test
+        # their values.
+        stored_dia_sources = self.assoc_db.load_dia_sources([1])
+        self.assertEqual(len(stored_dia_sources), n_sources)
+        for dia_source, created_source in zip(stored_dia_sources, dia_sources):
+            self._compare_source_records(dia_source, created_source)
+
+    def test_store_dia_sources(self):
+        """Test the storage of DIASources in the database.
+        """
+        # Create DIASources
         n_sources = 5
         dia_sources = create_test_points(
             point_locs_deg=[[0.1, 0.1] for idx in range(n_sources)],
@@ -229,31 +317,22 @@ class TestAssociationDBSqlite(unittest.TestCase):
             scatter_arcsec=1.0,
             associated_ids=[0 for idx in range(n_sources)])
 
-        self.assoc_db.store_dia_sources(dia_sources, [0 for idx in range(n_sources)])
+        # Store the DIASources
+        self.assoc_db.store_dia_sources(dia_sources, range(n_sources))
 
-        src_cat = self.assoc_db.load_dia_sources([0])
-        self.assertEqual(len(src_cat), n_sources)
-        for dia_source, created_source in zip(src_cat, dia_sources):
-            self._compare_source_records(dia_source, created_source)
-
-        dia_sources = create_test_points(
-            point_locs_deg=[[0.0, 0.0] for idx in range(n_sources)],
-            start_id=n_sources,
-            schema=make_minimal_dia_source_schema(),
-            scatter_arcsec=1.0,
-            associated_ids=[1 for idx in range(n_sources)])
-
-        self.assoc_db.store_dia_sources(dia_sources)
-
-        src_cat = self.assoc_db.load_dia_sources([1])
-        self.assertEqual(len(src_cat), n_sources)
-        for dia_source, created_source in zip(src_cat, dia_sources):
+        # Retrieve and test DIASources.
+        stored_dia_sources = self._retrieve_source_catalog(
+            self.assoc_db._dia_object_converter)
+        self.assertEqual(len(stored_dia_sources), n_sources)
+        for dia_source, created_source in zip(stored_dia_sources, dia_sources):
             self._compare_source_records(dia_source, created_source)
 
     def test_store_catalog_objects(self):
         """Test storing a SourceRecord object in either the dia_objects and
         dia_sources table.
         """
+
+        # Create test associated DIAObjects and DIASources.
         dia_objects = create_test_points(
             point_locs_deg=[[0.0, 0.0],
                             [1.0, 1.0]],
@@ -269,30 +348,44 @@ class TestAssociationDBSqlite(unittest.TestCase):
             scatter_arcsec=1.0,
             associated_ids=[0, 1])
 
-        dia_object_catalog = self._store_and_retrieve_source_catalog(
-            dia_objects,
+        # Check the DIAObjects round trip properly.
+        self._store_source_catalog(dia_objects,
+                                   self.assoc_db._dia_object_converter)
+        round_trip_dia_object_catalog = self._retrieve_source_catalog(
             self.assoc_db._dia_object_converter)
-
-        dia_source_catalog = self._store_and_retrieve_source_catalog(
-            dia_sources,
-            self.assoc_db._dia_source_converter)
-
-        for stored_dia_object, dia_object in zip(dia_object_catalog,
+        for stored_dia_object, dia_object in zip(round_trip_dia_object_catalog,
                                                  dia_objects):
             self._compare_source_records(stored_dia_object, dia_object)
-        for stored_dia_source, dia_source in zip(dia_source_catalog,
+
+        # Check the DIASources round trip properly.
+        self._store_source_catalog(dia_sources,
+                                   self.assoc_db._dia_source_converter)
+        round_trip_dia_source_catalog = self._retrieve_source_catalog(
+            self.assoc_db._dia_source_converter)
+        for stored_dia_source, dia_source in zip(round_trip_dia_source_catalog,
                                                  dia_sources):
             self._compare_source_records(stored_dia_source, dia_source)
 
-    def _store_and_retrieve_source_catalog(self,
-                                           source_catalog,
-                                           converter):
-        """Convenience method for round tripping a source catalog object.
+    def _store_source_catalog(self, source_catalog, converter):
+        """Convenience method for storing a source catalog object in the DB.
 
         Parameters
         ----------
         source_catalog : `lsst.afw.table.SourceCatalog`
             SourceCatalog to store.
+        converter : `lsst.ap.association.SqliteDBConverter`
+            converter defining the table and schema to store.
+        """
+        self.assoc_db._store_catalog(
+            source_catalog, converter)
+        self.assoc_db._commit()
+
+    def _retrieve_source_catalog(self, converter):
+        """Convenience method for retrieving a source catalog object from the
+        DB.
+
+        Parameters
+        ----------
         converter : `lsst.ap.association.SqliteDBConverter`
             converter defining the table and schema to store.
 
@@ -301,10 +394,6 @@ class TestAssociationDBSqlite(unittest.TestCase):
         source_catalog : `lsst.afw.table.SourceCatalog`
             SourceCatalog of the requested objects.
         """
-        self.assoc_db._store_catalog(
-            source_catalog, converter)
-        self.assoc_db._commit()
-
         self.assoc_db._db_cursor.execute(
             "SELECT * FROM %s" % converter.table_name)
 
@@ -313,7 +402,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         for row in rows:
             output_source_catalog.append(converter.source_record_from_db_row(row))
 
-        return source_catalog
+        return output_source_catalog
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

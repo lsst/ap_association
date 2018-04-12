@@ -196,7 +196,6 @@ class TestAssociationTask(unittest.TestCase):
         for dia_object in dia_objects:
             dia_object['n_dia_sources'] = 1
 
-        n_sources = 5
         dia_sources = create_test_points(
             point_locs_deg=object_centers[:n_objects],
             start_id=0,
