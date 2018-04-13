@@ -195,7 +195,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
             for idx in np.linspace(-100, 0, 10)[:n_objects]]
         outside_dia_objects = create_test_points(
             point_locs_deg=object_centers,
-            start_id=0,
+            start_id=n_objects,
             schema=make_minimal_dia_object_schema(),
             scatter_arcsec=-1)
 
@@ -259,8 +259,10 @@ class TestAssociationDBSqlite(unittest.TestCase):
             start_id=0,
             schema=make_minimal_dia_object_schema(),
             scatter_arcsec=-1)
-        for obj in dia_objects:
-            print(self.assoc_db.compute_indexer_id(obj.getCoord()))
+        expected_ids = [131072, 253952, 253952, 253952, 253955] 
+        for obj, indexer_id in zip(dia_objects, expected_ids):
+            self.assertEqual(self.assoc_db.compute_indexer_id(obj.getCoord()),
+                             indexer_id)
 
     def test_load_dia_sources(self):
         """Test the retrieval of DIASources from the database.
@@ -270,7 +272,8 @@ class TestAssociationDBSqlite(unittest.TestCase):
             point_locs_deg=[[0.1, 0.1] for idx in range(n_sources)],
             start_id=0,
             schema=make_minimal_dia_source_schema(),
-            scatter_arcsec=1.0)
+            scatter_arcsec=1.0,
+            associated_ids=[0] * n_sources)
 
         # Store the first set of DIASources and retrieve them using their
         # associated DIAObject id.
@@ -290,7 +293,8 @@ class TestAssociationDBSqlite(unittest.TestCase):
             point_locs_deg=[[0.1, 0.1] for idx in range(n_sources)],
             start_id=n_sources,
             schema=make_minimal_dia_source_schema(),
-            scatter_arcsec=1.0)
+            scatter_arcsec=1.0,
+            associated_ids=[1] * n_sources)
         self.assoc_db.store_dia_sources(dia_sources, [1] * n_sources)
 
         # Load all the associated DIASources and test that the returned catalog
@@ -303,6 +307,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         stored_dia_sources = self.assoc_db.load_dia_sources([1])
         self.assertEqual(len(stored_dia_sources), n_sources)
         for dia_source, created_source in zip(stored_dia_sources, dia_sources):
+            created_source
             self._compare_source_records(dia_source, created_source)
 
     def test_store_dia_sources(self):
@@ -315,14 +320,14 @@ class TestAssociationDBSqlite(unittest.TestCase):
             start_id=0,
             schema=make_minimal_dia_source_schema(),
             scatter_arcsec=1.0,
-            associated_ids=[0 for idx in range(n_sources)])
+            associated_ids=[idx for idx in range(n_sources)])
 
         # Store the DIASources
         self.assoc_db.store_dia_sources(dia_sources, range(n_sources))
 
         # Retrieve and test DIASources.
         stored_dia_sources = self._retrieve_source_catalog(
-            self.assoc_db._dia_object_converter)
+            self.assoc_db._dia_source_converter)
         self.assertEqual(len(stored_dia_sources), n_sources)
         for dia_source, created_source in zip(stored_dia_sources, dia_sources):
             self._compare_source_records(dia_source, created_source)
