@@ -26,15 +26,38 @@
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.afw.geom as afwGeom
 import lsst.afw.table as afwTable
 from .assoc_db_sqlite import AssociationDBSqliteTask
-from .dia_object import DIAObject
 
 __all__ = ["AssociationConfig", "AssociationTask"]
+
+
+def _set_mean_position(dia_object_record, dia_sources):
+    """Compute and set the mean position of the input dia_object_record using
+    the positions of the input catalog of DIASources.
+
+    Parameters
+    ----------
+    dia_object_record : `lsst.afw.table.SourceRecord`
+        SourceRecord of the DIAObject to edit.
+    dia_sources : `lsst.afw.table.SourceCatalog`
+        Catalog of DIASources to compute a mean position from.
+
+    Returns
+    -------
+    ave_coord : `lsst.afw.geom.SpherePoint`
+        Average position of the dia_sources.
+    """
+    coord_list = [src.getCoord() for src in dia_sources]
+    ave_coord = afwGeom.averageSpherePoint(coord_list)
+    dia_object_record.setCoord(ave_coord)
+
+    return ave_coord
 
 
 class AssociationConfig(pexConfig.Config):
@@ -90,66 +113,81 @@ class AssociationTask(pipeBase.Task):
             bbox=bbox,
             wcs=wcs,)
 
-        dia_collection = self.level1_db.load(expMd)
+        dia_objects = self.level1_db.load_dia_objects(expMd)
 
-        association_result = self.associate_sources(dia_collection,
-                                                    dia_sources)
+        updated_obj_ids = self.associate_sources(dia_objects, dia_sources)
 
-        dia_collection = association_result.dia_collection
-        updated_obj_ids = association_result.updated_ids
-
-        dia_collection.update_dia_objects()
-
-        self.level1_db.store_updated(dia_collection, updated_obj_ids)
+        # Store newly associated DIASources.
+        self.level1_db.store_dia_sources(dia_sources, updated_obj_ids)
+        # Update previously existing DIAObjects with the information from their
+        # newly association DIASources.
+        self.update_dia_objects(updated_obj_ids)
 
     @pipeBase.timeMethod
-    def associate_sources(self, dia_collection, dia_sources):
-        """Associate the input DIASources in to the collection of DIAObjects.
+    def associate_sources(self, dia_objects, dia_sources):
+        """Associate the input DIASources with the catalog of DIAObjects.
 
         Parameters
         ----------
-        dia_collection : `lsst.ap.association.DIAObjectCollection`
-            Collection of DIAObjects to attempt to associate the input
+        dia_objects : `lsst.afw.table.SourceCatalog`
+            Catalog of DIAObjects to attempt to associate the input
             DIASources into.
         dia_sources : `lsst.afw.table.SourceCatalog`
             DIASources to associate into the DIAObjectCollection.
 
         Returns
         -------
-        result : `lsst.pipe.base.Struct`
-            Results struct with components:
-
-            - ``dia_collection``: A DIAObjectCollectoin containing the new and
-              updated DIAObjects (`lsst.ap.association.DIACollection`).
-            - ``updated_ids``: id of the DIAObject in this DIAObjectCollection
-              that the given source matched. (`list` of `int`s).
+        updated_ids: array-like of `int`s
+            Ids of the DIAObjects that the DIASources associated to including
+            the ids of newly created DIAObjects.
         """
 
         scores = self.score(
-            dia_collection, dia_sources,
+            dia_objects, dia_sources,
             self.config.maxDistArcSeconds * afwGeom.arcseconds)
-        match_result = self.match(dia_collection, dia_sources, scores)
+        match_result = self.match(dia_objects, dia_sources, scores)
 
         self._add_association_meta_data(match_result)
 
-        return pipeBase.Struct(
-            dia_collection=dia_collection,
-            updated_ids=match_result.updated_and_new_dia_object_ids,
-        )
+        return match_result.associated_dia_object_ids
 
-    def score(self, dia_collection, dia_source_catalog, max_dist):
+    @pipeBase.timeMethod
+    def update_dia_objects(self, updated_obj_ids):
+        """Update select dia_objects currently stored within the database or
+        create new ones.
+
+        Parameters
+        ----------
+        updated_obj_ids : array like of `int`s
+            Ids of the dia_objects that should be updated.
+        """
+        updated_dia_objects = afwTable.SourceCatalog(
+            self.level1_db.get_dia_object_schema())
+        updated_dia_objects.reserve(len(updated_obj_ids))
+        for obj_id in updated_obj_ids:
+            dia_object = updated_dia_objects.addNew()
+            dia_object.set('id', obj_id)
+
+            dia_sources = self.level1_db.load_dia_sources([obj_id])
+            dia_object.set('n_dia_sources', len(dia_sources))
+            ave_coord = _set_mean_position(dia_object, dia_sources)
+            indexer_id = self.level1_db.compute_indexer_id(ave_coord)
+            dia_object.set('indexer_id', indexer_id)
+        self.level1_db.store_dia_objects(updated_dia_objects, False)
+
+    def score(self, dia_objects, dia_sources, max_dist):
         """Compute a quality score for each dia_source/dia_object pair
-        between this collection and an input diat_source catalog.
+        between this catalog of DIAObjects and the input DIASource catalog.
 
-        max_dist sets maximum separation in arcseconds to consider a
+        ``max_dist`` sets maximum separation in arcseconds to consider a
         dia_source a possible match to a dia_object. If the pair is
         beyond this distance no score is computed.
 
         Parameters
         ----------
-        dia_object_collection : `lsst.ap.association.DIAObjectCollection`
-            A DIAObjectCollection to score against dia_sources.
-        dia_source_catalog : `lsst.afw.table.SourceCatalog`
+        dia_objects : `lsst.afw.table.SourceCatalog`
+            A contiguous catalog of DIAObjects to score against dia_sources.
+        dia_sources : `lsst.afw.table.SourceCatalog`
             A contiguous catalog of dia_sources to "score" based on distance
             and (in the future) other metrics.
         max_dist : `lsst.afw.geom.Angle`
@@ -161,64 +199,95 @@ class AssociationTask(pipeBase.Task):
         result : `lsst.pipe.base.Struct`
             Results struct with components:
 
-            - ``scores``: array of floats of match quality
-                updated DIAObjects (`ndarray` of `float`s).
-            - ``obj_ids``: array of floats of match quality
-                updated DIAObjects (`ndarray` of `ints`s).
+            - ``scores``: array of floats of match quality updated DIAObjects
+                (array-like of `float`s).
+            - ``obj_idxs``: indexes of the matched DIAObjects in the catalog.
+                (array-like of `int`s)
+            - ``obj_ids``: array of floats of match quality updated DIAObjects
+                (array-like of `int`s).
             Default values for these arrays are
-            INF and -1 respectively for unassociated sources.
+            INF, -1, and -1 respectively for unassociated sources.
         """
-        if not dia_collection._is_valid_tree:
-            dia_collection.update_spatial_tree()
+        scores = np.full(len(dia_sources), np.inf, dtype=np.float64)
+        obj_idxs = np.full(len(dia_sources), -1, dtype=np.int)
+        obj_ids = np.full(len(dia_sources), -1, dtype=np.int)
 
-        scores = np.ones(len(dia_source_catalog)) * np.inf
-        obj_ids = -1 * np.ones(len(dia_source_catalog), dtype=np.int)
-
-        if len(dia_collection.dia_objects) == 0:
+        if len(dia_objects) == 0:
             return pipeBase.Struct(
                 scores=scores,
+                obj_idxs=obj_idxs,
                 obj_ids=obj_ids)
 
-        for src_idx, dia_source in enumerate(dia_source_catalog):
+        spatial_tree = self._make_spatial_tree(dia_objects)
+
+        max_dist_rad = max_dist.asRadians()
+
+        for src_idx, dia_source in enumerate(dia_sources):
 
             src_point = dia_source.getCoord().getVector()
-            dist, obj_idx = dia_collection._spatial_tree.query(src_point)
-            if dist < max_dist.asRadians():
+            dist, obj_idx = spatial_tree.query(src_point)
+            if dist < max_dist_rad:
                 scores[src_idx] = dist
-                obj_ids[src_idx] = dia_collection.dia_objects[obj_idx].id
+                obj_ids[src_idx] = dia_objects[obj_idx].getId()
+                obj_idxs[src_idx] = obj_idx
 
         return pipeBase.Struct(
             scores=scores,
+            obj_idxs=obj_idxs,
             obj_ids=obj_ids)
 
-    def match(self, dia_collection, dia_source_catalog, score_struct):
-        """Append DIAsources to DIAObjects given a score and create new
-        DIAObjects in this collection from DIASources with poor scores.
+    def _make_spatial_tree(self, dia_objects):
+        """Create a searchable kd-tree the input dia_object positions.
 
         Parameters
         ----------
-        dia_object_collection : `lsst.ap.association.DIAObjectCollection`
-            A DIAObjectCollection to associate to dia_sources.
-        dia_source_catalog : `lsst.afw.table.SourceCatalog`
+        dia_objects : `lsst.afw.table.SourceCatalog`
+            A catalog of DIAObjects to create the tree from.
+
+        Returns
+        -------
+        kd_tree : `scipy.spatical.cKDTree`
+            Searchable kd-tree created from the positions of the DIAObjects.
+        """
+
+        coord_key = dia_objects.getCoordKey()
+        coord_vects = np.empty((len(dia_objects), 3))
+
+        for obj_idx, dia_object in enumerate(dia_objects):
+            coord_vects[obj_idx] = dia_object[coord_key].getVector()
+
+        return cKDTree(coord_vects)
+
+    def match(self, dia_objects, dia_sources, score_struct):
+        """Match DIAsources to DIAObjects given a score and create new
+        DIAObject Ids for new unassociated DIASources.
+
+        Parameters
+        ----------
+        dia_objects : `lsst.afw.table.SourceCatalog`
+            A SourceCatalog of DIAObjects to associate to DIASources.
+        dia_sources : `lsst.afw.table.SourceCatalog`
             A contiguous catalog of dia_sources for which the set of scores
             has been computed on with DIAObjectCollection.score.
         score_struct : `lsst.pipe.base.Struct`
             Results struct with components:
 
             - ``scores``: array of floats of match quality
-                updated DIAObjects (`ndarray` of `float`s).
+                updated DIAObjects (array-like of `float`s).
             - ``obj_ids``: array of floats of match quality
-                updated DIAObjects (`ndarray` of `ints`s).
+                updated DIAObjects (array-like of `ints`s).
+            - ``obj_idxs``: indexes of the matched DIAObjects in the catalog.
+                (array-like of `int`s)
             Default values for these arrays are
-            INF and -1 respectively for unassociated sources.
+            INF, -1 and -1 respectively for unassociated sources.
 
         Returns
         -------
         result : `lsst.pipeBase.Struct`
             Results struct with components:
 
-            - ``updated_and_new_dia_object_ids`` : ids new and updated
-              dia_objects in the collection (`list` of `int`s).
+            - ``updated_and_new_dia_object_ids`` : ids of new and updated
+              dia_objects as the result of association. (`list` of `int`s).
             - ``n_updated_dia_objects`` : Number of previously know dia_objects
               with newly associated DIASources. (`int`).
             - ``n_new_dia_objects`` : Number of newly created DIAObjects from
@@ -227,12 +296,14 @@ class AssociationTask(pipeBase.Task):
               were not associated to a new DIASource (`int`).
         """
 
-        n_previous_dia_objects = len(dia_collection.dia_objects)
+        n_previous_dia_objects = len(dia_objects)
         used_dia_object = np.zeros(n_previous_dia_objects, dtype=np.bool)
-        used_dia_source = np.zeros(len(dia_source_catalog), dtype=np.bool)
+        used_dia_source = np.zeros(len(dia_sources), dtype=np.bool)
+        associated_dia_object_ids = np.zeros(len(dia_sources),
+                                             dtype=np.uint64)
 
-        updated_dia_objects = []
-        new_dia_objects = []
+        n_updated_dia_objects = 0
+        n_new_dia_objects = 0
 
         # We sort from best match to worst to effectively perform a
         # "handshake" match where both the DIASources and DIAObjects agree
@@ -247,37 +318,28 @@ class AssociationTask(pipeBase.Task):
                 # sources to a existing DIAObject, leaving these for
                 # the loop creating new objects.
                 break
-            dia_obj_idx = dia_collection._id_to_index[
-                score_struct.obj_ids[score_idx]]
+            dia_obj_idx = score_struct.obj_idxs[score_idx]
             if used_dia_object[dia_obj_idx]:
                 continue
             used_dia_object[dia_obj_idx] = True
             used_dia_source[score_idx] = True
-            updated_obj_id = score_struct.obj_ids[score_idx]
-            updated_dia_objects.append(updated_obj_id)
-
-            dia_collection.dia_objects[dia_obj_idx].append_dia_source(
-                dia_source_catalog[int(score_idx)])
+            associated_dia_object_ids[score_idx] = score_struct.obj_ids[score_idx]
+            n_updated_dia_objects += 1
 
         # Argwhere returns a array shape (N, 1) so we access the index
         # thusly to retrieve the value rather than the tuple.
         for (src_idx,) in np.argwhere(np.logical_not(used_dia_source)):
-            tmp_src_cat = afwTable.SourceCatalog(dia_source_catalog.schema)
-            tmp_src_cat.append(dia_source_catalog[int(src_idx)])
-            dia_collection.append(DIAObject(tmp_src_cat))
-            new_dia_objects.append(
-                dia_collection.dia_objects[-1].id)
+            associated_dia_object_ids[src_idx] = dia_sources[int(src_idx)].getId()
+            n_new_dia_objects += 1
 
         # Return the ids of the DIAObjects in this DIAObjectCollection that
         # were updated or newly created.
-        n_updated_dia_objects = len(updated_dia_objects)
         n_unassociated_dia_objects = \
             n_previous_dia_objects - n_updated_dia_objects
-        updated_dia_objects.extend(new_dia_objects)
         return pipeBase.Struct(
-            updated_and_new_dia_object_ids=updated_dia_objects,
+            associated_dia_object_ids=associated_dia_object_ids,
             n_updated_dia_objects=n_updated_dia_objects,
-            n_new_dia_objects=len(new_dia_objects),
+            n_new_dia_objects=n_new_dia_objects,
             n_unassociated_dia_objects=n_unassociated_dia_objects,)
 
     def _add_association_meta_data(self, match_result):
