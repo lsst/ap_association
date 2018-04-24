@@ -60,6 +60,32 @@ def _set_mean_position(dia_object_record, dia_sources):
     return ave_coord
 
 
+def _set_flux_stats(dia_object_record, dia_sources, filter_name):
+    """Compute the mean, standard error, and variance of a DIAObject for
+    a given band.
+
+    Parameters
+    ----------
+    dia_object_record : `lsst.afw.table.SourceRecord`
+        SourceRecord of the DIAObject to edit.
+    dia_sources : `lsst.afw.table.SourceCatalog`
+        Catalog of DIASources to compute a mean position from.
+    filter_name : `str`
+        Name of the band pass filter to update.
+    """
+    if len(dia_sources) == 1:
+        dia_object_record['psFluxMean_%s' % filter_name] = dia_sources[0]['psFlux']
+        dia_object_record['psFluxSigma_%s' % filter_name] = dia_sources[0]['psFluxErr']
+        dia_object_record['psFluxErr_%s' % filter_name] = dia_sources[0]['psFluxErr']
+    else:
+        fluxes = dia_sources.get("psFlux")[
+            dia_sources.get('filterName') == filter_name]
+        dia_object_record['psFluxMean_%s' % filter_name] = np.mean(fluxes)
+        dia_object_record['psFluxSigma_%s' % filter_name] = np.std(fluxes, 1)
+        dia_object_record['psFluxErr_%s' % filter_name] = \
+            dia_object_record['psFluxSigma_%s' % filter_name] / len(dia_sources)
+
+
 class AssociationConfig(pexConfig.Config):
     """Config class for AssociationTask.
     """
@@ -107,20 +133,23 @@ class AssociationTask(pipeBase.Task):
             box of the ccd.
         """
         # Assure we have a Box2D and can use the getCenter method.
-        bbox = afwGeom.Box2D(exposure.getBBox())
-        wcs = exposure.getWcs()
-        expMd = pipeBase.Struct(
-            bbox=bbox,
-            wcs=wcs,)
 
-        dia_objects = self.level1_db.load_dia_objects(expMd)
+        dia_objects = self.level1_db.load_dia_objects(exposure)
 
         updated_obj_ids = self.associate_sources(dia_objects, dia_sources)
 
+        self.level1_db.store_ccd_visit_info(exposure)
+
+        # Create aliases to appropriate flux fields
+        dia_sources.getSchema.getAliasMap().set('psFlux', 'base_PsfFlux_flux')
+        dia_sources.getSchema.getAliasMap().set('psFluxErr', 'base_PsfFlux_fluxSigma')
+
         # Store newly associated DIASources.
-        self.level1_db.store_dia_sources(dia_sources, updated_obj_ids)
+        self.level1_db.store_dia_sources(
+            dia_sources, updated_obj_ids, exposure)
         # Update previously existing DIAObjects with the information from their
-        # newly association DIASources.
+        # newly association DIASources and create new DIAObjects from
+        # unassociated sources.
         self.update_dia_objects(updated_obj_ids)
 
     @pipeBase.timeMethod
@@ -152,14 +181,16 @@ class AssociationTask(pipeBase.Task):
         return match_result.associated_dia_object_ids
 
     @pipeBase.timeMethod
-    def update_dia_objects(self, updated_obj_ids):
+    def update_dia_objects(self, updated_obj_ids, exposure):
         """Update select dia_objects currently stored within the database or
         create new ones.
 
         Parameters
         ----------
-        updated_obj_ids : array like of `int`s
+        updated_obj_ids : array-like of `int`s
             Ids of the dia_objects that should be updated.
+        exposure : `lsst.afw.image.Exposure`
+            Exposure the newly associated DIASources were detected in.
         """
         updated_dia_objects = afwTable.SourceCatalog(
             self.level1_db.get_dia_object_schema())
@@ -169,10 +200,15 @@ class AssociationTask(pipeBase.Task):
             dia_object.set('id', obj_id)
 
             dia_sources = self.level1_db.load_dia_sources([obj_id])
+
             dia_object.set('n_dia_sources', len(dia_sources))
+
             ave_coord = _set_mean_position(dia_object, dia_sources)
             indexer_id = self.level1_db.compute_indexer_id(ave_coord)
             dia_object.set('indexer_id', indexer_id)
+
+            _set_flux_stats(dia_object, dia_sources, exposure.getFilter().getName())
+
         self.level1_db.store_dia_objects(updated_dia_objects, False)
 
     def score(self, dia_objects, dia_sources, max_dist):

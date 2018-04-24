@@ -27,6 +27,7 @@ ap_pipe/ap_verify.
 
 from __future__ import absolute_import, division, print_function
 
+import numpy as np
 import sqlite3
 
 from lsst.meas.algorithms.indexerRegistry import IndexerRegistry
@@ -42,8 +43,13 @@ __all__ = ["AssociationDBSqliteConfig",
            "make_minimal_dia_source_schema"]
 
 
-def make_minimal_dia_object_schema():
+def make_minimal_dia_object_schema(filter_names=[]):
     """Define and create the minimal schema required for a DIAObject.
+
+    Parameters
+    ----------
+    filter_names : `list` of `str`s
+        Names of the filters expect and compute means for.
 
     Return
     ------
@@ -60,7 +66,10 @@ def make_minimal_dia_object_schema():
     # hold off until it is implemented. This is to be addressed in DM-7101.
     schema.addField("indexer_id", type='L')
     schema.addField("n_dia_sources", type='L')
-
+    for filter_name in filter_names:
+        schema.addField("psFluxMean_%s" % filter_name, type='D')
+        schema.addField("psFluxMeanErr_%s" % filter_name, type='D')
+        schema.addField("psFluxSigma_%s" % filter_name, type='D')
     return schema
 
 
@@ -74,6 +83,10 @@ def make_minimal_dia_source_schema():
     """
     schema = afwTable.SourceTable.makeMinimalSchema()
     schema.addField("diaObjectId", type='L')
+    schema.addField("ccdVisitId", type='L')
+    schema.addField("psFlux", type='D')
+    schema.addField("psFluxErr", type='D')
+    schema.addField("filterName", type='String', size=10)
     return schema
 
 
@@ -93,8 +106,10 @@ class SqliteDBConverter(object):
         self._schema = schema
         self._table_name = table_name
         self._afw_to_db_types = {
+            "Angle": "REAL",
+            "D": "REAL",
             "L": "INTEGER",
-            "Angle": "REAL"
+            "String": "TEXT",
         }
 
     @property
@@ -152,15 +167,16 @@ class SqliteDBConverter(object):
             afwTable.SourceTable.make(self._schema))
 
         for sub_schema, value in zip(self._schema, db_row):
+            if value is None:
+                value = np.nan
             if sub_schema.getField().getTypeString() == 'Angle':
                 output_source_record.set(
                     sub_schema.getKey(), value * afwGeom.degrees)
             else:
-                output_source_record.set(
-                    sub_schema.getKey(), value)
+                output_source_record.set(sub_schema.getKey(), value)
         return output_source_record
 
-    def source_record_to_value_list(self, source_record, obj_id=None):
+    def source_record_to_value_list(self, source_record, overwrite_dict={}):
         """Convert a source record object into a list of its internal values.
 
         Parameters
@@ -177,17 +193,16 @@ class SqliteDBConverter(object):
         """
         values = []
         for sub_schema in self._schema:
-            if sub_schema.getField().getTypeString() == 'Angle':
-                values.append(
-                    source_record.get(sub_schema.getKey()).asDegrees())
-            elif obj_id is not None and sub_schema.getField().getName() == "diaObjectId":
-                # diaObjectId is a special case that will not be found in a
-                # difference catalog returned from the Butler. Hence we
-                # explicitly set it here.
-                values.append(int(obj_id))
+            field_name = sub_schema.getField().getName()
+            overwrite_value = overwrite_dict.get(field_name)
+            if overwrite_value is not None:
+                values.append(overwrite_dict[field_name])
             else:
-                values.append(source_record.get(sub_schema.getKey()))
-
+                if sub_schema.getField().getTypeString() == 'Angle':
+                    values.append(
+                        source_record.get(sub_schema.getKey()).asDegrees())
+                else:
+                    values.append(source_record.get(sub_schema.getKey()))
         return values
 
 
@@ -199,6 +214,10 @@ class AssociationDBSqliteConfig(pexConfig.Config):
         doc='Location on disk and name of the sqlite3 database for storing '
         'and loading DIASources and DIAObjects.',
         default=':memory:'
+    )
+    filter_names = pexConfig.ListField(
+        dtype=str,
+        doc='List of filter names to store and expect from in this DB.'
     )
     indexer = IndexerRegistry.makeField(
         doc='Select the spatial indexer to use within the database.',
@@ -230,9 +249,11 @@ class AssociationDBSqliteTask(pipeBase.Task):
         self._db_cursor = self._db_connection.cursor()
 
         self._dia_object_converter = SqliteDBConverter(
-            make_minimal_dia_object_schema(), "dia_objects")
+            make_minimal_dia_object_schema(self.config.filter_names),
+            "dia_objects")
         self._dia_source_converter = SqliteDBConverter(
-            make_minimal_dia_source_schema(), "dia_sources")
+            make_minimal_dia_source_schema(),
+            "dia_sources")
 
     def _commit(self):
         """Save changes to the sqlite database.
@@ -277,23 +298,30 @@ class AssociationDBSqliteTask(pipeBase.Task):
                 "CREATE INDEX diaObjectId_index ON dia_sources(diaObjectId)")
             self._commit()
 
-            # Create linkage table between associated dia_objects and
-            # dia_sources.
-            self._db_connection.commit()
+            self._db_cursor.execute(
+                "CREATE TABLE CcdVisit ("
+                "ccdVisitId INTEGER PRIMARY KEY, "
+                "ccdNum INTEGER, "
+                "filterName TEXT, "
+                "ra REAL, "
+                "decl REAL, "
+                "expTime REAL, "
+                "expMidptMJD REAL, "
+                "fluxZeroPoint REAL, "
+                "fluxZeroPointErr Real)")
+            self._commit()
 
         return True
 
     @pipeBase.timeMethod
-    def load_dia_objects(self, expMd):
+    def load_dia_objects(self, exposure):
         """Load all DIAObjects within the exposure.
 
         Parameters
         ----------
-        expMd : `lsst.pipe.base.Struct`
-            Results struct with components.
-
-            - ``bbox``: Bounding box of exposure (`lsst.afw.geom.Box2D`).
-            - ``wcs``: WCS of exposure (`lsst.afw.geom.SkyWcs`).
+        exposure : `lsst.afw.image.Exposure`
+            An exposure with a solved WCS representing the area on the sky to
+            load DIAObjects.
 
         Returns
         -------
@@ -301,6 +329,12 @@ class AssociationDBSqliteTask(pipeBase.Task):
             Catalog of DIAObjects that are contained with the the bounding
             box defined by expMd.
         """
+        bbox = afwGeom.Box2D(exposure.getBBox())
+        wcs = exposure.getWcs()
+        expMd = pipeBase.Struct(
+            bbox=bbox,
+            wcs=wcs,)
+
         ctr_coord = expMd.wcs.pixelToSky(expMd.bbox.getCenter())
         max_radius = max(
             ctr_coord.separation(expMd.wcs.pixelToSky(pp))
@@ -379,7 +413,10 @@ class AssociationDBSqliteTask(pipeBase.Task):
             [sphere_point.getDec().asDegrees()])[0]
 
     @pipeBase.timeMethod
-    def store_dia_sources(self, dia_sources, associated_ids=None):
+    def store_dia_sources(self,
+                          dia_sources,
+                          associated_ids=None,
+                          exposure=None):
         """Store all DIASources in this SourceCatalog.
 
         Parameters
@@ -388,11 +425,66 @@ class AssociationDBSqliteTask(pipeBase.Task):
             Catalog of DIASources to store.
         associated_ids : array-like of `int`s (optional)
             DIAObject ids that have been associated with these DIASources
+        exposure : `lsst.afw.image.Exposure`
+            Exposure object the DIASources were detected in.
         """
         self._store_catalog(dia_sources,
                             self._dia_source_converter,
-                            associated_ids)
+                            associated_ids,
+                            exposure)
         self._commit()
+
+    def store_ccd_visit_info(self, exposure):
+        """Store information describing the exposure for this ccd, visit.
+
+        Paramters
+        ---------
+        exposure : `lsst.afw.image.Exposure`
+            Exposure to store information from.
+        """
+        values = self._get_ccd_visit_info_from_exposure(exposure)
+        self._db_cursor.execute(
+            "INSERT OR REPLACE INTO CcdVisit VALUES (%s)" %
+            (("?," * len(values))[:-1]), values)
+
+    def _get_ccd_visit_info_from_exposure(self, exposure):
+        """
+        Extract info on the ccd and visit from the exposure to store in the
+        DB.
+
+        Paramters
+        ---------
+        exposure : `lsst.afw.image.Exposure`
+            Exposure to store information from.
+
+        Returns
+        -------
+        values : `list` of ``values``
+            List values representing info taken from the exposure.
+        """
+        visit_info = exposure.getInfo().getVisitInfo()
+        sphPoint = exposure.getWcs().getSkyOrigin()
+        flux0, flux0_err = exposure.getCalib().getFluxMag0()
+        # Values list is:
+        # [CcdVisitId ``int``,
+        #  ccdNum ``int``,
+        #  filterName ``str``,
+        #  RA WCS center ``degrees``,
+        #  DEC WCS center ``degrees``,
+        #  exposure time ``seconds``,
+        #  dateTimeMJD ``seconds``,
+        #  flux zero point ``counts``,
+        #  flux zero point error ``counts``]
+        values = [visit_info.getExposureId(),
+                  exposure.getDetector().getId(),
+                  exposure.getFilter().getName(),
+                  sphPoint.getRa().asDegrees(),
+                  sphPoint.getDec().asDegrees(),
+                  visit_info.getExposureTime(),
+                  visit_info.getDate().nsecs() * 10 ** -9,
+                  flux0,
+                  flux0_err]
+        return values
 
     def _get_dia_object_catalog(self, indexer_indices, expMd=None):
         """Retrieve the DIAObjects from the database whose indexer indices
@@ -526,7 +618,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         return output_rows
 
-    def _store_catalog(self, source_catalog, converter, obj_ids=None):
+    def _store_catalog(self, source_catalog, converter, obj_ids=None, exposure=None):
         """ Store a SourceCatalog into the database.
 
         Parameters
@@ -537,18 +629,38 @@ class AssociationDBSqliteTask(pipeBase.Task):
         converter : `lsst.ap.association.SqliteDBConverter`
             A converter object specifying the correct database table to write
             into.
-        obj_idd : array-like of `int`s (optional)
+        obj_id : array-like of `int`s (optional)
             Ids of the DIAObjects these objects are associated with. Use only
             when storing DIASources.
+        exposure : `lsst.afw.image.Exposure` (optional)
+            Exposure that the sources in source_catalog were detected in. If
+            set the fluxes are calibrated and stored using the exposure Calib
+            object. The filter the exposure was taken in as well as the
+            ccdVisitId are also stored.
         """
         values = []
+
         for src_idx, source_record in enumerate(source_catalog):
+            overwrite_dict = {}
             if obj_ids is not None:
-                values.append(converter.source_record_to_value_list(
-                    source_record, obj_ids[src_idx]))
-            else:
-                values.append(converter.source_record_to_value_list(
-                    source_record, None))
+                overwrite_dict['diaObjectId'] = int(obj_ids[src_idx])
+            if exposure is not None:
+                psFlux = source_record['psFlux']
+                psFluxErr = source_record['psFluxErr']
+                flux0, flux0_err = exposure.getCalib().getFluxMag0()
+
+                overwrite_dict['psFlux'] = psFlux / flux0
+                overwrite_dict['psFluxErr'] = np.sqrt(
+                    (psFluxErr / flux0) ** 2 +
+                    (psFlux * flux0_err / flux0 ** 2) ** 2)
+
+                overwrite_dict['ccdVisitId'] = \
+                    exposure.getInfo().getVisitInfo().getExposureId()
+                overwrite_dict['filterName'] = exposure.getFilter().getName()
+
+            values.append(converter.source_record_to_value_list(
+                source_record, overwrite_dict))
+
         insert_string = ("?," * len(values[0]))[:-1]
 
         self._db_cursor.executemany(
