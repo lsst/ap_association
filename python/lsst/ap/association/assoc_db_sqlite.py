@@ -388,13 +388,11 @@ class AssociationDBSqliteTask(pipeBase.Task):
         output_dia_sources = afwTable.SourceCatalog(dia_source_schema)
 
         rows = self._query_dia_sources(dia_obj_ids)
-        output_dia_sources.reserve(len(rows))
-
         for row in rows:
-            output_dia_sources.append(
+            output_dia_sources.append( 
                 self._dia_source_converter.source_record_from_db_row(row))
 
-        return output_dia_sources
+        return output_dia_sources.copy(deep=True)
 
     @pipeBase.timeMethod
     def store_dia_objects(self, dia_objects, compute_spatial_index=False):
@@ -534,7 +532,6 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         output_dia_objects = afwTable.SourceCatalog(
             self._dia_object_converter.schema)
-        output_dia_objects.reserve(len(dia_object_rows))
 
         for row in dia_object_rows:
             dia_object_record = \
@@ -542,7 +539,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
             if self._check_dia_object_position(dia_object_record, expMd):
                 output_dia_objects.append(dia_object_record)
 
-        return output_dia_objects
+        return output_dia_objects.copy(deep=True)
 
     def _query_dia_objects(self, indexer_indices):
         """Query the database for the stored DIAObjects given a set of

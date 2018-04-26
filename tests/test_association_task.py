@@ -234,7 +234,7 @@ class TestAssociationTask(unittest.TestCase):
             schema=self.dia_object_schema,
             scatter_arcsec=-1,)
         for dia_object in dia_objects:
-            dia_object['n_dia_sources'] = 1
+            dia_object['n_dia_sources'] = 2
             for filter_name in self.filter_names:
                 dia_object['psFluxMean_%s' % filter_name] = 1
                 dia_object['psFluxMeanErr_%s' % filter_name] = 1
@@ -300,11 +300,13 @@ class TestAssociationTask(unittest.TestCase):
         assoc_task = AssociationTask(config=assoc_config)
         assoc_task.update_dia_objects([1, 2, 3, 4, 14], self.exposure)
 
+        import pdb; pdb.set_trace()
+
         output_dia_objects = assoc_task.level1_db.load_dia_objects(self.exposure)
         self.assertEqual(len(output_dia_objects), 6)
         for dia_object, exp_id, exp_n_source in zip(output_dia_objects,
                                                     [0, 1, 2, 3, 4, 14],
-                                                    [1, 2, 2, 2, 2, 1]):
+                                                    [2, 3, 3, 3, 3, 1]):
             self.assertEqual(dia_object.getId(), exp_id)
             self.assertEqual(dia_object['n_dia_sources'], exp_n_source)
             self.assertAlmostEqual()

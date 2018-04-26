@@ -83,7 +83,7 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
         fluxes = dia_sources.get("psFlux")[
             dia_sources.get('filterId') == filter_id]
         dia_object_record['psFluxMean_%s' % filter_name] = np.mean(fluxes)
-        dia_object_record['psFluxSigma_%s' % filter_name] = np.std(fluxes, 1)
+        dia_object_record['psFluxSigma_%s' % filter_name] = np.std(fluxes, ddof=1)
         dia_object_record['psFluxMeanErr_%s' % filter_name] = \
             dia_object_record['psFluxSigma_%s' % filter_name] / len(dia_sources)
 
@@ -142,9 +142,16 @@ class AssociationTask(pipeBase.Task):
 
         self.level1_db.store_ccd_visit_info(exposure)
 
-        # Create aliases to appropriate flux fields
-        dia_sources.getSchema.getAliasMap().set('psFlux', 'base_PsfFlux_flux')
-        dia_sources.getSchema.getAliasMap().set('psFluxErr', 'base_PsfFlux_fluxSigma')
+        # Create aliases to appropriate flux fields if they exist.
+        schema_names = dia_sources.getSchema().getNames()
+        if len(schema_names.intersection('base_PsfFlux_flux')) == 1 and \
+           len(schema_names.intersection('base_PsfFlux_fluxSigma')) == 1 and \
+           len(schema_names.intersection('psFlux')) == 0 and \
+           len(schema_names.intersection('psFluxErr')) == 0:
+            dia_sources.getSchema().getAliasMap().set('psFlux',
+                                                      'base_PsfFlux_flux')
+            dia_sources.getSchema().getAliasMap().set('psFluxErr',
+                                                      'base_PsfFlux_fluxSigma')
 
         # Store newly associated DIASources.
         self.level1_db.store_dia_sources(
@@ -152,7 +159,7 @@ class AssociationTask(pipeBase.Task):
         # Update previously existing DIAObjects with the information from their
         # newly association DIASources and create new DIAObjects from
         # unassociated sources.
-        self.update_dia_objects(updated_obj_ids)
+        self.update_dia_objects(updated_obj_ids, exposure)
 
     @pipeBase.timeMethod
     def associate_sources(self, dia_objects, dia_sources):
