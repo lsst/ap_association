@@ -237,14 +237,14 @@ class TestAssociationTask(unittest.TestCase):
             dia_object['n_dia_sources'] = 1
             for filter_name in self.filter_names:
                 dia_object['psFluxMean_%s' % filter_name] = 1
-                dia_object['psFluxErr_%s' % filter_name] = 1
-                dia_object['psFluxSimga_%s' % filter_name] = 1
+                dia_object['psFluxMeanErr_%s' % filter_name] = 1
+                dia_object['psFluxSigma_%s' % filter_name] = 1
         assoc_db.store_dia_objects(dia_objects, True)
 
         # Create DIASources, update their ccdVisitId and fluxes, and store
         # them.
         dia_sources = create_test_points(
-            point_locs_deg=np.concatentate(
+            point_locs_deg=np.concatenate(
                 [object_centers[:n_objects], object_centers[:n_objects]]),
             start_id=0,
             scatter_arcsec=-1,
@@ -307,7 +307,7 @@ class TestAssociationTask(unittest.TestCase):
                                                     [1, 2, 2, 2, 2, 1]):
             self.assertEqual(dia_object.getId(), exp_id)
             self.assertEqual(dia_object['n_dia_sources'], exp_n_source)
-
+            self.assertAlmostEqual()
 
     def test_associate_sources(self):
         """Test the performance of the associate_sources method in

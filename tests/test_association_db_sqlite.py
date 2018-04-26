@@ -36,6 +36,7 @@ import lsst.afw.image.utils as afwImageUtils
 import lsst.afw.geom as afwGeom
 import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
+from lsst.pex.exceptions import InvalidParameterError
 import lsst.pipe.base as pipeBase
 import lsst.utils.tests
 
@@ -307,6 +308,17 @@ class TestAssociationDBSqlite(unittest.TestCase):
         for obj, indexer_id in zip(dia_objects, expected_ids):
             self.assertEqual(self.assoc_db.compute_indexer_id(obj.getCoord()),
                              indexer_id)
+
+    def test_get_db_filter_id_from_name(self):
+        """Test that the filter name mapper to id is working.
+        """
+        for filter_name, filter_id in zip(self.assoc_db.config.filter_names,
+                                          [0, 1, 2, 3, 4, 5]):
+            self.assertEqual(
+                self.assoc_db.get_db_filter_id_from_name(filter_name),
+                filter_id)
+        with self.assertRaises(InvalidParameterError):
+            self.assoc_db.get_db_filter_id_from_name("J")
 
     def test_store_ccd_visit_info(self):
         """Test storing and retrieving CcdVisit info.

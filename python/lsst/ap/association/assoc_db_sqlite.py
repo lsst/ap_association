@@ -34,6 +34,7 @@ from lsst.meas.algorithms.indexerRegistry import IndexerRegistry
 import lsst.afw.table as afwTable
 import lsst.afw.geom as afwGeom
 import lsst.pex.config as pexConfig
+from lsst.pex.exceptions import InvalidParameterError
 import lsst.pipe.base as pipeBase
 
 __all__ = ["AssociationDBSqliteConfig",
@@ -87,6 +88,7 @@ def make_minimal_dia_source_schema():
     schema.addField("psFlux", type='D')
     schema.addField("psFluxErr", type='D')
     schema.addField("filterName", type='String', size=10)
+    schema.addField("filterId", type='L')
     return schema
 
 
@@ -283,8 +285,26 @@ class AssociationDBSqliteTask(pipeBase.Task):
         # If this database currently contains any tables exit and do not
         # create tables.
         if db_tables:
+            self._db_cursor.execute("SELECT * FROM FilterMap")
+            filter_rows = self._db_cursor.fetchall()
+            for stored_row, filter_name in zip(filter_rows,
+                                               self.config.filter_names):
+                if stored_row[-1] != filter_name:
+                    raise InvalidParameterError(
+                        "Mismatch in filters names stored in DB and "
+                        "filters requested in AssociationDBSqliteConfig.")
             return False
         else:
+            # Create a mapper for filter string name to an id number.
+            self._db_cursor.execute("CREATE TABLE FilterMap ("
+                                    "filterId INTEGER PRIMARY KEY, "
+                                    "filterName TEXT)")
+            self._db_cursor.executemany(
+                "INSERT OR REPLACE INTO FilterMap VALUES (?, ?)",
+                [[idx, filter_name]
+                 for idx, filter_name in enumerate(self.config.filter_names)])
+            self._commit()
+
             # Create tables to store the individual DIAObjects and DIASources
             self._db_cursor.execute(
                 self._dia_object_converter.make_table_from_afw_schema(
@@ -641,6 +661,12 @@ class AssociationDBSqliteTask(pipeBase.Task):
         """
         values = []
 
+        if exposure is not None:
+            ccdVisitId = exposure.getInfo().getVisitInfo().getExposureId()
+            flux0, flux0_err = exposure.getCalib().getFluxMag0()
+            filter_name = exposure.getFilter().getName()
+            filter_id = self.get_db_filter_id_from_name(filter_name)
+
         for src_idx, source_record in enumerate(source_catalog):
             overwrite_dict = {}
             if obj_ids is not None:
@@ -648,16 +674,14 @@ class AssociationDBSqliteTask(pipeBase.Task):
             if exposure is not None:
                 psFlux = source_record['psFlux']
                 psFluxErr = source_record['psFluxErr']
-                flux0, flux0_err = exposure.getCalib().getFluxMag0()
 
                 overwrite_dict['psFlux'] = psFlux / flux0
                 overwrite_dict['psFluxErr'] = np.sqrt(
                     (psFluxErr / flux0) ** 2 +
                     (psFlux * flux0_err / flux0 ** 2) ** 2)
-
-                overwrite_dict['ccdVisitId'] = \
-                    exposure.getInfo().getVisitInfo().getExposureId()
-                overwrite_dict['filterName'] = exposure.getFilter().getName()
+                overwrite_dict['ccdVisitId'] = ccdVisitId
+                overwrite_dict['filterName'] = filter_name
+                overwrite_dict['filterId'] = filter_id
 
             values.append(converter.source_record_to_value_list(
                 source_record, overwrite_dict))
@@ -667,6 +691,30 @@ class AssociationDBSqliteTask(pipeBase.Task):
         self._db_cursor.executemany(
             "INSERT OR REPLACE INTO %s VALUES (%s)" %
             (converter.table_name, insert_string), values)
+
+    def get_db_filter_id_from_name(self, filter_name):
+        """Retrieve the id of a band pass filter give its string name.
+
+        This id mapping may be different that those in the obs package stored
+        in the associated repo.
+
+        Parameters
+        ----------
+        filter_name : `str`
+            String name of the filter band pass to get the id of.
+
+        Returns
+        -------
+        filterId : `int`
+            Integer id stored in this db.
+        """
+        self._db_cursor.execute(
+            "SELECT filterId FROM FilterMap WHERE filterName = ?", filter_name)
+        row = self._db_cursor.fetchone()
+        if row is None:
+            raise InvalidParameterError(
+                "Requested filter name not available in this DB.")
+        return row[0]
 
     def get_dia_object_schema(self):
         """Retrieve the Schema of the DIAObjects in this database.

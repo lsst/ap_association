@@ -60,7 +60,7 @@ def _set_mean_position(dia_object_record, dia_sources):
     return ave_coord
 
 
-def _set_flux_stats(dia_object_record, dia_sources, filter_name):
+def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
     """Compute the mean, standard error, and variance of a DIAObject for
     a given band.
 
@@ -72,17 +72,19 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name):
         Catalog of DIASources to compute a mean position from.
     filter_name : `str`
         Name of the band pass filter to update.
+    filter_id : `int`
+        id of the filter in the AssociationDB.
     """
     if len(dia_sources) == 1:
         dia_object_record['psFluxMean_%s' % filter_name] = dia_sources[0]['psFlux']
         dia_object_record['psFluxSigma_%s' % filter_name] = dia_sources[0]['psFluxErr']
-        dia_object_record['psFluxErr_%s' % filter_name] = dia_sources[0]['psFluxErr']
+        dia_object_record['psFluxMeanErr_%s' % filter_name] = dia_sources[0]['psFluxErr']
     else:
         fluxes = dia_sources.get("psFlux")[
-            dia_sources.get('filterName') == filter_name]
+            dia_sources.get('filterId') == filter_id]
         dia_object_record['psFluxMean_%s' % filter_name] = np.mean(fluxes)
         dia_object_record['psFluxSigma_%s' % filter_name] = np.std(fluxes, 1)
-        dia_object_record['psFluxErr_%s' % filter_name] = \
+        dia_object_record['psFluxMeanErr_%s' % filter_name] = \
             dia_object_record['psFluxSigma_%s' % filter_name] / len(dia_sources)
 
 
@@ -195,6 +197,9 @@ class AssociationTask(pipeBase.Task):
         updated_dia_objects = afwTable.SourceCatalog(
             self.level1_db.get_dia_object_schema())
         updated_dia_objects.reserve(len(updated_obj_ids))
+
+        filter_name = exposure.getFilter().getName()
+        filter_id = self.level1_db.get_db_filter_id_from_name(filter_name)
         for obj_id in updated_obj_ids:
             dia_object = updated_dia_objects.addNew()
             dia_object.set('id', obj_id)
@@ -206,8 +211,10 @@ class AssociationTask(pipeBase.Task):
             ave_coord = _set_mean_position(dia_object, dia_sources)
             indexer_id = self.level1_db.compute_indexer_id(ave_coord)
             dia_object.set('indexer_id', indexer_id)
-
-            _set_flux_stats(dia_object, dia_sources, exposure.getFilter().getName())
+            _set_flux_stats(dia_object,
+                            dia_sources,
+                            filter_name,
+                            filter_id)
 
         self.level1_db.store_dia_objects(updated_dia_objects, False)
 
