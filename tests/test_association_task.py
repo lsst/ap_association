@@ -27,8 +27,10 @@ import os
 import tempfile
 import unittest
 
+from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
+import lsst.afw.image.utils as afwImageUtils
 import lsst.daf.base as dafBase
 import lsst.pipe.base as pipeBase
 from lsst.ap.association import \
@@ -47,9 +49,21 @@ class TestAssociationTask(unittest.TestCase):
     def setUp(self):
         """Create a sqlite3 database with default tables and schemas.
         """
+        # CFHT Filters from the camera mapper.
+        afwImageUtils.resetFilters()
+        afwImageUtils.defineFilter('u', lambdaEff=374, alias="u.MP9301")
+        afwImageUtils.defineFilter('g', lambdaEff=487, alias="g.MP9401")
+        afwImageUtils.defineFilter('r', lambdaEff=628, alias="r.MP9601")
+        afwImageUtils.defineFilter('i', lambdaEff=778, alias="i.MP9701")
+        afwImageUtils.defineFilter('z', lambdaEff=1170, alias="z.MP9801")
         (self.tmp_file, self.db_file) = tempfile.mkstemp(dir=os.path.dirname(__file__))
+        self.filter_names = ['g', 'r']
+        self.dia_object_schema = make_minimal_dia_object_schema(
+            self.filter_names)
         assoc_db_config = AssociationDBSqliteConfig()
         assoc_db_config.db_name = self.db_file
+        assoc_db_config.filter_names = self.filter_names
+
         assoc_db = AssociationDBSqliteTask(config=assoc_db_config)
         assoc_db.create_tables()
         assoc_db.close()
@@ -83,6 +97,18 @@ class TestAssociationTask(unittest.TestCase):
         self.exposure = afwImage.makeExposure(
             afwImage.makeMaskedImageFromArrays(np.ones((1024, 1153))),
             self.wcs)
+        detector = DetectorWrapper(id=23, bbox=self.exposure.getBBox()).detector
+        visit = afwImage.VisitInfo(
+            exposureId=1234,
+            exposureTime=200.,
+            date=dafBase.DateTime(nsecs=1400000000 * 10**9))
+        self.exposure.setDetector(detector)
+        self.exposure.getInfo().setVisitInfo(visit)
+        self.exposure.setFilter(afwImage.Filter('g'))
+        self.flux0 = 10000
+        self.flux0_err = 100
+        self.exposure.getCalib().setFluxMag0((self.flux0, self.flux0_err))
+
         bbox = afwGeom.Box2D(self.exposure.getBBox())
         wcs = self.exposure.getWcs()
         self.expMd = pipeBase.Struct(
@@ -166,6 +192,7 @@ class TestAssociationTask(unittest.TestCase):
 
         assoc_config = AssociationConfig()
         assoc_config.level1_db.value.db_name = self.db_file
+        assoc_config.level1_db.value.filter_names = self.filter_names
         assoc_task = AssociationTask(config=assoc_config)
 
         assoc_task.run(dia_sources, self.exposure)
@@ -173,9 +200,10 @@ class TestAssociationTask(unittest.TestCase):
 
         assoc_db_config = AssociationDBSqliteConfig()
         assoc_db_config.db_name = self.db_file
+        assoc_db_config.filter_names = self.filter_names
         assoc_db = AssociationDBSqliteTask(config=assoc_db_config)
 
-        dia_objects = assoc_db.load_dia_objects(self.expMd)
+        dia_objects = assoc_db.load_dia_objects(self.exposure)
         assoc_db.close()
         return dia_objects
 
@@ -183,6 +211,18 @@ class TestAssociationTask(unittest.TestCase):
         """Method for storing a set of test DIAObjects and sources into
         the L1 database.
         """
+
+        # This should create a DB of 5 DIAObjects with 2 DIASources associated
+        # to them. The DIASources are "observed" in g and r.
+
+        # Create an empty database
+        assoc_db_config = AssociationDBSqliteConfig()
+        assoc_db_config.db_name = self.db_file
+        assoc_db_config.filter_names = self.filter_names
+        assoc_db = AssociationDBSqliteTask(config=assoc_db_config)
+        assoc_db.create_tables()
+
+        # Create DIObjects, give them fluxes, and store them
         n_objects = 5
         object_centers = np.array([
             [self.wcs.pixelToSky(idx, idx).getRa().asDegrees(),
@@ -191,22 +231,38 @@ class TestAssociationTask(unittest.TestCase):
         dia_objects = create_test_points(
             point_locs_deg=object_centers[:n_objects],
             start_id=0,
-            schema=make_minimal_dia_object_schema(),
+            schema=self.dia_object_schema,
             scatter_arcsec=-1,)
         for dia_object in dia_objects:
             dia_object['n_dia_sources'] = 1
-
-        dia_sources = create_test_points(
-            point_locs_deg=object_centers[:n_objects],
-            start_id=0,
-            scatter_arcsec=-1)
-
-        assoc_db_config = AssociationDBSqliteConfig()
-        assoc_db_config.db_name = self.db_file
-        assoc_db = AssociationDBSqliteTask(config=assoc_db_config)
-        assoc_db.create_tables()
+            for filter_name in self.filter_names:
+                dia_object['psFluxMean_%s' % filter_name] = 1
+                dia_object['psFluxErr_%s' % filter_name] = 1
+                dia_object['psFluxSimga_%s' % filter_name] = 1
         assoc_db.store_dia_objects(dia_objects, True)
-        assoc_db.store_dia_sources(dia_sources, [0, 1, 2, 3, 4])
+
+        # Create DIASources, update their ccdVisitId and fluxes, and store
+        # them.
+        dia_sources = create_test_points(
+            point_locs_deg=np.concatentate(
+                [object_centers[:n_objects], object_centers[:n_objects]]),
+            start_id=0,
+            scatter_arcsec=-1,
+            associated_ids=[0, 1, 2, 3, 4,
+                            0, 1, 2, 3, 4])
+        for src_idx, dia_source in enumerate(dia_sources):
+            dia_source['ccdVisitId'] = 1232
+            if src_idx >= n_objects:
+                dia_source['ccdVisitId'] += 1
+            dia_source["psFlux"] = 10000 / self.flux0
+            dia_source["psFluxErr"] = np.sqrt(
+                (100 / self.flux0) ** 2 +
+                (10000 * self.flux0_err / self.flux0 ** 2) ** 2)
+            if src_idx < n_objects:
+                dia_source["filterName"] = 'g'
+            else:
+                dia_source["filterName"] = 'r'
+        assoc_db.store_dia_sources(dia_sources)
         assoc_db.close()
 
     def test_update_dia_objects(self):
@@ -219,30 +275,39 @@ class TestAssociationTask(unittest.TestCase):
              self.wcs.pixelToSky(idx, idx).getDec().asDegrees()]
             for idx in np.linspace(1, 1000, 10)])
         dia_sources = create_test_points(
-            point_locs_deg=object_centers[1:(n_sources + 1)],
-            start_id=n_sources,
-            scatter_arcsec=0.1)
+            point_locs_deg=object_centers[:n_sources],
+            start_id=10,
+            scatter_arcsec=-1)
+        for dia_source in dia_sources:
+            dia_source["psFlux"] = 20000
+            dia_source["psFluxErr"] = 100
+
         assoc_db_config = AssociationDBSqliteConfig()
         assoc_db_config.db_name = self.db_file
+        assoc_db_config.filter_names = self.filter_names
         assoc_db = AssociationDBSqliteTask(config=assoc_db_config)
         assoc_db.create_tables()
-        assoc_db.store_dia_sources(dia_sources, [1, 2, 3, 4, 9])
+        assoc_db.store_dia_sources(dia_sources,
+                                   [1, 2, 3, 4, 14],
+                                   self.exposure)
         assoc_db._db_cursor.execute("select * from dia_sources")
         assoc_db.close()
         del assoc_db
 
         assoc_config = AssociationConfig()
         assoc_config.level1_db.value.db_name = self.db_file
+        assoc_config.level1_db.filter_names = self.filter_names
         assoc_task = AssociationTask(config=assoc_config)
-        assoc_task.update_dia_objects([1, 2, 3, 4, 9])
+        assoc_task.update_dia_objects([1, 2, 3, 4, 14], self.exposure)
 
-        output_dia_objects = assoc_task.level1_db.load_dia_objects(self.expMd)
+        output_dia_objects = assoc_task.level1_db.load_dia_objects(self.exposure)
         self.assertEqual(len(output_dia_objects), 6)
         for dia_object, exp_id, exp_n_source in zip(output_dia_objects,
-                                                    [0, 1, 2, 3, 4, 9],
+                                                    [0, 1, 2, 3, 4, 14],
                                                     [1, 2, 2, 2, 2, 1]):
             self.assertEqual(dia_object.getId(), exp_id)
             self.assertEqual(dia_object['n_dia_sources'], exp_n_source)
+
 
     def test_associate_sources(self):
         """Test the performance of the associate_sources method in
@@ -253,7 +318,7 @@ class TestAssociationTask(unittest.TestCase):
             point_locs_deg=[[0.04 * obj_idx, 0.04 * obj_idx]
                             for obj_idx in range(n_objects)],
             start_id=0,
-            schema=make_minimal_dia_object_schema(),
+            schema=self.dia_object_schema,
             scatter_arcsec=-1,)
 
         n_sources = 5
@@ -288,7 +353,7 @@ class TestAssociationTask(unittest.TestCase):
             point_locs_deg=[[0.04 * obj_idx, 0.04 * obj_idx]
                             for obj_idx in range(n_objects)],
             start_id=0,
-            schema=make_minimal_dia_object_schema(),
+            schema=self.dia_object_schema,
             scatter_arcsec=-1,)
 
         n_sources = 5

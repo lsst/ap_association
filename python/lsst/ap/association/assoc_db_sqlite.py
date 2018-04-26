@@ -217,7 +217,8 @@ class AssociationDBSqliteConfig(pexConfig.Config):
     )
     filter_names = pexConfig.ListField(
         dtype=str,
-        doc='List of filter names to store and expect from in this DB.'
+        doc='List of filter names to store and expect from in this DB.',
+        default=[],
     )
     indexer = IndexerRegistry.makeField(
         doc='Select the spatial indexer to use within the database.',
