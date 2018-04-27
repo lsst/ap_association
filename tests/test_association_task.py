@@ -290,7 +290,7 @@ class TestAssociationTask(unittest.TestCase):
         assoc_db.store_dia_sources(dia_sources,
                                    [1, 2, 3, 4, 14],
                                    self.exposure)
-        assoc_db._db_cursor.execute("select * from dia_sources")
+        loaded_dia_objects = assoc_db.load_dia_objects(self.exposure)
         assoc_db.close()
         del assoc_db
 
@@ -298,11 +298,10 @@ class TestAssociationTask(unittest.TestCase):
         assoc_config.level1_db.value.db_name = self.db_file
         assoc_config.level1_db.filter_names = self.filter_names
         assoc_task = AssociationTask(config=assoc_config)
-        assoc_task.update_dia_objects([1, 2, 3, 4, 14], self.exposure)
-
-        import pdb; pdb.set_trace()
+        assoc_task.update_dia_objects(loaded_dia_objects, [1, 2, 3, 4, 14], self.exposure)
 
         output_dia_objects = assoc_task.level1_db.load_dia_objects(self.exposure)
+        import pdb; pdb.set_trace()
         self.assertEqual(len(output_dia_objects), 6)
         for dia_object, exp_id, exp_n_source in zip(output_dia_objects,
                                                     [0, 1, 2, 3, 4, 14],
