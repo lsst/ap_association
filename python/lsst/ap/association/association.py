@@ -77,8 +77,8 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
     """
     if len(dia_sources) == 1:
         dia_object_record['psFluxMean_%s' % filter_name] = dia_sources[0]['psFlux']
-        dia_object_record['psFluxSigma_%s' % filter_name] = dia_sources[0]['psFluxErr']
-        dia_object_record['psFluxMeanErr_%s' % filter_name] = dia_sources[0]['psFluxErr']
+        dia_object_record['psFluxSigma_%s' % filter_name] = np.nan
+        dia_object_record['psFluxMeanErr_%s' % filter_name] = np.nan
     else:
         fluxes = dia_sources.get("psFlux")[
             dia_sources.get('filterId') == filter_id]
@@ -196,6 +196,9 @@ class AssociationTask(pipeBase.Task):
 
         Parameters
         ----------
+        dia_objects : `lsst.afw.table.SourceCatalog`
+            Pre-existing/loaded DIAObjects to copy values that are not updated
+            from.
         updated_obj_ids : array-like of `int`s
             Ids of the dia_objects that should be updated.
         exposure : `lsst.afw.image.Exposure`

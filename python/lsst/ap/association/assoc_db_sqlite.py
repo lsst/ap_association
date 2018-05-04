@@ -185,8 +185,9 @@ class SqliteDBConverter(object):
         ----------
         source_record : `lsst.afw.table.SourceRecord`
             SourceRecord to convert.
-        obj_id : `int` (optional)
-            Force the value of diaObjectId for a DIASource.
+        overwrite_dict : `dict` (optional)
+            Dictionary of values and keys to overwrite into the values of
+            source_record and store the values in overwrite_dict instead.
 
         Returns
         -------
@@ -374,7 +375,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         Parameters
         ----------
-        dia_obj_ids : `list` of `int`s
+        dia_obj_ids : array-like of `int`s
             Id of the DIAObject that is associated with the DIASources
             of interest.
 
@@ -389,7 +390,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         rows = self._query_dia_sources(dia_obj_ids)
         for row in rows:
-            output_dia_sources.append( 
+            output_dia_sources.append(
                 self._dia_source_converter.source_record_from_db_row(row))
 
         return output_dia_sources.copy(deep=True)

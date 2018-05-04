@@ -135,17 +135,20 @@ class TestAssociationTask(unittest.TestCase):
         new_idx_start = 5
         total_expected_dia_objects = 10
         self.assertEqual(len(dia_objects), total_expected_dia_objects)
+
+        # Test to make sure the number of DIAObjects have been properly
+        # associated within the db.
         for obj_idx, dia_object in enumerate(dia_objects):
             if obj_idx == not_updated_idx:
                 # Test the DIAObject we expect to not be associated with any
                 # new DIASources.
-                self.assertEqual(dia_object['n_dia_sources'], 1)
+                self.assertEqual(dia_object['n_dia_sources'], 2)
                 self.assertEqual(dia_object.getId(), obj_idx)
             elif updated_idx_start <= obj_idx < new_idx_start:
                 # Test that associating to the existing DIAObjects went
                 # as planned and test that the IDs of the newly associated
                 # DIASources is correct.
-                self.assertEqual(dia_object['n_dia_sources'], 2)
+                self.assertEqual(dia_object['n_dia_sources'], 3)
                 self.assertEqual(dia_object.getId(), obj_idx)
             else:
                 self.assertEqual(dia_object['n_dia_sources'], 1)
@@ -189,6 +192,9 @@ class TestAssociationTask(unittest.TestCase):
             point_locs_deg=source_centers,
             start_id=10,
             scatter_arcsec=-1)
+        for dia_source in dia_sources:
+            dia_source["psFlux"] = 10000.
+            dia_source["psFluxErr"] = 100.
 
         assoc_config = AssociationConfig()
         assoc_config.level1_db.value.db_name = self.db_file
@@ -233,6 +239,7 @@ class TestAssociationTask(unittest.TestCase):
             start_id=0,
             schema=self.dia_object_schema,
             scatter_arcsec=-1,)
+        # Set the DIAObject fluxes and number of associated sources.
         for dia_object in dia_objects:
             dia_object['n_dia_sources'] = 2
             for filter_name in self.filter_names:
@@ -269,6 +276,7 @@ class TestAssociationTask(unittest.TestCase):
         """Test the update_dia_objects method.
         """
         self._store_dia_objects_and_sources()
+        # Create new DIAObjects
         n_sources = 5
         object_centers = np.array([
             [self.wcs.pixelToSky(idx, idx).getRa().asDegrees(),
@@ -278,37 +286,76 @@ class TestAssociationTask(unittest.TestCase):
             point_locs_deg=object_centers[:n_sources],
             start_id=10,
             scatter_arcsec=-1)
+        # Store raw uncalibrated fluxes for these sources.
         for dia_source in dia_sources:
             dia_source["psFlux"] = 20000
             dia_source["psFluxErr"] = 100
 
+        # Store them in the DB containing pre-existing objects.
         assoc_db_config = AssociationDBSqliteConfig()
         assoc_db_config.db_name = self.db_file
         assoc_db_config.filter_names = self.filter_names
         assoc_db = AssociationDBSqliteTask(config=assoc_db_config)
         assoc_db.create_tables()
+        # Load the Existing DIAObjects for use in the update method.
+        loaded_dia_objects = assoc_db.load_dia_objects(self.exposure)
+
+        # Store the new DIASources with associations and an exposure.
         assoc_db.store_dia_sources(dia_sources,
                                    [1, 2, 3, 4, 14],
                                    self.exposure)
-        loaded_dia_objects = assoc_db.load_dia_objects(self.exposure)
         assoc_db.close()
         del assoc_db
 
+        # Create our task and update the stored DIAObjects.
         assoc_config = AssociationConfig()
         assoc_config.level1_db.value.db_name = self.db_file
         assoc_config.level1_db.filter_names = self.filter_names
         assoc_task = AssociationTask(config=assoc_config)
         assoc_task.update_dia_objects(loaded_dia_objects, [1, 2, 3, 4, 14], self.exposure)
 
+        # Retrieve the DIAObjects from the DB.
         output_dia_objects = assoc_task.level1_db.load_dia_objects(self.exposure)
-        import pdb; pdb.set_trace()
+
+        # Data and column names to test.
+        test_column_names = [
+            'id', 'n_dia_sources',
+            'psFluxMean_g', 'psFluxMeanErr_g', 'psFluxSigma_g',
+            'psFluxMean_r', 'psFluxMeanErr_r', 'psFluxSigma_r']
+        test_dia_object_values = [
+            {'id': 0, 'n_dia_sources': 2,
+             'psFluxMean_g': 1., 'psFluxMeanErr_g': 1., 'psFluxSigma_g': 1.,
+             'psFluxMean_r': 1., 'psFluxMeanErr_r': 1., 'psFluxSigma_r': 1.},
+            {'id': 1, 'n_dia_sources': 3,
+             'psFluxMean_g': 4. / 3, 'psFluxMeanErr_g': 0.19245009, 'psFluxSigma_g': 0.57735027,
+             'psFluxMean_r': 1., 'psFluxMeanErr_r': 1., 'psFluxSigma_r': 1.},
+            {'id': 2, 'n_dia_sources': 3,
+             'psFluxMean_g': 4. / 3, 'psFluxMeanErr_g': 0.19245009, 'psFluxSigma_g': 0.57735027,
+             'psFluxMean_r': 1., 'psFluxMeanErr_r': 1., 'psFluxSigma_r': 1.},
+            {'id': 3, 'n_dia_sources': 3,
+             'psFluxMean_g': 4. / 3, 'psFluxMeanErr_g': 0.19245009, 'psFluxSigma_g': 0.57735027,
+             'psFluxMean_r': 1., 'psFluxMeanErr_r': 1., 'psFluxSigma_r': 1.},
+            {'id': 4, 'n_dia_sources': 3,
+             'psFluxMean_g': 4. / 3, 'psFluxMeanErr_g': 0.19245009, 'psFluxSigma_g': 0.57735027,
+             'psFluxMean_r': 1., 'psFluxMeanErr_r': 1., 'psFluxSigma_r': 1.},
+            {'id': 14, 'n_dia_sources': 1,
+             'psFluxMean_g': 2., 'psFluxMeanErr_g': np.nan, 'psFluxSigma_g': np.nan,
+             'psFluxMean_r': np.nan, 'psFluxMeanErr_r': np.nan, 'psFluxSigma_r': np.nan}
+        ]
+
+        # Test that the stored values are as expected.
         self.assertEqual(len(output_dia_objects), 6)
-        for dia_object, exp_id, exp_n_source in zip(output_dia_objects,
-                                                    [0, 1, 2, 3, 4, 14],
-                                                    [2, 3, 3, 3, 3, 1]):
-            self.assertEqual(dia_object.getId(), exp_id)
-            self.assertEqual(dia_object['n_dia_sources'], exp_n_source)
-            self.assertAlmostEqual()
+        for dia_object, values in zip(output_dia_objects,
+                                      test_dia_object_values):
+            for test_name in test_column_names:
+                if np.isnan(values[test_name]):
+                    self.assertTrue(np.isnan(dia_object[test_name]))
+                elif test_name == 'id' or test_name == 'n_dia_sources':
+                    self.assertEqual(dia_object[test_name],
+                                     values[test_name])
+                else:
+                    self.assertAlmostEqual(dia_object[test_name],
+                                           values[test_name])
 
     def test_associate_sources(self):
         """Test the performance of the associate_sources method in
