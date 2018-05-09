@@ -27,6 +27,7 @@ ap_pipe/ap_verify.
 
 from __future__ import absolute_import, division, print_function
 
+from collections import OrderedDict as oDict
 import numpy as np
 import sqlite3
 
@@ -90,6 +91,25 @@ def make_minimal_dia_source_schema():
     schema.addField("filterName", type='String', size=10)
     schema.addField("filterId", type='L')
     return schema
+
+
+def ccdVisitSchema():
+    """Define the schema for the CcdVisit table.
+
+    Return
+    ------
+    ccdVisitNames: `collections.OrderedDict`
+       Names of columns in the ccdVisit table.
+    """
+    return oDict([("ccdVisitId", "INTEGER PRIMARY KEY"),
+                  ("ccdNum", "INTEGER"),
+                  ("filterName", "TEXT"),
+                  ("ra", "REAL"),
+                  ("decl", "REAL"),
+                  ("expTime", "REAL"),
+                  ("expMidptMJD", "REAL"),
+                  ("fluxZeroPoint", "REAL"),
+                  ("fluxZeroPointErr", "REAL")])
 
 
 class SqliteDBConverter(object):
@@ -186,8 +206,8 @@ class SqliteDBConverter(object):
         source_record : `lsst.afw.table.SourceRecord`
             SourceRecord to convert.
         overwrite_dict : `dict` (optional)
-            Dictionary of values and keys to overwrite into the values of
-            source_record and store the values in overwrite_dict instead.
+            Mapping specifying the names of columns to overwrite with
+            specified values.
 
         Returns
         -------
@@ -197,8 +217,7 @@ class SqliteDBConverter(object):
         values = []
         for sub_schema in self._schema:
             field_name = sub_schema.getField().getName()
-            overwrite_value = overwrite_dict.get(field_name)
-            if overwrite_value is not None:
+            if field_name in overwrite_dict:
                 values.append(overwrite_dict[field_name])
             else:
                 if sub_schema.getField().getTypeString() == 'Angle':
@@ -320,17 +339,12 @@ class AssociationDBSqliteTask(pipeBase.Task):
                 "CREATE INDEX diaObjectId_index ON dia_sources(diaObjectId)")
             self._commit()
 
+            ccd_visit_schema = ccdVisitSchema()
+            table_schema = ",".join(
+                "%s %s" % (key, ccd_visit_schema[key])
+                for key in ccd_visit_schema.keys())
             self._db_cursor.execute(
-                "CREATE TABLE CcdVisit ("
-                "ccdVisitId INTEGER PRIMARY KEY, "
-                "ccdNum INTEGER, "
-                "filterName TEXT, "
-                "ra REAL, "
-                "decl REAL, "
-                "expTime REAL, "
-                "expMidptMJD REAL, "
-                "fluxZeroPoint REAL, "
-                "fluxZeroPointErr Real)")
+                "CREATE TABLE CcdVisit (%s)" % table_schema)
             self._commit()
 
         return True
@@ -462,10 +476,12 @@ class AssociationDBSqliteTask(pipeBase.Task):
         exposure : `lsst.afw.image.Exposure`
             Exposure to store information from.
         """
+
         values = self._get_ccd_visit_info_from_exposure(exposure)
         self._db_cursor.execute(
             "INSERT OR REPLACE INTO CcdVisit VALUES (%s)" %
-            (("?," * len(values))[:-1]), values)
+            ",".join("?" for idx in range(len(values))),
+            [values[key] for key in ccdVisitSchema().keys()])
 
     def _get_ccd_visit_info_from_exposure(self, exposure):
         """
@@ -479,7 +495,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         Returns
         -------
-        values : `list` of ``values``
+        values : `dict` of ``values``
             List values representing info taken from the exposure.
         """
         visit_info = exposure.getInfo().getVisitInfo()
@@ -495,15 +511,15 @@ class AssociationDBSqliteTask(pipeBase.Task):
         #  dateTimeMJD ``seconds``,
         #  flux zero point ``counts``,
         #  flux zero point error ``counts``]
-        values = [visit_info.getExposureId(),
-                  exposure.getDetector().getId(),
-                  exposure.getFilter().getName(),
-                  sphPoint.getRa().asDegrees(),
-                  sphPoint.getDec().asDegrees(),
-                  visit_info.getExposureTime(),
-                  visit_info.getDate().nsecs() * 10 ** -9,
-                  flux0,
-                  flux0_err]
+        values = {'ccdVisitId': visit_info.getExposureId(),
+                  'ccdNum': exposure.getDetector().getId(),
+                  'filterName': exposure.getFilter().getName(),
+                  'ra': sphPoint.getRa().asDegrees(),
+                  'decl': sphPoint.getDec().asDegrees(),
+                  'expTime': visit_info.getExposureTime(),
+                  'expMidptMJD': visit_info.getDate().nsecs() * 10 ** -9,
+                  'fluxZeroPoint': flux0,
+                  'fluxZeroPointErr': flux0_err}
         return values
 
     def _get_dia_object_catalog(self, indexer_indices, expMd=None):
@@ -693,8 +709,8 @@ class AssociationDBSqliteTask(pipeBase.Task):
     def get_db_filter_id_from_name(self, filter_name):
         """Retrieve the id of a band pass filter give its string name.
 
-        This id mapping may be different that those in the obs package stored
-        in the associated repo.
+        This name/id mapping may be different that those in the obs package
+        stored in the associated repo.
 
         Parameters
         ----------
@@ -707,7 +723,31 @@ class AssociationDBSqliteTask(pipeBase.Task):
             Integer id stored in this db.
         """
         self._db_cursor.execute(
-            "SELECT filterId FROM FilterMap WHERE filterName = ?", filter_name)
+            "SELECT filterId FROM FilterMap WHERE filterName = ?", (filter_name,))
+        row = self._db_cursor.fetchone()
+        if row is None:
+            raise InvalidParameterError(
+                "Requested filter name not available in this DB.")
+        return row[0]
+
+    def get_db_filter_name_from_id(self, filter_id):
+        """Retrieve the name of a band pass filter given its id.
+
+        This name/id mapping may be different that those in the obs package
+        stored in the associated repo.
+
+        Parameters
+        ----------
+        filter_id : `int`
+            String name of the filter band pass to get the id of.
+
+        Returns
+        -------
+        filterName : `str`
+            String filter named stored in this db.
+        """
+        self._db_cursor.execute(
+            "SELECT filterName FROM FilterMap WHERE filterId = ?", (filter_id,))
         row = self._db_cursor.fetchone()
         if row is None:
             raise InvalidParameterError(

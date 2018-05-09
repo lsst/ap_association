@@ -28,7 +28,6 @@ import unittest
 from lsst.ap.association import \
     AssociationDBSqliteTask, \
     AssociationDBSqliteConfig, \
-    make_minimal_dia_object_schema, \
     make_minimal_dia_source_schema
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.image as afwImage
@@ -309,16 +308,20 @@ class TestAssociationDBSqlite(unittest.TestCase):
             self.assertEqual(self.assoc_db.compute_indexer_id(obj.getCoord()),
                              indexer_id)
 
-    def test_get_db_filter_id_from_name(self):
+    def test_get_db_filter_id_and_name(self):
         """Test that the filter name mapper to id is working.
         """
         for filter_name, filter_id in zip(self.assoc_db.config.filter_names,
-                                          [0, 1, 2, 3, 4, 5]):
+                                          range(len(self.assoc_db.config.filter_names))):
             self.assertEqual(
                 self.assoc_db.get_db_filter_id_from_name(filter_name),
                 filter_id)
+            self.assertEqual(
+                self.assoc_db.get_db_filter_name_from_id(filter_id),
+                filter_name)
         with self.assertRaises(InvalidParameterError):
             self.assoc_db.get_db_filter_id_from_name("J")
+            self.assoc_db.get_db_filter_name_from_id(100)
 
     def test_store_ccd_visit_info(self):
         """Test storing and retrieving CcdVisit info.
@@ -329,7 +332,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
             self.exposure)
         rows = self.assoc_db._db_cursor.fetchall()
         for row in rows:
-            for db_value, value in zip(row, stored_values):
+            for db_value, value in zip(row, stored_values.values()):
                 self.assertEqual(db_value, value)
 
     def test_load_dia_sources(self):

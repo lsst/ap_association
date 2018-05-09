@@ -159,7 +159,9 @@ class AssociationTask(pipeBase.Task):
         # Update previously existing DIAObjects with the information from their
         # newly association DIASources and create new DIAObjects from
         # unassociated sources.
-        self.update_dia_objects(dia_objects, updated_obj_ids, exposure)
+        self.update_dia_objects(dia_objects,
+                                updated_obj_ids,
+                                exposure.getFilter().getName())
 
     @pipeBase.timeMethod
     def associate_sources(self, dia_objects, dia_sources):
@@ -190,7 +192,7 @@ class AssociationTask(pipeBase.Task):
         return match_result.associated_dia_object_ids
 
     @pipeBase.timeMethod
-    def update_dia_objects(self, dia_objects, updated_obj_ids, exposure):
+    def update_dia_objects(self, dia_objects, updated_obj_ids, filter_name):
         """Update select dia_objects currently stored within the database or
         create new ones.
 
@@ -201,13 +203,12 @@ class AssociationTask(pipeBase.Task):
             from.
         updated_obj_ids : array-like of `int`s
             Ids of the dia_objects that should be updated.
-        exposure : `lsst.afw.image.Exposure`
-            Exposure the newly associated DIASources were detected in.
+        filter_name : `str`
+            String name of the filter to update fluxes for.
         """
         updated_dia_objects = afwTable.SourceCatalog(
             self.level1_db.get_dia_object_schema())
 
-        filter_name = exposure.getFilter().getName()
         filter_id = self.level1_db.get_db_filter_id_from_name(filter_name)
         for obj_id in updated_obj_ids:
             dia_object = dia_objects.find(obj_id)

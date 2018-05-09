@@ -312,7 +312,9 @@ class TestAssociationTask(unittest.TestCase):
         assoc_config.level1_db.value.db_name = self.db_file
         assoc_config.level1_db.filter_names = self.filter_names
         assoc_task = AssociationTask(config=assoc_config)
-        assoc_task.update_dia_objects(loaded_dia_objects, [1, 2, 3, 4, 14], self.exposure)
+        assoc_task.update_dia_objects(loaded_dia_objects,
+                                      [1, 2, 3, 4, 14],
+                                      self.exposure.getFilter().getName())
 
         # Retrieve the DIAObjects from the DB.
         output_dia_objects = assoc_task.level1_db.load_dia_objects(self.exposure)
