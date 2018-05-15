@@ -27,12 +27,15 @@ import unittest
 
 from lsst.ap.association import \
     AssociationDBSqliteTask, \
-    make_minimal_dia_object_schema, \
+    AssociationDBSqliteConfig, \
     make_minimal_dia_source_schema
+from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.image as afwImage
+import lsst.afw.image.utils as afwImageUtils
 import lsst.afw.geom as afwGeom
 import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
+from lsst.pex.exceptions import InvalidParameterError
 import lsst.pipe.base as pipeBase
 import lsst.utils.tests
 
@@ -94,7 +97,18 @@ class TestAssociationDBSqlite(unittest.TestCase):
     def setUp(self):
         """Initialize an empty database.
         """
-        self.assoc_db = AssociationDBSqliteTask()
+
+        # CFHT Filters from the camera mapper.
+        afwImageUtils.resetFilters()
+        afwImageUtils.defineFilter('u', lambdaEff=374, alias="u.MP9301")
+        afwImageUtils.defineFilter('g', lambdaEff=487, alias="g.MP9401")
+        afwImageUtils.defineFilter('r', lambdaEff=628, alias="r.MP9601")
+        afwImageUtils.defineFilter('i', lambdaEff=778, alias="i.MP9701")
+        afwImageUtils.defineFilter('z', lambdaEff=1170, alias="z.MP9801")
+
+        assoc_db_config = AssociationDBSqliteConfig()
+        assoc_db_config.filter_names = ['u', 'g', 'r', 'i', 'z']
+        self.assoc_db = AssociationDBSqliteTask(config=assoc_db_config)
         self.assoc_db.create_tables()
         self.assoc_db._commit()
 
@@ -124,6 +138,18 @@ class TestAssociationDBSqlite(unittest.TestCase):
         self.exposure = afwImage.makeExposure(
             afwImage.makeMaskedImageFromArrays(np.ones((1024, 1153))),
             self.wcs)
+        detector = DetectorWrapper(id=23, bbox=self.exposure.getBBox()).detector
+        visit = afwImage.VisitInfo(
+            exposureId=4321,
+            exposureTime=200.,
+            date=dafBase.DateTime(nsecs=1400000000 * 10**9))
+        self.exposure.setDetector(detector)
+        self.exposure.getInfo().setVisitInfo(visit)
+        self.exposure.setFilter(afwImage.Filter('g'))
+        self.flux0 = 10000
+        self.flux0_err = 100
+        self.exposure.getCalib().setFluxMag0((self.flux0, self.flux0_err))
+
         bbox = afwGeom.Box2D(self.exposure.getBBox())
         wcs = self.exposure.getWcs()
         self.expMd = pipeBase.Struct(
@@ -148,16 +174,22 @@ class TestAssociationDBSqlite(unittest.TestCase):
         record_b : `lsst.afw.table.SourceRecord`
         """
         for sub_schema in record_a.schema:
-            if sub_schema.getField().getTypeString() == 'L':
-                self.assertEqual(record_a[sub_schema.getKey()],
-                                 record_b[sub_schema.getKey()])
-            elif sub_schema.getField().getTypeString() == 'Angle':
-                self.assertAlmostEqual(
-                    record_a[sub_schema.getKey()].asDegrees(),
-                    record_b[sub_schema.getKey()].asDegrees())
+            value_a = record_a[sub_schema.getKey()]
+            value_b = record_a[sub_schema.getKey()]
+            if sub_schema.getField().getTypeString() == 'Angle':
+                value_a = value_a.asDegrees()
+                value_b = value_b.asDegrees()
+
+            if sub_schema.getField().getTypeString()[0] == 'S':
+                self.assertEqual(value_a, value_b)
+            elif np.isfinite(value_a) and np.isfinite(value_b):
+                if sub_schema.getField().getTypeString() == 'L':
+                    self.assertEqual(value_a, value_b)
+                else:
+                    self.assertAlmostEqual(value_a, value_b)
             else:
-                self.assertAlmostEqual(record_a[sub_schema.getKey()],
-                                       record_b[sub_schema.getKey()])
+                self.assertFalse(np.isfinite(value_a))
+                self.assertFalse(np.isfinite(value_b))
 
     def test_load_dia_objects(self):
         """Test the retrieval of DIAObjects from the database.
@@ -174,15 +206,19 @@ class TestAssociationDBSqlite(unittest.TestCase):
         dia_objects = create_test_points(
             point_locs_deg=object_centers,
             start_id=0,
-            schema=make_minimal_dia_object_schema(),
+            schema=self.assoc_db.get_dia_object_schema(),
             scatter_arcsec=-1)
+        for src_idx, dia_object in enumerate(dia_objects):
+            dia_object['psFluxMean_g'] = 10000. + np.random.randn() * 100.
+            dia_object['psFluxMeanErr_g'] = 100. + np.random.randn() * 10.
+            dia_object['psFluxSigma_g'] = 100. + np.random.randn() * 10.
 
         # Store the DIAObjects.
         self.assoc_db.store_dia_objects(dia_objects, True)
 
         # Load the DIAObjects using the bounding box and WCS associated with
         # them.
-        output_dia_objects = self.assoc_db.load_dia_objects(self.expMd)
+        output_dia_objects = self.assoc_db.load_dia_objects(self.exposure)
         # One of the objects should be outside of the bounding box and will
         # therefore not be loaded.
         self.assertEqual(len(output_dia_objects),
@@ -207,8 +243,12 @@ class TestAssociationDBSqlite(unittest.TestCase):
         dia_objects = create_test_points(
             point_locs_deg=object_centers,
             start_id=0,
-            schema=make_minimal_dia_object_schema(),
+            schema=self.assoc_db.get_dia_object_schema(),
             scatter_arcsec=1.0)
+        for src_idx, dia_object in enumerate(dia_objects):
+            dia_object['psFluxMean_g'] = 10000. + np.random.randn() * 100.
+            dia_object['psFluxMeanErr_g'] = 100. + np.random.randn() * 10.
+            dia_object['psFluxSigma_g'] = 100. + np.random.randn() * 10.
 
         # Store their values and test if they are preserved after round tripping
         # to the DB.
@@ -233,10 +273,14 @@ class TestAssociationDBSqlite(unittest.TestCase):
         dia_objects = create_test_points(
             point_locs_deg=object_centers,
             start_id=0,
-            schema=make_minimal_dia_object_schema(),
+            schema=self.assoc_db.get_dia_object_schema(),
             scatter_arcsec=1.0)
         # Store and overwrite the same sources this time updating their HTM
         # index.
+        for src_idx, dia_object in enumerate(dia_objects):
+            dia_object['psFluxMean_g'] = 10000. + np.random.randn() * 100.
+            dia_object['psFluxMeanErr_g'] = 100. + np.random.randn() * 10.
+            dia_object['psFluxSigma_g'] = 100. + np.random.randn() * 10.
         self.assoc_db.store_dia_objects(dia_objects, True)
 
         # Retrieve the DIAObjects again and test that their HTM index has
@@ -257,12 +301,39 @@ class TestAssociationDBSqlite(unittest.TestCase):
         dia_objects = create_test_points(
             point_locs_deg=object_centers,
             start_id=0,
-            schema=make_minimal_dia_object_schema(),
+            schema=self.assoc_db.get_dia_object_schema(),
             scatter_arcsec=-1)
         expected_ids = [131072, 253952, 253952, 253952, 253955]
         for obj, indexer_id in zip(dia_objects, expected_ids):
             self.assertEqual(self.assoc_db.compute_indexer_id(obj.getCoord()),
                              indexer_id)
+
+    def test_get_db_filter_id_and_name(self):
+        """Test that the filter name mapper to id is working.
+        """
+        for filter_name, filter_id in zip(self.assoc_db.config.filter_names,
+                                          range(len(self.assoc_db.config.filter_names))):
+            self.assertEqual(
+                self.assoc_db.get_db_filter_id_from_name(filter_name),
+                filter_id)
+            self.assertEqual(
+                self.assoc_db.get_db_filter_name_from_id(filter_id),
+                filter_name)
+        with self.assertRaises(InvalidParameterError):
+            self.assoc_db.get_db_filter_id_from_name("J")
+            self.assoc_db.get_db_filter_name_from_id(100)
+
+    def test_store_ccd_visit_info(self):
+        """Test storing and retrieving CcdVisit info.
+        """
+        self.assoc_db.store_ccd_visit_info(self.exposure)
+        self.assoc_db._db_cursor.execute("SELECT * FROM CcdVisit")
+        stored_values = self.assoc_db._get_ccd_visit_info_from_exposure(
+            self.exposure)
+        rows = self.assoc_db._db_cursor.fetchall()
+        for row in rows:
+            for db_value, value in zip(row, stored_values.values()):
+                self.assertEqual(db_value, value)
 
     def test_load_dia_sources(self):
         """Test the retrieval of DIASources from the database.
@@ -271,13 +342,30 @@ class TestAssociationDBSqlite(unittest.TestCase):
         dia_sources = create_test_points(
             point_locs_deg=[[0.1, 0.1] for idx in range(n_sources)],
             start_id=0,
-            schema=make_minimal_dia_source_schema(),
+            schema=self.assoc_db.get_dia_source_schema(),
             scatter_arcsec=1.0,
             associated_ids=range(n_sources))
 
+        for dia_source in dia_sources:
+            dia_source['psFlux'] = 10000. + np.random.randn() * 100.
+            dia_source['psFluxErr'] = 100. + np.random.randn() * 10.
+            dia_source['filterName'] = self.exposure.getFilter().getName()
+
         # Store the first set of DIASources and retrieve them using their
         # associated DIAObject id.
-        self.assoc_db.store_dia_sources(dia_sources, range(n_sources))
+        self.assoc_db.store_dia_sources(dia_sources,
+                                        range(n_sources),
+                                        self.exposure)
+
+        for dia_source in dia_sources:
+            tmp_flux = dia_source['psFlux']
+            tmp_flux_err = dia_source['psFluxErr']
+            dia_source['psFlux'] = tmp_flux / self.flux0
+            dia_source['psFluxErr'] = np.sqrt(
+                (tmp_flux_err / self.flux0) ** 2 +
+                (tmp_flux * self.flux0_err / self.flux0 ** 2) ** 2)
+            dia_source['ccdVisitId'] = \
+                self.exposure.getInfo().getVisitInfo().getExposureId()
 
         for dia_object_id, dia_source in zip(range(n_sources), dia_sources):
             stored_dia_sources = self.assoc_db.load_dia_sources([dia_object_id])
@@ -299,101 +387,162 @@ class TestAssociationDBSqlite(unittest.TestCase):
     def test_store_dia_sources(self):
         """Test the storage of DIASources in the database.
         """
-        # Create DIASources
+        # Create test associated DIAObjects and DIASources.
         n_sources = 5
+        source_centers = [[1. * idx, 1. * idx] for idx in range(n_sources)]
+        obj_ids = [idx for idx in range(n_sources)]
         dia_sources = create_test_points(
-            point_locs_deg=[[0.1, 0.1] for idx in range(n_sources)],
+            point_locs_deg=source_centers,
             start_id=0,
-            schema=make_minimal_dia_source_schema(),
-            scatter_arcsec=1.0)
-
-        # Store the DIASources
-        self.assoc_db.store_dia_sources(dia_sources, range(n_sources))
-
-        # Retrieve and test DIASources.
-        stored_dia_sources = self._retrieve_source_catalog(
-            self.assoc_db._dia_source_converter)
-        self.assertEqual(len(stored_dia_sources), n_sources)
-        for dia_source, created_source, assoc_id in zip(stored_dia_sources,
-                                                        dia_sources,
-                                                        range(n_sources)):
-            # Set the id after the fact to test it was set properly in the
-            # code.
-            created_source['diaObjectId'] = assoc_id
-            self._compare_source_records(dia_source, created_source)
-
-    def test_store_dia_sources_no_id_update(self):
-        # Create DIASources
-        n_sources = 5
-        dia_sources = create_test_points(
-            point_locs_deg=[[0.1, 0.1] for idx in range(n_sources)],
-            start_id=0,
-            schema=make_minimal_dia_source_schema(),
+            schema=self.assoc_db.get_dia_source_schema(),
             scatter_arcsec=1.0,
-            associated_ids=range(n_sources))
+            associated_ids=range(5))
+        for src_idx, dia_source in enumerate(dia_sources):
+            dia_source['psFlux'] = 10000. + np.random.randn() * 100.
+            dia_source['psFluxErr'] = 100. + np.random.randn() * 10.
 
-        # Store the DIASources
-        self.assoc_db.store_dia_sources(dia_sources)
-
-        # Retrieve and test DIASources.
-        stored_dia_sources = self._retrieve_source_catalog(
+        # Check the DIASources round trip properly. We don't need to be
+        # as complex here as the call signature has been almost fully tested
+        # here by the ``test_store_catalog_dia_sources`` tests.
+        self.assoc_db.store_dia_sources(dia_sources,
+                                        range(5),
+                                        self.exposure)
+        round_trip_dia_source_catalog = self._retrieve_source_catalog(
             self.assoc_db._dia_source_converter)
-        self.assertEqual(len(stored_dia_sources), n_sources)
-        for dia_source, created_source in zip(stored_dia_sources, dia_sources):
-            self._compare_source_records(dia_source, created_source)
 
-    def test_store_catalog_objects(self):
+        for stored_dia_source, dia_source, obj_id, filter_name in zip(
+                round_trip_dia_source_catalog,
+                dia_sources,
+                obj_ids,
+                self.assoc_db.config.filter_names):
+            dia_source['diaObjectId'] = obj_id
+            tmp_flux = dia_source['psFlux']
+            tmp_flux_err = dia_source['psFluxErr']
+            dia_source['psFlux'] = tmp_flux / self.flux0
+            dia_source['psFluxErr'] = np.sqrt(
+                (tmp_flux_err / self.flux0) ** 2 +
+                (tmp_flux * self.flux0_err / self.flux0 ** 2) ** 2)
+            dia_source['filterName'] = self.exposure.getFilter().getName()
+            dia_source['ccdVisitId'] = \
+                self.exposure.getInfo().getVisitInfo().getExposureId()
+
+            self._compare_source_records(stored_dia_source, dia_source)
+
+    def test_store_catalog_dia_objects(self):
         """Test storing a SourceRecord object in either the dia_objects and
         dia_sources table.
         """
 
         # Create test associated DIAObjects and DIASources.
+        n_objects = 5
+        object_centers = [[1. * idx, 1. * idx] for idx in range(n_objects)]
         dia_objects = create_test_points(
-            point_locs_deg=[[0.0, 0.0],
-                            [1.0, 1.0]],
+            point_locs_deg=object_centers,
             start_id=0,
-            schema=make_minimal_dia_object_schema(),
-            scatter_arcsec=1.0,
-            associated_ids=None)
-        dia_sources = create_test_points(
-            point_locs_deg=[[0.0, 0.0],
-                            [1.0, 1.0]],
-            start_id=0,
-            schema=make_minimal_dia_source_schema(),
-            scatter_arcsec=1.0,
-            associated_ids=[0, 1])
+            schema=self.assoc_db.get_dia_object_schema(),
+            scatter_arcsec=1.0)
+
+        for src_idx, dia_object in enumerate(dia_objects):
+            dia_object['psFluxMean_g'] = 10000. + np.random.randn() * 100.
+            dia_object['psFluxMeanErr_g'] = 100. + np.random.randn() * 10.
+            dia_object['psFluxSigma_g'] = 100. + np.random.randn() * 10.
 
         # Check the DIAObjects round trip properly.
-        self._store_source_catalog(dia_objects,
-                                   self.assoc_db._dia_object_converter)
+        self.assoc_db._store_catalog(
+            dia_objects, self.assoc_db._dia_object_converter)
         round_trip_dia_object_catalog = self._retrieve_source_catalog(
             self.assoc_db._dia_object_converter)
         for stored_dia_object, dia_object in zip(round_trip_dia_object_catalog,
                                                  dia_objects):
             self._compare_source_records(stored_dia_object, dia_object)
 
+    def test_store_catalog_dia_sources(self):
+        """Test storing a DIASources with the full functionality of store
+        catalogs.
+        """
+        self._store_catalog_dia_sources(True, True)
+
+    def test_store_catalog_dia_sources_no_id(self):
+        """Test storing a DIASources with without updating the associated
+        DIAObject ids.
+        """
+        self._store_catalog_dia_sources(False, True)
+
+    def test_store_catalog_dia_sources_no_exposure(self):
+        """Test storing a DIASources with without updating the exposure
+        properties
+        """
+        self._store_catalog_dia_sources(True, False)
+
+    def test_store_catalog_dia_sources_no_id_no_exposure(self):
+        """Test storing a DIASources with without updating the associated
+        DIAObject ids or the exposure properties.
+        """
+        self._store_catalog_dia_sources(False, False)
+
+    def _store_catalog_dia_sources(self, use_ids=False, use_exposure=False):
+        """Test storing a SourceRecord object in either the dia_objects and
+        dia_sources table.
+        """
+
+        # Create test associated DIAObjects and DIASources.
+        n_sources = 5
+        source_centers = [[1. * idx, 1. * idx] for idx in range(n_sources)]
+        obj_ids = [idx for idx in range(n_sources)]
+        dia_sources = create_test_points(
+            point_locs_deg=source_centers,
+            start_id=0,
+            schema=self.assoc_db.get_dia_source_schema(),
+            scatter_arcsec=1.0)
+        for src_idx, dia_source in enumerate(dia_sources):
+            if not use_ids:
+                dia_source['diaObjectId'] = src_idx
+            dia_source['psFlux'] = 10000. + np.random.randn() * 100.
+            dia_source['psFluxErr'] = 100. + np.random.randn() * 10.
+            if not use_exposure:
+                dia_source['filterName'] = self.assoc_db.config.filter_names[src_idx]
+                dia_source['ccdVisitId'] = 1234 + src_idx
+
         # Check the DIASources round trip properly.
-        self._store_source_catalog(dia_sources,
-                                   self.assoc_db._dia_source_converter)
+        if use_ids and not use_exposure:
+            self.assoc_db._store_catalog(dia_sources,
+                                         self.assoc_db._dia_source_converter,
+                                         obj_ids=obj_ids)
+        elif not use_ids and use_exposure:
+            self.assoc_db._store_catalog(dia_sources,
+                                         self.assoc_db._dia_source_converter,
+                                         exposure=self.exposure)
+        elif use_ids and use_exposure:
+            self.assoc_db._store_catalog(dia_sources,
+                                         self.assoc_db._dia_source_converter,
+                                         obj_ids=obj_ids,
+                                         exposure=self.exposure)
+        else:
+            self.assoc_db._store_catalog(dia_sources,
+                                         self.assoc_db._dia_source_converter)
+        self.assoc_db._commit()
         round_trip_dia_source_catalog = self._retrieve_source_catalog(
             self.assoc_db._dia_source_converter)
-        for stored_dia_source, dia_source in zip(round_trip_dia_source_catalog,
-                                                 dia_sources):
+
+        for stored_dia_source, dia_source, obj_id, filter_name in zip(
+                round_trip_dia_source_catalog,
+                dia_sources,
+                obj_ids,
+                self.assoc_db.config.filter_names):
+            if use_ids:
+                dia_source['diaObjectId'] = obj_id
+            if use_exposure:
+                tmp_flux = dia_source['psFlux']
+                tmp_flux_err = dia_source['psFluxErr']
+                dia_source['psFlux'] = tmp_flux / self.flux0
+                dia_source['psFluxErr'] = np.sqrt(
+                    (tmp_flux_err / self.flux0) ** 2 +
+                    (tmp_flux * self.flux0_err / self.flux0 ** 2) ** 2)
+                dia_source['filterName'] = self.exposure.getFilter().getName()
+                dia_source['ccdVisitId'] = \
+                    self.exposure.getInfo().getVisitInfo().getExposureId()
+
             self._compare_source_records(stored_dia_source, dia_source)
-
-    def _store_source_catalog(self, source_catalog, converter):
-        """Convenience method for storing a source catalog object in the DB.
-
-        Parameters
-        ----------
-        source_catalog : `lsst.afw.table.SourceCatalog`
-            SourceCatalog to store.
-        converter : `lsst.ap.association.SqliteDBConverter`
-            converter defining the table and schema to store.
-        """
-        self.assoc_db._store_catalog(
-            source_catalog, converter)
-        self.assoc_db._commit()
 
     def _retrieve_source_catalog(self, converter):
         """Convenience method for retrieving a source catalog object from the
@@ -414,6 +563,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
 
         rows = self.assoc_db._db_cursor.fetchall()
         output_source_catalog = afwTable.SourceCatalog(converter.schema)
+        output_source_catalog.reserve(len(rows))
         for row in rows:
             output_source_catalog.append(converter.source_record_from_db_row(row))
 
