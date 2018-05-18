@@ -124,7 +124,7 @@ class SqliteDBConverter(object):
         Name of the sqlite table this converter is to be used for.
     """
 
-    def __init__(self, schema, table_name):
+    def __init__(self, schema, table_namee):
         self._schema = schema
         self._table_name = table_name
         self._afw_to_db_types = {
@@ -170,6 +170,31 @@ class SqliteDBConverter(object):
         name_type_string = name_type_string[:-1]
 
         return "CREATE TABLE %s (%s)" % (table_name, name_type_string)
+
+    def make_schema_mapper(self, input_schema):
+        """
+        """
+        schema_mapper = afwTable.SchemaMapper(input_schema)
+
+        input_names = input_schema.getNames()
+        for schema_name in self._schema.getNames():
+            if input_names.contains({schema_name}):
+                schema_mapper.addMapping(
+                    input_schema.find(schema_name).getKey(),
+                    schema_name)
+            elif schema_name == 'psFlux':
+                schema_mapper.addMapping(
+                    input_schema.find('base_PsfFlux_flux'),
+                    schema_name)
+            elif schema_name == 'psFluxErr':
+                schema_mapper.addMapping(
+                    input_schema.find('base_PsfFlux_fluxSigma'),
+                    schema_name)
+            else:
+                schema_mapp.addOutputField(
+                    self._schema.find(schema_name).getKey())
+
+        return schema_mapper
 
     def source_record_from_db_row(self, db_row):
         """Create a source record from the values stored in a database row.
@@ -675,6 +700,11 @@ class AssociationDBSqliteTask(pipeBase.Task):
         """
         values = []
 
+        schema_mapper = None
+        if source_catalog.getSchema() != converter.schema:
+            schema_mapper = converter.make_schema_mapper(
+                source_catalog.getSchema())
+
         if exposure is not None:
             ccdVisitId = exposure.getInfo().getVisitInfo().getExposureId()
             flux0, flux0_err = exposure.getCalib().getFluxMag0()
@@ -682,6 +712,9 @@ class AssociationDBSqliteTask(pipeBase.Task):
             filter_id = self.get_db_filter_id_from_name(filter_name)
 
         for src_idx, source_record in enumerate(source_catalog):
+            if schema_mapper is not None:
+                source_record = source_catalog.copyRecord(
+                    source_record, schema_mapper)
             overwrite_dict = {}
             if obj_ids is not None:
                 overwrite_dict['diaObjectId'] = int(obj_ids[src_idx])
