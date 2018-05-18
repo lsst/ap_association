@@ -675,6 +675,18 @@ class AssociationDBSqliteTask(pipeBase.Task):
         """
         values = []
 
+        if source_catalog.getSchema() != converter.schema and \
+           converter.table_name == 'dia_sources':
+            # Create aliases to appropriate flux fields if they exist.
+            schema_names = source_catalog.getSchema().getNames()
+            if 'base_PsfFlux_flux' in schema_names and \
+               'base_PsfFlux_fluxSigma' in schema_names and \
+               'psFlux' not in schema_names and \
+               'psFluxErr' not in schema_names:
+                    alias_map = source_catalog.getSchema().getAliasMap()
+                    alias_map.set('psFlux', 'base_PsfFlux_flux')
+                    alias_map.set('psFluxErr', 'base_PsfFlux_fluxSigma')
+
         if exposure is not None:
             ccdVisitId = exposure.getInfo().getVisitInfo().getExposureId()
             flux0, flux0_err = exposure.getCalib().getFluxMag0()

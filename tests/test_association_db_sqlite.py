@@ -384,6 +384,63 @@ class TestAssociationDBSqlite(unittest.TestCase):
         empty_dia_sources = self.assoc_db.load_dia_sources([6])
         self.assertEqual(len(empty_dia_sources), 0)
 
+    def test_store_dia_sources_different_schema(self):
+        """Test the storage of DIASources in the database.
+        """
+        # Create a schema that is miss-matched to the expected DIASource
+        # schema but with expected ipdiffim like flux columns. Also add
+        # unused columns that are ignored within the code.
+        schema = afwTable.SourceTable.makeMinimalSchema()
+        schema.addField('base_PsfFlux_flux', type='D')
+        schema.addField('base_PsfFlux_fluxSigma', type='D')
+        schema.addField('junk1', type='L')
+        schema.addField('junk2', type='D')
+        schema.addField('junk3', type='L')
+        schema.addField('junk4', type='D')
+
+        # Create test associated DIASources.
+        n_sources = 5
+        source_centers = [[1. * idx, 1. * idx] for idx in range(n_sources)]
+        dia_sources = create_test_points(
+            point_locs_deg=source_centers,
+            start_id=0,
+            schema=schema,
+            scatter_arcsec=-1)
+        for dia_source in dia_sources:
+            dia_source['base_PsfFlux_flux'] = 10000.
+            dia_source['base_PsfFlux_fluxSigma'] = 100.
+
+        # Check the DIASources round trip properly. We don't need to be
+        # as complex here as the call signature has been almost fully tested
+        # here by the ``test_store_catalog_dia_sources`` tests.
+        self.assoc_db.store_dia_sources(dia_sources,
+                                        range(5),
+                                        self.exposure)
+        round_trip_dia_source_catalog = self._retrieve_source_catalog(
+            self.assoc_db._dia_source_converter)
+
+        # Remake the DIASources with the correct values and columns for
+        # comparison.
+        dia_sources = create_test_points(
+            point_locs_deg=source_centers,
+            start_id=0,
+            schema=make_minimal_dia_source_schema(),
+            scatter_arcsec=-1,
+            associated_ids=range(5))
+        for dia_source in dia_sources:
+            dia_source['filterName'] = self.exposure.getFilter().getName()
+            dia_source['ccdVisitId'] = \
+                self.exposure.getInfo().getVisitInfo().getExposureId()
+            dia_source['psFlux'] = 10000. / self.flux0
+            dia_source['psFluxErr'] = np.sqrt(
+                (100. / self.flux0) ** 2 +
+                (10000. * self.flux0_err / self.flux0 ** 2) ** 2)
+
+        for stored_dia_source, dia_source in zip(round_trip_dia_source_catalog,
+                                                 dia_sources,):
+
+            self._compare_source_records(stored_dia_source, dia_source)
+
     def test_store_dia_sources(self):
         """Test the storage of DIASources in the database.
         """
@@ -397,7 +454,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
             schema=self.assoc_db.get_dia_source_schema(),
             scatter_arcsec=1.0,
             associated_ids=range(5))
-        for src_idx, dia_source in enumerate(dia_sources):
+        for dia_source in dia_sources:
             dia_source['psFlux'] = 10000. + np.random.randn() * 100.
             dia_source['psFluxErr'] = 100. + np.random.randn() * 10.
 
