@@ -171,32 +171,6 @@ class SqliteDBConverter(object):
 
         return "CREATE TABLE %s (%s)" % (table_name, name_type_string)
 
-    def make_schema_mapper(self, input_schema):
-        """
-        """
-        schema_mapper = afwTable.SchemaMapper(input_schema)
-
-        input_names = input_schema.getNames()
-        for sub_schema in self._schema:
-            schema_name = sub_schema.getField().getName()
-            if input_names.contains({schema_name}):
-                schema_mapper.addMapping(
-                    input_schema.find(schema_name).getKey(),
-                    schema_name)
-            elif schema_name == 'psFlux':
-                schema_mapper.addMapping(
-                    input_schema.find('base_PsfFlux_flux'),
-                    schema_name)
-            elif schema_name == 'psFluxErr':
-                schema_mapper.addMapping(
-                    input_schema.find('base_PsfFlux_fluxSigma'),
-                    schema_name)
-            else:
-                schema_mapper.addOutputField(
-                    self._schema.find(schema_name).getKey())
-
-        return schema_mapper
-
     def source_record_from_db_row(self, db_row):
         """Create a source record from the values stored in a database row.
 
@@ -704,15 +678,16 @@ class AssociationDBSqliteTask(pipeBase.Task):
         if source_catalog.getSchema() != converter.schema and \
            converter.table_name == 'dia_sources':
             # Create aliases to appropriate flux fields if they exist.
+            # This mapping assumes the input data looks like that of
+            # ipdiffim's output.
             schema_names = source_catalog.getSchema().getNames()
             if 'base_PsfFlux_flux' in schema_names and \
                'base_PsfFlux_fluxSigma' in schema_names and \
                'psFlux' not in schema_names and \
                'psFluxErr' not in schema_names:
-                source_catalog.getSchema().getAliasMap().set(
-                    'psFlux', 'base_PsfFlux_flux')
-                source_catalog.getSchema().getAliasMap().set(
-                    'psFluxErr', 'base_PsfFlux_fluxSigma')
+                    alias_map = source_catalog.getSchema().getAliasMap()
+                    alias_map.set('psFlux', 'base_PsfFlux_flux')
+                    alias_map.set('psFluxErr', 'base_PsfFlux_fluxSigma')
 
         if exposure is not None:
             ccdVisitId = exposure.getInfo().getVisitInfo().getExposureId()

@@ -387,7 +387,10 @@ class TestAssociationDBSqlite(unittest.TestCase):
     def test_store_dia_sources_different_schema(self):
         """Test the storage of DIASources in the database.
         """
-        # Create test associated DIAObjects and DIASources.
+
+        # Create a schema that is miss-matched to the expected DIASource
+        # schema but with expected ipdiffim like flux columns. Also add
+        # unused columns that are ignored within the code.
         schema = afwTable.SourceTable.makeMinimalSchema()
         schema.addField('base_PsfFlux_flux', type='D')
         schema.addField('base_PsfFlux_fluxSigma', type='D')
@@ -396,6 +399,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         schema.addField('junk3', type='L')
         schema.addField('junk4', type='D')
 
+        # Create test associated DIASources.
         n_sources = 5
         source_centers = [[1. * idx, 1. * idx] for idx in range(n_sources)]
         obj_ids = [idx for idx in range(n_sources)]
@@ -404,7 +408,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
             start_id=0,
             schema=schema,
             scatter_arcsec=-1)
-        for src_idx, dia_source in enumerate(dia_sources):
+        for dia_source in dia_sources:
             dia_source['base_PsfFlux_flux'] = 10000.
             dia_source['base_PsfFlux_fluxSigma'] = 100.
 
@@ -425,7 +429,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
             schema=make_minimal_dia_source_schema(),
             scatter_arcsec=-1,
             associated_ids=range(5))
-        for src_idx, dia_source in enumerate(dia_sources):
+        for dia_source in dia_sources:
             dia_source['filterName'] = self.exposure.getFilter().getName()
             dia_source['ccdVisitId'] = \
                 self.exposure.getInfo().getVisitInfo().getExposureId()
@@ -452,7 +456,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
             schema=self.assoc_db.get_dia_source_schema(),
             scatter_arcsec=1.0,
             associated_ids=range(5))
-        for src_idx, dia_source in enumerate(dia_sources):
+        for dia_source in dia_sources:
             dia_source['psFlux'] = 10000. + np.random.randn() * 100.
             dia_source['psFluxErr'] = 100. + np.random.randn() * 10.
 
