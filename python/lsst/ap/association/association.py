@@ -142,17 +142,6 @@ class AssociationTask(pipeBase.Task):
 
         self.level1_db.store_ccd_visit_info(exposure)
 
-        # Create aliases to appropriate flux fields if they exist.
-        schema_names = dia_sources.getSchema().getNames()
-        if len(schema_names.intersection('base_PsfFlux_flux')) == 1 and \
-           len(schema_names.intersection('base_PsfFlux_fluxSigma')) == 1 and \
-           len(schema_names.intersection('psFlux')) == 0 and \
-           len(schema_names.intersection('psFluxErr')) == 0:
-            dia_sources.getSchema().getAliasMap().set('psFlux',
-                                                      'base_PsfFlux_flux')
-            dia_sources.getSchema().getAliasMap().set('psFluxErr',
-                                                      'base_PsfFlux_fluxSigma')
-
         # Store newly associated DIASources.
         self.level1_db.store_dia_sources(
             dia_sources, updated_obj_ids, exposure)

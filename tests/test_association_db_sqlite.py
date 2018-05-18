@@ -403,8 +403,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
             point_locs_deg=source_centers,
             start_id=0,
             schema=schema,
-            scatter_arcsec=-1,
-            associated_ids=range(5))
+            scatter_arcsec=-1)
         for src_idx, dia_source in enumerate(dia_sources):
             dia_source['base_PsfFlux_flux'] = 10000.
             dia_source['base_PsfFlux_fluxSigma'] = 100.
@@ -418,6 +417,8 @@ class TestAssociationDBSqlite(unittest.TestCase):
         round_trip_dia_source_catalog = self._retrieve_source_catalog(
             self.assoc_db._dia_source_converter)
 
+        # Remake the DIASources with the correct values and columns for
+        # comparison.
         dia_sources = create_test_points(
             point_locs_deg=source_centers,
             start_id=0,
@@ -425,19 +426,16 @@ class TestAssociationDBSqlite(unittest.TestCase):
             scatter_arcsec=-1,
             associated_ids=range(5))
         for src_idx, dia_source in enumerate(dia_sources):
+            dia_source['filterName'] = self.exposure.getFilter().getName()
+            dia_source['ccdVisitId'] = \
+                self.exposure.getInfo().getVisitInfo().getExposureId()
             dia_source['psFlux'] = 10000. / self.flux0
             dia_source['psFluxErr'] = np.sqrt(
                 (100. / self.flux0) ** 2 +
                 (10000. * self.flux0_err / self.flux0 ** 2) ** 2)
 
-        for stored_dia_source, dia_source, obj_id, filter_name in zip(
-                round_trip_dia_source_catalog,
-                dia_sources,
-                obj_ids,
-                self.assoc_db.config.filter_names):
-            dia_source['filterName'] = self.exposure.getFilter().getName()
-            dia_source['ccdVisitId'] = \
-                self.exposure.getInfo().getVisitInfo().getExposureId()
+        for stored_dia_source, dia_source in zip(round_trip_dia_source_catalog,
+                                                 dia_sources,):
 
             self._compare_source_records(stored_dia_source, dia_source)
 

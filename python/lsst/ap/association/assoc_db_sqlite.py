@@ -124,7 +124,7 @@ class SqliteDBConverter(object):
         Name of the sqlite table this converter is to be used for.
     """
 
-    def __init__(self, schema, table_namee):
+    def __init__(self, schema, table_name):
         self._schema = schema
         self._table_name = table_name
         self._afw_to_db_types = {
@@ -177,7 +177,8 @@ class SqliteDBConverter(object):
         schema_mapper = afwTable.SchemaMapper(input_schema)
 
         input_names = input_schema.getNames()
-        for schema_name in self._schema.getNames():
+        for sub_schema in self._schema:
+            schema_name = sub_schema.getField().getName()
             if input_names.contains({schema_name}):
                 schema_mapper.addMapping(
                     input_schema.find(schema_name).getKey(),
@@ -191,7 +192,7 @@ class SqliteDBConverter(object):
                     input_schema.find('base_PsfFlux_fluxSigma'),
                     schema_name)
             else:
-                schema_mapp.addOutputField(
+                schema_mapper.addOutputField(
                     self._schema.find(schema_name).getKey())
 
         return schema_mapper
@@ -700,10 +701,18 @@ class AssociationDBSqliteTask(pipeBase.Task):
         """
         values = []
 
-        schema_mapper = None
-        if source_catalog.getSchema() != converter.schema:
-            schema_mapper = converter.make_schema_mapper(
-                source_catalog.getSchema())
+        if source_catalog.getSchema() != converter.schema and \
+           converter.table_name == 'dia_sources':
+            # Create aliases to appropriate flux fields if they exist.
+            schema_names = source_catalog.getSchema().getNames()
+            if 'base_PsfFlux_flux' in schema_names and \
+               'base_PsfFlux_fluxSigma' in schema_names and \
+               'psFlux' not in schema_names and \
+               'psFluxErr' not in schema_names:
+                source_catalog.getSchema().getAliasMap().set(
+                    'psFlux', 'base_PsfFlux_flux')
+                source_catalog.getSchema().getAliasMap().set(
+                    'psFluxErr', 'base_PsfFlux_fluxSigma')
 
         if exposure is not None:
             ccdVisitId = exposure.getInfo().getVisitInfo().getExposureId()
@@ -712,9 +721,6 @@ class AssociationDBSqliteTask(pipeBase.Task):
             filter_id = self.get_db_filter_id_from_name(filter_name)
 
         for src_idx, source_record in enumerate(source_catalog):
-            if schema_mapper is not None:
-                source_record = source_catalog.copyRecord(
-                    source_record, schema_mapper)
             overwrite_dict = {}
             if obj_ids is not None:
                 overwrite_dict['diaObjectId'] = int(obj_ids[src_idx])
