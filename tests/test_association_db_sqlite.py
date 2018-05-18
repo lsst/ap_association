@@ -422,7 +422,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         dia_sources = create_test_points(
             point_locs_deg=source_centers,
             start_id=0,
-            schema=make_minimal_dia_source_schema,
+            schema=make_minimal_dia_source_schema(),
             scatter_arcsec=-1,
             associated_ids=range(5))
         for src_idx, dia_source in enumerate(dia_sources):
