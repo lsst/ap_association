@@ -103,7 +103,11 @@ def make_minimal_dia_source_schema():
                         'in.')
     schema.addField("filterId", type='L',
                     doc='Obs package id of the filter this source was '
-                    'observed in.')
+                        'observed in.')
+    schema.addField("flags", type='L',
+                    doc='Quality flags for this DIASource.')
+    schema.addField("pixelId", type='L',
+                    doc='Unique spherical pixelization identifier.')
     return schema
 
 
@@ -194,9 +198,9 @@ def add_dia_source_aliases_to_catalog(source_catalog):
                 alias_map.set('psFluxErr', 'base_PsfFlux_fluxSigma')
 
 
-def convert_dia_source_to_asssoc_schema_and_calibrate(dia_sources,
-                                                      obj_ids=None,
-                                                      exposure=None):
+def convert_dia_source_to_asssoc_schema(dia_sources,
+                                        obj_ids=None,
+                                        exposure=None):
     """Create aliases in for the input source catalog schema and overwrite
     values if requested.
 
@@ -212,7 +216,7 @@ def convert_dia_source_to_asssoc_schema_and_calibrate(dia_sources,
         Exposure to copy flux and filter information from.
     """
 
-    output_dia_sources = afwTable.SourceCatog(
+    output_dia_sources = afwTable.SourceCatalog(
         make_minimal_dia_source_schema())
     output_dia_sources.reserve(len(dia_sources))
     add_dia_source_aliases_to_catalog(dia_sources)
@@ -298,7 +302,8 @@ def copy_source_record(source_record,
         if field_name in overwrite_dict:
             output_record.set(sub_schema.getKey(),
                               overwrite_dict[field_name])
-        else:
+        elif field_name in source_record_schema.getNames():
             output_record.set(
                 sub_schema.getKey(),
-                source_record_schema.find(field_name).getKey())
+                source_record.get(
+                    source_record_schema.find(field_name).getKey()))

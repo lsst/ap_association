@@ -48,75 +48,6 @@ __all__ = ["AssociationDBSqliteConfig",
            "SqliteDBConverter"]
 
 
-
-def make_minimal_dia_object_schema(filter_names=[]):
-    """Define and create the minimal schema required for a DIAObject.
-
-    Parameters
-    ----------
-    filter_names : `list` of `str`s
-        Names of the filters expect and compute means for.
-
-    Return
-    ------
-    schema : `lsst.afw.table.Schema`
-        Minimal schema for DIAObjects.
-    """
-    schema = afwTable.SourceTable.makeMinimalSchema()
-    # For the MVP/S we currently only care about the position though
-    # in the future we will add summary computations for fluxes etc.
-    # as well as their errors.
-
-    # In the future we would like to store a covariance of the coordinate.
-    # This functionality is not defined in currently in the stack, so we will
-    # hold off until it is implemented. This is to be addressed in DM-7101.
-    schema.addField("pixelId", type='L')
-    schema.addField("nDiaSources", type='L')
-    for filter_name in filter_names:
-        schema.addField("psFluxMean_%s" % filter_name, type='D')
-        schema.addField("psFluxMeanErr_%s" % filter_name, type='D')
-        schema.addField("psFluxSigma_%s" % filter_name, type='D')
-    return schema
-
-
-def make_minimal_dia_source_schema():
-    """ Define and create the minimal schema required for a DIASource.
-
-    Return
-    ------
-    schema : `lsst.afw.table.Schema`
-        Minimal schema for DIAObjects.
-    """
-    schema = afwTable.SourceTable.makeMinimalSchema()
-    schema.addField("diaObjectId", type='L')
-    schema.addField("ccdVisitId", type='L')
-    schema.addField("psFlux", type='D')
-    schema.addField("psFluxErr", type='D')
-    schema.addField("filterName", type='String', size=10)
-    schema.addField("filterId", type='L')
-    return schema
-
-
-def ccdVisitSchema():
-    """Define the schema for the CcdVisit table.
-
-    Return
-    ------
-    ccdVisitNames: `collections.OrderedDict`
-       Names of columns in the ccdVisit table.
-    """
-    return oDict([("ccdVisitId", "INTEGER PRIMARY KEY"),
-                  ("ccdNum", "INTEGER"),
-                  ("filterName", "TEXT"),
-                  ("ra", "REAL"),
-                  ("decl", "REAL"),
-                  ("expTime", "REAL"),
-                  ("expMidptMJD", "REAL"),
-                  ("fluxZeroPoint", "REAL"),
-                  ("fluxZeroPointErr", "REAL")])
->>>>>>> 232ece2... Modify call signatures for consitency across store commands.
-
-
 class SqliteDBConverter(object):
     """Class for defining conversions to and from an sqlite database and afw
     SourceRecord objects.
@@ -195,7 +126,14 @@ class SqliteDBConverter(object):
 
         for sub_schema, value in zip(self._schema, db_row):
             if value is None:
-                value = np.nan
+                if sub_schema.getField().getTypeString() == 'L':
+                    value = -1
+                elif sub_schema.getField().getTypeString() == 'L':
+                    value = np.nan
+                elif sub_schema.getField().getTypeString() == 'String':
+                    value = 'NULL'
+                else:
+                    continue
             if sub_schema.getField().getTypeString() == 'Angle':
                 output_source_record.set(
                     sub_schema.getKey(), value * afwGeom.degrees)
@@ -224,12 +162,14 @@ class SqliteDBConverter(object):
             field_name = sub_schema.getField().getName()
             if field_name in overwrite_dict:
                 values.append(overwrite_dict[field_name])
-            else:
+            elif field_name in source_record.getSchema().getNames():
                 if sub_schema.getField().getTypeString() == 'Angle':
                     values.append(
                         source_record.get(sub_schema.getKey()).asDegrees())
                 else:
                     values.append(source_record.get(sub_schema.getKey()))
+            else:
+                values.append(None)
         return values
 
 
@@ -372,7 +312,8 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
     @pipeBase.timeMethod
     def load_dia_sources(self, dia_obj_ids):
-        """Retrieve all DIASources associated with this DIAObject id.
+        """Retrieve all DIASources associated with this collection of DIAObject
+        ids.
 
         Parameters
         ----------
@@ -410,6 +351,9 @@ class AssociationDBSqliteTask(pipeBase.Task):
         compute_spatial_index : `bool`
             If True, compute the spatial search indices using the
             indexer specified at class instantiation.
+        exposure: `lsst.afw.image.Exposure` (optional)
+            CcdExposure associated with these DIAObjects being inserted.
+            Inserts the CcdVisitInfo for this exposure in the CcdVisitTable.
         """
         if compute_spatial_index:
             for dia_object in dia_objects:
@@ -421,21 +365,6 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         if exposure is not None:
             self.store_ccd_visit_info(exposure)
-
-    def store_ccd_visit_info(self, exposure):
-        """Store information describing the exposure for this ccd, visit.
-
-        Parameters
-        ---------
-        exposure : `lsst.afw.image.Exposure`
-            Exposure to store information from.
-        """
-
-        values = self._get_ccd_visit_info_from_exposure(exposure)
-        self._db_cursor.execute(
-            "INSERT OR REPLACE INTO CcdVisit VALUES (%s)" %
-            ",".join("?" for idx in range(len(values))),
-            [values[key] for key in ccdVisitSchema().keys()])
 
     def compute_indexer_id(self, sphere_point):
         """Compute the pixel index of the given point.
