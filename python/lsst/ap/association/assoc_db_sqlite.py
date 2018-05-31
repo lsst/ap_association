@@ -27,7 +27,6 @@ ap_pipe/ap_verify.
 
 from __future__ import absolute_import, division, print_function
 
-from collections import OrderedDict as oDict
 import numpy as np
 import sqlite3
 
@@ -35,81 +34,18 @@ from lsst.meas.algorithms.indexerRegistry import IndexerRegistry
 import lsst.afw.table as afwTable
 import lsst.afw.geom as afwGeom
 import lsst.pex.config as pexConfig
-from lsst.pex.exceptions import InvalidParameterError
 import lsst.pipe.base as pipeBase
+from .assoc_afw_utils import \
+    make_minimal_dia_object_schema, \
+    make_minimal_dia_source_schema, \
+    getCcdVisitSchemaSql, \
+    add_dia_source_aliases_to_catalog, \
+    get_ccd_visit_info_from_exposure, \
+    make_overwrite_dict
 
 __all__ = ["AssociationDBSqliteConfig",
            "AssociationDBSqliteTask",
-           "SqliteDBConverter",
-           "make_minimal_dia_object_schema",
-           "make_minimal_dia_source_schema"]
-
-
-def make_minimal_dia_object_schema(filter_names=[]):
-    """Define and create the minimal schema required for a DIAObject.
-
-    Parameters
-    ----------
-    filter_names : `list` of `str`s
-        Names of the filters expect and compute means for.
-
-    Return
-    ------
-    schema : `lsst.afw.table.Schema`
-        Minimal schema for DIAObjects.
-    """
-    schema = afwTable.SourceTable.makeMinimalSchema()
-    # For the MVP/S we currently only care about the position though
-    # in the future we will add summary computations for fluxes etc.
-    # as well as their errors.
-
-    # In the future we would like to store a covariance of the coordinate.
-    # This functionality is not defined in currently in the stack, so we will
-    # hold off until it is implemented. This is to be addressed in DM-7101.
-    schema.addField("indexer_id", type='L')
-    schema.addField("n_dia_sources", type='L')
-    for filter_name in filter_names:
-        schema.addField("psFluxMean_%s" % filter_name, type='D')
-        schema.addField("psFluxMeanErr_%s" % filter_name, type='D')
-        schema.addField("psFluxSigma_%s" % filter_name, type='D')
-    return schema
-
-
-def make_minimal_dia_source_schema():
-    """ Define and create the minimal schema required for a DIASource.
-
-    Return
-    ------
-    schema : `lsst.afw.table.Schema`
-        Minimal schema for DIAObjects.
-    """
-    schema = afwTable.SourceTable.makeMinimalSchema()
-    schema.addField("diaObjectId", type='L')
-    schema.addField("ccdVisitId", type='L')
-    schema.addField("psFlux", type='D')
-    schema.addField("psFluxErr", type='D')
-    schema.addField("filterName", type='String', size=10)
-    schema.addField("filterId", type='L')
-    return schema
-
-
-def ccdVisitSchema():
-    """Define the schema for the CcdVisit table.
-
-    Return
-    ------
-    ccdVisitNames: `collections.OrderedDict`
-       Names of columns in the ccdVisit table.
-    """
-    return oDict([("ccdVisitId", "INTEGER PRIMARY KEY"),
-                  ("ccdNum", "INTEGER"),
-                  ("filterName", "TEXT"),
-                  ("ra", "REAL"),
-                  ("decl", "REAL"),
-                  ("expTime", "REAL"),
-                  ("expMidptMJD", "REAL"),
-                  ("fluxZeroPoint", "REAL"),
-                  ("fluxZeroPointErr", "REAL")])
+           "SqliteDBConverter"]
 
 
 class SqliteDBConverter(object):
@@ -305,32 +241,14 @@ class AssociationDBSqliteTask(pipeBase.Task):
         # If this database currently contains any tables exit and do not
         # create tables.
         if db_tables:
-            self._db_cursor.execute("SELECT * FROM FilterMap")
-            filter_rows = self._db_cursor.fetchall()
-            for stored_row, filter_name in zip(filter_rows,
-                                               self.config.filter_names):
-                if stored_row[-1] != filter_name:
-                    raise InvalidParameterError(
-                        "Mismatch in filters names stored in DB and "
-                        "filters requested in AssociationDBSqliteConfig.")
             return False
         else:
-            # Create a mapper for filter string name to an id number.
-            self._db_cursor.execute("CREATE TABLE FilterMap ("
-                                    "filterId INTEGER PRIMARY KEY, "
-                                    "filterName TEXT)")
-            self._db_cursor.executemany(
-                "INSERT OR REPLACE INTO FilterMap VALUES (?, ?)",
-                [[idx, filter_name]
-                 for idx, filter_name in enumerate(self.config.filter_names)])
-            self._commit()
-
             # Create tables to store the individual DIAObjects and DIASources
             self._db_cursor.execute(
                 self._dia_object_converter.make_table_from_afw_schema(
                     "dia_objects"))
             self._db_cursor.execute(
-                "CREATE INDEX indexer_id_index ON dia_objects(indexer_id)")
+                "CREATE INDEX indexer_id_index ON dia_objects(pixelId)")
             self._commit()
             self._db_cursor.execute(
                 self._dia_source_converter.make_table_from_afw_schema(
@@ -339,7 +257,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
                 "CREATE INDEX diaObjectId_index ON dia_sources(diaObjectId)")
             self._commit()
 
-            ccd_visit_schema = ccdVisitSchema()
+            ccd_visit_schema = getCcdVisitSchemaSql()
             table_schema = ",".join(
                 "%s %s" % (key, ccd_visit_schema[key])
                 for key in ccd_visit_schema.keys())
@@ -424,7 +342,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         if compute_spatial_index:
             for dia_object in dia_objects:
                 sphPoint = dia_object.getCoord()
-                dia_object.set('indexer_id',
+                dia_object.set('pixelId',
                                self.compute_indexer_id(sphPoint))
         self._store_catalog(dia_objects, self._dia_object_converter, None)
         self._commit()
@@ -477,50 +395,11 @@ class AssociationDBSqliteTask(pipeBase.Task):
             Exposure to store information from.
         """
 
-        values = self._get_ccd_visit_info_from_exposure(exposure)
+        values = get_ccd_visit_info_from_exposure(exposure)
         self._db_cursor.execute(
             "INSERT OR REPLACE INTO CcdVisit VALUES (%s)" %
             ",".join("?" for idx in range(len(values))),
-            [values[key] for key in ccdVisitSchema().keys()])
-
-    def _get_ccd_visit_info_from_exposure(self, exposure):
-        """
-        Extract info on the ccd and visit from the exposure to store in the
-        DB.
-
-        Paramters
-        ---------
-        exposure : `lsst.afw.image.Exposure`
-            Exposure to store information from.
-
-        Returns
-        -------
-        values : `dict` of ``values``
-            List values representing info taken from the exposure.
-        """
-        visit_info = exposure.getInfo().getVisitInfo()
-        sphPoint = exposure.getWcs().getSkyOrigin()
-        flux0, flux0_err = exposure.getCalib().getFluxMag0()
-        # Values list is:
-        # [CcdVisitId ``int``,
-        #  ccdNum ``int``,
-        #  filterName ``str``,
-        #  RA WCS center ``degrees``,
-        #  DEC WCS center ``degrees``,
-        #  exposure time ``seconds``,
-        #  dateTimeMJD ``seconds``,
-        #  flux zero point ``counts``,
-        #  flux zero point error ``counts``]
-        values = {'ccdVisitId': visit_info.getExposureId(),
-                  'ccdNum': exposure.getDetector().getId(),
-                  'filterName': exposure.getFilter().getName(),
-                  'ra': sphPoint.getRa().asDegrees(),
-                  'decl': sphPoint.getDec().asDegrees(),
-                  'expTime': visit_info.getExposureTime(),
-                  'expMidptMJD': visit_info.getDate().nsecs() * 10 ** -9,
-                  'fluxZeroPoint': flux0,
-                  'fluxZeroPointErr': flux0_err}
-        return values
+            [values[key] for key in getCcdVisitSchemaSql().keys()])
 
     def _get_dia_object_catalog(self, indexer_indices, expMd=None):
         """Retrieve the DIAObjects from the database whose indexer indices
@@ -575,7 +454,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         """
         self._db_cursor.execute(
             "CREATE TEMPORARY TABLE tmp_indexer_indices "
-            "(indexer_id INTEGER PRIMARY KEY)")
+            "(pixelId INTEGER PRIMARY KEY)")
 
         self._db_cursor.executemany(
             "INSERT OR REPLACE INTO tmp_indexer_indices VALUES (?)",
@@ -584,7 +463,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         self._db_cursor.execute(
             "SELECT o.* FROM dia_objects AS o "
             "INNER JOIN tmp_indexer_indices AS i "
-            "ON o.indexer_id = i.indexer_id")
+            "ON o.pixelId = i.pixelId")
 
         output_rows = self._db_cursor.fetchall()
 
@@ -675,39 +554,24 @@ class AssociationDBSqliteTask(pipeBase.Task):
         """
         values = []
 
-        if source_catalog.getSchema() != converter.schema and \
-           converter.table_name == 'dia_sources':
+        if converter.table_name == 'dia_sources':
             # Create aliases to appropriate flux fields if they exist.
-            schema_names = source_catalog.getSchema().getNames()
-            if 'base_PsfFlux_flux' in schema_names and \
-               'base_PsfFlux_fluxSigma' in schema_names and \
-               'psFlux' not in schema_names and \
-               'psFluxErr' not in schema_names:
-                    alias_map = source_catalog.getSchema().getAliasMap()
-                    alias_map.set('psFlux', 'base_PsfFlux_flux')
-                    alias_map.set('psFluxErr', 'base_PsfFlux_fluxSigma')
+            add_dia_source_aliases_to_catalog(source_catalog)
 
-        if exposure is not None:
-            ccdVisitId = exposure.getInfo().getVisitInfo().getExposureId()
-            flux0, flux0_err = exposure.getCalib().getFluxMag0()
-            filter_name = exposure.getFilter().getName()
-            filter_id = self.get_db_filter_id_from_name(filter_name)
+        if exposure is None:
+            exp_dict = None
+        else:
+            exp_dict = get_ccd_visit_info_from_exposure(exposure)
 
         for src_idx, source_record in enumerate(source_catalog):
-            overwrite_dict = {}
-            if obj_ids is not None:
-                overwrite_dict['diaObjectId'] = int(obj_ids[src_idx])
-            if exposure is not None:
-                psFlux = source_record['psFlux']
-                psFluxErr = source_record['psFluxErr']
+            if obj_ids is None:
+                obj_id = None
+            else:
+                obj_id = obj_ids[src_idx]
 
-                overwrite_dict['psFlux'] = psFlux / flux0
-                overwrite_dict['psFluxErr'] = np.sqrt(
-                    (psFluxErr / flux0) ** 2 +
-                    (psFlux * flux0_err / flux0 ** 2) ** 2)
-                overwrite_dict['ccdVisitId'] = ccdVisitId
-                overwrite_dict['filterName'] = filter_name
-                overwrite_dict['filterId'] = filter_id
+            overwrite_dict = make_overwrite_dict(source_record,
+                                                 obj_id,
+                                                 exp_dict)
 
             values.append(converter.source_record_to_value_list(
                 source_record, overwrite_dict))
@@ -717,54 +581,6 @@ class AssociationDBSqliteTask(pipeBase.Task):
         self._db_cursor.executemany(
             "INSERT OR REPLACE INTO %s VALUES (%s)" %
             (converter.table_name, insert_string), values)
-
-    def get_db_filter_id_from_name(self, filter_name):
-        """Retrieve the id of a band pass filter give its string name.
-
-        This name/id mapping may be different that those in the obs package
-        stored in the associated repo.
-
-        Parameters
-        ----------
-        filter_name : `str`
-            String name of the filter band pass to get the id of.
-
-        Returns
-        -------
-        filterId : `int`
-            Integer id stored in this db.
-        """
-        self._db_cursor.execute(
-            "SELECT filterId FROM FilterMap WHERE filterName = ?", (filter_name,))
-        row = self._db_cursor.fetchone()
-        if row is None:
-            raise InvalidParameterError(
-                "Requested filter name not available in this DB.")
-        return row[0]
-
-    def get_db_filter_name_from_id(self, filter_id):
-        """Retrieve the name of a band pass filter given its id.
-
-        This name/id mapping may be different that those in the obs package
-        stored in the associated repo.
-
-        Parameters
-        ----------
-        filter_id : `int`
-            String name of the filter band pass to get the id of.
-
-        Returns
-        -------
-        filterName : `str`
-            String filter named stored in this db.
-        """
-        self._db_cursor.execute(
-            "SELECT filterName FROM FilterMap WHERE filterId = ?", (filter_id,))
-        row = self._db_cursor.fetchone()
-        if row is None:
-            raise InvalidParameterError(
-                "Requested filter name not available in this DB.")
-        return row[0]
 
     def get_dia_object_schema(self):
         """Retrieve the Schema of the DIAObjects in this database.

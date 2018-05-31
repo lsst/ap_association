@@ -29,13 +29,14 @@ from lsst.ap.association import \
     AssociationDBSqliteTask, \
     AssociationDBSqliteConfig, \
     make_minimal_dia_source_schema
+from lsst.ap.association.assoc_afw_utils import \
+    get_ccd_visit_info_from_exposure
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.image as afwImage
 import lsst.afw.image.utils as afwImageUtils
 import lsst.afw.geom as afwGeom
 import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
-from lsst.pex.exceptions import InvalidParameterError
 import lsst.pipe.base as pipeBase
 import lsst.utils.tests
 
@@ -84,7 +85,7 @@ def create_test_points(point_locs_deg,
                 np.random.rand() * 360 * afwGeom.degrees,
                 np.random.rand() * scatter_arcsec * afwGeom.arcseconds)
         if indexer_ids is not None:
-            src['indexer_id'] = indexer_ids[src_idx]
+            src['pixelId'] = indexer_ids[src_idx]
         if associated_ids is not None:
             src['diaObjectId'] = associated_ids[src_idx]
         src.setCoord(coord)
@@ -227,7 +228,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         # Loop over the 9 output_dia_objects
         for dia_object, created_object in zip(output_dia_objects, dia_objects):
             # HTM trixel for this CCD at level 7.
-            created_object["indexer_id"] = 225823
+            created_object["pixelId"] = 225823
             self._compare_source_records(dia_object, created_object)
 
     def test_store_dia_objects_no_indexer_id_update(self):
@@ -290,7 +291,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         self.assertEqual(len(output_dia_objects), len(dia_objects))
         for dia_object, created_object in zip(output_dia_objects, dia_objects):
             # HTM trixel for this CCD at level 7.
-            created_object["indexer_id"] = 225823
+            created_object["pixelId"] = 225823
             self._compare_source_records(dia_object, created_object)
 
     def test_indexer_ids(self):
@@ -308,27 +309,12 @@ class TestAssociationDBSqlite(unittest.TestCase):
             self.assertEqual(self.assoc_db.compute_indexer_id(obj.getCoord()),
                              indexer_id)
 
-    def test_get_db_filter_id_and_name(self):
-        """Test that the filter name mapper to id is working.
-        """
-        for filter_name, filter_id in zip(self.assoc_db.config.filter_names,
-                                          range(len(self.assoc_db.config.filter_names))):
-            self.assertEqual(
-                self.assoc_db.get_db_filter_id_from_name(filter_name),
-                filter_id)
-            self.assertEqual(
-                self.assoc_db.get_db_filter_name_from_id(filter_id),
-                filter_name)
-        with self.assertRaises(InvalidParameterError):
-            self.assoc_db.get_db_filter_id_from_name("J")
-            self.assoc_db.get_db_filter_name_from_id(100)
-
     def test_store_ccd_visit_info(self):
         """Test storing and retrieving CcdVisit info.
         """
         self.assoc_db.store_ccd_visit_info(self.exposure)
         self.assoc_db._db_cursor.execute("SELECT * FROM CcdVisit")
-        stored_values = self.assoc_db._get_ccd_visit_info_from_exposure(
+        stored_values = get_ccd_visit_info_from_exposure(
             self.exposure)
         rows = self.assoc_db._db_cursor.fetchall()
         for row in rows:
