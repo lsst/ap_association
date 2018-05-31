@@ -48,6 +48,75 @@ __all__ = ["AssociationDBSqliteConfig",
            "SqliteDBConverter"]
 
 
+
+def make_minimal_dia_object_schema(filter_names=[]):
+    """Define and create the minimal schema required for a DIAObject.
+
+    Parameters
+    ----------
+    filter_names : `list` of `str`s
+        Names of the filters expect and compute means for.
+
+    Return
+    ------
+    schema : `lsst.afw.table.Schema`
+        Minimal schema for DIAObjects.
+    """
+    schema = afwTable.SourceTable.makeMinimalSchema()
+    # For the MVP/S we currently only care about the position though
+    # in the future we will add summary computations for fluxes etc.
+    # as well as their errors.
+
+    # In the future we would like to store a covariance of the coordinate.
+    # This functionality is not defined in currently in the stack, so we will
+    # hold off until it is implemented. This is to be addressed in DM-7101.
+    schema.addField("pixelId", type='L')
+    schema.addField("nDiaSources", type='L')
+    for filter_name in filter_names:
+        schema.addField("psFluxMean_%s" % filter_name, type='D')
+        schema.addField("psFluxMeanErr_%s" % filter_name, type='D')
+        schema.addField("psFluxSigma_%s" % filter_name, type='D')
+    return schema
+
+
+def make_minimal_dia_source_schema():
+    """ Define and create the minimal schema required for a DIASource.
+
+    Return
+    ------
+    schema : `lsst.afw.table.Schema`
+        Minimal schema for DIAObjects.
+    """
+    schema = afwTable.SourceTable.makeMinimalSchema()
+    schema.addField("diaObjectId", type='L')
+    schema.addField("ccdVisitId", type='L')
+    schema.addField("psFlux", type='D')
+    schema.addField("psFluxErr", type='D')
+    schema.addField("filterName", type='String', size=10)
+    schema.addField("filterId", type='L')
+    return schema
+
+
+def ccdVisitSchema():
+    """Define the schema for the CcdVisit table.
+
+    Return
+    ------
+    ccdVisitNames: `collections.OrderedDict`
+       Names of columns in the ccdVisit table.
+    """
+    return oDict([("ccdVisitId", "INTEGER PRIMARY KEY"),
+                  ("ccdNum", "INTEGER"),
+                  ("filterName", "TEXT"),
+                  ("ra", "REAL"),
+                  ("decl", "REAL"),
+                  ("expTime", "REAL"),
+                  ("expMidptMJD", "REAL"),
+                  ("fluxZeroPoint", "REAL"),
+                  ("fluxZeroPointErr", "REAL")])
+>>>>>>> 232ece2... Modify call signatures for consitency across store commands.
+
+
 class SqliteDBConverter(object):
     """Class for defining conversions to and from an sqlite database and afw
     SourceRecord objects.
@@ -328,7 +397,10 @@ class AssociationDBSqliteTask(pipeBase.Task):
         return output_dia_sources.copy(deep=True)
 
     @pipeBase.timeMethod
-    def store_dia_objects(self, dia_objects, compute_spatial_index=False):
+    def store_dia_objects(self,
+                          dia_objects,
+                          compute_spatial_index=False,
+                          exposure=None):
         """Store all DIAObjects in this SourceCatalog.
 
         Parameters
@@ -346,6 +418,24 @@ class AssociationDBSqliteTask(pipeBase.Task):
                                self.compute_indexer_id(sphPoint))
         self._store_catalog(dia_objects, self._dia_object_converter, None)
         self._commit()
+
+        if exposure is not None:
+            self.store_ccd_visit_info(exposure)
+
+    def store_ccd_visit_info(self, exposure):
+        """Store information describing the exposure for this ccd, visit.
+
+        Parameters
+        ---------
+        exposure : `lsst.afw.image.Exposure`
+            Exposure to store information from.
+        """
+
+        values = self._get_ccd_visit_info_from_exposure(exposure)
+        self._db_cursor.execute(
+            "INSERT OR REPLACE INTO CcdVisit VALUES (%s)" %
+            ",".join("?" for idx in range(len(values))),
+            [values[key] for key in ccdVisitSchema().keys()])
 
     def compute_indexer_id(self, sphere_point):
         """Compute the pixel index of the given point.
