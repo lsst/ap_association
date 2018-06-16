@@ -202,7 +202,7 @@ def convert_dia_source_to_asssoc_schema_and_calibrate(dia_sources,
     obj_ids:  array-like of `int`
         DIAObject ids to associate with the input DIASources. Overwrites
         the current value in diaObjectId column. If None the obj_id no action
-        is taken.
+        is taken. The array should be the same length as dia_sources.
     exposure : `lsst.afw.image.Exposure`
         Exposure to copy flux and filter information from.
     """

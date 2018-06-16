@@ -29,7 +29,7 @@ from lsst.ap.association import \
     AssociationDBSqliteTask, \
     AssociationDBSqliteConfig, \
     make_minimal_dia_source_schema
-from lsst.ap.association.assoc_afw_utils import \
+from lsst.ap.association.afwUtils import \
     get_ccd_visit_info_from_exposure
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.image as afwImage

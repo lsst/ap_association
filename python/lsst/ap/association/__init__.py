@@ -26,4 +26,4 @@ from __future__ import absolute_import, division, print_function
 from .version import *
 from .association import *
 from .assoc_db_sqlite import *
-from .assoc_afw_utils import *
+from .afwUtils import *

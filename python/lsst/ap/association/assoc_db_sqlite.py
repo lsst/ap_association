@@ -35,7 +35,7 @@ import lsst.afw.table as afwTable
 import lsst.afw.geom as afwGeom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
-from .assoc_afw_utils import \
+from .afwUtils import \
     make_minimal_dia_object_schema, \
     make_minimal_dia_source_schema, \
     getCcdVisitSchemaSql, \
