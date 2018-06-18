@@ -142,16 +142,16 @@ class TestAssociationTask(unittest.TestCase):
             if obj_idx == not_updated_idx:
                 # Test the DIAObject we expect to not be associated with any
                 # new DIASources.
-                self.assertEqual(dia_object['n_dia_sources'], 2)
+                self.assertEqual(dia_object['nDiaSources'], 2)
                 self.assertEqual(dia_object.getId(), obj_idx)
             elif updated_idx_start <= obj_idx < new_idx_start:
                 # Test that associating to the existing DIAObjects went
                 # as planned and test that the IDs of the newly associated
                 # DIASources is correct.
-                self.assertEqual(dia_object['n_dia_sources'], 3)
+                self.assertEqual(dia_object['nDiaSources'], 3)
                 self.assertEqual(dia_object.getId(), obj_idx)
             else:
-                self.assertEqual(dia_object['n_dia_sources'], 1)
+                self.assertEqual(dia_object['nDiaSources'], 1)
                 self.assertEqual(dia_object.getId(), obj_idx + 4 + 5)
 
     def test_run_no_existing_objects(self):
@@ -162,7 +162,7 @@ class TestAssociationTask(unittest.TestCase):
         self.assertEqual(len(dia_objects),
                          total_expected_dia_objects)
         for obj_idx, output_dia_object in enumerate(dia_objects):
-            self.assertEqual(output_dia_object['n_dia_sources'], 1)
+            self.assertEqual(output_dia_object['nDiaSources'], 1)
             self.assertEqual(output_dia_object.getId(),
                              obj_idx + 10)
             self.assertEqual(output_dia_object.getId(), obj_idx + 10)
@@ -241,7 +241,7 @@ class TestAssociationTask(unittest.TestCase):
             scatter_arcsec=-1,)
         # Set the DIAObject fluxes and number of associated sources.
         for dia_object in dia_objects:
-            dia_object['n_dia_sources'] = 2
+            dia_object['nDiaSources'] = 2
             for filter_name in self.filter_names:
                 dia_object['psFluxMean_%s' % filter_name] = 1
                 dia_object['psFluxMeanErr_%s' % filter_name] = 1
@@ -267,8 +267,10 @@ class TestAssociationTask(unittest.TestCase):
                 (10000 * self.flux0_err / self.flux0 ** 2) ** 2)
             if src_idx < n_objects:
                 dia_source["filterName"] = 'g'
+                dia_source["filterId"] = 1
             else:
                 dia_source["filterName"] = 'r'
+                dia_source["filterId"] = 2
         assoc_db.store_dia_sources(dia_sources)
         assoc_db.close()
 
@@ -290,6 +292,8 @@ class TestAssociationTask(unittest.TestCase):
         for dia_source in dia_sources:
             dia_source["psFlux"] = 20000
             dia_source["psFluxErr"] = 100
+            dia_source["filterName"] = "g"
+            dia_source["filterId"] = 1
 
         # Store them in the DB containing pre-existing objects.
         assoc_db_config = AssociationDBSqliteConfig()
@@ -314,33 +318,33 @@ class TestAssociationTask(unittest.TestCase):
         assoc_task = AssociationTask(config=assoc_config)
         assoc_task.update_dia_objects(loaded_dia_objects,
                                       [1, 2, 3, 4, 14],
-                                      self.exposure.getFilter().getName())
+                                      self.exposure)
 
         # Retrieve the DIAObjects from the DB.
         output_dia_objects = assoc_task.level1_db.load_dia_objects(self.exposure)
 
         # Data and column names to test.
         test_column_names = [
-            'id', 'n_dia_sources',
+            'id', 'nDiaSources',
             'psFluxMean_g', 'psFluxMeanErr_g', 'psFluxSigma_g',
             'psFluxMean_r', 'psFluxMeanErr_r', 'psFluxSigma_r']
         test_dia_object_values = [
-            {'id': 0, 'n_dia_sources': 2,
+            {'id': 0, 'nDiaSources': 2,
              'psFluxMean_g': 1., 'psFluxMeanErr_g': 1., 'psFluxSigma_g': 1.,
              'psFluxMean_r': 1., 'psFluxMeanErr_r': 1., 'psFluxSigma_r': 1.},
-            {'id': 1, 'n_dia_sources': 3,
-             'psFluxMean_g': 4. / 3, 'psFluxMeanErr_g': 0.19245009, 'psFluxSigma_g': 0.57735027,
+            {'id': 1, 'nDiaSources': 3,
+             'psFluxMean_g': 1.5, 'psFluxMeanErr_g': 0.23570226, 'psFluxSigma_g': 0.70710678,
              'psFluxMean_r': 1., 'psFluxMeanErr_r': 1., 'psFluxSigma_r': 1.},
-            {'id': 2, 'n_dia_sources': 3,
-             'psFluxMean_g': 4. / 3, 'psFluxMeanErr_g': 0.19245009, 'psFluxSigma_g': 0.57735027,
+            {'id': 2, 'nDiaSources': 3,
+             'psFluxMean_g': 1.5, 'psFluxMeanErr_g': 0.23570226, 'psFluxSigma_g': 0.70710678,
              'psFluxMean_r': 1., 'psFluxMeanErr_r': 1., 'psFluxSigma_r': 1.},
-            {'id': 3, 'n_dia_sources': 3,
-             'psFluxMean_g': 4. / 3, 'psFluxMeanErr_g': 0.19245009, 'psFluxSigma_g': 0.57735027,
+            {'id': 3, 'nDiaSources': 3,
+             'psFluxMean_g': 1.5, 'psFluxMeanErr_g': 0.23570226, 'psFluxSigma_g': 0.70710678,
              'psFluxMean_r': 1., 'psFluxMeanErr_r': 1., 'psFluxSigma_r': 1.},
-            {'id': 4, 'n_dia_sources': 3,
-             'psFluxMean_g': 4. / 3, 'psFluxMeanErr_g': 0.19245009, 'psFluxSigma_g': 0.57735027,
+            {'id': 4, 'nDiaSources': 3,
+             'psFluxMean_g': 1.5, 'psFluxMeanErr_g': 0.23570226, 'psFluxSigma_g': 0.70710678,
              'psFluxMean_r': 1., 'psFluxMeanErr_r': 1., 'psFluxSigma_r': 1.},
-            {'id': 14, 'n_dia_sources': 1,
+            {'id': 14, 'nDiaSources': 1,
              'psFluxMean_g': 2., 'psFluxMeanErr_g': np.nan, 'psFluxSigma_g': np.nan,
              'psFluxMean_r': np.nan, 'psFluxMeanErr_r': np.nan, 'psFluxSigma_r': np.nan}
         ]
@@ -352,7 +356,7 @@ class TestAssociationTask(unittest.TestCase):
             for test_name in test_column_names:
                 if np.isnan(values[test_name]):
                     self.assertTrue(np.isnan(dia_object[test_name]))
-                elif test_name == 'id' or test_name == 'n_dia_sources':
+                elif test_name == 'id' or test_name == 'nDiaSources':
                     self.assertEqual(dia_object[test_name],
                                      values[test_name])
                 else:

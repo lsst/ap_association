@@ -150,7 +150,7 @@ class AssociationTask(pipeBase.Task):
         # unassociated sources.
         self.update_dia_objects(dia_objects,
                                 updated_obj_ids,
-                                exposure.getFilter().getName())
+                                exposure)
 
     @pipeBase.timeMethod
     def associate_sources(self, dia_objects, dia_sources):
@@ -181,7 +181,7 @@ class AssociationTask(pipeBase.Task):
         return match_result.associated_dia_object_ids
 
     @pipeBase.timeMethod
-    def update_dia_objects(self, dia_objects, updated_obj_ids, filter_name):
+    def update_dia_objects(self, dia_objects, updated_obj_ids, exposure):
         """Update select dia_objects currently stored within the database or
         create new ones.
 
@@ -198,7 +198,8 @@ class AssociationTask(pipeBase.Task):
         updated_dia_objects = afwTable.SourceCatalog(
             self.level1_db.get_dia_object_schema())
 
-        filter_id = self.level1_db.get_db_filter_id_from_name(filter_name)
+        filter_name = exposure.getFilter().getName()
+        filter_id = exposure.getFilter().getId()
         for obj_id in updated_obj_ids:
             dia_object = dia_objects.find(obj_id)
             if dia_object is None:
@@ -209,11 +210,11 @@ class AssociationTask(pipeBase.Task):
 
             dia_sources = self.level1_db.load_dia_sources([obj_id])
 
-            dia_object.set('n_dia_sources', len(dia_sources))
+            dia_object.set('nDiaSources', len(dia_sources))
 
             ave_coord = _set_mean_position(dia_object, dia_sources)
             indexer_id = self.level1_db.compute_indexer_id(ave_coord)
-            dia_object.set('indexer_id', indexer_id)
+            dia_object.set('pixelId', indexer_id)
             _set_flux_stats(dia_object,
                             dia_sources,
                             filter_name,
