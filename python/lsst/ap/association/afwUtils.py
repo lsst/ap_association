@@ -22,8 +22,6 @@
 
 from collections import OrderedDict as oDict
 
-import numpy as np
-
 import lsst.afw.table as afwTable
 import lsst.afw.image as afwImage
 
@@ -91,7 +89,7 @@ def make_minimal_dia_source_schema():
     schema = afwTable.SourceTable.makeMinimalSchema()
     schema.addField("diaObjectId", type='L',
                     doc='Unique identifier of the DIAObject this source is '
-                         'associated to.')
+                        'associated to.')
     schema.addField("ccdVisitId", type='L',
                     doc='Id of the exposure and ccd this object was detected '
                         'in.')
@@ -144,6 +142,8 @@ def get_ccd_visit_info_from_exposure(exposure):
     """
     visit_info = exposure.getInfo().getVisitInfo()
     sphPoint = exposure.getWcs().getSkyOrigin()
+    # TODO: Calib is going away and being replaced with photoCalib as in
+    # DM-10153.
     flux0, flux0_err = exposure.getCalib().getFluxMag0()
     filter_obj = exposure.getFilter()
     # Values list is:

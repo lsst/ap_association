@@ -213,6 +213,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         self._dia_source_converter = SqliteDBConverter(
             make_minimal_dia_source_schema(),
             "dia_sources")
+        self._ccd_visit_schema = getCcdVisitSchemaSql()
 
     def _commit(self):
         """Save changes to the sqlite database.
@@ -257,10 +258,9 @@ class AssociationDBSqliteTask(pipeBase.Task):
                 "CREATE INDEX diaObjectId_index ON dia_sources(diaObjectId)")
             self._commit()
 
-            ccd_visit_schema = getCcdVisitSchemaSql()
             table_schema = ",".join(
-                "%s %s" % (key, ccd_visit_schema[key])
-                for key in ccd_visit_schema.keys())
+                "%s %s" % (key, self._ccd_visit_schema[key])
+                for key in self._ccd_visit_schema.keys())
             self._db_cursor.execute(
                 "CREATE TABLE CcdVisit (%s)" % table_schema)
             self._commit()
@@ -398,8 +398,8 @@ class AssociationDBSqliteTask(pipeBase.Task):
         values = get_ccd_visit_info_from_exposure(exposure)
         self._db_cursor.execute(
             "INSERT OR REPLACE INTO CcdVisit VALUES (%s)" %
-            ",".join("?" for idx in range(len(values))),
-            [values[key] for key in getCcdVisitSchemaSql().keys()])
+            ",".join("?" for idx in range(len(self._ccd_visit_schema))),
+            [values[key] for key in self._ccd_visit_schema.keys()])
 
     def _get_dia_object_catalog(self, indexer_indices, expMd=None):
         """Retrieve the DIAObjects from the database whose indexer indices
