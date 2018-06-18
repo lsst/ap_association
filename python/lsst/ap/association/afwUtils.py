@@ -25,6 +25,7 @@ from collections import OrderedDict as oDict
 import numpy as np
 
 import lsst.afw.table as afwTable
+import lsst.afw.image as afwImage
 
 
 """Defines afw schemas and conversions for use in ap_association tasks.
@@ -107,7 +108,7 @@ def make_minimal_dia_source_schema():
     return schema
 
 
-def getgetCcdVisitSchemaSqlSchemaSql():
+def getCcdVisitSchemaSql():
     """Define the schema for the CcdVisit table.
 
     Return
@@ -164,7 +165,9 @@ def get_ccd_visit_info_from_exposure(exposure):
               'expTime': visit_info.getExposureTime(),
               'expMidptMJD': visit_info.getDate().nsecs() * 10 ** -9,
               'fluxZeroPoint': flux0,
-              'fluxZeroPointErr': flux0_err}
+              'fluxZeroPointErr': flux0_err,
+              'photoCalib': afwImage.PhotoCalib(1 / flux0,
+                                                flux0_err / flux0 ** 2)}
     return values
 
 
@@ -259,11 +262,9 @@ def make_overwrite_dict(source_record, obj_id=None, exp_dict=None):
         psFlux = source_record['psFlux']
         psFluxErr = source_record['psFluxErr']
 
-        overwrite_dict['psFlux'] = psFlux / exp_dict['fluxZeroPoint']
-        overwrite_dict['psFluxErr'] = np.sqrt(
-            (psFluxErr / exp_dict['fluxZeroPoint']) ** 2 +
-            (psFlux * exp_dict['fluxZeroPointErr'] /
-             exp_dict['fluxZeroPoint'] ** 2) ** 2)
+        meas = exp_dict['photoCalib'].instFluxToMaggies(psFlux, psFluxErr)
+        overwrite_dict['psFlux'] = meas.value
+        overwrite_dict['psFluxErr'] = meas.err
         overwrite_dict['ccdVisitId'] = exp_dict['ccdVisitId']
         overwrite_dict['filterName'] = exp_dict['filterName']
         overwrite_dict['filterId'] = exp_dict['filterId']
