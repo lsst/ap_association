@@ -19,14 +19,6 @@
 # the GNU General Public License along with this program.  If not,
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
-
-from collections import OrderedDict as oDict
-
-import lsst.afw.table as afwTable
-import lsst.afw.image as afwImage
-from lsst.daf.base import DateTime
-
-
 """Defines afw schemas and conversions for use in ap_association tasks.
 
 Until a more finalized interface between the prompt products database (PPD) can
@@ -35,10 +27,15 @@ be established, we put many utility functions for converting `lsst.afw.table` an
 different catalogs and the DB.
 """
 
-
 __all__ = ["make_minimal_dia_object_schema",
            "make_minimal_dia_source_schema",
            "getCcdVisitSchemaSql"]
+
+from collections import OrderedDict as oDict
+
+import lsst.afw.table as afwTable
+import lsst.afw.image as afwImage
+from lsst.daf.base import DateTime
 
 
 def make_minimal_dia_object_schema(filter_names=None):

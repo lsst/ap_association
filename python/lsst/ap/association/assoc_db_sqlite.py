@@ -25,9 +25,10 @@ DIASources. This class is mainly for testing purposes in the context of
 ap_pipe/ap_verify.
 """
 
-from __future__ import absolute_import, division, print_function
+__all__ = ["AssociationDBSqliteConfig",
+           "AssociationDBSqliteTask",
+           "SqliteDBConverter"]
 
-import numpy as np
 import sqlite3
 
 from lsst.meas.algorithms.indexerRegistry import IndexerRegistry
@@ -42,10 +43,6 @@ from .afwUtils import \
     add_dia_source_aliases_to_catalog, \
     get_ccd_visit_info_from_exposure, \
     make_overwrite_dict
-
-__all__ = ["AssociationDBSqliteConfig",
-           "AssociationDBSqliteTask",
-           "SqliteDBConverter"]
 
 
 class SqliteDBConverter(object):
@@ -128,8 +125,6 @@ class SqliteDBConverter(object):
             if value is None:
                 if sub_schema.getField().getTypeString() == 'L':
                     value = -1
-                elif sub_schema.getField().getTypeString() == 'L':
-                    value = np.nan
                 elif sub_schema.getField().getTypeString() == 'String':
                     value = 'NULL'
                 else:
@@ -211,8 +206,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
     def __init__(self, **kwargs):
 
         pipeBase.Task.__init__(self, **kwargs)
-        self.indexer = IndexerRegistry[self.config.indexer.name](
-            self.config.indexer.active)
+        self.makeSubtask("indexer")
         self._db_connection = sqlite3.connect(self.config.db_name)
         self._db_cursor = self._db_connection.cursor()
 

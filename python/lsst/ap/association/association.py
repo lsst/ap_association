@@ -23,7 +23,7 @@
 """A simple implementation of source association task for ap_verify.
 """
 
-from __future__ import absolute_import, division, print_function
+__all__ = ["AssociationConfig", "AssociationTask"]
 
 import numpy as np
 from scipy.spatial import cKDTree
@@ -33,8 +33,6 @@ import lsst.pipe.base as pipeBase
 import lsst.afw.geom as afwGeom
 import lsst.afw.table as afwTable
 from .assoc_db_sqlite import AssociationDBSqliteTask
-
-__all__ = ["AssociationConfig", "AssociationTask"]
 
 
 def _set_mean_position(dia_object_record, dia_sources):
@@ -190,7 +188,7 @@ class AssociationTask(pipeBase.Task):
             from.
         updated_obj_ids : array-like of `int`s
             Ids of the dia_objects that should be updated.
-        exposure : `lsst.afw.image`
+        exposure : `lsst.afw.image.Exposure`
             Input exposure representing the region of the sky the dia_sources
             were detected on. Should contain both the solved WCS and a bounding
             box of the ccd.

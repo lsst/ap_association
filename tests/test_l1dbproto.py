@@ -22,7 +22,9 @@
 
 from __future__ import absolute_import, division, print_function
 
+import os
 import numpy as np
+import tempfile
 import unittest
 
 from lsst.ap.association import \
@@ -106,7 +108,9 @@ class TestAssociationDBSqlite(unittest.TestCase):
         afwImageUtils.defineFilter('z', lambdaEff=1170, alias="z.MP9801")
         afwImageUtils.defineFilter('y', lambdaEff=2000, alias="y.MP9901")
 
+        self.tmp_file, self.db_file = tempfile.mkstemp(dir=os.path.dirname(__file__))
         assoc_db_config = AssociationL1DBProtoConfig()
+        assoc_db_config.l1db_config.db_url = 'sqlite:///' + self.db_file
         self.assoc_db = AssociationL1DBProtoTask(config=assoc_db_config)
         self.assoc_db.db.makeSchema(drop=True)
 
@@ -157,6 +161,8 @@ class TestAssociationDBSqlite(unittest.TestCase):
     def tearDown(self):
         """Close the database connection and delete the object.
         """
+        del self.tmp_file
+        os.remove(self.db_file)
         del self.assoc_db
 
     def _compare_source_records(self, record_a, record_b):

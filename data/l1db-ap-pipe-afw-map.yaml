@@ -1,0 +1,42 @@
+# This file defines mapping between L1DB column names and afw.table column
+# names. Top-level structure is a dictionary indexed by table name and the
+# values are dictionaries where key is the name of column in L1DB and value
+# is the name of the column in afw.table
+
+DiaObject:
+  diaObjectId: id
+  ra: coord_ra
+  decl: coord_dec
+  parent: parent
+  pixelId: pixelId
+  nDiaSources: nDiaSources
+  uPSFluxMean: psFluxMean_u
+  uPSFluxMeanErr: psFluxMeanErr_u
+  uPSFluxSigma: psFluxSigma_u
+  gPSFluxMean: psFluxMean_g
+  gPSFluxMeanErr: psFluxMeanErr_g
+  gPSFluxSigma: psFluxSigma_g
+  rPSFluxMean: psFluxMean_r
+  rPSFluxMeanErr: psFluxMeanErr_r
+  rPSFluxSigma: psFluxSigma_r
+  iPSFluxMean: psFluxMean_i
+  iPSFluxMeanErr: psFluxMeanErr_i
+  iPSFluxSigma: psFluxSigma_i
+  zPSFluxMean: psFluxMean_z
+  zPSFluxMeanErr: psFluxMeanErr_z
+  zPSFluxSigma: psFluxSigma_z
+  yPSFluxMean: psFluxMean_y
+  yPSFluxMeanErr: psFluxMeanErr_y
+  yPSFluxSigma: psFluxSigma_y
+
+DiaSource:
+  diaSourceId: id
+  parentDiaSourceId: parent
+  ra: coord_ra
+  decl: coord_dec
+  ccdVisitId: ccdVisitId
+  diaObjectId: diaObjectId
+  psFlux: psFlux
+  psFluxSigma: psFluxErr
+  filterName: filterName
+  filterId: filterId

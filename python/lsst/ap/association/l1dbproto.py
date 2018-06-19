@@ -24,6 +24,10 @@
 DIASources. This class is mainly for testing purposes in the context of
 ap_pipe/ap_verify.
 """
+
+__all__ = ["AssociationL1DBProtoConfig",
+           "AssociationL1DBProtoTask"]
+
 import os
 
 from lsst.meas.algorithms.indexerRegistry import IndexerRegistry
@@ -32,20 +36,29 @@ import lsst.afw.geom as afwGeom
 from lsst.ap.association import \
     make_minimal_dia_object_schema, \
     make_minimal_dia_source_schema
-from .afwUtils import \
-    convert_dia_source_to_asssoc_schema
+from .afwUtils import convert_dia_source_to_asssoc_schema
 import lsst.l1dbproto.l1db as l1db
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 
-__all__ = ["AssociationL1DBProtoConfig",
-           "AssociationL1DBProtoTask"]
 
-
-def _cfg_file_name(basename):
+def _data_file_name(basename, module_name):
     """Return path name of a data file.
+
+    Parameters
+    ----------
+    basename : `str`
+        Name of the file to add to the path string.
+    module_name : `str`
+        Name of lsst stack package environment variable.
+
+    Returns
+    -------
+    data_file_path : `str`
+       Fill path of the file to load from the "data" directory in a given
+       repository.
     """
-    return os.path.join(os.environ.get("L1DBPROTO_DIR"), "cfg", basename)
+    return os.path.join(os.environ.get(module_name), "data", basename)
 
 
 class AssociationL1DBProtoConfig(pexConfig.Config):
@@ -55,36 +68,57 @@ class AssociationL1DBProtoConfig(pexConfig.Config):
         doc='Select the spatial indexer to use within the database.',
         default='HTM'
     )
-    db_config_file = pexConfig.Field(
-        dtype=str,
-        doc='',
-        default=_cfg_file_name("l1db-ap-pipe-sqlite.py")
+    l1db_config = pexConfig.ConfigField(
+        dtype=l1db.L1dbConfig,
+        doc='Configuration for l1dbproto.',
     )
+    filter_names = pexConfig.ListField(
+        dtype=str,
+        doc='List of filter names to store and expect from in this DB.',
+        default=['u', 'g', 'r', 'i', 'z', 'y'],
+    )
+
+    def setDefaults(self):
+        self.l1db_config.db_url = "sqlite:///l1dbproto.db"
+        self.l1db_config.isolation_level = "READ_UNCOMMITTED"
+        self.l1db_config.dia_object_index = "last_object_table"
+        self.l1db_config.read_sources_months = 12
+        self.l1db_config.read_forced_sources_months = 6
+        self.l1db_config.object_last_replace = True
+        self.l1db_config.explain = False
+        self.l1db_config.schema_file = _data_file_name(
+            "l1db-schema.yaml", "L1DBPROTO_DIR")
+        self.l1db_config.column_map = _data_file_name(
+            "l1db-ap-pipe-afw-map.yaml", "AP_ASSOCIATION_DIR")
+        self.l1db_config.extra_schema_file = _data_file_name(
+            "l1db-ap-pipe-schema-extra.yaml", "AP_ASSOCIATION_DIR")
 
 
 class AssociationL1DBProtoTask(pipeBase.Task):
-    """
+    """Task wrapping `lsst.l1dbproto` enabling it to be used in ap_association.
+
+    Handles computation of HTM indices, trimming of DIAObject catalogs to the
+    CCD geometry, and assuring input DIASource catalog schemas are compatible
+    with the db.
     """
 
     ConfigClass = AssociationL1DBProtoConfig
-    _DefaultName = "association_l1dbroto_task"
+    _DefaultName = "associationL1DBProto"
 
     def __init__(self, **kwargs):
 
         pipeBase.Task.__init__(self, **kwargs)
-        self.indexer = IndexerRegistry[self.config.indexer.name](
-            self.config.indexer.active)
-        self.l1db_config = l1db.L1dbConfig()
-        self.l1db_config.load(self.config.db_config_file)
+        self.makeSubtask("indexer")
 
         self._dia_object_afw_schema = make_minimal_dia_object_schema(
-            ['u', 'g', 'r', 'i', 'z', 'y'])
+            self.config.filter_names)
         self._dia_source_afw_schema = make_minimal_dia_source_schema()
 
         afw_schema = dict(
             DiaObject=self._dia_object_afw_schema,
             DiaSource=self._dia_source_afw_schema)
-        self.db = l1db.L1db(config=self.l1db_config, afw_schemas=afw_schema)
+        self.db = l1db.L1db(config=self.config.l1db_config,
+                            afw_schemas=afw_schema)
 
     def load_dia_objects(self, exposure):
         """Load all DIAObjects within the exposure.
@@ -115,7 +149,8 @@ class AssociationL1DBProtoTask(pipeBase.Task):
         indexer_indices, on_boundry = self.indexer.get_pixel_ids(
             ctr_coord, max_radius)
         # Index types must be cast to int to work with l1dbproto.
-        index_ranges = [[int(idexer_idx), int(idexer_idx) + 1] for idexer_idx in indexer_indices]
+        index_ranges = [[int(indexer_idx), int(indexer_idx) + 1]
+                        for indexer_idx in indexer_indices]
         covering_dia_objects = self.db.getDiaObjects(index_ranges)
 
         output_dia_objects = afwTable.SourceCatalog(
@@ -124,6 +159,7 @@ class AssociationL1DBProtoTask(pipeBase.Task):
             if self._check_dia_object_position(cov_dia_object, expMd):
                 output_dia_objects.append(cov_dia_object)
 
+        # Return deep copy to enforce contiguity.
         return output_dia_objects.copy(deep=True)
 
     def _check_dia_object_position(self, dia_object_record, expMd):
@@ -228,13 +264,13 @@ class AssociationL1DBProtoTask(pipeBase.Task):
         exposure : `lsst.afw.image.Exposure`
             Exposure object the DIASources were detected in.
         """
-        if dia_sources.getSchema().contains(make_minimal_dia_source_schema()) and \
-           associated_ids is None and exposure is None:
-                self.db.storeDiaSources(dia_sources)
+        if (associated_ids is None and exposure is None and
+                dia_sources.getSchema().contains(
+                    make_minimal_dia_source_schema())):
+                        self.db.storeDiaSources(dia_sources)
         else:
-            dia_sources_to_store = \
-                convert_dia_source_to_asssoc_schema(
-                    dia_sources, associated_ids, exposure)
+            dia_sources_to_store = convert_dia_source_to_asssoc_schema(
+                dia_sources, associated_ids, exposure)
 
             self.db.storeDiaSources(dia_sources_to_store)
 
