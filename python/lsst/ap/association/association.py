@@ -81,7 +81,7 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
         dia_object_record['psFluxMeanErr_%s' % filter_name] = np.nan
     else:
         fluxes = dia_sources.get("psFlux")[
-            dia_sources.get('filterId') == filter_id]
+            dia_sources.get("filterId") == filter_id]
         dia_object_record['psFluxMean_%s' % filter_name] = np.mean(fluxes)
         dia_object_record['psFluxSigma_%s' % filter_name] = np.std(fluxes, ddof=1)
         dia_object_record['psFluxMeanErr_%s' % filter_name] = \
@@ -200,6 +200,10 @@ class AssociationTask(pipeBase.Task):
 
         filter_name = exposure.getFilter().getName()
         filter_id = exposure.getFilter().getId()
+
+        dia_sources = self.level1_db.load_dia_sources(updated_obj_ids)
+        diaObjectId_key = dia_sources.schema['diaObjectId'].asKey()
+        dia_sources.sort(diaObjectId_key)
         for obj_id in updated_obj_ids:
             dia_object = dia_objects.find(obj_id)
             if dia_object is None:
@@ -208,15 +212,19 @@ class AssociationTask(pipeBase.Task):
                 updated_dia_objects.append(dia_object)
             dia_object.set('id', obj_id)
 
-            dia_sources = self.level1_db.load_dia_sources([obj_id])
+            # Select the dia_sources associated with this DIAObject id and
+            # copy the copy the subcatalog for fast slicing.
+            start_idx = dia_sources.lower_bound(obj_id, diaObjectId_key)
+            end_idx = dia_sources.upper_bound(obj_id, diaObjectId_key)
+            obj_dia_sources = dia_sources[start_idx:end_idx].copy(deep=True)
 
-            dia_object.set('nDiaSources', len(dia_sources))
+            dia_object.set('nDiaSources', len(obj_dia_sources))
 
-            ave_coord = _set_mean_position(dia_object, dia_sources)
+            ave_coord = _set_mean_position(dia_object, obj_dia_sources)
             indexer_id = self.level1_db.compute_indexer_id(ave_coord)
             dia_object.set('pixelId', indexer_id)
             _set_flux_stats(dia_object,
-                            dia_sources,
+                            obj_dia_sources,
                             filter_name,
                             filter_id)
 
