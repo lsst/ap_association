@@ -56,7 +56,7 @@ class TestAssociationTask(unittest.TestCase):
         afwImageUtils.defineFilter('r', lambdaEff=628, alias="r.MP9601")
         afwImageUtils.defineFilter('i', lambdaEff=778, alias="i.MP9701")
         afwImageUtils.defineFilter('z', lambdaEff=1170, alias="z.MP9801")
-        (self.tmp_file, self.db_file) = tempfile.mkstemp(dir=os.path.dirname(__file__))
+        self.tmp_file, self.db_file = tempfile.mkstemp(dir=os.path.dirname(__file__))
         self.filter_names = ['g', 'r']
         self.dia_object_schema = make_minimal_dia_object_schema(
             self.filter_names)

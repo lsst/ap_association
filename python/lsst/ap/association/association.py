@@ -23,7 +23,7 @@
 """A simple implementation of source association task for ap_verify.
 """
 
-from __future__ import absolute_import, division, print_function
+__all__ = ["AssociationConfig", "AssociationTask"]
 
 import numpy as np
 from scipy.spatial import cKDTree
@@ -33,8 +33,6 @@ import lsst.pipe.base as pipeBase
 import lsst.afw.geom as afwGeom
 import lsst.afw.table as afwTable
 from .assoc_db_sqlite import AssociationDBSqliteTask
-
-__all__ = ["AssociationConfig", "AssociationTask"]
 
 
 def _set_mean_position(dia_object_record, dia_sources):
@@ -140,8 +138,6 @@ class AssociationTask(pipeBase.Task):
 
         updated_obj_ids = self.associate_sources(dia_objects, dia_sources)
 
-        self.level1_db.store_ccd_visit_info(exposure)
-
         # Store newly associated DIASources.
         self.level1_db.store_dia_sources(
             dia_sources, updated_obj_ids, exposure)
@@ -192,11 +188,13 @@ class AssociationTask(pipeBase.Task):
             from.
         updated_obj_ids : array-like of `int`s
             Ids of the dia_objects that should be updated.
-        filter_name : `str`
-            String name of the filter to update fluxes for.
+        exposure : `lsst.afw.image.Exposure`
+            Input exposure representing the region of the sky the dia_sources
+            were detected on. Should contain both the solved WCS and a bounding
+            box of the ccd.
         """
         updated_dia_objects = afwTable.SourceCatalog(
-            self.level1_db.get_dia_object_schema())
+            self.level1_db.dia_object_afw_schema)
 
         filter_name = exposure.getFilter().getName()
         filter_id = exposure.getFilter().getId()
@@ -204,6 +202,7 @@ class AssociationTask(pipeBase.Task):
         dia_sources = self.level1_db.load_dia_sources(updated_obj_ids)
         diaObjectId_key = dia_sources.schema['diaObjectId'].asKey()
         dia_sources.sort(diaObjectId_key)
+
         for obj_id in updated_obj_ids:
             dia_object = dia_objects.find(obj_id)
             if dia_object is None:
@@ -228,7 +227,7 @@ class AssociationTask(pipeBase.Task):
                             filter_name,
                             filter_id)
 
-        self.level1_db.store_dia_objects(updated_dia_objects, False)
+        self.level1_db.store_dia_objects(updated_dia_objects, False, exposure)
 
     def score(self, dia_objects, dia_sources, max_dist):
         """Compute a quality score for each dia_source/dia_object pair
