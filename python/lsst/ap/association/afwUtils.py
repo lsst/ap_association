@@ -24,6 +24,7 @@ from collections import OrderedDict as oDict
 
 import lsst.afw.table as afwTable
 import lsst.afw.image as afwImage
+from lsst.daf.base import DateTime
 
 
 """Defines afw schemas and conversions for use in ap_association tasks.
@@ -141,6 +142,7 @@ def get_ccd_visit_info_from_exposure(exposure):
         List values representing info taken from the exposure.
     """
     visit_info = exposure.getInfo().getVisitInfo()
+    date = visit_info.getDate()
     sphPoint = exposure.getWcs().getSkyOrigin()
     # TODO: Calib is going away and being replaced with photoCalib as in
     # DM-10153.
@@ -153,7 +155,7 @@ def get_ccd_visit_info_from_exposure(exposure):
     #  RA WCS center ``degrees``,
     #  DEC WCS center ``degrees``,
     #  exposure time ``seconds``,
-    #  dateTimeMJD ``seconds``,
+    #  dateTimeMJD ``days``,
     #  flux zero point ``counts``,
     #  flux zero point error ``counts``]
     values = {'ccdVisitId': visit_info.getExposureId(),
@@ -163,7 +165,7 @@ def get_ccd_visit_info_from_exposure(exposure):
               'ra': sphPoint.getRa().asDegrees(),
               'decl': sphPoint.getDec().asDegrees(),
               'expTime': visit_info.getExposureTime(),
-              'expMidptMJD': visit_info.getDate().nsecs() * 10 ** -9,
+              'expMidptMJD': date.get(system=DateTime.MJD),
               'fluxZeroPoint': flux0,
               'fluxZeroPointErr': flux0_err,
               'photoCalib': afwImage.PhotoCalib(1 / flux0,
