@@ -108,7 +108,8 @@ class AssociationL1DBProtoTask(pipeBase.Task):
     def __init__(self, **kwargs):
 
         pipeBase.Task.__init__(self, **kwargs)
-        self.makeSubtask("indexer")
+        self.indexer = IndexerRegistry[self.config.indexer.name](
+            self.config.indexer.active)
 
         self._dia_object_afw_schema = make_minimal_dia_object_schema(
             self.config.filter_names)
@@ -133,18 +134,15 @@ class AssociationL1DBProtoTask(pipeBase.Task):
         -------
         dia_objects : `lsst.afw.table.SourceCatalog`
             Catalog of DIAObjects that are contained with the the bounding
-            box defined by expMd.
+            box defined by the exposure bounding box.
         """
         bbox = afwGeom.Box2D(exposure.getBBox())
         wcs = exposure.getWcs()
-        expMd = pipeBase.Struct(
-            bbox=bbox,
-            wcs=wcs,)
 
-        ctr_coord = expMd.wcs.pixelToSky(expMd.bbox.getCenter())
+        ctr_coord = wcs.pixelToSky(bbox.getCenter())
         max_radius = max(
-            ctr_coord.separation(expMd.wcs.pixelToSky(pp))
-            for pp in expMd.bbox.getCorners())
+            ctr_coord.separation(wcs.pixelToSky(pp))
+            for pp in bbox.getCorners())
 
         indexer_indices, on_boundry = self.indexer.get_pixel_ids(
             ctr_coord, max_radius)
@@ -156,13 +154,13 @@ class AssociationL1DBProtoTask(pipeBase.Task):
         output_dia_objects = afwTable.SourceCatalog(
             covering_dia_objects.getSchema())
         for cov_dia_object in covering_dia_objects:
-            if self._check_dia_object_position(cov_dia_object, expMd):
+            if self._check_dia_object_position(cov_dia_object, bbox, wcs):
                 output_dia_objects.append(cov_dia_object)
 
         # Return deep copy to enforce contiguity.
         return output_dia_objects.copy(deep=True)
 
-    def _check_dia_object_position(self, dia_object_record, expMd):
+    def _check_dia_object_position(self, dia_object_record, bbox, wcs):
         """Check the RA, DEC position of the current dia_object_record against
         the bounding box of the exposure.
 
@@ -171,21 +169,18 @@ class AssociationL1DBProtoTask(pipeBase.Task):
         dia_object_record : `lsst.afw.table.SourceRecord`
             A SourceRecord object containing the DIAObject we would like to
             test against our bounding box.
-        expMd : `lsst.pipe.base.Struct` (optional)
-            Results struct with components:
-
-            - ``bbox``: Bounding box of exposure (`lsst.afw.geom.Box2D`).
-            - ``wcs``: WCS of exposure (`lsst.afw.geom.SkyWcs`).
+        bbox : `lsst.geom.Box2D`
+            Bounding box of exposure.
+        wcs : `lsst.geom.SkyWcs`
+            WCS of exposure.
 
         Return
         ------
         is_contained : `bool`
             Object position is contained within the bounding box of expMd.
         """
-        if expMd is None:
-            return True
-        point = expMd.wcs.skyToPixel(dia_object_record.getCoord())
-        return expMd.bbox.contains(point)
+        point = wcs.skyToPixel(dia_object_record.getCoord())
+        return bbox.contains(point)
 
     def load_dia_sources(self, dia_obj_ids):
         """Retrieve all DIASources associated with this collection of DIAObject
@@ -274,7 +269,8 @@ class AssociationL1DBProtoTask(pipeBase.Task):
 
             self.db.storeDiaSources(dia_sources_to_store)
 
-    def get_dia_object_schema(self):
+    @property
+    def dia_object_afw_schema(self):
         """Retrieve the Schema of the DIAObjects in this database.
 
         Returns
@@ -284,7 +280,8 @@ class AssociationL1DBProtoTask(pipeBase.Task):
         """
         return self._dia_object_afw_schema
 
-    def get_dia_source_schema(self):
+    @property
+    def dia_source_afw_schema(self):
         """Retrieve the Schema of the DIASources in this database.
 
         Returns

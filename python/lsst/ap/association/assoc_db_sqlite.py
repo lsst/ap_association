@@ -206,7 +206,8 @@ class AssociationDBSqliteTask(pipeBase.Task):
     def __init__(self, **kwargs):
 
         pipeBase.Task.__init__(self, **kwargs)
-        self.makeSubtask("indexer")
+        self.indexer = IndexerRegistry[self.config.indexer.name](
+            self.config.indexer.active)
         self._db_connection = sqlite3.connect(self.config.db_name)
         self._db_cursor = self._db_connection.cursor()
 
@@ -288,19 +289,16 @@ class AssociationDBSqliteTask(pipeBase.Task):
         """
         bbox = afwGeom.Box2D(exposure.getBBox())
         wcs = exposure.getWcs()
-        expMd = pipeBase.Struct(
-            bbox=bbox,
-            wcs=wcs,)
 
-        ctr_coord = expMd.wcs.pixelToSky(expMd.bbox.getCenter())
+        ctr_coord = wcs.pixelToSky(bbox.getCenter())
         max_radius = max(
-            ctr_coord.separation(expMd.wcs.pixelToSky(pp))
-            for pp in expMd.bbox.getCorners())
+            ctr_coord.separation(wcs.pixelToSky(pp))
+            for pp in bbox.getCorners())
 
         indexer_indices, on_boundry = self.indexer.get_pixel_ids(
             ctr_coord, max_radius)
 
-        dia_objects = self._get_dia_object_catalog(indexer_indices, expMd)
+        dia_objects = self._get_dia_object_catalog(indexer_indices, bbox, wcs)
 
         return dia_objects
 
@@ -414,7 +412,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
             ",".join("?" for idx in range(len(self._ccd_visit_schema))),
             [values[key] for key in self._ccd_visit_schema.keys()])
 
-    def _get_dia_object_catalog(self, indexer_indices, expMd=None):
+    def _get_dia_object_catalog(self, indexer_indices, bbox, wcs):
         """Retrieve the DIAObjects from the database whose indexer indices
         are with the specified list of indices.
 
@@ -425,17 +423,16 @@ class AssociationDBSqliteTask(pipeBase.Task):
         ----------
         indexer_indices : array-like of `int`s
             Pixelized indexer indices from which to load.
-        expMd : `lsst.pipe.base.Struct` (optional)
-            Results struct with components:
-
-            - ``bbox``: Bounding box of exposure (`lsst.afw.geom.Box2D`).
-            - ``wcs``: WCS of exposure (`lsst.afw.geom.SkyWcs`).
+        bbox : `lsst.geom.Box2D`
+            Bounding box of exposure.
+        wcs : `lsst.geom.SkyWcs`
+            WCS of exposure
 
         Returns
         -------
         dia_objects : `lsst.afw.table.SourceCatalog`
             Catalog of DIAObjects with the specified indexer index and
-            contained within the expMd bounding box.
+            contained within the bounding box.
         """
         dia_object_rows = self._query_dia_objects(indexer_indices)
 
@@ -445,7 +442,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         for row in dia_object_rows:
             dia_object_record = \
                 self._dia_object_converter.source_record_from_db_row(row)
-            if self._check_dia_object_position(dia_object_record, expMd):
+            if self._check_dia_object_position(dia_object_record, bbox, wcs):
                 output_dia_objects.append(dia_object_record)
 
         return output_dia_objects.copy(deep=True)
@@ -485,7 +482,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         return output_rows
 
-    def _check_dia_object_position(self, dia_object_record, expMd):
+    def _check_dia_object_position(self, dia_object_record, bbox, wcs):
         """Check the RA, DEC position of the current dia_object_record against
         the bounding box of the exposure.
 
@@ -494,21 +491,18 @@ class AssociationDBSqliteTask(pipeBase.Task):
         dia_object_record : `lsst.afw.table.SourceRecord`
             A SourceRecord object containing the DIAObject we would like to
             test against our bounding box.
-        expMd : `lsst.pipe.base.Struct` (optional)
-            Results struct with components:
-
-            - ``bbox``: Bounding box of exposure (`lsst.afw.geom.Box2D`).
-            - ``wcs``: WCS of exposure (`lsst.afw.geom.SkyWcs`).
+        bbox : `lsst.geom.Box2D`
+            Bounding box of exposure.
+        wcs : `lsst.geom.SkyWcs`
+            WCS of exposure.
 
         Return
         ------
         is_contained : `bool`
             Object position is contained within the bounding box of expMd.
         """
-        if expMd is None:
-            return True
-        point = expMd.wcs.skyToPixel(dia_object_record.getCoord())
-        return expMd.bbox.contains(point)
+        point = wcs.skyToPixel(dia_object_record.getCoord())
+        return bbox.contains(point)
 
     def _query_dia_sources(self, dia_object_ids):
         """Query the database for the stored DIASources given a set of
@@ -595,7 +589,8 @@ class AssociationDBSqliteTask(pipeBase.Task):
             "INSERT OR REPLACE INTO %s VALUES (%s)" %
             (converter.table_name, insert_string), values)
 
-    def get_dia_object_schema(self):
+    @property
+    def dia_object_afw_schema(self):
         """Retrieve the Schema of the DIAObjects in this database.
 
         Returns
@@ -605,7 +600,8 @@ class AssociationDBSqliteTask(pipeBase.Task):
         """
         return self._dia_object_converter.schema
 
-    def get_dia_source_schema(self):
+    @property
+    def dia_source_afw_schema(self):
         """Retrieve the Schema of the DIASources in this database.
 
         Returns

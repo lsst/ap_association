@@ -207,7 +207,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         dia_objects = create_test_points(
             point_locs_deg=object_centers,
             start_id=0,
-            schema=self.assoc_db.get_dia_object_schema(),
+            schema=self.assoc_db.dia_object_afw_schema,
             scatter_arcsec=-1)
         for src_idx, dia_object in enumerate(dia_objects):
             dia_object['psFluxMean_g'] = 10000. + np.random.randn() * 100.
@@ -244,7 +244,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         dia_objects = create_test_points(
             point_locs_deg=object_centers,
             start_id=0,
-            schema=self.assoc_db.get_dia_object_schema(),
+            schema=self.assoc_db.dia_object_afw_schema,
             scatter_arcsec=1.0)
         for src_idx, dia_object in enumerate(dia_objects):
             dia_object['psFluxMean_g'] = 10000. + np.random.randn() * 100.
@@ -274,7 +274,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         dia_objects = create_test_points(
             point_locs_deg=object_centers,
             start_id=0,
-            schema=self.assoc_db.get_dia_object_schema(),
+            schema=self.assoc_db.dia_object_afw_schema,
             scatter_arcsec=1.0)
         # Store and overwrite the same sources this time updating their HTM
         # index.
@@ -302,7 +302,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         dia_objects = create_test_points(
             point_locs_deg=object_centers,
             start_id=0,
-            schema=self.assoc_db.get_dia_object_schema(),
+            schema=self.assoc_db.dia_object_afw_schema,
             scatter_arcsec=-1)
         expected_ids = [131072, 253952, 253952, 253952, 253955]
         for obj, indexer_id in zip(dia_objects, expected_ids):
@@ -328,7 +328,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         dia_sources = create_test_points(
             point_locs_deg=[[0.1, 0.1] for idx in range(n_sources)],
             start_id=0,
-            schema=self.assoc_db.get_dia_source_schema(),
+            schema=self.assoc_db.dia_source_afw_schema,
             scatter_arcsec=1.0,
             associated_ids=range(n_sources))
 
@@ -437,7 +437,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         dia_sources = create_test_points(
             point_locs_deg=source_centers,
             start_id=0,
-            schema=self.assoc_db.get_dia_source_schema(),
+            schema=self.assoc_db.dia_source_afw_schema,
             scatter_arcsec=1.0,
             associated_ids=range(5))
         for dia_source in dia_sources:
@@ -482,7 +482,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         dia_objects = create_test_points(
             point_locs_deg=object_centers,
             start_id=0,
-            schema=self.assoc_db.get_dia_object_schema(),
+            schema=self.assoc_db.dia_object_afw_schema,
             scatter_arcsec=1.0)
 
         for src_idx, dia_object in enumerate(dia_objects):
@@ -535,7 +535,7 @@ class TestAssociationDBSqlite(unittest.TestCase):
         dia_sources = create_test_points(
             point_locs_deg=source_centers,
             start_id=0,
-            schema=self.assoc_db.get_dia_source_schema(),
+            schema=self.assoc_db.dia_source_afw_schema,
             scatter_arcsec=1.0)
         for src_idx, dia_source in enumerate(dia_sources):
             if not use_ids:

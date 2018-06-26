@@ -194,7 +194,7 @@ class AssociationTask(pipeBase.Task):
             box of the ccd.
         """
         updated_dia_objects = afwTable.SourceCatalog(
-            self.level1_db.get_dia_object_schema())
+            self.level1_db.dia_object_afw_schema)
 
         filter_name = exposure.getFilter().getName()
         filter_id = exposure.getFilter().getId()
