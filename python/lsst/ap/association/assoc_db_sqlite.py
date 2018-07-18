@@ -208,7 +208,8 @@ class AssociationDBSqliteTask(pipeBase.Task):
         pipeBase.Task.__init__(self, **kwargs)
         self.indexer = IndexerRegistry[self.config.indexer.name](
             self.config.indexer.active)
-        self._db_connection = sqlite3.connect(self.config.db_name)
+        self._db_connection = sqlite3.connect(self.config.db_name,
+                                              timeout=60)
         self._db_cursor = self._db_connection.cursor()
 
         self._dia_object_converter = SqliteDBConverter(
@@ -478,7 +479,6 @@ class AssociationDBSqliteTask(pipeBase.Task):
         output_rows = self._db_cursor.fetchall()
 
         self._db_cursor.execute("DROP TABLE tmp_indexer_indices")
-        self._commit()
 
         return output_rows
 
@@ -535,7 +535,6 @@ class AssociationDBSqliteTask(pipeBase.Task):
         output_rows = self._db_cursor.fetchall()
 
         self._db_cursor.execute("DROP TABLE tmp_object_ids")
-        self._commit()
 
         return output_rows
 
