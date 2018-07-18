@@ -313,13 +313,15 @@ class TestAssociationDBSqlite(unittest.TestCase):
         """Test storing and retrieving CcdVisit info.
         """
         self.assoc_db.store_ccd_visit_info(self.exposure)
-        self.assoc_db._db_cursor.execute("SELECT * FROM CcdVisit")
-        stored_values = get_ccd_visit_info_from_exposure(
-            self.exposure)
-        rows = self.assoc_db._db_cursor.fetchall()
-        for row in rows:
-            for db_value, value in zip(row, stored_values.values()):
-                self.assertEqual(db_value, value)
+        with self.assoc_db._db_connection:
+            cursor = self.assoc_db._db_connection.execute(
+                "SELECT * FROM CcdVisit")
+            stored_values = get_ccd_visit_info_from_exposure(
+                self.exposure)
+            rows = cursor.fetchall()
+            for row in rows:
+                for db_value, value in zip(row, stored_values.values()):
+                    self.assertEqual(db_value, value)
 
     def test_load_dia_sources(self):
         """Test the retrieval of DIASources from the database.
@@ -601,14 +603,15 @@ class TestAssociationDBSqlite(unittest.TestCase):
         source_catalog : `lsst.afw.table.SourceCatalog`
             SourceCatalog of the requested objects.
         """
-        self.assoc_db._db_cursor.execute(
-            "SELECT * FROM %s" % converter.table_name)
+        with self.assoc_db._db_connection:
+            cursor = self.assoc_db._db_connection.execute(
+                "SELECT * FROM %s" % converter.table_name)
 
-        rows = self.assoc_db._db_cursor.fetchall()
-        output_source_catalog = afwTable.SourceCatalog(converter.schema)
-        output_source_catalog.reserve(len(rows))
-        for row in rows:
-            output_source_catalog.append(converter.source_record_from_db_row(row))
+            rows = cursor.fetchall()
+            output_source_catalog = afwTable.SourceCatalog(converter.schema)
+            output_source_catalog.reserve(len(rows))
+            for row in rows:
+                output_source_catalog.append(converter.source_record_from_db_row(row))
 
         return output_source_catalog
 
