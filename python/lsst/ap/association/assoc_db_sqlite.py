@@ -102,7 +102,7 @@ class SqliteDBConverter(object):
             name_type_string += "%s %s," % (tmp_name, tmp_type)
         name_type_string = name_type_string[:-1]
 
-        return "CREATE TABLE %s (%s)" % (table_name, name_type_string)
+        return "CREATE TABLE IF NOT EXISTS %s (%s)" % (table_name, name_type_string)
 
     def source_record_from_db_row(self, db_row):
         """Create a source record from the values stored in a database row.
@@ -208,8 +208,8 @@ class AssociationDBSqliteTask(pipeBase.Task):
         pipeBase.Task.__init__(self, **kwargs)
         self.indexer = IndexerRegistry[self.config.indexer.name](
             self.config.indexer.active)
-        self._db_connection = sqlite3.connect(self.config.db_name)
-        self._db_cursor = self._db_connection.cursor()
+        self._db_connection = sqlite3.connect(self.config.db_name,
+                                              timeout=60)
 
         self._dia_object_converter = SqliteDBConverter(
             make_minimal_dia_object_schema(self.config.filter_names),
@@ -238,36 +238,27 @@ class AssociationDBSqliteTask(pipeBase.Task):
         succeeded : `bool`
             Successfully created a new database with specified tables.
         """
-
-        self._db_cursor.execute(
-            'select name from sqlite_master where type = "table"')
-        db_tables = self._db_cursor.fetchall()
-
-        # If this database currently contains any tables exit and do not
-        # create tables.
-        if db_tables:
-            return False
-        else:
-            # Create tables to store the individual DIAObjects and DIASources
-            self._db_cursor.execute(
+        # Create tables to store the individual DIAObjects and DIASources
+        with self._db_connection as conn:
+            conn.execute("BEGIN")
+            conn.execute(
                 self._dia_object_converter.make_table_from_afw_schema(
                     "dia_objects"))
-            self._db_cursor.execute(
-                "CREATE INDEX indexer_id_index ON dia_objects(pixelId)")
-            self._commit()
-            self._db_cursor.execute(
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS indexer_id_index ON "
+                "dia_objects(pixelId)")
+            conn.execute(
                 self._dia_source_converter.make_table_from_afw_schema(
                     "dia_sources"))
-            self._db_cursor.execute(
-                "CREATE INDEX diaObjectId_index ON dia_sources(diaObjectId)")
-            self._commit()
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS diaObjectId_index ON "
+                "dia_sources(diaObjectId)")
 
             table_schema = ",".join(
                 "%s %s" % (key, self._ccd_visit_schema[key])
                 for key in self._ccd_visit_schema.keys())
-            self._db_cursor.execute(
-                "CREATE TABLE CcdVisit (%s)" % table_schema)
-            self._commit()
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS CcdVisit (%s)" % table_schema)
 
         return True
 
@@ -353,7 +344,6 @@ class AssociationDBSqliteTask(pipeBase.Task):
                 dia_object.set('pixelId',
                                self.compute_indexer_id(sphPoint))
         self._store_catalog(dia_objects, self._dia_object_converter, None)
-        self._commit()
 
         if exposure is not None:
             self.store_ccd_visit_info(exposure)
@@ -395,7 +385,6 @@ class AssociationDBSqliteTask(pipeBase.Task):
                             self._dia_source_converter,
                             associated_ids,
                             exposure)
-        self._commit()
 
     def store_ccd_visit_info(self, exposure):
         """Store information describing the exposure for this ccd, visit.
@@ -407,10 +396,11 @@ class AssociationDBSqliteTask(pipeBase.Task):
         """
 
         values = get_ccd_visit_info_from_exposure(exposure)
-        self._db_cursor.execute(
-            "INSERT OR REPLACE INTO CcdVisit VALUES (%s)" %
-            ",".join("?" for idx in range(len(self._ccd_visit_schema))),
-            [values[key] for key in self._ccd_visit_schema.keys()])
+        with self._db_connection as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO CcdVisit VALUES (%s)" %
+                ",".join("?" for idx in range(len(self._ccd_visit_schema))),
+                [values[key] for key in self._ccd_visit_schema.keys()])
 
     def _get_dia_object_catalog(self, indexer_indices, bbox, wcs):
         """Retrieve the DIAObjects from the database whose indexer indices
@@ -462,23 +452,24 @@ class AssociationDBSqliteTask(pipeBase.Task):
         dia_objects : `list` of `tuples` containing ``dia_object`` ``values``
             Query result containing the catalog values of the DIAObject.
         """
-        self._db_cursor.execute(
-            "CREATE TEMPORARY TABLE tmp_indexer_indices "
-            "(pixelId INTEGER PRIMARY KEY)")
+        with self._db_connection as conn:
+            conn.execute("BEGIN")
+            conn.execute(
+                "CREATE TEMPORARY TABLE tmp_indexer_indices "
+                "(pixelId INTEGER PRIMARY KEY)")
 
-        self._db_cursor.executemany(
-            "INSERT OR REPLACE INTO tmp_indexer_indices VALUES (?)",
-            [(int(indexer_index),) for indexer_index in indexer_indices])
+            conn.executemany(
+                "INSERT OR REPLACE INTO tmp_indexer_indices VALUES (?)",
+                [(int(indexer_index),) for indexer_index in indexer_indices])
 
-        self._db_cursor.execute(
-            "SELECT o.* FROM dia_objects AS o "
-            "INNER JOIN tmp_indexer_indices AS i "
-            "ON o.pixelId = i.pixelId")
+            cursor = conn.execute(
+                "SELECT o.* FROM dia_objects AS o "
+                "INNER JOIN tmp_indexer_indices AS i "
+                "ON o.pixelId = i.pixelId")
 
-        output_rows = self._db_cursor.fetchall()
+            output_rows = cursor.fetchall()
 
-        self._db_cursor.execute("DROP TABLE tmp_indexer_indices")
-        self._commit()
+            conn.execute("DROP TABLE tmp_indexer_indices")
 
         return output_rows
 
@@ -519,23 +510,24 @@ class AssociationDBSqliteTask(pipeBase.Task):
         dia_objects : `list` of `tuples`
             Query result containing the values representing DIASources
         """
-        self._db_cursor.execute(
-            "CREATE TEMPORARY TABLE tmp_object_ids "
-            "(diaObjectId INTEGER PRIMARY KEY)")
+        with self._db_connection as conn:
+            conn.execute("BEGIN")
+            conn.execute(
+                "CREATE TEMPORARY TABLE tmp_object_ids "
+                "(diaObjectId INTEGER PRIMARY KEY)")
 
-        self._db_cursor.executemany(
-            "INSERT OR REPLACE INTO tmp_object_ids VALUES (?)",
-            [(int(dia_object_id),) for dia_object_id in dia_object_ids])
+            conn.executemany(
+                "INSERT OR REPLACE INTO tmp_object_ids VALUES (?)",
+                [(int(dia_object_id),) for dia_object_id in dia_object_ids])
 
-        self._db_cursor.execute(
-            "SELECT s.* FROM dia_sources AS s "
-            "INNER JOIN tmp_object_ids AS o "
-            "ON s.diaObjectId = o.diaObjectId")
+            cursor = conn.execute(
+                "SELECT s.* FROM dia_sources AS s "
+                "INNER JOIN tmp_object_ids AS o "
+                "ON s.diaObjectId = o.diaObjectId")
 
-        output_rows = self._db_cursor.fetchall()
+            output_rows = cursor.fetchall()
 
-        self._db_cursor.execute("DROP TABLE tmp_object_ids")
-        self._commit()
+            conn.execute("DROP TABLE tmp_object_ids")
 
         return output_rows
 
@@ -585,9 +577,10 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         insert_string = ("?," * len(values[0]))[:-1]
 
-        self._db_cursor.executemany(
-            "INSERT OR REPLACE INTO %s VALUES (%s)" %
-            (converter.table_name, insert_string), values)
+        with self._db_connection as conn:
+            conn.executemany(
+                "INSERT OR REPLACE INTO %s VALUES (%s)" %
+                (converter.table_name, insert_string), values)
 
     @property
     def dia_object_afw_schema(self):
