@@ -102,7 +102,7 @@ class SqliteDBConverter(object):
             name_type_string += "%s %s," % (tmp_name, tmp_type)
         name_type_string = name_type_string[:-1]
 
-        return "CREATE TABLE %s (%s)" % (table_name, name_type_string)
+        return "CREATE TABLE IF NOT EXISTS %s (%s)" % (table_name, name_type_string)
 
     def source_record_from_db_row(self, db_row):
         """Create a source record from the values stored in a database row.
@@ -238,35 +238,27 @@ class AssociationDBSqliteTask(pipeBase.Task):
         succeeded : `bool`
             Successfully created a new database with specified tables.
         """
-
+        # Create tables to store the individual DIAObjects and DIASources
         with self._db_connection as conn:
-            cursor = conn.execute(
-                'select name from sqlite_master where type = "table"')
-            db_tables = cursor.fetchall()
+            conn.execute("BEGIN")
+            conn.execute(
+                self._dia_object_converter.make_table_from_afw_schema(
+                    "dia_objects"))
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS indexer_id_index ON "
+                "dia_objects(pixelId)")
+            conn.execute(
+                self._dia_source_converter.make_table_from_afw_schema(
+                    "dia_sources"))
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS diaObjectId_index ON "
+                "dia_sources(diaObjectId)")
 
-        # If this database currently contains any tables exit and do not
-        # create tables.
-        if db_tables:
-            return False
-        else:
-            # Create tables to store the individual DIAObjects and DIASources
-            with self._db_connection as conn:
-                conn.execute(
-                    self._dia_object_converter.make_table_from_afw_schema(
-                        "dia_objects"))
-                conn.execute(
-                    "CREATE INDEX indexer_id_index ON dia_objects(pixelId)")
-                conn.execute(
-                    self._dia_source_converter.make_table_from_afw_schema(
-                        "dia_sources"))
-                conn.execute(
-                    "CREATE INDEX diaObjectId_index ON dia_sources(diaObjectId)")
-
-                table_schema = ",".join(
-                    "%s %s" % (key, self._ccd_visit_schema[key])
-                    for key in self._ccd_visit_schema.keys())
-                conn.execute(
-                    "CREATE TABLE CcdVisit (%s)" % table_schema)
+            table_schema = ",".join(
+                "%s %s" % (key, self._ccd_visit_schema[key])
+                for key in self._ccd_visit_schema.keys())
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS CcdVisit (%s)" % table_schema)
 
         return True
 
@@ -461,6 +453,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
             Query result containing the catalog values of the DIAObject.
         """
         with self._db_connection as conn:
+            conn.execute("BEGIN")
             conn.execute(
                 "CREATE TEMPORARY TABLE tmp_indexer_indices "
                 "(pixelId INTEGER PRIMARY KEY)")
@@ -518,6 +511,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
             Query result containing the values representing DIASources
         """
         with self._db_connection as conn:
+            conn.execute("BEGIN")
             conn.execute(
                 "CREATE TEMPORARY TABLE tmp_object_ids "
                 "(diaObjectId INTEGER PRIMARY KEY)")
