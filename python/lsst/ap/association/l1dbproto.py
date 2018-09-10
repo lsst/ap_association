@@ -81,7 +81,7 @@ class AssociationL1DBProtoConfig(pexConfig.Config):
     def setDefaults(self):
         self.l1db_config.db_url = "sqlite:///l1dbproto.db"
         self.l1db_config.isolation_level = "READ_UNCOMMITTED"
-        self.l1db_config.dia_object_index = "last_object_table"
+        self.l1db_config.dia_object_index = "baseline"
         self.l1db_config.read_sources_months = 12
         self.l1db_config.read_forced_sources_months = 6
         self.l1db_config.object_last_replace = True
