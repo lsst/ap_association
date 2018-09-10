@@ -229,6 +229,7 @@ class AssociationTask(pipeBase.Task):
 
         self.level1_db.store_dia_objects(updated_dia_objects, False, exposure)
 
+    @pipeBase.timeMethod
     def score(self, dia_objects, dia_sources, max_dist):
         """Compute a quality score for each dia_source/dia_object pair
         between this catalog of DIAObjects and the input DIASource catalog.
@@ -312,6 +313,7 @@ class AssociationTask(pipeBase.Task):
 
         return cKDTree(coord_vects)
 
+    @pipeBase.timeMethod
     def match(self, dia_objects, dia_sources, score_struct):
         """Match DIAsources to DIAObjects given a score and create new
         DIAObject Ids for new unassociated DIASources.
