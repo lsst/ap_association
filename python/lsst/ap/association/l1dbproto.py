@@ -144,7 +144,7 @@ class AssociationL1DBProtoTask(pipeBase.Task):
             ctr_coord.separation(wcs.pixelToSky(pp))
             for pp in bbox.getCorners())
 
-        indexer_indices, on_boundry = self.indexer.get_pixel_ids(
+        indexer_indices, on_boundry = self.indexer.getShardIds(
             ctr_coord, max_radius)
         # Index types must be cast to int to work with l1dbproto.
         index_ranges = [[int(indexer_idx), int(indexer_idx) + 1]
@@ -240,7 +240,7 @@ class AssociationL1DBProtoTask(pipeBase.Task):
         index : `int`
             Index of the pixel the point is contained in.
         """
-        return self.indexer.index_points(
+        return self.indexer.indexPoints(
             [sphere_point.getRa().asDegrees()],
             [sphere_point.getDec().asDegrees()])[0]
 

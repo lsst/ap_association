@@ -286,7 +286,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
             ctr_coord.separation(wcs.pixelToSky(pp))
             for pp in bbox.getCorners())
 
-        indexer_indices, on_boundry = self.indexer.get_pixel_ids(
+        indexer_indices, on_boundry = self.indexer.getShardIds(
             ctr_coord, max_radius)
 
         dia_objects = self._get_dia_object_catalog(indexer_indices, bbox, wcs)
@@ -361,7 +361,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         index : `int`
             Index of the pixel the point is contained in.
         """
-        return self.indexer.index_points(
+        return self.indexer.indexPoints(
             [sphere_point.getRa().asDegrees()],
             [sphere_point.getDec().asDegrees()])[0]
 
