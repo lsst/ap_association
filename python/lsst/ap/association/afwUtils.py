@@ -186,13 +186,13 @@ def add_dia_source_aliases_to_catalog(source_catalog):
     if not source_catalog.getSchema().contains(make_minimal_dia_source_schema()):
         # Create aliases to appropriate flux fields if they exist.
         schema_names = source_catalog.getSchema().getNames()
-        if 'base_PsfFlux_flux' in schema_names and \
-           'base_PsfFlux_fluxErr' in schema_names and \
+        if 'base_PsfFlux_instFlux' in schema_names and \
+           'base_PsfFlux_instFluxErr' in schema_names and \
            'psFlux' not in schema_names and \
            'psFluxErr' not in schema_names:
                 alias_map = source_catalog.getSchema().getAliasMap()
-                alias_map.set('psFlux', 'base_PsfFlux_flux')
-                alias_map.set('psFluxErr', 'base_PsfFlux_fluxErr')
+                alias_map.set('psFlux', 'base_PsfFlux_instFlux')
+                alias_map.set('psFluxErr', 'base_PsfFlux_instFluxErr')
 
 
 def convert_dia_source_to_asssoc_schema(dia_sources,
