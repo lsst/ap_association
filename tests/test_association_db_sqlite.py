@@ -379,8 +379,8 @@ class TestAssociationDBSqlite(unittest.TestCase):
         # schema but with expected ipdiffim like flux columns. Also add
         # unused columns that are ignored within the code.
         schema = afwTable.SourceTable.makeMinimalSchema()
-        schema.addField('base_PsfFlux_flux', type='D')
-        schema.addField('base_PsfFlux_fluxErr', type='D')
+        schema.addField('base_PsfFlux_instFlux', type='D')
+        schema.addField('base_PsfFlux_instFluxErr', type='D')
         schema.addField('junk1', type='L')
         schema.addField('junk2', type='D')
         schema.addField('junk3', type='L')
@@ -395,8 +395,8 @@ class TestAssociationDBSqlite(unittest.TestCase):
             schema=schema,
             scatter_arcsec=-1)
         for dia_source in dia_sources:
-            dia_source['base_PsfFlux_flux'] = 10000.
-            dia_source['base_PsfFlux_fluxErr'] = 100.
+            dia_source['base_PsfFlux_instFlux'] = 10000.
+            dia_source['base_PsfFlux_instFluxErr'] = 100.
 
         # Check the DIASources round trip properly. We don't need to be
         # as complex here as the call signature has been almost fully tested
