@@ -37,7 +37,7 @@ from lsst.ap.association import \
     make_minimal_dia_object_schema, \
     make_minimal_dia_source_schema
 from .afwUtils import convert_dia_source_to_asssoc_schema
-import lsst.l1dbproto.l1db as l1db
+from lsst.dax.ppdb import Ppdb, PpdbConfig
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 
@@ -58,6 +58,7 @@ def _data_file_name(basename, module_name):
        Fill path of the file to load from the "data" directory in a given
        repository.
     """
+    # TODO: Should probably use getPackageDir(module_name) instead of getenv
     return os.path.join(os.environ.get(module_name), "data", basename)
 
 
@@ -69,7 +70,7 @@ class AssociationL1DBProtoConfig(pexConfig.Config):
         default='HTM'
     )
     l1db_config = pexConfig.ConfigField(
-        dtype=l1db.L1dbConfig,
+        dtype=PpdbConfig,
         doc='Configuration for l1dbproto.',
     )
     filter_names = pexConfig.ListField(
@@ -87,7 +88,7 @@ class AssociationL1DBProtoConfig(pexConfig.Config):
         self.l1db_config.object_last_replace = True
         self.l1db_config.explain = False
         self.l1db_config.schema_file = _data_file_name(
-            "l1db-schema.yaml", "L1DBPROTO_DIR")
+            "ppdb-schema.yaml", "DAX_PPDB_DIR")
         self.l1db_config.column_map = _data_file_name(
             "l1db-ap-pipe-afw-map.yaml", "AP_ASSOCIATION_DIR")
         self.l1db_config.extra_schema_file = _data_file_name(
@@ -95,7 +96,7 @@ class AssociationL1DBProtoConfig(pexConfig.Config):
 
 
 class AssociationL1DBProtoTask(pipeBase.Task):
-    """Task wrapping `lsst.l1dbproto` enabling it to be used in ap_association.
+    """Task wrapping `lsst.dax.ppdb` enabling it to be used in ap_association.
 
     Handles computation of HTM indices, trimming of DIAObject catalogs to the
     CCD geometry, and assuring input DIASource catalog schemas are compatible
@@ -118,8 +119,8 @@ class AssociationL1DBProtoTask(pipeBase.Task):
         afw_schema = dict(
             DiaObject=self._dia_object_afw_schema,
             DiaSource=self._dia_source_afw_schema)
-        self.db = l1db.L1db(config=self.config.l1db_config,
-                            afw_schemas=afw_schema)
+        self.db = Ppdb(config=self.config.l1db_config,
+                       afw_schemas=afw_schema)
 
     def load_dia_objects(self, exposure):
         """Load all DIAObjects within the exposure.
@@ -146,7 +147,7 @@ class AssociationL1DBProtoTask(pipeBase.Task):
 
         indexer_indices, on_boundry = self.indexer.getShardIds(
             ctr_coord, max_radius)
-        # Index types must be cast to int to work with l1dbproto.
+        # Index types must be cast to int to work with dax_ppdb.
         index_ranges = [[int(indexer_idx), int(indexer_idx) + 1]
                         for indexer_idx in indexer_indices]
         covering_dia_objects = self.db.getDiaObjects(index_ranges)
