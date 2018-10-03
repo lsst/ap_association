@@ -1,5 +1,6 @@
 .cache
 .coverage
+.pytest_cache
 .sconsign.dblite
 .sconf_temp
 config.log
@@ -15,5 +16,6 @@ doc/xml
 doc/*.tag
 doc/*.inc
 doc/doxygen.conf
+pytest_session.txt
 tests/.tests
 version.py

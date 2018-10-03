@@ -1,3 +1,3 @@
 # -*- python -*-
 from lsst.sconsUtils import scripts
-scripts.BasicSConstruct("ap_association")
+scripts.BasicSConstruct("ap_association", disableCc=True)
