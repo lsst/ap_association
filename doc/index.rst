@@ -9,5 +9,4 @@ ap_association documentation preview
 .. toctree::
    :maxdepth: 1
 
-   ap_association/index
    lsst.ap.association/index
