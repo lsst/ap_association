@@ -161,7 +161,7 @@ class AssociationTask(pipeBase.Task):
 
         Returns
         -------
-        updated_ids: array-like of `int`s
+        updated_ids : array-like of `int`
             Ids of the DIAObjects that the DIASources associated to including
             the ids of newly created DIAObjects.
         """
@@ -185,7 +185,7 @@ class AssociationTask(pipeBase.Task):
         dia_objects : `lsst.afw.table.SourceCatalog`
             Pre-existing/loaded DIAObjects to copy values that are not updated
             from.
-        updated_obj_ids : array-like of `int`s
+        updated_obj_ids : array-like of `int`
             Ids of the dia_objects that should be updated.
         exposure : `lsst.afw.image.Exposure`
             Input exposure representing the region of the sky the dia_sources
@@ -254,11 +254,12 @@ class AssociationTask(pipeBase.Task):
             Results struct with components:
 
             - ``scores``: array of floats of match quality updated DIAObjects
-                (array-like of `float`s).
+                (array-like of `float`).
             - ``obj_idxs``: indexes of the matched DIAObjects in the catalog.
-                (array-like of `int`s)
+                (array-like of `int`)
             - ``obj_ids``: array of floats of match quality updated DIAObjects
-                (array-like of `int`s).
+                (array-like of `int`).
+
             Default values for these arrays are
             INF, -1, and -1 respectively for unassociated sources.
         """
@@ -328,11 +329,12 @@ class AssociationTask(pipeBase.Task):
             Results struct with components:
 
             - ``scores``: array of floats of match quality
-                updated DIAObjects (array-like of `float`s).
+                updated DIAObjects (array-like of `float`).
             - ``obj_ids``: array of floats of match quality
-                updated DIAObjects (array-like of `ints`s).
+                updated DIAObjects (array-like of `int`).
             - ``obj_idxs``: indexes of the matched DIAObjects in the catalog.
-                (array-like of `int`s)
+                (array-like of `int`)
+
             Default values for these arrays are
             INF, -1 and -1 respectively for unassociated sources.
 
@@ -342,7 +344,7 @@ class AssociationTask(pipeBase.Task):
             Results struct with components:
 
             - ``updated_and_new_dia_object_ids`` : ids of new and updated
-              dia_objects as the result of association. (`list` of `int`s).
+              dia_objects as the result of association. (`list` of `int`).
             - ``n_updated_dia_objects`` : Number of previously know dia_objects
               with newly associated DIASources. (`int`).
             - ``n_new_dia_objects`` : Number of newly created DIAObjects from
@@ -406,7 +408,7 @@ class AssociationTask(pipeBase.Task):
             Results struct with components:
 
             - ``updated_and_new_dia_object_ids`` : ids new and updated
-              dia_objects in the collection (`list` of `int`s).
+              dia_objects in the collection (`list` of `int`).
             - ``n_updated_dia_objects`` : Number of previously know dia_objects
               with newly associated DIASources. (`int`).
             - ``n_new_dia_objects`` : Number of newly created DIAObjects from

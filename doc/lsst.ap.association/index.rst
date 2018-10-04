@@ -6,7 +6,7 @@
 lsst.ap.association
 ###################
 
-The ``ap_association`` package provides tools for association DIAObjects to DIASources, persisting this association, and computing DIAObject summary statistics.
+The ``ap_association`` package provides tools for associating DIAObjects to DIASources, persisting this association, and computing DIAObject summary statistics.
 
 .. .. _lsst.ap.association-using:
 

@@ -43,11 +43,11 @@ def make_minimal_dia_object_schema(filter_names=None):
 
     Parameters
     ----------
-    filter_names : `list` of `str`s
+    filter_names : `list` of `str`
         Names of the filters expect and compute means for.
 
-    Return
-    ------
+    Returns
+    -------
     schema : `lsst.afw.table.Schema`
         Minimal schema for DIAObjects.
     """
@@ -79,8 +79,8 @@ def make_minimal_dia_object_schema(filter_names=None):
 def make_minimal_dia_source_schema():
     """ Define and create the minimal schema required for a DIASource.
 
-    Return
-    ------
+    Returns
+    -------
     schema : `lsst.afw.table.Schema`
         Minimal schema for DIAObjects.
     """
@@ -111,9 +111,9 @@ def make_minimal_dia_source_schema():
 def getCcdVisitSchemaSql():
     """Define the schema for the CcdVisit table.
 
-    Return
-    ------
-    ccdVisitNames: `collections.OrderedDict`
+    Returns
+    -------
+    ccdVisitNames : `collections.OrderedDict`
        Names of columns in the ccdVisit table.
     """
     return oDict([("ccdVisitId", "INTEGER PRIMARY KEY"),
@@ -132,8 +132,8 @@ def get_ccd_visit_info_from_exposure(exposure):
     """
     Extract info on the ccd and visit from the exposure.
 
-    Paramters
-    ---------
+    Parameters
+    ----------
     exposure : `lsst.afw.image.Exposure`
         Exposure to store information from.
 
@@ -205,7 +205,7 @@ def convert_dia_source_to_asssoc_schema(dia_sources,
     ----------
     dia_sources : `lsst.afw.table.SourceCatalog`
         Input source catalog to alias and overwrite values of.
-    obj_ids:  array-like of `int`
+    obj_ids :  array-like of `int`
         DIAObject ids to associate with the input DIASources. Overwrites
         the current value in diaObjectId column. If None the obj_id no action
         is taken. The array should be the same length as dia_sources.

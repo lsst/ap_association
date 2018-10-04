@@ -299,7 +299,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         Parameters
         ----------
-        dia_obj_ids : array-like of `int`s
+        dia_obj_ids : array-like of `int`
             Id of the DIAObject that is associated with the DIASources
             of interest.
 
@@ -375,7 +375,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         ----------
         dia_sources : `lsst.afw.table.SourceCatalog`
             Catalog of DIASources to store.
-        associated_ids : array-like of `int`s (optional)
+        associated_ids : array-like of `int` (optional)
             DIAObject ids that have been associated with these DIASources
         exposure : `lsst.afw.image.Exposure`
             Exposure object the DIASources were detected in.
@@ -388,8 +388,8 @@ class AssociationDBSqliteTask(pipeBase.Task):
     def store_ccd_visit_info(self, exposure):
         """Store information describing the exposure for this ccd, visit.
 
-        Paramters
-        ---------
+        Parameters
+        ----------
         exposure : `lsst.afw.image.Exposure`
             Exposure to store information from.
         """
@@ -410,7 +410,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         Parameters
         ----------
-        indexer_indices : array-like of `int`s
+        indexer_indices : array-like of `int`
             Pixelized indexer indices from which to load.
         bbox : `lsst.geom.Box2D`
             Bounding box of exposure.
@@ -442,7 +442,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         Parameters
         ----------
-        indexer_indices : array-like of `int`s
+        indexer_indices : array-like of `int`
             Spatial indices in the indexer specifying the area on the sky
             to load DIAObjects for.
 
@@ -500,7 +500,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
 
         Parameters
         ----------
-        dia_object_ids : array-like of `int`s
+        dia_object_ids : array-like of `int`
             Spatial indices in the indexer specifying the area on the sky
             to load DIAObjects for.
 
@@ -541,7 +541,7 @@ class AssociationDBSqliteTask(pipeBase.Task):
         converter : `lsst.ap.association.SqliteDBConverter`
             A converter object specifying the correct database table to write
             into.
-        obj_id : array-like of `int`s (optional)
+        obj_id : array-like of `int` (optional)
             Ids of the DIAObjects these objects are associated with. Use only
             when storing DIASources.
         exposure : `lsst.afw.image.Exposure` (optional)
