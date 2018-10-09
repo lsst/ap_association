@@ -188,7 +188,7 @@ class AssociationL1DBProtoTask(pipeBase.Task):
 
         Parameters
         ----------
-        dia_obj_ids : array-like of `int`s
+        dia_obj_ids : array-like of `int`
             Id of the DIAObject that is associated with the DIASources
             of interest.
 
@@ -215,7 +215,7 @@ class AssociationL1DBProtoTask(pipeBase.Task):
         compute_spatial_index : `bool`
             If True, compute the spatial search indices using the
             indexer specified at class instantiation.
-        exposure: `lsst.afw.image.Exposure` (optional)
+        exposure : `lsst.afw.image.Exposure` (optional)
             CcdExposure associated with these DIAObjects being inserted.
             Inserts the CcdVisitInfo for this exposure in the CcdVisitTable.
         """
@@ -254,7 +254,7 @@ class AssociationL1DBProtoTask(pipeBase.Task):
         ----------
         dia_sources : `lsst.afw.table.SourceCatalog`
             Catalog of DIASources to store.
-        associated_ids : array-like of `int`s (optional)
+        associated_ids : array-like of `int` (optional)
             DIAObject ids that have been associated with these DIASources
         exposure : `lsst.afw.image.Exposure`
             Exposure object the DIASources were detected in.
