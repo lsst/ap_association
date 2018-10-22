@@ -286,7 +286,7 @@ class AssociationTask(pipeBase.Task):
         filter_id = exposure.getFilter().getId()
 
         dateTime = exposure.getInfo().getVisitInfo().getDate()
-        
+
         dia_sources = ppdb.getDiaSources(updated_obj_ids, dateTime.toPython())
         diaObjectId_key = dia_sources.schema['diaObjectId'].asKey()
         dia_sources.sort(diaObjectId_key)
@@ -304,7 +304,7 @@ class AssociationTask(pipeBase.Task):
             start_idx = dia_sources.lower_bound(obj_id, diaObjectId_key)
             end_idx = dia_sources.upper_bound(obj_id, diaObjectId_key)
             obj_dia_sources = dia_sources[start_idx:end_idx].copy(deep=True)
-            
+
             ave_coord = _set_mean_position(dia_object, obj_dia_sources)
             indexer_id = self.indexer.indexPoints(
                 [ave_coord.getRa().asDegrees()],

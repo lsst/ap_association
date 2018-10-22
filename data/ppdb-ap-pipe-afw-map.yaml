@@ -7,41 +7,9 @@ DiaObject:
   diaObjectId: id
   ra: coord_ra
   decl: coord_dec
-  pixelId: pixelId
-  nDiaSources: nDiaSources
-  uPSFluxMean: uPSFluxMean
-  uPSFluxMeanErr: uPSFluxMeanErr
-  uPSFluxSigma: uPSFluxSigma
-  uPSFluxNdata: uPSFluxNdata
-  gPSFluxMean: gPSFluxMean
-  gPSFluxMeanErr: gPSFluxMeanErr
-  gPSFluxSigma: gPSFluxSigma
-  gPSFluxNdata: gPSFluxNdata
-  rPSFluxMean: rPSFluxMean
-  rPSFluxMeanErr: rPSFluxMeanErr
-  rPSFluxSigma: rPSFluxSigma
-  rPSFluxNdata: rPSFluxNdata
-  iPSFluxMean: iPSFluxMean
-  iPSFluxMeanErr: iPSFluxMeanErr
-  iPSFluxSigma: iPSFluxSigma
-  iPSFluxNdata: iPSFluxNdata
-  zPSFluxMean: zPSFluxMean
-  zPSFluxMeanErr: zPSFluxMeanErr
-  zPSFluxSigma: zPSFluxSigma
-  zPSFluxNdata: zPSFluxNdata
-  yPSFluxMean: yPSFluxMean
-  yPSFluxMeanErr: yPSFluxMeanErr
-  yPSFluxSigma: yPSFluxSigma
-  yPSFluxNdata: yPSFluxNdata
 
 DiaSource:
   diaSourceId: id
   parentDiaSourceId: parent
   ra: coord_ra
   decl: coord_dec
-  ccdVisitId: ccdVisitId
-  diaObjectId: diaObjectId
-  psFlux: psFlux
-  psFluxSigma: psFluxErr
-  filterName: filterName
-  filterId: filterId

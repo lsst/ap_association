@@ -13,6 +13,10 @@ columns:
   nullable: true
   description: Time when validity of this diaObject ends.
   default: null
+- name: nDiaSources
+  type: INT
+  nullable: false
+  description: Total number of DiaSources associated with this DiaObject.
 
 ---
 # DiaObjectLast uses the same columns as DiaObject but has different index
@@ -27,6 +31,10 @@ indices:
   columns:
   - diaObjectId
   type: INDEX
+- name: nDiaSources
+  type: INT
+  nullable: false
+  description: Total number of DiaSources associated with this DiaObject.
 
 ---
 # Special PK index for DiaObject table with spacial column being first
