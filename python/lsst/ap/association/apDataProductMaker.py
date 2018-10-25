@@ -19,17 +19,24 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+"""Classes for taking science pipeline outputs and creating data products for
+use in ap_association and the prompt-products database (PPDB).
+"""
+
 __all__ = ["APDataMapperConfig", "APDataMapperTask",
            "DiaSourceMapperConfig", "DiaSourceMapperTask"]
 
 import lsst.afw.table as afwTable
+from lsst.daf.base import DateTime
 import lsst.pipe.base as pipeBase
 import lsst.pex.config as pexConfig
 import lsst.afw.image as afwImage
+from .afwUtils import make_minimal_dia_source_schema
 
 
 class APDataMapperConfig(pexConfig.Config):
-
+    """Configuration for the generic APDMMapper class.
+    """
     copyColumns = pexConfig.DictField(
         keytype=str,
         itemtype=str,
@@ -43,7 +50,9 @@ class APDataMapperConfig(pexConfig.Config):
 
 
 class APDataMapperTask(pipeBase.Task):
-
+    """Generic mapper class for copying values from a science pipelines catalog
+    into a product for use in ap_association or the PPDB.
+    """
     ConfigClass = APDataMapperConfig
     _DefaultName = "apDataMapperTask"
 
@@ -66,7 +75,7 @@ class APDataMapperTask(pipeBase.Task):
 
         Parameters
         ----------
-        inputCatalog: `lsst.afw.table.SourceCatalog``
+        inputCatalog: `lsst.afw.table.SourceCatalog`
            Input catalog with data to be copied into new output catalog.
 
         Returns
@@ -88,7 +97,8 @@ class APDataMapperTask(pipeBase.Task):
 
 
 class DiaSourceMapperConfig(pexConfig.Config):
-
+    """Config for the DiaSourceMapperTask
+    """
     copyColumns = pexConfig.DictField(
         keytype=str,
         itemtype=str,
@@ -112,14 +122,20 @@ class DiaSourceMapperConfig(pexConfig.Config):
 
 
 class DiaSourceMapperTask(APDataMapperTask):
+    """Task specific for copying columns from science pipelines catalogs,
+    calibrating them, for use in ap_association and the PPDB.
+
+    This task also copies information from the exposure such as the ExpsoureId
+    and the exposure date as specified in the DPDD.
+    """
 
     ConfigClass = DiaSourceMapperConfig
     _DefaultName = "diaSourceMapper"
 
     def __init__(self, inputSchema, **kwargs):
         APDataMapperTask.__init__(self,
-                                  inputSchema,
-                                  make_dia_source_schema(),
+                                  inputSchema=inputSchema,
+                                  outputSchema=make_minimal_dia_source_schema(),
                                   **kwargs)      
 
     
@@ -142,7 +158,7 @@ class DiaSourceMapperTask(APDataMapperTask):
         midPointTaiMJD = visit_info.getDate().get(system=DateTime.MJD)
 
         flux0, flux0Err = exposure.getCalib().getFluxMag0()
-        photoCalib = afwImage.PhotoCalib(1 / flux0, 1 / flux0Err)
+        photoCalib = afwImage.PhotoCalib(1 / flux0, flux0Err / flux0 ** 2)
 
         outputCatalog = afwTable.SourceCatalog(self.outputSchema)
         outputCatalog.preallocate(len(inputCatalog))
@@ -155,7 +171,7 @@ class DiaSourceMapperTask(APDataMapperTask):
             outputRecord.set("ccdVisitId", ccdVisitId)
             outputRecord.set("midPointTai", midPointTaiMJD)
 
-        if outputCatalog.isContigious():
+        if outputCatalog.isContiguous():
             return outputCatalog
 
         return outputCatalog.copy(deep=True)
@@ -173,9 +189,9 @@ class DiaSourceMapperTask(APDataMapperTask):
             Calibration object from the difference exposure.
         """
         for col_name in self.config.calibrateColumns:
-            val, valErr = photoCalib.instFluxToMaggies(inputRecord, col_name)
+            meas = photoCalib.instFluxToMaggies(inputRecord, col_name)
             outputRecord.set(self.config.copyColumns[col_name + "_instFlux"],
-                             val)
+                             meas.value)
             outputRecord.set(
-                self.config.copyColumns[col_name + "_instFluxErr"] + "Err",
-                valErr)
+                self.config.copyColumns[col_name + "_instFluxErr"],
+                meas.err)

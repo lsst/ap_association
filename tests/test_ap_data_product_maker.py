@@ -41,17 +41,23 @@ import lsst.utils.tests
 
 
 def make_input_source_catalog(n_objects):
-    """
+    """Create tests objects to map into apData products.
+
+    Parameters
+    ----------
+    n_objects: `int`
+        Number of objects to create.
     """
     schema = afwTable.SourceTable.makeMinimalSchema()
+    schema.addField("base_NaiveCentroid_x", type="D")
+    schema.addField("base_NaiveCentroid_y", type="D")
     schema.addField("base_PsfFlux_instFlux", type="D")
     schema.addField("base_PsfFlux_instFluxErr", type="D")
 
-    alias_map = schema.getAliasMap()
-    alias_map.set('slot_PsfFlux', 'base_PsfFlux')
-
     objects = afwTable.SourceCatalog(schema)
     objects.preallocate(n_objects)
+    objects.definePsfFlux("base_PsfFlux")
+    objects.defineCentroid("base_NaiveCentroid")
 
     for obj_idx in range(n_objects):
         obj = objects.addNew()
@@ -109,12 +115,14 @@ class testAPDataMapperTask(unittest.TestCase):
         self.exposure.getInfo().setVisitInfo(visit)
         self.exposure.setFilter(afwImage.Filter('g'))
         self.flux0 = 2
-        self.flux0_err = 1
-        self.exposure.getCalib().setFluxMag0((self.flux0, self.flux0_err))
+        self.flux0Err = 1
+        self.exposure.getCalib().setFluxMag0((self.flux0, self.flux0Err))
 
         self.inputCatalog = make_input_source_catalog(10)
 
     def test_run(self):
+        """Test the generic data product mapper.
+        """
         outSchema = afwTable.SourceTable.makeMinimalSchema()
         outSchema.addField("psFlux", type="D")
         outSchema.addField("psFluxErr", type="D")
@@ -139,10 +147,69 @@ class testAPDataMapperTask(unittest.TestCase):
                 self.assertEqual(inObj[inputName], outObj[outputName])
 
     def test_run_dia_source(self):
-        pass
+        """Test the DiaSource specific data product mapper/calibrator.
+        """
+        apDMapConfig = DiaSourceMapperConfig()
+        apDMapConfig.copyColumns = {
+            "id": "id",
+            "parent": "parent",
+            "coord_ra": "coord_ra",
+            "coord_dec": "coord_dec",
+            "slot_PsfFlux_instFlux": "psFlux",
+            "slot_PsfFlux_instFluxErr": "psFluxErr"
+        }
+        apDMapConfig.calibrateColumns = ["slot_PsfFlux"]
+        apDMap = DiaSourceMapperTask(inputSchema=self.inputCatalog.schema,
+                                     config=apDMapConfig)
+        outputCatalog = apDMap.run(self.inputCatalog, self.exposure)
+
+        for inObj, outObj in zip(self.inputCatalog, outputCatalog):
+            for inputName, outputName in apDMapConfig.copyColumns.items():
+                if inputName[:4] == "slot":
+                    self._test_calibrated_flux(inObj, outObj)
+                else:
+                    self.assertEqual(inObj[inputName], outObj[outputName])
 
     def test_calibrateFluxes(self):
-        pass
+        """Test that flux calibration works as expected.
+        """
+        outSchema = afwTable.SourceTable.makeMinimalSchema()
+        outSchema.addField("psFlux", type="D")
+        outSchema.addField("psFluxErr", type="D")
+
+        outputCatalog = afwTable.SourceCatalog(outSchema)
+        outRecord = outputCatalog.addNew()
+
+        apDMapConfig = DiaSourceMapperConfig()
+        apDMapConfig.copyColumns = {
+            "id": "id",
+            "parent": "parent",
+            "coord_ra": "coord_ra",
+            "coord_dec": "coord_dec",
+            "slot_PsfFlux_instFlux": "psFlux",
+            "slot_PsfFlux_instFluxErr": "psFluxErr"
+        }
+        apDMapConfig.calibrateColumns = ["slot_PsfFlux"]
+        apDMap = DiaSourceMapperTask(inputSchema=self.inputCatalog.schema,
+                                     config=apDMapConfig)
+
+        photoCalib = afwImage.PhotoCalib(1 / self.flux0, self.flux0Err / self.flux0 ** 2)
+        apDMap.calibrateFluxes(self.inputCatalog[0],
+                               outRecord,
+                               photoCalib)
+        self._test_calibrated_flux(self.inputCatalog[0], outRecord)
+
+        self.assertAlmostEqual(outRecord["psFlux"], expectedValue)
+        self.assertAlmostEqual(outRecord["psFluxErr"], expectedValueErr)
+
+    def _test_calibrated_flux(self, inputRecord, outputRecord):
+        expectedValue = (inputRecord["slot_PsfFlux_instFlux"] / self.flux0)
+        expectedValueErr = expectedValue * np.sqrt(
+            (inputRecord["slot_PsfFlux_instFluxErr"] /
+             inputRecord["slot_PsfFlux_instFlux"]) ** 2 +
+            (self.flux0Err / self.flux0) ** 2)
+        self.assertAlmostEqual(outputRecord["psFlux"], expectedValue)
+        self.assertAlmostEqual(outputRecord["psFluxErr"], expectedValueErr)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

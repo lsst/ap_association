@@ -91,6 +91,8 @@ def make_minimal_dia_source_schema():
     schema.addField("ccdVisitId", type='L',
                     doc='Id of the exposure and ccd this object was detected '
                         'in.')
+    schema.addField("midPointTai", type="D",
+                    doc="Time of mid-exposure for this DIASource")
     schema.addField("psFlux", type='D',
                     doc='Calibrated PSF flux of this source.')
     schema.addField("psFluxErr", type='D',
