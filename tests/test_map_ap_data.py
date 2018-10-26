@@ -20,24 +20,19 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import numpy as np
-import os
-import tempfile
 import unittest
 
-from lsst.ap.association import \
-    APDataMapperConfig, \
-    APDataMapperTask, \
-    DiaSourceMapperConfig, \
-    DiaSourceMapperTask
+from lsst.ap.association import (MapApDataConfig,
+                                 MapApDataTask, 
+                                 MapDiaSourceConfig, 
+                                 MapDiaSourceTask)
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
-import lsst.geom as geom
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 import lsst.afw.image.utils as afwImageUtils
 import lsst.utils.tests
-
 
 
 def make_input_source_catalog(n_objects):
@@ -69,7 +64,7 @@ def make_input_source_catalog(n_objects):
     return objects
 
 
-class testAPDataMapperTask(unittest.TestCase):
+class TestAPDataMapperTask(unittest.TestCase):
 
     def setUp(self):
         # CFHT Filters from the camera mapper.
@@ -127,8 +122,8 @@ class testAPDataMapperTask(unittest.TestCase):
         outSchema.addField("psFlux", type="D")
         outSchema.addField("psFluxErr", type="D")
 
-        apDMapConfig = APDataMapperConfig()
-        apDMapConfig.copyColumns = {
+        mapApDConfig = MapApDataConfig()
+        mapApDConfig.copyColumns = {
             "id": "id",
             "parent": "parent",
             "coord_ra": "coord_ra",
@@ -137,20 +132,20 @@ class testAPDataMapperTask(unittest.TestCase):
             "slot_PsfFlux_instFluxErr": "psFluxErr"
         }
 
-        apDMap = APDataMapperTask(inputSchema=self.inputCatalog.schema,
-                                  outputSchema=outSchema,
-                                  config=apDMapConfig)
-        outputCatalog = apDMap.run(self.inputCatalog)
+        mapApD = MapApDataTask(inputSchema=self.inputCatalog.schema,
+                               outputSchema=outSchema,
+                               config=mapApDConfig)
+        outputCatalog = mapApD.run(self.inputCatalog)
 
         for inObj, outObj in zip(self.inputCatalog, outputCatalog):
-            for inputName, outputName in apDMapConfig.copyColumns.items():
+            for inputName, outputName in mapApDConfig.copyColumns.items():
                 self.assertEqual(inObj[inputName], outObj[outputName])
 
     def test_run_dia_source(self):
         """Test the DiaSource specific data product mapper/calibrator.
         """
-        apDMapConfig = DiaSourceMapperConfig()
-        apDMapConfig.copyColumns = {
+        mapApDConfig = MapDiaSourceConfig()
+        mapApDConfig.copyColumns = {
             "id": "id",
             "parent": "parent",
             "coord_ra": "coord_ra",
@@ -158,14 +153,21 @@ class testAPDataMapperTask(unittest.TestCase):
             "slot_PsfFlux_instFlux": "psFlux",
             "slot_PsfFlux_instFluxErr": "psFluxErr"
         }
-        apDMapConfig.calibrateColumns = ["slot_PsfFlux"]
-        apDMap = DiaSourceMapperTask(inputSchema=self.inputCatalog.schema,
-                                     config=apDMapConfig)
-        outputCatalog = apDMap.run(self.inputCatalog, self.exposure)
+        mapApDConfig.calibrateColumns = ["slot_PsfFlux"]
+        mapApD = MapDiaSourceTask(inputSchema=self.inputCatalog.schema,
+                                     config=mapApDConfig)
+        outputCatalog = mapApD.run(self.inputCatalog, self.exposure)
 
         for inObj, outObj in zip(self.inputCatalog, outputCatalog):
-            for inputName, outputName in apDMapConfig.copyColumns.items():
-                if inputName[:4] == "slot":
+            self.assertEqual(
+                outObj["ccdVisitId"],
+                self.exposure.getInfo().getVisitInfo().getExposureId())
+            self.assertEqual(
+                outObj["midPointTai"],
+                self.exposure.getInfo().getVisitInfo().getDate().get(
+                    system=dafBase.DateTime.MJD))
+            for inputName, outputName in mapApDConfig.copyColumns.items():
+                if inputName.startswith("slot"):
                     self._test_calibrated_flux(inObj, outObj)
                 else:
                     self.assertEqual(inObj[inputName], outObj[outputName])
@@ -180,8 +182,8 @@ class testAPDataMapperTask(unittest.TestCase):
         outputCatalog = afwTable.SourceCatalog(outSchema)
         outRecord = outputCatalog.addNew()
 
-        apDMapConfig = DiaSourceMapperConfig()
-        apDMapConfig.copyColumns = {
+        mapApDConfig = MapDiaSourceConfig()
+        mapApDConfig.copyColumns = {
             "id": "id",
             "parent": "parent",
             "coord_ra": "coord_ra",
@@ -189,20 +191,26 @@ class testAPDataMapperTask(unittest.TestCase):
             "slot_PsfFlux_instFlux": "psFlux",
             "slot_PsfFlux_instFluxErr": "psFluxErr"
         }
-        apDMapConfig.calibrateColumns = ["slot_PsfFlux"]
-        apDMap = DiaSourceMapperTask(inputSchema=self.inputCatalog.schema,
-                                     config=apDMapConfig)
+        mapApDConfig.calibrateColumns = ["slot_PsfFlux"]
+        mapApD = MapDiaSourceTask(inputSchema=self.inputCatalog.schema,
+                                  config=mapApDConfig)
 
         photoCalib = afwImage.PhotoCalib(1 / self.flux0, self.flux0Err / self.flux0 ** 2)
-        apDMap.calibrateFluxes(self.inputCatalog[0],
+        mapApD.calibrateFluxes(self.inputCatalog[0],
                                outRecord,
                                photoCalib)
         self._test_calibrated_flux(self.inputCatalog[0], outRecord)
 
-        self.assertAlmostEqual(outRecord["psFlux"], expectedValue)
-        self.assertAlmostEqual(outRecord["psFluxErr"], expectedValueErr)
-
     def _test_calibrated_flux(self, inputRecord, outputRecord):
+        """Compare calibrated fluxes to expectation from zero point.
+
+        Parameters
+        ----------
+        inputRecord: `lsst.afw.table.SourceRecord`
+            Input source record with uncalibrated flux values.
+        outputRecord: `lsst.afw.table.SourceRecord`
+            Source record with calibrated fluxes.
+        """
         expectedValue = (inputRecord["slot_PsfFlux_instFlux"] / self.flux0)
         expectedValueErr = expectedValue * np.sqrt(
             (inputRecord["slot_PsfFlux_instFluxErr"] /

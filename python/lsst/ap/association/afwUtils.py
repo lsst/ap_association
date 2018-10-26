@@ -271,6 +271,7 @@ def make_overwrite_dict(source_record, obj_id=None, exp_dict=None):
         overwrite_dict['psFlux'] = meas.value
         overwrite_dict['psFluxErr'] = meas.err
         overwrite_dict['ccdVisitId'] = exp_dict['ccdVisitId']
+        overwrite_dict['midPointTai'] = exp_dict["expMidptMJD"]
         overwrite_dict['filterName'] = exp_dict['filterName']
         overwrite_dict['filterId'] = exp_dict['filterId']
 

@@ -23,8 +23,8 @@
 use in ap_association and the prompt-products database (PPDB).
 """
 
-__all__ = ["APDataMapperConfig", "APDataMapperTask",
-           "DiaSourceMapperConfig", "DiaSourceMapperTask"]
+__all__ = ["MapApDataConfig", "MapApDataTask",
+           "MapDiaSourceConfig", "MapDiaSourceTask"]
 
 import lsst.afw.table as afwTable
 from lsst.daf.base import DateTime
@@ -34,8 +34,8 @@ import lsst.afw.image as afwImage
 from .afwUtils import make_minimal_dia_source_schema
 
 
-class APDataMapperConfig(pexConfig.Config):
-    """Configuration for the generic APDMMapper class.
+class MapApDataConfig(pexConfig.Config):
+    """Configuration for the generic MapApDataTask class.
     """
     copyColumns = pexConfig.DictField(
         keytype=str,
@@ -49,12 +49,12 @@ class APDataMapperConfig(pexConfig.Config):
     )
 
 
-class APDataMapperTask(pipeBase.Task):
+class MapApDataTask(pipeBase.Task):
     """Generic mapper class for copying values from a science pipelines catalog
     into a product for use in ap_association or the PPDB.
     """
-    ConfigClass = APDataMapperConfig
-    _DefaultName = "apDataMapperTask"
+    ConfigClass = MapApDataConfig
+    _DefaultName = "mapApDataTask"
 
     def __init__(self, inputSchema, outputSchema, **kwargs):
         pipeBase.Task.__init__(self, **kwargs)
@@ -84,19 +84,12 @@ class APDataMapperTask(pipeBase.Task):
             Output catalog with data copied from input and new column names.
         """
         outputCatalog = afwTable.SourceCatalog(self.outputSchema)
-        outputCatalog.preallocate(len(inputCatalog))
+        outputCatalog.extend(inputCatalog, self.mapper)
 
-        for inputRecord in inputCatalog:
-            outputRecord = outputCatalog.addNew()
-            outputRecord.assign(inputRecord, self.mapper)
-
-        if outputCatalog.isContiguous():
-            return outputCatalog
-
-        return outputCatalog.copy(deep=True)
+        return outputCatalog
 
 
-class DiaSourceMapperConfig(pexConfig.Config):
+class MapDiaSourceConfig(pexConfig.Config):
     """Config for the DiaSourceMapperTask
     """
     copyColumns = pexConfig.DictField(
@@ -121,7 +114,7 @@ class DiaSourceMapperConfig(pexConfig.Config):
     )
 
 
-class DiaSourceMapperTask(APDataMapperTask):
+class MapDiaSourceTask(MapApDataTask):
     """Task specific for copying columns from science pipelines catalogs,
     calibrating them, for use in ap_association and the PPDB.
 
@@ -129,45 +122,45 @@ class DiaSourceMapperTask(APDataMapperTask):
     and the exposure date as specified in the DPDD.
     """
 
-    ConfigClass = DiaSourceMapperConfig
-    _DefaultName = "diaSourceMapper"
+    ConfigClass = MapDiaSourceConfig
+    _DefaultName = "mapDiaSourceTask"
 
     def __init__(self, inputSchema, **kwargs):
-        APDataMapperTask.__init__(self,
-                                  inputSchema=inputSchema,
-                                  outputSchema=make_minimal_dia_source_schema(),
-                                  **kwargs)      
+        MapApDataTask.__init__(self,
+                               inputSchema=inputSchema,
+                               outputSchema=make_minimal_dia_source_schema(),
+                               **kwargs)
 
-    
     def run(self, inputCatalog, exposure):
         """Copy data from the inputCatalog into an output catalog with
         requested columns.
 
         Parameters
         ----------
-        inputCatalog: `lsst.afw.table.SourceCatalog``
-           Input catalog with data to be copied into new output catalog.
-
+        inputCatalog: `lsst.afw.table.SourceCatalog`
+            Input catalog with data to be copied into new output catalog.
+        exposure: `lsst.afw.image.Exposure`
+            Exposure with containing the calib object relevant to this catalog.
         Returns
         -------
         outputCatalog: `lsst.afw.table.SourceCatalog`
             Output catalog with data copied from input and new column names.
         """
         visit_info = exposure.getInfo().getVisitInfo()
-        ccdVisitId =  visit_info.getExposureId()
+        ccdVisitId = visit_info.getExposureId()
         midPointTaiMJD = visit_info.getDate().get(system=DateTime.MJD)
 
         flux0, flux0Err = exposure.getCalib().getFluxMag0()
         photoCalib = afwImage.PhotoCalib(1 / flux0, flux0Err / flux0 ** 2)
 
         outputCatalog = afwTable.SourceCatalog(self.outputSchema)
-        outputCatalog.preallocate(len(inputCatalog))
+        outputCatalog.reserve(len(inputCatalog))
 
         for inputRecord in inputCatalog:
             outputRecord = outputCatalog.addNew()
             outputRecord.assign(inputRecord, self.mapper)
             self.calibrateFluxes(inputRecord, outputRecord, photoCalib)
-     
+
             outputRecord.set("ccdVisitId", ccdVisitId)
             outputRecord.set("midPointTai", midPointTaiMJD)
 
