@@ -30,6 +30,7 @@ import lsst.afw.table as afwTable
 from lsst.daf.base import DateTime
 import lsst.pipe.base as pipeBase
 import lsst.pex.config as pexConfig
+from lsst.pex.exceptions import RuntimeError
 import lsst.afw.image as afwImage
 from .afwUtils import make_minimal_dia_source_schema
 
@@ -85,6 +86,9 @@ class MapApDataTask(pipeBase.Task):
         """
         outputCatalog = afwTable.SourceCatalog(self.outputSchema)
         outputCatalog.extend(inputCatalog, self.mapper)
+
+        if not outputCatalog.isContiguous():
+            raise RuntimeError("Output catalogs must be contiguous.")
 
         return outputCatalog
 
@@ -164,10 +168,10 @@ class MapDiaSourceTask(MapApDataTask):
             outputRecord.set("ccdVisitId", ccdVisitId)
             outputRecord.set("midPointTai", midPointTaiMJD)
 
-        if outputCatalog.isContiguous():
-            return outputCatalog
+        if not outputCatalog.isContiguous():
+            raise RuntimeError("Output catalogs must be contiguous.")
 
-        return outputCatalog.copy(deep=True)
+        return outputCatalog
 
     def calibrateFluxes(self, inputRecord, outputRecord, photoCalib):
         """Copy flux values into an output record and calibrate them.

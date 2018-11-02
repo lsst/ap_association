@@ -22,10 +22,11 @@
 import numpy as np
 import unittest
 
-from lsst.ap.association import (MapApDataConfig,
-                                 MapApDataTask, 
-                                 MapDiaSourceConfig, 
-                                 MapDiaSourceTask)
+from lsst.ap.association import (
+    MapApDataConfig,
+    MapApDataTask,
+    MapDiaSourceConfig,
+    MapDiaSourceTask)
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
@@ -155,7 +156,7 @@ class TestAPDataMapperTask(unittest.TestCase):
         }
         mapApDConfig.calibrateColumns = ["slot_PsfFlux"]
         mapApD = MapDiaSourceTask(inputSchema=self.inputCatalog.schema,
-                                     config=mapApDConfig)
+                                  config=mapApDConfig)
         outputCatalog = mapApD.run(self.inputCatalog, self.exposure)
 
         for inObj, outObj in zip(self.inputCatalog, outputCatalog):
