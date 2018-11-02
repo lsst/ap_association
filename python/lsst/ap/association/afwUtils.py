@@ -91,6 +91,8 @@ def make_minimal_dia_source_schema():
     schema.addField("ccdVisitId", type='L',
                     doc='Id of the exposure and ccd this object was detected '
                         'in.')
+    schema.addField("midPointTai", type="D",
+                    doc="Time of mid-exposure for this DIASource")
     schema.addField("psFlux", type='D',
                     doc='Calibrated PSF flux of this source.')
     schema.addField("psFluxErr", type='D',
@@ -269,6 +271,7 @@ def make_overwrite_dict(source_record, obj_id=None, exp_dict=None):
         overwrite_dict['psFlux'] = meas.value
         overwrite_dict['psFluxErr'] = meas.err
         overwrite_dict['ccdVisitId'] = exp_dict['ccdVisitId']
+        overwrite_dict['midPointTai'] = exp_dict["expMidptMJD"]
         overwrite_dict['filterName'] = exp_dict['filterName']
         overwrite_dict['filterId'] = exp_dict['filterId']
 

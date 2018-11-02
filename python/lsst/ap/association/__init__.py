@@ -21,6 +21,7 @@
 
 from .version import *
 from .association import *
+from .mapApData import *
 from .assoc_db_sqlite import *
 from .afwUtils import *
 from .l1dbproto import *
