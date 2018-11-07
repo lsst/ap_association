@@ -32,7 +32,7 @@ import lsst.pipe.base as pipeBase
 import lsst.pex.config as pexConfig
 from lsst.pex.exceptions import RuntimeError
 import lsst.afw.image as afwImage
-from .afwUtils import make_minimal_dia_source_schema
+from .afwUtils import make_dia_source_schema
 
 
 class MapApDataConfig(pexConfig.Config):
@@ -105,6 +105,10 @@ class MapDiaSourceConfig(pexConfig.Config):
                  "parent": "parent",
                  "coord_ra": "coord_ra",
                  "coord_dec": "coord_dec",
+                 "slot_Centroid_x": "x",
+                 "slot_Centroid_xErr": "xErr",
+                 "slot_Centroid_y": "y",
+                 "slot_Centroid_yErr": "yErr",
                  "slot_ApFlux_instFlux": "apFlux",
                  "slot_ApFlux_instFluxErr": "apFluxErr",
                  "slot_PsfFlux_instFlux": "psFlux",
@@ -113,8 +117,7 @@ class MapDiaSourceConfig(pexConfig.Config):
     calibrateColumns = pexConfig.ListField(
         dtype=str,
         doc="Flux columns in the input catalog to calibrate.",
-        default=["slot_ApFlux", "slot_PsfFlux", "slot_dipMeanFlux",
-                 "slot_dipFluxDiff", "slot_totFlux"]
+        default=["slot_ApFlux", "slot_PsfFlux"]
     )
 
 
@@ -132,7 +135,7 @@ class MapDiaSourceTask(MapApDataTask):
     def __init__(self, inputSchema, **kwargs):
         MapApDataTask.__init__(self,
                                inputSchema=inputSchema,
-                               outputSchema=make_minimal_dia_source_schema(),
+                               outputSchema=make_dia_source_schema(),
                                **kwargs)
 
     def run(self, inputCatalog, exposure):
@@ -153,6 +156,8 @@ class MapDiaSourceTask(MapApDataTask):
         visit_info = exposure.getInfo().getVisitInfo()
         ccdVisitId = visit_info.getExposureId()
         midPointTaiMJD = visit_info.getDate().get(system=DateTime.MJD)
+        filterId = exposure.getFilter().getId()
+        filterName = exposure.getFilter().getName()
 
         flux0, flux0Err = exposure.getCalib().getFluxMag0()
         photoCalib = afwImage.PhotoCalib(1 / flux0, flux0Err / flux0 ** 2)
@@ -167,6 +172,8 @@ class MapDiaSourceTask(MapApDataTask):
 
             outputRecord.set("ccdVisitId", ccdVisitId)
             outputRecord.set("midPointTai", midPointTaiMJD)
+            outputRecord.set("filterId", filterId)
+            outputRecord.set("filterName", filterName)
 
         if not outputCatalog.isContiguous():
             raise RuntimeError("Output catalogs must be contiguous.")

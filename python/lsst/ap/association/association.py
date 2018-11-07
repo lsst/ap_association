@@ -311,6 +311,7 @@ class AssociationTask(pipeBase.Task):
                 [ave_coord.getDec().asDegrees()])[0]
             dia_object.set('pixelId', indexer_id)
             dia_object.set("radecTai", dateTime.get(system=DateTime.MJD))
+            dia_object.set("nDiaSources", len(obj_dia_sources))
             _set_flux_stats(dia_object,
                             obj_dia_sources,
                             filter_name,

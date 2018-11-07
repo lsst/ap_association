@@ -31,7 +31,6 @@ import lsst.afw.image.utils as afwImageUtils
 import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
 from lsst.dax.ppdb import Ppdb, PpdbConfig
-import lsst.pipe.base as pipeBase
 from lsst.ap.association import \
     AssociationTask, \
     AssociationConfig, \
@@ -291,19 +290,17 @@ class TestAssociationTask(unittest.TestCase):
             dia_source["midPointTai"] = \
                 self.exposure.getInfo().getVisitInfo().getDate().get(system=dafBase.DateTime.MJD)
             dia_source["psFlux"] = 10000 / self.flux0
-            dia_source["psFluxErr"] = np.sqrt(
-                (100 / self.flux0) ** 2 +
-                (10000 * self.flux0_err / self.flux0 ** 2) ** 2)
+            dia_source["psFluxErr"] = \
+                np.sqrt((100 / self.flux0) ** 2 + (10000 * self.flux0_err / self.flux0 ** 2) ** 2)
             dia_source["apFlux"] = 10000 / self.flux0
-            dia_source["apFluxErr"] = np.sqrt(
-                (100 / self.flux0) ** 2 +
-                (10000 * self.flux0_err / self.flux0 ** 2) ** 2)
+            dia_source["apFluxErr"] = \
+                np.sqrt((100 / self.flux0) ** 2 + (10000 * self.flux0_err / self.flux0 ** 2) ** 2)
             dia_source["filterName"] = self.exposure.getFilter().getName()
             dia_source["filterId"] = self.exposure.getFilter().getId()
             dia_source["x"] = 0
             dia_source["y"] = 0
             dia_source["snr"] = 10
-            
+
         assoc_config = AssociationConfig()
         assoc_task = AssociationTask(config=assoc_config)
 
@@ -372,13 +369,11 @@ class TestAssociationTask(unittest.TestCase):
             if src_idx >= n_objects:
                 dia_source['ccdVisitId'] += 1
             dia_source["psFlux"] = 10000 / self.flux0
-            dia_source["psFluxErr"] = np.sqrt(
-                (100 / self.flux0) ** 2 +
-                (10000 * self.flux0_err / self.flux0 ** 2) ** 2)
+            dia_source["psFluxErr"] = \
+                np.sqrt((100 / self.flux0) ** 2 + (10000 * self.flux0_err / self.flux0 ** 2) ** 2)
             dia_source["apFlux"] = 10000 / self.flux0
-            dia_source["apFluxErr"] = np.sqrt(
-                (100 / self.flux0) ** 2 +
-                (10000 * self.flux0_err / self.flux0 ** 2) ** 2)
+            dia_source["apFluxErr"] = \
+                np.sqrt((100 / self.flux0) ** 2 + (10000 * self.flux0_err / self.flux0 ** 2) ** 2)
             dia_source["snr"] = 10
             if src_idx < n_objects:
                 dia_source["filterName"] = 'g'
@@ -411,13 +406,11 @@ class TestAssociationTask(unittest.TestCase):
             dia_source["x"] = 0
             dia_source["y"] = 0
             dia_source["psFlux"] = 20000 / self.flux0
-            dia_source["psFluxErr"] = np.sqrt(
-                (100 / self.flux0) ** 2 +
-                (20000 * self.flux0_err / self.flux0 ** 2) ** 2)
+            dia_source["psFluxErr"] = \
+                np.sqrt((100 / self.flux0) ** 2 + (20000 * self.flux0_err / self.flux0 ** 2) ** 2)
             dia_source["apFlux"] = 20000 / self.flux0
-            dia_source["apFluxErr"] = np.sqrt(
-                (100 / self.flux0) ** 2 +
-                (20000 * self.flux0_err / self.flux0 ** 2) ** 2)
+            dia_source["apFluxErr"] = \
+                np.sqrt((100 / self.flux0) ** 2 + (20000 * self.flux0_err / self.flux0 ** 2) ** 2)
             dia_source["filterName"] = "g"
             dia_source["filterId"] = 1
 
