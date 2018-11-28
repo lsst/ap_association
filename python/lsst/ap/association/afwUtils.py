@@ -191,44 +191,42 @@ def make_dia_object_schema(filter_names=None):
                     doc='Standard deviation of the distribution of yFPFlux.')
     # Mapping of arrays and BLOBs is not currently supported by the PPDB so we
     # these columns out.
-    """
-    schema.addField('uLcPeriodic', type='ArrayF',
-                    doc='Periodic features extracted from light-curves using generalized Lomb-Scargle '
-                        'periodogram for u filter. [32 FLOAT].')
-    schema.addField('gLcPeriodic', type='ArrayF',
-                    doc='Periodic features extracted from light-curves using generalized Lomb-Scargle '
-                        'periodogram for g filter. [32 FLOAT].')
-    schema.addField('rLcPeriodic', type='ArrayF',
-                    doc='Periodic features extracted from light-curves using generalized Lomb-Scargle '
-                        'periodogram for r filter. [32 FLOAT].')
-    schema.addField('iLcPeriodic', type='ArrayF',
-                    doc='Periodic features extracted from light-curves using generalized Lomb-Scargle '
-                        'periodogram for i filter. [32 FLOAT].')
-    schema.addField('zLcPeriodic', type='ArrayF',
-                    doc='Periodic features extracted from light-curves using generalized Lomb-Scargle '
-                        'periodogram for z filter. [32 FLOAT].')
-    schema.addField('yLcPeriodic', type='ArrayF',
-                    doc='Periodic features extracted from light-curves using generalized Lomb-Scargle '
-                        'periodogram for y filter. [32 FLOAT].')
-    schema.addField('uLcNonPeriodic', type='ArrayF',
-                    doc='Non-periodic features extracted from light-curves using generalized Lomb-Scargle '
-                        'periodogram for u filter. [20 FLOAT].')
-    schema.addField('gLcNonPeriodic', type='ArrayF',
-                    doc='Non-periodic features extracted from light-curves using generalized Lomb-Scargle '
-                        'periodogram for g filter. [20 FLOAT].')
-    schema.addField('rLcNonPeriodic', type='ArrayF',
-                    doc='Non-periodic features extracted from light-curves using generalized Lomb-Scargle '
-                        'periodogram for r filter. [20 FLOAT].')
-    schema.addField('iLcNonPeriodic', type='ArrayF',
-                    doc='Non-periodic features extracted from light-curves using generalized Lomb-Scargle '
-                        'periodogram for i filter. [20 FLOAT].')
-    schema.addField('zLcNonPeriodic', type='ArrayF',
-                    doc='Non-periodic features extracted from light-curves using generalized Lomb-Scargle '
-                        'periodogram for z filter. [20 FLOAT].')
-    schema.addField('yLcNonPeriodic', type='ArrayF',
-                    doc='Non-periodic features extracted from light-curves using generalized Lomb-Scargle '
-                        'periodogram for y filter. [20 FLOAT].')
-    """
+    # schema.addField('uLcPeriodic', type='ArrayF',
+    #                 doc='Periodic features extracted from light-curves using generalized Lomb-Scargle '
+    #                     'periodogram for u filter. [32 FLOAT].')
+    # schema.addField('gLcPeriodic', type='ArrayF',
+    #                 doc='Periodic features extracted from light-curves using generalized Lomb-Scargle '
+    #                     'periodogram for g filter. [32 FLOAT].')
+    # schema.addField('rLcPeriodic', type='ArrayF',
+    #                 doc='Periodic features extracted from light-curves using generalized Lomb-Scargle '
+    #                     'periodogram for r filter. [32 FLOAT].')
+    # schema.addField('iLcPeriodic', type='ArrayF',
+    #                 doc='Periodic features extracted from light-curves using generalized Lomb-Scargle '
+    #                     'periodogram for i filter. [32 FLOAT].')
+    # schema.addField('zLcPeriodic', type='ArrayF',
+    #                 doc='Periodic features extracted from light-curves using generalized Lomb-Scargle '
+    #                     'periodogram for z filter. [32 FLOAT].')
+    # schema.addField('yLcPeriodic', type='ArrayF',
+    #                 doc='Periodic features extracted from light-curves using generalized Lomb-Scargle '
+    #                     'periodogram for y filter. [32 FLOAT].')
+    # schema.addField('uLcNonPeriodic', type='ArrayF',
+    #                 doc='Non-periodic features extracted from light-curves using generalized Lomb-Scargle '
+    #                     'periodogram for u filter. [20 FLOAT].')
+    # schema.addField('gLcNonPeriodic', type='ArrayF',
+    #                 doc='Non-periodic features extracted from light-curves using generalized Lomb-Scargle '
+    #                     'periodogram for g filter. [20 FLOAT].')
+    # schema.addField('rLcNonPeriodic', type='ArrayF',
+    #                 doc='Non-periodic features extracted from light-curves using generalized Lomb-Scargle '
+    #                     'periodogram for r filter. [20 FLOAT].')
+    # schema.addField('iLcNonPeriodic', type='ArrayF',
+    #                 doc='Non-periodic features extracted from light-curves using generalized Lomb-Scargle '
+    #                     'periodogram for i filter. [20 FLOAT].')
+    # schema.addField('zLcNonPeriodic', type='ArrayF',
+    #                 doc='Non-periodic features extracted from light-curves using generalized Lomb-Scargle '
+    #                     'periodogram for z filter. [20 FLOAT].')
+    # schema.addField('yLcNonPeriodic', type='ArrayF',
+    #                 doc='Non-periodic features extracted from light-curves using generalized Lomb-Scargle '
+    #                     'periodogram for y filter. [20 FLOAT].')
     schema.addField('nearbyObj1', type='L',
                     doc='Id of the closest nearby object.')
     schema.addField('nearbyObj1Dist', type='D',

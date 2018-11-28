@@ -182,6 +182,8 @@ class AssociationTask(pipeBase.Task):
         Returns
         -------
         diaObjects : `lsst.afw.table.SourceCatalog`
+            DiaObjects within the exposure boundary. Resultant catalog is
+            contiguous.
         """
         bbox = afwGeom.Box2D(exposure.getBBox())
         wcs = exposure.getWcs()
@@ -224,7 +226,7 @@ class AssociationTask(pipeBase.Task):
         Return
         ------
         is_contained : `bool`
-            Object position is contained within the bounding box of expMd.
+            Object position is contained within the bounding box.
         """
         point = wcs.skyToPixel(dia_object_record.getCoord())
         return bbox.contains(point)
@@ -279,8 +281,6 @@ class AssociationTask(pipeBase.Task):
         """
         updated_dia_objects = afwTable.SourceCatalog(
             self.dia_object_schema)
-        mapper = afwTable.SchemaMapper(dia_objects.schema, updated_dia_objects.schema)
-        mapper.addMapping(dia_objects.schema.find("id")[0], "id", True)
 
         filter_name = exposure.getFilter().getName()
         filter_id = exposure.getFilter().getId()

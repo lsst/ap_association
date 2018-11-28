@@ -33,9 +33,9 @@ import lsst.daf.base as dafBase
 from lsst.dax.ppdb import Ppdb, PpdbConfig
 from lsst.ap.association import \
     AssociationTask, \
-    AssociationConfig, \
     make_dia_source_schema, \
     make_dia_object_schema
+from lsst.utils import getPackageDir
 import lsst.utils.tests
 
 
@@ -110,11 +110,10 @@ def _data_file_name(basename, module_name):
     Returns
     -------
     data_file_path : `str`
-       Fill path of the file to load from the "data" directory in a given
+       Full path of the file to load from the "data" directory in a given
        repository.
     """
-    # TODO: Should probably use getPackageDir(module_name) instead of getenv
-    return os.path.join(os.environ.get(module_name), "data", basename)
+    return os.path.join(getPackageDir(module_name), "data", basename)
 
 
 class TestAssociationTask(unittest.TestCase):
@@ -141,11 +140,11 @@ class TestAssociationTask(unittest.TestCase):
         self.ppdbConfig.dia_object_index = "baseline"
         self.ppdbConfig.dia_object_columns = []
         self.ppdbConfig.schema_file = _data_file_name(
-            "ppdb-schema.yaml", "DAX_PPDB_DIR")
+            "ppdb-schema.yaml", "dax_ppdb")
         self.ppdbConfig.column_map = _data_file_name(
-            "ppdb-ap-pipe-afw-map.yaml", "AP_ASSOCIATION_DIR")
+            "ppdb-ap-pipe-afw-map.yaml", "ap_association")
         self.ppdbConfig.extra_schema_file = _data_file_name(
-            "ppdb-ap-pipe-schema-extra.yaml", "AP_ASSOCIATION_DIR")
+            "ppdb-ap-pipe-schema-extra.yaml", "ap_association")
 
         # metadata taken from CFHT data
         # v695856-e0/v695856-e0-c000-a00.sci_img.fits
@@ -180,7 +179,8 @@ class TestAssociationTask(unittest.TestCase):
         visit = afwImage.VisitInfo(
             exposureId=1234,
             exposureTime=200.,
-            date=dafBase.DateTime(nsecs=1400000000 * 10**9))
+            date=dafBase.DateTime("2014-05-13T17:00:00.000000000",
+                                  dafBase.DateTime.Timescale.TAI))
         self.exposure.setDetector(detector)
         self.exposure.getInfo().setVisitInfo(visit)
         self.exposure.setFilter(afwImage.Filter('g'))
@@ -196,8 +196,7 @@ class TestAssociationTask(unittest.TestCase):
             ctr_coord.separation(wcs.pixelToSky(pp))
             for pp in bbox.getCorners())
 
-        assoc_config = AssociationConfig()
-        assoc_task = AssociationTask(config=assoc_config)
+        assoc_task = AssociationTask()
 
         indexer_indices, on_boundry = assoc_task.indexer.getShardIds(
             ctr_coord, max_radius)
@@ -234,6 +233,7 @@ class TestAssociationTask(unittest.TestCase):
                 # new DIASources.
                 self.assertEqual(dia_object['gPSFluxNdata'], 1)
                 self.assertEqual(dia_object['rPSFluxNdata'], 1)
+                self.assertEqual(dia_object['nDiaSources'], 2)
                 self.assertEqual(dia_object.getId(), obj_idx)
             elif updated_idx_start <= obj_idx < new_idx_start:
                 # Test that associating to the existing DIAObjects went
@@ -241,9 +241,11 @@ class TestAssociationTask(unittest.TestCase):
                 # DIASources is correct.
                 self.assertEqual(dia_object['gPSFluxNdata'], 2)
                 self.assertEqual(dia_object['rPSFluxNdata'], 1)
+                self.assertEqual(dia_object['nDiaSources'], 3)
                 self.assertEqual(dia_object.getId(), obj_idx)
             else:
                 self.assertEqual(dia_object['gPSFluxNdata'], 1)
+                self.assertEqual(dia_object['nDiaSources'], 1)
                 self.assertEqual(dia_object.getId(), obj_idx + 4 + 5)
 
     def test_run_no_existing_objects(self):
@@ -258,6 +260,21 @@ class TestAssociationTask(unittest.TestCase):
             self.assertEqual(output_dia_object.getId(),
                              obj_idx + 10)
             self.assertEqual(output_dia_object.getId(), obj_idx + 10)
+
+    def _make_ppdb(self):
+        """Create an empty ppdb database.
+
+        Returns
+        -------
+        ppdb : `lsst.dax.ppdb.Ppdb`
+            Initialized and empty ppdb.
+        """
+        ppdb = Ppdb(config=self.ppdbConfig,
+                    afw_schemas=dict(DiaObject=make_dia_object_schema(),
+                                     DiaSource=make_dia_source_schema()))
+        ppdb.makeSchema()
+
+        return ppdb
 
     def _run_association_and_retrieve_objects(self, create_objects=False):
         """Convenience method for testing the Association run method.
@@ -285,34 +302,57 @@ class TestAssociationTask(unittest.TestCase):
             start_id=10,
             scatter_arcsec=-1)
         for dia_source in dia_sources:
-            dia_source['ccdVisitId'] = \
-                self.exposure.getInfo().getVisitInfo().getExposureId()
-            dia_source["midPointTai"] = \
-                self.exposure.getInfo().getVisitInfo().getDate().get(system=dafBase.DateTime.MJD)
-            dia_source["psFlux"] = 10000 / self.flux0
-            dia_source["psFluxErr"] = \
-                np.sqrt((100 / self.flux0) ** 2 + (10000 * self.flux0_err / self.flux0 ** 2) ** 2)
-            dia_source["apFlux"] = 10000 / self.flux0
-            dia_source["apFluxErr"] = \
-                np.sqrt((100 / self.flux0) ** 2 + (10000 * self.flux0_err / self.flux0 ** 2) ** 2)
-            dia_source["filterName"] = self.exposure.getFilter().getName()
-            dia_source["filterId"] = self.exposure.getFilter().getId()
-            dia_source["x"] = 0
-            dia_source["y"] = 0
-            dia_source["snr"] = 10
+            self._set_source_values(
+                dia_source=dia_source,
+                flux=10000,
+                fluxErr=100,
+                filterName=self.exposure.getFilter().getName(),
+                filterId=self.exposure.getFilter().getId(),
+                ccdVisitId=self.exposure.getInfo().getVisitInfo().getExposureId(),
+                midPointTai=self.exposure.getInfo().getVisitInfo().getDate().get(system=dafBase.DateTime.MJD))
 
-        assoc_config = AssociationConfig()
-        assoc_task = AssociationTask(config=assoc_config)
+        assoc_task = AssociationTask()
 
-        ppdb = Ppdb(config=self.ppdbConfig,
-                    afw_schemas=dict(DiaObject=make_dia_object_schema(),
-                                     DiaSource=make_dia_source_schema()))
-        ppdb._schema.makeSchema()
+        ppdb = self._make_ppdb()
 
         assoc_task.run(dia_sources, self.exposure, ppdb)
 
         dia_objects = assoc_task.retrieve_dia_objects(self.exposure, ppdb)
         return dia_objects
+
+    def _set_source_values(self, dia_source, flux, fluxErr, filterName,
+                           filterId, ccdVisitId, midPointTai):
+        """Set fluxes and visit info for DiaSources.
+
+        Parameters
+        ----------
+        dia_source : `lsst.afw.table.SourceRecord`
+            SourceRecord object to edit.
+        flux : `double`
+            Flux of DiaSource
+        fluxErr : `double`
+            Flux error of DiaSource
+        filterName : `string`
+            Name of filter for flux.
+        filterId : `int`
+            Unique id of filter.
+        ccdVisitId : `int`
+            Integer id of this ccd/visit.
+        midPointTai : `double`
+            Time of observation
+        """
+        dia_source['ccdVisitId'] = ccdVisitId
+        dia_source["midPointTai"] = midPointTai
+        dia_source["psFlux"] = flux / self.flux0
+        dia_source["psFluxErr"] = \
+            np.sqrt((fluxErr / self.flux0) ** 2 + (flux * self.flux0_err / self.flux0 ** 2) ** 2)
+        dia_source["apFlux"] = flux / self.flux0
+        dia_source["apFluxErr"] = \
+            np.sqrt((fluxErr / self.flux0) ** 2 + (flux * self.flux0_err / self.flux0 ** 2) ** 2)
+        dia_source["filterName"] = filterName
+        dia_source["filterId"] = filterId
+        dia_source["x"] = 0.
+        dia_source["y"] = 0.
 
     def _store_dia_objects_and_sources(self):
         """Method for storing a set of test DIAObjects and sources into
@@ -323,10 +363,7 @@ class TestAssociationTask(unittest.TestCase):
         # to them. The DIASources are "observed" in g and r.
 
         # Create an empty database
-        ppdb = Ppdb(config=self.ppdbConfig,
-                    afw_schemas=dict(DiaObject=make_dia_object_schema(),
-                                     DiaSource=make_dia_source_schema()))
-        ppdb._schema.makeSchema()
+        ppdb = self._make_ppdb()
 
         # Create DIObjects, give them fluxes, and store them
         n_objects = 5
@@ -341,6 +378,7 @@ class TestAssociationTask(unittest.TestCase):
             scatter_arcsec=-1,)
         # Set the DIAObject fluxes and number of associated sources.
         for dia_object in dia_objects:
+            dia_object["nDiaSources"] = 2
             for filter_name in self.filter_names:
                 dia_object["pixelId"] = 225823
                 dia_object['%sPSFluxMean' % filter_name] = 1
@@ -348,7 +386,8 @@ class TestAssociationTask(unittest.TestCase):
                 dia_object['%sPSFluxSigma' % filter_name] = 1
                 dia_object['%sPSFluxNdata' % filter_name] = 1
 
-        dateTime = dafBase.DateTime(nsecs=1400000000 * 10**9 - 1000)
+        dateTime = dafBase.DateTime("2014-05-13T16:00:00.000000000",
+                                    dafBase.DateTime.Timescale.TAI)
         ppdb.storeDiaObjects(dia_objects, dateTime.toPython())
 
         # Create DIASources, update their ccdVisitId and fluxes, and store
@@ -361,26 +400,24 @@ class TestAssociationTask(unittest.TestCase):
             associated_ids=[0, 1, 2, 3, 4,
                             0, 1, 2, 3, 4])
         for src_idx, dia_source in enumerate(dia_sources):
-            dia_source['ccdVisitId'] = 1232
-            dia_source["midPointTai"] = \
-                dateTime.get(system=dafBase.DateTime.MJD)
-            dia_source["x"] = 0
-            dia_source["y"] = 0
-            if src_idx >= n_objects:
-                dia_source['ccdVisitId'] += 1
-            dia_source["psFlux"] = 10000 / self.flux0
-            dia_source["psFluxErr"] = \
-                np.sqrt((100 / self.flux0) ** 2 + (10000 * self.flux0_err / self.flux0 ** 2) ** 2)
-            dia_source["apFlux"] = 10000 / self.flux0
-            dia_source["apFluxErr"] = \
-                np.sqrt((100 / self.flux0) ** 2 + (10000 * self.flux0_err / self.flux0 ** 2) ** 2)
-            dia_source["snr"] = 10
             if src_idx < n_objects:
-                dia_source["filterName"] = 'g'
-                dia_source["filterId"] = 1
+                self._set_source_values(
+                    dia_source=dia_source,
+                    flux=10000,
+                    fluxErr=100,
+                    filterName='g',
+                    filterId=1,
+                    ccdVisitId=1232,
+                    midPointTai=dateTime.get(system=dafBase.DateTime.MJD))
             else:
-                dia_source["filterName"] = 'r'
-                dia_source["filterId"] = 2
+                self._set_source_values(
+                    dia_source=dia_source,
+                    flux=10000,
+                    fluxErr=100,
+                    filterName='r',
+                    filterId=2,
+                    ccdVisitId=1233,
+                    midPointTai=dateTime.get(system=dafBase.DateTime.MJD))
         ppdb.storeDiaSources(dia_sources)
 
     def test_update_dia_objects(self):
@@ -398,26 +435,19 @@ class TestAssociationTask(unittest.TestCase):
             start_id=10,
             scatter_arcsec=-1,
             associated_ids=[1, 2, 3, 4, 14])
-        # Store raw uncalibrated fluxes for these sources.
+
         for dia_source in dia_sources:
-            dia_source["snr"] = 10
-            dia_source["midPointTai"] = \
-                self.exposure.getInfo().getVisitInfo().getDate().get(system=dafBase.DateTime.MJD)
-            dia_source["x"] = 0
-            dia_source["y"] = 0
-            dia_source["psFlux"] = 20000 / self.flux0
-            dia_source["psFluxErr"] = \
-                np.sqrt((100 / self.flux0) ** 2 + (20000 * self.flux0_err / self.flux0 ** 2) ** 2)
-            dia_source["apFlux"] = 20000 / self.flux0
-            dia_source["apFluxErr"] = \
-                np.sqrt((100 / self.flux0) ** 2 + (20000 * self.flux0_err / self.flux0 ** 2) ** 2)
-            dia_source["filterName"] = "g"
-            dia_source["filterId"] = 1
+            self._set_source_values(
+                dia_source=dia_source,
+                flux=20000,
+                fluxErr=100,
+                filterName='g',
+                filterId=1,
+                ccdVisitId=self.exposure.getInfo().getVisitInfo().getExposureId(),
+                midPointTai=self.exposure.getInfo().getVisitInfo().getDate().get(system=dafBase.DateTime.MJD))
 
         # Store them in the DB containing pre-existing objects.
-        ppdb = Ppdb(config=self.ppdbConfig,
-                    afw_schemas=dict(DiaObject=make_dia_object_schema(),
-                                     DiaSource=make_dia_source_schema()))
+        ppdb = self._make_ppdb()
         # Load the Existing DIAObjects for use in the update method.
         loaded_dia_objects = ppdb.getDiaObjects(self.index_ranges)
 
@@ -425,8 +455,7 @@ class TestAssociationTask(unittest.TestCase):
         ppdb.storeDiaSources(dia_sources)
 
         # Create our task and update the stored DIAObjects.
-        assoc_config = AssociationConfig()
-        assoc_task = AssociationTask(config=assoc_config)
+        assoc_task = AssociationTask()
         assoc_task.update_dia_objects(loaded_dia_objects,
                                       [1, 2, 3, 4, 14],
                                       self.exposure,
@@ -436,9 +465,6 @@ class TestAssociationTask(unittest.TestCase):
         output_dia_objects = ppdb.getDiaObjects(self.index_ranges)
 
         # Data and column names to test.
-        test_column_names = [
-            'id', 'gPSFluxMean', 'gPSFluxMeanErr', 'gPSFluxSigma',
-            'rPSFluxMean', 'rPSFluxMeanErr', 'rPSFluxSigma']
         test_dia_object_values = [
             {'id': 0,
              'gPSFluxMean': 1., 'gPSFluxMeanErr': 1., 'gPSFluxSigma': 1.,
@@ -464,7 +490,7 @@ class TestAssociationTask(unittest.TestCase):
         self.assertEqual(len(output_dia_objects), 6)
         for dia_object, values in zip(output_dia_objects,
                                       test_dia_object_values):
-            for test_name in test_column_names:
+            for test_name in values.keys():
                 if np.isnan(values[test_name]):
                     self.assertTrue(np.isnan(dia_object[test_name]))
                 elif test_name == 'id' or test_name == 'nDiaSources':
