@@ -27,11 +27,14 @@ __all__ = ["AssociationConfig", "AssociationTask"]
 import numpy as np
 from scipy.spatial import cKDTree
 
+from lsst.meas.algorithms.indexerRegistry import IndexerRegistry
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.afw.geom as afwGeom
 import lsst.afw.table as afwTable
-from .assoc_db_sqlite import AssociationDBSqliteTask
+from lsst.daf.base import DateTime
+
+from .afwUtils import make_dia_object_schema
 
 
 def _set_mean_position(dia_object_record, dia_sources):
@@ -72,32 +75,40 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
     filter_id : `int`
         id of the filter in the AssociationDB.
     """
-    if len(dia_sources) == 1:
-        dia_object_record['psFluxMean_%s' % filter_name] = dia_sources[0]['psFlux']
-        dia_object_record['psFluxSigma_%s' % filter_name] = np.nan
-        dia_object_record['psFluxMeanErr_%s' % filter_name] = np.nan
+    n_sources = len(dia_sources)
+    if n_sources == 1 and dia_sources[0]["filterId"] == filter_id:
+        dia_object_record['%sPSFluxMean' % filter_name] = dia_sources[0]['psFlux']
+        dia_object_record['%sPSFluxSigma' % filter_name] = np.nan
+        dia_object_record['%sPSFluxMeanErr' % filter_name] = np.nan
+        dia_object_record["%sPSFluxChi2" % filter_name] = np.nan
+        dia_object_record['%sPSFluxNdata' % filter_name] = n_sources
     else:
         fluxes = dia_sources.get("psFlux")[
             dia_sources.get("filterId") == filter_id]
-        dia_object_record['psFluxMean_%s' % filter_name] = np.mean(fluxes)
-        dia_object_record['psFluxSigma_%s' % filter_name] = np.std(fluxes, ddof=1)
-        dia_object_record['psFluxMeanErr_%s' % filter_name] = \
-            dia_object_record['psFluxSigma_%s' % filter_name] / len(dia_sources)
+        fluxErrors = dia_sources.get("psFluxErr")[
+            dia_sources.get("filterId") == filter_id]
+        fluxMean = np.mean(fluxes)
+        dia_object_record['%sPSFluxMean' % filter_name] = np.mean(fluxes)
+        dia_object_record['%sPSFluxSigma' % filter_name] = np.std(fluxes, ddof=1)
+        dia_object_record['%sPSFluxMeanErr' % filter_name] = \
+            dia_object_record['%sPSFluxSigma' % filter_name] / len(fluxes)
+        dia_object_record["%sPSFluxChi2" % filter_name] = np.sum(
+            ((fluxMean - fluxes) / fluxErrors) ** 2)
+        dia_object_record['%sPSFluxNdata' % filter_name] = len(fluxes)
 
 
 class AssociationConfig(pexConfig.Config):
     """Config class for AssociationTask.
     """
-    level1_db = pexConfig.ConfigurableField(
-        target=AssociationDBSqliteTask,
-        doc='Specify where and how to load and store DIAObjects and '
-        'DIASources.',
-    )
     maxDistArcSeconds = pexConfig.Field(
         dtype=float,
         doc='Maximum distance in arcseconds to test for a DIASource to be a '
         'match to a DIAObject.',
         default=1.0,
+    )
+    indexer = IndexerRegistry.makeField(
+        doc='Select the spatial indexer to use within the database.',
+        default='HTM'
     )
 
 
@@ -115,10 +126,12 @@ class AssociationTask(pipeBase.Task):
 
     def __init__(self, **kwargs):
         pipeBase.Task.__init__(self, **kwargs)
-        self.makeSubtask('level1_db')
+        self.indexer = IndexerRegistry[self.config.indexer.name](
+            self.config.indexer.active)
+        self.dia_object_schema = make_dia_object_schema()
 
     @pipeBase.timeMethod
-    def run(self, dia_sources, exposure):
+    def run(self, dia_sources, exposure, ppdb):
         """Load DIAObjects from the database, associate the sources, and
         persist the results into the L1 database.
 
@@ -130,22 +143,93 @@ class AssociationTask(pipeBase.Task):
             Input exposure representing the region of the sky the dia_sources
             were detected on. Should contain both the solved WCS and a bounding
             box of the ccd.
+        ppdb : `lsst.dax.ppdb.Ppdb`
+            Ppdb connection object to retrieve DIASources/Objects from and
+            write to.
         """
         # Assure we have a Box2D and can use the getCenter method.
 
-        dia_objects = self.level1_db.load_dia_objects(exposure)
+        dia_objects = self.retrieve_dia_objects(exposure, ppdb)
 
         updated_obj_ids = self.associate_sources(dia_objects, dia_sources)
 
         # Store newly associated DIASources.
-        self.level1_db.store_dia_sources(
-            dia_sources, updated_obj_ids, exposure)
+        visitInfo = exposure.getInfo().getVisitInfo()
+        ppdb.saveVisit(visitInfo.getExposureId(),
+                       visitInfo.getDate().toPython())
+        ppdb.storeDiaSources(dia_sources)
         # Update previously existing DIAObjects with the information from their
         # newly association DIASources and create new DIAObjects from
         # unassociated sources.
         self.update_dia_objects(dia_objects,
                                 updated_obj_ids,
-                                exposure)
+                                exposure,
+                                ppdb)
+
+    @pipeBase.timeMethod
+    def retrieve_dia_objects(self, exposure, ppdb):
+        """Convert the exposure object into HTM pixels and retrieve DIAObjects
+        contained within the exposure.
+
+        Parameters
+        ----------
+        exposure : `lsst.afw.image.Exposure`
+            An exposure specifying a bounding region with a WCS to load
+            DIAOjbects within.
+        ppdb : `lsst.dax.ppdb.Ppdb`
+            Ppdb connection object to retrieve DIAObjects from.
+
+        Returns
+        -------
+        diaObjects : `lsst.afw.table.SourceCatalog`
+            DiaObjects within the exposure boundary. Resultant catalog is
+            contiguous.
+        """
+        bbox = afwGeom.Box2D(exposure.getBBox())
+        wcs = exposure.getWcs()
+
+        ctr_coord = wcs.pixelToSky(bbox.getCenter())
+        max_radius = max(
+            ctr_coord.separation(wcs.pixelToSky(pp))
+            for pp in bbox.getCorners())
+
+        indexer_indices, on_boundry = self.indexer.getShardIds(
+            ctr_coord, max_radius)
+        # Index types must be cast to int to work with dax_ppdb.
+        index_ranges = [[int(indexer_idx), int(indexer_idx) + 1]
+                        for indexer_idx in indexer_indices]
+        covering_dia_objects = ppdb.getDiaObjects(index_ranges)
+
+        output_dia_objects = afwTable.SourceCatalog(
+            covering_dia_objects.getSchema())
+        for cov_dia_object in covering_dia_objects:
+            if self._check_dia_object_position(cov_dia_object, bbox, wcs):
+                output_dia_objects.append(cov_dia_object)
+
+        # Return deep copy to enforce contiguity.
+        return output_dia_objects.copy(deep=True)
+
+    def _check_dia_object_position(self, dia_object_record, bbox, wcs):
+        """Check the RA, DEC position of the current dia_object_record against
+        the bounding box of the exposure.
+
+        Parameters
+        ----------
+        dia_object_record : `lsst.afw.table.SourceRecord`
+            A SourceRecord object containing the DIAObject we would like to
+            test against our bounding box.
+        bbox : `lsst.geom.Box2D`
+            Bounding box of exposure.
+        wcs : `lsst.geom.SkyWcs`
+            WCS of exposure.
+
+        Return
+        ------
+        is_contained : `bool`
+            Object position is contained within the bounding box.
+        """
+        point = wcs.skyToPixel(dia_object_record.getCoord())
+        return bbox.contains(point)
 
     @pipeBase.timeMethod
     def associate_sources(self, dia_objects, dia_sources):
@@ -176,7 +260,7 @@ class AssociationTask(pipeBase.Task):
         return match_result.associated_dia_object_ids
 
     @pipeBase.timeMethod
-    def update_dia_objects(self, dia_objects, updated_obj_ids, exposure):
+    def update_dia_objects(self, dia_objects, updated_obj_ids, exposure, ppdb):
         """Update select dia_objects currently stored within the database or
         create new ones.
 
@@ -191,14 +275,19 @@ class AssociationTask(pipeBase.Task):
             Input exposure representing the region of the sky the dia_sources
             were detected on. Should contain both the solved WCS and a bounding
             box of the ccd.
+        ppdb : `lsst.dax.ppdb.Ppdb`
+            Ppdb connection object to retrieve DIASources from and
+            write DIAObjects to.
         """
         updated_dia_objects = afwTable.SourceCatalog(
-            self.level1_db.dia_object_afw_schema)
+            self.dia_object_schema)
 
         filter_name = exposure.getFilter().getName()
         filter_id = exposure.getFilter().getId()
 
-        dia_sources = self.level1_db.load_dia_sources(updated_obj_ids)
+        dateTime = exposure.getInfo().getVisitInfo().getDate()
+
+        dia_sources = ppdb.getDiaSources(updated_obj_ids, dateTime.toPython())
         diaObjectId_key = dia_sources.schema['diaObjectId'].asKey()
         dia_sources.sort(diaObjectId_key)
 
@@ -206,9 +295,9 @@ class AssociationTask(pipeBase.Task):
             dia_object = dia_objects.find(obj_id)
             if dia_object is None:
                 dia_object = updated_dia_objects.addNew()
+                dia_object.set('id', obj_id)
             else:
                 updated_dia_objects.append(dia_object)
-            dia_object.set('id', obj_id)
 
             # Select the dia_sources associated with this DIAObject id and
             # copy the copy the subcatalog for fast slicing.
@@ -216,17 +305,19 @@ class AssociationTask(pipeBase.Task):
             end_idx = dia_sources.upper_bound(obj_id, diaObjectId_key)
             obj_dia_sources = dia_sources[start_idx:end_idx].copy(deep=True)
 
-            dia_object.set('nDiaSources', len(obj_dia_sources))
-
             ave_coord = _set_mean_position(dia_object, obj_dia_sources)
-            indexer_id = self.level1_db.compute_indexer_id(ave_coord)
+            indexer_id = self.indexer.indexPoints(
+                [ave_coord.getRa().asDegrees()],
+                [ave_coord.getDec().asDegrees()])[0]
             dia_object.set('pixelId', indexer_id)
+            dia_object.set("radecTai", dateTime.get(system=DateTime.MJD))
+            dia_object.set("nDiaSources", len(obj_dia_sources))
             _set_flux_stats(dia_object,
                             obj_dia_sources,
                             filter_name,
                             filter_id)
 
-        self.level1_db.store_dia_objects(updated_dia_objects, False, exposure)
+        ppdb.storeDiaObjects(updated_dia_objects, dateTime.toPython())
 
     @pipeBase.timeMethod
     def score(self, dia_objects, dia_sources, max_dist):
@@ -380,13 +471,17 @@ class AssociationTask(pipeBase.Task):
                 continue
             used_dia_object[dia_obj_idx] = True
             used_dia_source[score_idx] = True
-            associated_dia_object_ids[score_idx] = score_struct.obj_ids[score_idx]
+            obj_id = score_struct.obj_ids[score_idx]
+            associated_dia_object_ids[score_idx] = obj_id
             n_updated_dia_objects += 1
+            dia_sources[int(score_idx)].set("diaObjectId", int(obj_id))
 
         # Argwhere returns a array shape (N, 1) so we access the index
-        # thusly to retrieve the value rather than the tuple.
+        # thusly to retrieve the value rather than the tuple
         for (src_idx,) in np.argwhere(np.logical_not(used_dia_source)):
-            associated_dia_object_ids[src_idx] = dia_sources[int(src_idx)].getId()
+            src_id = dia_sources[int(src_idx)].getId()
+            associated_dia_object_ids[src_idx] = src_id
+            dia_sources[int(src_idx)].set("diaObjectId", int(src_id))
             n_new_dia_objects += 1
 
         # Return the ids of the DIAObjects in this DIAObjectCollection that
