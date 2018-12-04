@@ -112,12 +112,14 @@ class MapDiaSourceConfig(pexConfig.Config):
                  "slot_ApFlux_instFlux": "apFlux",
                  "slot_ApFlux_instFluxErr": "apFluxErr",
                  "slot_PsfFlux_instFlux": "psFlux",
-                 "slot_PsfFlux_instFluxErr": "psFluxErr"}
+                 "slot_PsfFlux_instFluxErr": "psFluxErr",
+                 "ip_diffim_forced_PsfFlux_instFlux": "totFlux",
+                 "ip_diffim_forced_PsfFlux_instFluxErr": "totFluxErr"}
     )
     calibrateColumns = pexConfig.ListField(
         dtype=str,
         doc="Flux columns in the input catalog to calibrate.",
-        default=["slot_ApFlux", "slot_PsfFlux"]
+        default=["slot_ApFlux", "slot_PsfFlux", "ip_diffim_forced_PsfFlux"]
     )
 
 
