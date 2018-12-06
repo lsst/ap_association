@@ -154,9 +154,6 @@ class AssociationTask(pipeBase.Task):
         updated_obj_ids = self.associate_sources(dia_objects, dia_sources)
 
         # Store newly associated DIASources.
-        visitInfo = exposure.getInfo().getVisitInfo()
-        ppdb.saveVisit(visitInfo.getExposureId(),
-                       visitInfo.getDate().toPython())
         ppdb.storeDiaSources(dia_sources)
         # Update previously existing DIAObjects with the information from their
         # newly association DIASources and create new DIAObjects from
