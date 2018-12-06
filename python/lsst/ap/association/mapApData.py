@@ -207,7 +207,9 @@ class MapDiaSourceTask(MapApDataTask):
         filterName = exposure.getFilter().getName()
 
         flux0, flux0Err = exposure.getCalib().getFluxMag0()
-        photoCalib = afwImage.PhotoCalib(1 / flux0, flux0Err / flux0 ** 2)
+        # TODO: need to scale these until DM-10153 is completed and PhotoCalib has replaced Calib entirely
+        referenceFlux = 1e23 * 10**(48.6 / -2.5) * 1e9
+        photoCalib = afwImage.PhotoCalib(referenceFlux / flux0, referenceFlux*flux0Err / flux0 ** 2)
 
         outputCatalog = afwTable.SourceCatalog(self.outputSchema)
         outputCatalog.reserve(len(inputCatalog))
@@ -241,12 +243,12 @@ class MapDiaSourceTask(MapApDataTask):
             Calibration object from the difference exposure.
         """
         for col_name in self.config.calibrateColumns:
-            meas = photoCalib.instFluxToMaggies(inputRecord, col_name)
+            meas = photoCalib.instFluxToNanojansky(inputRecord, col_name)
             outputRecord.set(self.config.copyColumns[col_name + "_instFlux"],
                              meas.value)
             outputRecord.set(
                 self.config.copyColumns[col_name + "_instFluxErr"],
-                meas.err)
+                meas.error)
 
     def bitPackFlags(self, inputRecord, outputRecord):
         """Pack requested flag columns in inputRecord into single columns in

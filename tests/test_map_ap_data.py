@@ -116,9 +116,14 @@ class TestAPDataMapperTask(unittest.TestCase):
         self.exposure.setDetector(detector)
         self.exposure.getInfo().setVisitInfo(visit)
         self.exposure.setFilter(afwImage.Filter('g'))
-        self.flux0 = 2
-        self.flux0Err = 1
-        self.exposure.getCalib().setFluxMag0((self.flux0, self.flux0Err))
+        # TODO: Need to save the PhotoCalib until DM-10153 is done and Calib is replaced by PhotoCalib.
+        scale = 2
+        scaleErr = 1
+        self.photoCalib = afwImage.PhotoCalib(scale, scaleErr)
+        flux0 = self.photoCalib.getInstFluxAtZeroMagnitude()
+        referenceFlux = 1e23 * 10**(48.6 / -2.5) * 1e9
+        flux0Err = (referenceFlux * scaleErr / scale**2)
+        self.exposure.getCalib().setFluxMag0(flux0, flux0Err)
 
         self.inputCatalogNoFlags = make_input_source_catalog(10, False)
         self.inputCatalog = make_input_source_catalog(10, True)
@@ -222,10 +227,9 @@ class TestAPDataMapperTask(unittest.TestCase):
         mapApD = MapDiaSourceTask(inputSchema=self.inputCatalog.schema,
                                   config=mapApDConfig)
 
-        photoCalib = afwImage.PhotoCalib(1 / self.flux0, self.flux0Err / self.flux0 ** 2)
         mapApD.calibrateFluxes(self.inputCatalog[0],
                                outRecord,
-                               photoCalib)
+                               self.photoCalib)
         self._test_calibrated_flux(self.inputCatalog[0], outRecord)
 
     def _test_calibrated_flux(self, inputRecord, outputRecord):
@@ -238,13 +242,10 @@ class TestAPDataMapperTask(unittest.TestCase):
         outputRecord: `lsst.afw.table.SourceRecord`
             Source record with calibrated fluxes.
         """
-        expectedValue = (inputRecord["slot_PsfFlux_instFlux"] / self.flux0)
-        expectedValueErr = expectedValue * np.sqrt(
-            (inputRecord["slot_PsfFlux_instFluxErr"] /
-             inputRecord["slot_PsfFlux_instFlux"]) ** 2 +
-            (self.flux0Err / self.flux0) ** 2)
-        self.assertAlmostEqual(outputRecord["psFlux"], expectedValue)
-        self.assertAlmostEqual(outputRecord["psFluxErr"], expectedValueErr)
+        expected = self.photoCalib.instFluxToNanojansky(inputRecord["slot_PsfFlux_instFlux"],
+                                                        inputRecord["slot_PsfFlux_instFluxErr"])
+        self.assertAlmostEqual(outputRecord["psFlux"], expected.value)
+        self.assertAlmostEqual(outputRecord["psFluxErr"], expected.error)
 
     def test_bit_unpacker(self):
         """Test that the integer bit packer is functioning correctly.
