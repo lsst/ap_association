@@ -1,9 +1,9 @@
 # This file lists columns for bit-packing using columns for use in the Ppdb
 # 
-table: DiaSource
+tableName: DiaSource
 doc: "Flag packing definitions for the DiaSource table."
 columns:
-  - columnName: flag
+  - columnName: flags
     doc: Bit pack of all relavant flags for the columns currently stored in
       the Ppdb.
     bitList:
@@ -76,3 +76,4 @@ columns:
     - name: ip_diffim_forced_PsfFlux_flag_edge
       bit: 22
       doc: Forced PSF flux object was too close to the edge of the image to use the full PSF model.
+---

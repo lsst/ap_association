@@ -20,6 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import numpy as np
+import os
 import unittest
 
 from lsst.ap.association import (
@@ -33,10 +34,11 @@ import lsst.daf.base as dafBase
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 import lsst.afw.image.utils as afwImageUtils
+from lsst.utils import getPackageDir
 import lsst.utils.tests
 
 
-def make_input_source_catalog(n_objects):
+def make_input_source_catalog(n_objects, add_flags=False):
     """Create tests objects to map into apData products.
 
     Parameters
@@ -49,6 +51,9 @@ def make_input_source_catalog(n_objects):
     schema.addField("base_NaiveCentroid_y", type="D")
     schema.addField("base_PsfFlux_instFlux", type="D")
     schema.addField("base_PsfFlux_instFluxErr", type="D")
+    if add_flags:
+        schema.addField("base_PixelFlags_flag", type="Flag")
+        schema.addField("base_PixelFlags_flag_offimage", type="Flag")
 
     objects = afwTable.SourceCatalog(schema)
     objects.preallocate(n_objects)
@@ -114,7 +119,8 @@ class TestAPDataMapperTask(unittest.TestCase):
         self.flux0Err = 1
         self.exposure.getCalib().setFluxMag0((self.flux0, self.flux0Err))
 
-        self.inputCatalog = make_input_source_catalog(10)
+        self.inputCatalogNoFlags = make_input_source_catalog(10, False)
+        self.inputCatalog = make_input_source_catalog(10, True)
 
     def test_run(self):
         """Test the generic data product mapper.
@@ -155,6 +161,10 @@ class TestAPDataMapperTask(unittest.TestCase):
             "slot_PsfFlux_instFluxErr": "psFluxErr"
         }
         mapApDConfig.calibrateColumns = ["slot_PsfFlux"]
+        mapApDConfig.flagMap = os.path.join(
+            getPackageDir("ap_association"),
+            "tests",
+            "test-flag-map.yaml")
         mapApD = MapDiaSourceTask(inputSchema=self.inputCatalog.schema,
                                   config=mapApDConfig)
         outputCatalog = mapApD.run(self.inputCatalog, self.exposure)
@@ -167,11 +177,36 @@ class TestAPDataMapperTask(unittest.TestCase):
                 outObj["midPointTai"],
                 self.exposure.getInfo().getVisitInfo().getDate().get(
                     system=dafBase.DateTime.MJD))
+            self.assertEqual(
+                outObj["flags"],
+                1 * 2 ** 0 + 1 * 2 ** 1)
             for inputName, outputName in mapApDConfig.copyColumns.items():
                 if inputName.startswith("slot"):
                     self._test_calibrated_flux(inObj, outObj)
                 else:
                     self.assertEqual(inObj[inputName], outObj[outputName])
+
+    def test_run_dia_source_wrong_flags(self):
+        """Test that the proper errors are thrown when requesting flag columns
+        that are not in the input schema.
+        """
+        mapApDConfig = MapDiaSourceConfig()
+        mapApDConfig.copyColumns = {
+            "id": "id",
+            "parent": "parent",
+            "coord_ra": "coord_ra",
+            "coord_dec": "coord_dec",
+            "slot_PsfFlux_instFlux": "psFlux",
+            "slot_PsfFlux_instFluxErr": "psFluxErr"
+        }
+        mapApDConfig.calibrateColumns = ["slot_PsfFlux"]
+        mapApDConfig.flagMap = os.path.join(
+            getPackageDir("ap_association"),
+            "tests",
+            "test-flag-map.yaml")
+        with self.assertRaises(KeyError):
+            MapDiaSourceTask(inputSchema=self.inputCatalogNoFlags.schema,
+                             config=mapApDConfig)
 
     def test_calibrateFluxes(self):
         """Test that flux calibration works as expected.
@@ -193,6 +228,10 @@ class TestAPDataMapperTask(unittest.TestCase):
             "slot_PsfFlux_instFluxErr": "psFluxErr"
         }
         mapApDConfig.calibrateColumns = ["slot_PsfFlux"]
+        mapApDConfig.flagMap = os.path.join(
+            getPackageDir("ap_association"),
+            "tests",
+            "test-flag-map.yaml")
         mapApD = MapDiaSourceTask(inputSchema=self.inputCatalog.schema,
                                   config=mapApDConfig)
 

@@ -26,12 +26,16 @@ use in ap_association and the prompt-products database (PPDB).
 __all__ = ["MapApDataConfig", "MapApDataTask",
            "MapDiaSourceConfig", "MapDiaSourceTask"]
 
+import os
+import yaml
+
 import lsst.afw.table as afwTable
 from lsst.daf.base import DateTime
 import lsst.pipe.base as pipeBase
 import lsst.pex.config as pexConfig
 from lsst.pex.exceptions import RuntimeError
 import lsst.afw.image as afwImage
+from lsst.utils import getPackageDir
 from .afwUtils import make_dia_source_schema
 
 
@@ -121,6 +125,13 @@ class MapDiaSourceConfig(pexConfig.Config):
         doc="Flux columns in the input catalog to calibrate.",
         default=["slot_ApFlux", "slot_PsfFlux", "ip_diffim_forced_PsfFlux"]
     )
+    flagMap = pexConfig.Field(
+        dtype=str,
+        doc="Yaml file specifying SciencePipelines flag fields to bit packs.",
+        default=os.path.join(getPackageDir("ap_association"),
+                             "data",
+                             "association-flag-map.yaml"),
+    )
 
 
 class MapDiaSourceTask(MapApDataTask):
@@ -139,6 +150,37 @@ class MapDiaSourceTask(MapApDataTask):
                                inputSchema=inputSchema,
                                outputSchema=make_dia_source_schema(),
                                **kwargs)
+        self._create_bit_pack_mappings()
+
+    def _create_bit_pack_mappings(self):
+        """Setup all flag bit packings.
+        """
+        output_columns = []
+        with open(self.config.flagMap) as yaml_stream:
+            table_list = list(yaml.load_all(yaml_stream))
+            for table in table_list:
+                if table['tableName'] == 'DiaSource':
+                    output_columns = table['columns']
+                    break
+        self.bit_pack_columns = output_columns
+
+        for outputFlag in self.bit_pack_columns:
+            try:
+                self.outputSchema.find(outputFlag['columnName'])
+            except KeyError:
+                raise KeyError(
+                    "Requested column %s not found in MapDiaSourceTask output "
+                    "schema. Please check that the requested output column "
+                    "exists." % outputFlag['columnName'])
+            bitList = outputFlag['bitList']
+            for bit in bitList:
+                try:
+                    self.inputSchema.find(bit['name'])
+                except KeyError:
+                    raise KeyError(
+                        "Requested column %s not found in MapDiaSourceTask input "
+                        "schema. Please check that the requested input column "
+                        "exists." % outputFlag['columnName'])
 
     def run(self, inputCatalog, exposure):
         """Copy data from the inputCatalog into an output catalog with
@@ -171,6 +213,7 @@ class MapDiaSourceTask(MapApDataTask):
             outputRecord = outputCatalog.addNew()
             outputRecord.assign(inputRecord, self.mapper)
             self.calibrateFluxes(inputRecord, outputRecord, photoCalib)
+            self.bitPackFlags(inputRecord, outputRecord)
 
             outputRecord.set("ccdVisitId", ccdVisitId)
             outputRecord.set("midPointTai", midPointTaiMJD)
@@ -201,3 +244,20 @@ class MapDiaSourceTask(MapApDataTask):
             outputRecord.set(
                 self.config.copyColumns[col_name + "_instFluxErr"],
                 meas.err)
+
+    def bitPackFlags(self, inputRecord, outputRecord):
+        """.
+
+        Parameters
+        ----------
+        inputRecord: `lsst.afw.table.SourceRecord`
+            Record to copy flux values from.
+        outputRecord: `lsst.afw.table.SourceRecord`
+            Record to copy and calibrate values into.
+        """
+        for outputFlag in self.bit_pack_columns:
+            bitList = outputFlag['bitList']
+            value = 0
+            for bit in bitList:
+                value += inputRecord[bit['name']] * 2 ** bit['bit']
+            outputRecord.set(outputFlag['columnName'], value)
