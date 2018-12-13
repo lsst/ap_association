@@ -24,8 +24,10 @@ use in ap_association and the prompt-products database (PPDB).
 """
 
 __all__ = ["MapApDataConfig", "MapApDataTask",
-           "MapDiaSourceConfig", "MapDiaSourceTask"]
+           "MapDiaSourceConfig", "MapDiaSourceTask",
+           "UpackPpdbFlags"]
 
+import numpy as np
 import os
 import yaml
 
@@ -164,6 +166,8 @@ class MapDiaSourceTask(MapApDataTask):
                     break
         self.bit_pack_columns = output_columns
 
+        # Test that all flags requested are present in both the input and
+        # output schemas.
         for outputFlag in self.bit_pack_columns:
             try:
                 self.outputSchema.find(outputFlag['columnName'])
@@ -246,7 +250,8 @@ class MapDiaSourceTask(MapApDataTask):
                 meas.err)
 
     def bitPackFlags(self, inputRecord, outputRecord):
-        """.
+        """Pack requested flag columns in inputRecord into single columns in
+        outputRecord.
 
         Parameters
         ----------
@@ -261,3 +266,60 @@ class MapDiaSourceTask(MapApDataTask):
             for bit in bitList:
                 value += inputRecord[bit['name']] * 2 ** bit['bit']
             outputRecord.set(outputFlag['columnName'], value)
+
+
+class UpackPpdbFlags(object):
+    """Class for unpacking bits from integer flag fields stored in the Ppdb.
+
+    Attributes
+    ----------
+    flag_map_file : `str`
+        Absolute or relative path to a yaml file specifiying mappings of flags
+        to integer bits.
+    table_name : `str`
+        Name of the Ppdb table the integer bit data are coming from.
+    """
+
+    def __init__(self, flag_map_file, table_name):
+        output_columns = []
+        with open(flag_map_file) as yaml_stream:
+            table_list = list(yaml.load_all(yaml_stream))
+            for table in table_list:
+                if table['tableName'] == table_name:
+                    output_columns = table['columns']
+                    break
+        self.bit_pack_columns = output_columns
+
+        self.output_flag_columns = {}
+
+        for column in self.bit_pack_columns:
+            names = []
+            for bit in column["bitList"]:
+                names.append((bit["name"], np.bool))
+            self.output_flag_columns[column["columnName"]] = names
+
+    def unpack(self, input_flag_values, flag_name):
+        """Determine individual boolean flags from an array of input unsigned
+        ints.
+
+        Parameters
+        ----------
+        input_flag_values : array-like of type uint
+            Input integer flags to unpack.
+        flag_name : `str`
+            Column name of integer flags to unpack. Names of packed int flags
+            are given by the flag_map_file.
+
+        Returns
+        -------
+        output_flags : `numpy.ndarray`
+            Numpy named tuple of booleans.
+        """
+        bit_names_types = self.output_flag_columns[flag_name]
+        output_flags = np.zeros(len(input_flag_values), dtype=bit_names_types)
+
+        for bit_idx, (bit_name, dtypes) in enumerate(bit_names_types):
+            masked_bits = np.bitwise_and(input_flag_values, 2 ** bit_idx)
+            output_flags[bit_name] = masked_bits
+
+        return output_flags
