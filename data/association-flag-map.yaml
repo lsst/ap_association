@@ -43,28 +43,28 @@ columns:
     - name: base_PixelFlags_flag_suspectCenter
       bit: 11
       doc: Source''s center is close to suspect pixels
-    - name: ip_diffim_NaiveDipoleCentroid_flag
+    - name: slot_Centroid_flag
       bit: 12
       doc: general failure flag, set if anything went wrong
-    - name: ip_diffim_NaiveDipoleCentroid_pos_flag
+    - name: slot_Centroid_pos_flag
       bit: 13
       doc: failure flag for positive, set if anything went wrong
-    - name: ip_diffim_NaiveDipoleCentroid_neg_flag
+    - name: slot_Centroid_neg_flag
       bit: 14
       doc: failure flag for negative, set if anything went wrong
-    - name: base_CircularApertureFlux_12_0_flag
+    - name: slot_ApFlux_flag
       bit: 15
       doc: General Failure Flag
-    - name: base_CircularApertureFlux_12_0_flag_apertureTruncated
+    - name: slot_ApFlux_flag_apertureTruncated
       bit: 16
       doc: aperture did not fit within measurement image
-    - name: base_PsfFlux_flag
+    - name: slot_PsfFlux_flag
       bit: 17
       doc: General Failure Flag
-    - name: base_PsfFlux_flag_noGoodPixels
+    - name: slot_PsfFlux_flag_noGoodPixels
       bit: 18
       doc: not enough non-rejected pixels in data to attempt the fit
-    - name: base_PsfFlux_flag_edge
+    - name: slot_PsfFlux_flag_edge
       bit: 19
       doc: object was too close to the edge of the image to use the full PSF model
     - name: ip_diffim_forced_PsfFlux_flag

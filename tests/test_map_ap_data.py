@@ -28,7 +28,7 @@ from lsst.ap.association import (
     MapApDataTask,
     MapDiaSourceConfig,
     MapDiaSourceTask,
-    UpackPpdbFlags)
+    UnpackPpdbFlags)
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
@@ -259,7 +259,7 @@ class TestAPDataMapperTask(unittest.TestCase):
                 obj.set("base_PixelFlags_flag_offimage", 0)
         outputCatalog = mapApD.run(self.inputCatalog, self.exposure)
 
-        unpacker = UpackPpdbFlags(mapApDConfig.flagMap, "DiaSource")
+        unpacker = UnpackPpdbFlags(mapApDConfig.flagMap, "DiaSource")
         flag_values = unpacker.unpack(outputCatalog.get("flags"), "flags")
 
         for idx, flag in enumerate(flag_values):

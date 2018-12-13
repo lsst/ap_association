@@ -25,7 +25,7 @@ use in ap_association and the prompt-products database (PPDB).
 
 __all__ = ["MapApDataConfig", "MapApDataTask",
            "MapDiaSourceConfig", "MapDiaSourceTask",
-           "UpackPpdbFlags"]
+           "UnpackPpdbFlags"]
 
 import numpy as np
 import os
@@ -157,14 +157,13 @@ class MapDiaSourceTask(MapApDataTask):
     def _create_bit_pack_mappings(self):
         """Setup all flag bit packings.
         """
-        output_columns = []
+        self.bit_pack_columns = []
         with open(self.config.flagMap) as yaml_stream:
             table_list = list(yaml.load_all(yaml_stream))
             for table in table_list:
                 if table['tableName'] == 'DiaSource':
-                    output_columns = table['columns']
+                    self.bit_pack_columns = table['columns']
                     break
-        self.bit_pack_columns = output_columns
 
         # Test that all flags requested are present in both the input and
         # output schemas.
@@ -268,7 +267,7 @@ class MapDiaSourceTask(MapApDataTask):
             outputRecord.set(outputFlag['columnName'], value)
 
 
-class UpackPpdbFlags(object):
+class UnpackPpdbFlags(object):
     """Class for unpacking bits from integer flag fields stored in the Ppdb.
 
     Attributes
@@ -281,14 +280,13 @@ class UpackPpdbFlags(object):
     """
 
     def __init__(self, flag_map_file, table_name):
-        output_columns = []
+        self.bit_pack_columns = []
         with open(flag_map_file) as yaml_stream:
             table_list = list(yaml.load_all(yaml_stream))
             for table in table_list:
                 if table['tableName'] == table_name:
-                    output_columns = table['columns']
+                    self.bit_pack_columns = table['columns']
                     break
-        self.bit_pack_columns = output_columns
 
         self.output_flag_columns = {}
 
@@ -307,8 +305,8 @@ class UpackPpdbFlags(object):
         input_flag_values : array-like of type uint
             Input integer flags to unpack.
         flag_name : `str`
-            Column name of integer flags to unpack. Names of packed int flags
-            are given by the flag_map_file.
+            Ppdb column name of integer flags to unpack. Names of packed int
+            flags are given by the flag_map_file.
 
         Returns
         -------
