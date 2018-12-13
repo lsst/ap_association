@@ -299,7 +299,7 @@ class UpackPpdbFlags(object):
             self.output_flag_columns[column["columnName"]] = names
 
     def unpack(self, input_flag_values, flag_name):
-        """Determine individual boolean flags from an array of input unsigned
+        """Determine individual boolean flags from an input array of unsigned
         ints.
 
         Parameters

@@ -253,7 +253,7 @@ def make_dia_object_schema(filter_names=None):
     schema.addField('pixelId', type='L',
                     doc='HTM index.')
     schema.addField('nDiaSources', type='I',
-                    doc='Total number of DiaSources associatedwith this DiaObject.')
+                    doc='Total number of DiaSources associated with this DiaObject.')
 
     return schema
 

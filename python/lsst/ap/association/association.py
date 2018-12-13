@@ -297,7 +297,7 @@ class AssociationTask(pipeBase.Task):
                 updated_dia_objects.append(dia_object)
 
             # Select the dia_sources associated with this DIAObject id and
-            # copy the copy the subcatalog for fast slicing.
+            # copy the subcatalog for fast slicing.
             start_idx = dia_sources.lower_bound(obj_id, diaObjectId_key)
             end_idx = dia_sources.upper_bound(obj_id, diaObjectId_key)
             obj_dia_sources = dia_sources[start_idx:end_idx].copy(deep=True)
@@ -313,6 +313,13 @@ class AssociationTask(pipeBase.Task):
                             obj_dia_sources,
                             filter_name,
                             filter_id)
+
+            # TODO: DM-15930
+            #     Define and improve flagging for DiaObjects
+            # Set a flag on this DiaObject if any DiaSource that makes up this
+            # object has a flag set for any reason.
+            if np.any(obj_dia_sources.get("flags") > 0):
+                dia_object.set("flags", 1)
 
         ppdb.storeDiaObjects(updated_dia_objects, dateTime.toPython())
 
