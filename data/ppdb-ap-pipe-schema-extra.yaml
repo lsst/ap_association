@@ -54,7 +54,7 @@ indices:
 
 ---
 # Added columns for DIASource table for use in ap_association.
-table: DIASource
+table: DiaSource
 columns:
 - name: filterName
   type: CHAR
