@@ -547,6 +547,8 @@ def get_ccd_visit_info_from_exposure(exposure):
     # TODO: Calib is going away and being replaced with photoCalib as in
     # DM-10153.
     flux0, flux0_err = exposure.getCalib().getFluxMag0()
+    # TODO: need to scale these until DM-10153 is completed and PhotoCalib has replaced Calib entirely
+    referenceFlux = 1e23 * 10**(48.6 / -2.5) * 1e9
     filter_obj = exposure.getFilter()
     # Values list is:
     # [CcdVisitId ``int``,
@@ -568,6 +570,6 @@ def get_ccd_visit_info_from_exposure(exposure):
               'expMidptMJD': date.get(system=DateTime.MJD),
               'fluxZeroPoint': flux0,
               'fluxZeroPointErr': flux0_err,
-              'photoCalib': afwImage.PhotoCalib(1 / flux0,
-                                                flux0_err / flux0 ** 2)}
+              'photoCalib': afwImage.PhotoCalib(referenceFlux / flux0,
+                                                referenceFlux*flux0_err / flux0 ** 2)}
     return values
