@@ -286,9 +286,9 @@ def make_dia_source_schema():
                         'reassociation happens, otherwise NULL).')
     schema.addField('midPointTai', type='D',
                     doc='Effective mid-exposure time for this diaSource.')
-    schema.addField('raSigma', type='D',
+    schema.addField('raErr', type='D',
                     doc='Uncertainty of ra.')
-    schema.addField('declSigma', type='D',
+    schema.addField('declErr', type='D',
                     doc='Uncertainty of decl.')
     schema.addField('ra_decl_Cov', type='D',
                     doc='Covariance between ra and decl.')
