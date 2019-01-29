@@ -35,6 +35,7 @@ import lsst.daf.base as dafBase
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 import lsst.afw.image.utils as afwImageUtils
+import lsst.geom as geom
 from lsst.utils import getPackageDir
 import lsst.utils.tests
 
@@ -64,8 +65,8 @@ def make_input_source_catalog(n_objects, add_flags=False):
     for obj_idx in range(n_objects):
         obj = objects.addNew()
         for subSchema in schema:
-            if isinstance(obj.get(subSchema.getKey()), afwGeom.Angle):
-                obj.set(subSchema.getKey(), 1. * afwGeom.degrees)
+            if isinstance(obj.get(subSchema.getKey()), geom.Angle):
+                obj.set(subSchema.getKey(), 1. * geom.degrees)
             else:
                 obj.set(subSchema.getKey(), 1)
     return objects
