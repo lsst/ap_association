@@ -50,7 +50,7 @@ def _set_mean_position(dia_object_record, dia_sources):
 
     Returns
     -------
-    ave_coord : `lsst.afw.geom.SpherePoint`
+    ave_coord : `lsst.geom.SpherePoint`
         Average position of the dia_sources.
     """
     coord_list = [src.getCoord() for src in dia_sources]
@@ -217,7 +217,7 @@ class AssociationTask(pipeBase.Task):
             test against our bounding box.
         bbox : `lsst.geom.Box2D`
             Bounding box of exposure.
-        wcs : `lsst.geom.SkyWcs`
+        wcs : `lsst.afw.geom.SkyWcs`
             WCS of exposure.
 
         Return
@@ -339,7 +339,7 @@ class AssociationTask(pipeBase.Task):
         dia_sources : `lsst.afw.table.SourceCatalog`
             A contiguous catalog of dia_sources to "score" based on distance
             and (in the future) other metrics.
-        max_dist : `lsst.afw.geom.Angle`
+        max_dist : `lsst.geom.Angle`
             Maximum allowed distance to compute a score for a given DIAObject
             DIASource pair.
 
