@@ -31,6 +31,7 @@ import lsst.afw.image.utils as afwImageUtils
 import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
 from lsst.dax.ppdb import Ppdb, PpdbConfig
+import lsst.geom as geom
 from lsst.ap.association import \
     AssociationTask, \
     make_dia_source_schema, \
@@ -78,11 +79,11 @@ def create_test_points(point_locs_deg,
     for src_idx, (ra, dec,) in enumerate(point_locs_deg):
         src = sources.addNew()
         src['id'] = src_idx + start_id
-        coord = afwGeom.SpherePoint(ra, dec, afwGeom.degrees)
+        coord = geom.SpherePoint(ra, dec, geom.degrees)
         if scatter_arcsec > 0.0:
             coord = coord.offset(
-                np.random.rand() * 360 * afwGeom.degrees,
-                np.random.rand() * scatter_arcsec * afwGeom.arcseconds)
+                np.random.rand() * 360 * geom.degrees,
+                np.random.rand() * scatter_arcsec * geom.arcseconds)
         if indexer_ids is not None:
             src['pixelId'] = indexer_ids[src_idx]
         if associated_ids is not None:
@@ -188,7 +189,7 @@ class TestAssociationTask(unittest.TestCase):
         self.flux0_err = 100
         self.exposure.getCalib().setFluxMag0((self.flux0, self.flux0_err))
 
-        bbox = afwGeom.Box2D(self.exposure.getBBox())
+        bbox = geom.Box2D(self.exposure.getBBox())
         wcs = self.exposure.getWcs()
 
         ctr_coord = wcs.pixelToSky(bbox.getCenter())
@@ -558,7 +559,7 @@ class TestAssociationTask(unittest.TestCase):
 
         score_struct = assoc_task.score(dia_objects,
                                         dia_sources,
-                                        1.0 * afwGeom.arcseconds)
+                                        1.0 * geom.arcseconds)
         self.assertFalse(np.isfinite(score_struct.scores[-1]))
         for src_idx in range(4):
             # Our scores should be extremely close to 0 but not exactly so due

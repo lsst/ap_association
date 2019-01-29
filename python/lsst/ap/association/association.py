@@ -27,12 +27,12 @@ __all__ = ["AssociationConfig", "AssociationTask"]
 import numpy as np
 from scipy.spatial import cKDTree
 
+import lsst.geom as geom
+import lsst.afw.table as afwTable
+from lsst.daf.base import DateTime
 from lsst.meas.algorithms.indexerRegistry import IndexerRegistry
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
-import lsst.afw.geom as afwGeom
-import lsst.afw.table as afwTable
-from lsst.daf.base import DateTime
 
 from .afwUtils import make_dia_object_schema
 
@@ -50,11 +50,11 @@ def _set_mean_position(dia_object_record, dia_sources):
 
     Returns
     -------
-    ave_coord : `lsst.afw.geom.SpherePoint`
+    ave_coord : `lsst.geom.SpherePoint`
         Average position of the dia_sources.
     """
     coord_list = [src.getCoord() for src in dia_sources]
-    ave_coord = afwGeom.averageSpherePoint(coord_list)
+    ave_coord = geom.averageSpherePoint(coord_list)
     dia_object_record.setCoord(ave_coord)
 
     return ave_coord
@@ -182,7 +182,7 @@ class AssociationTask(pipeBase.Task):
             DiaObjects within the exposure boundary. Resultant catalog is
             contiguous.
         """
-        bbox = afwGeom.Box2D(exposure.getBBox())
+        bbox = geom.Box2D(exposure.getBBox())
         wcs = exposure.getWcs()
 
         ctr_coord = wcs.pixelToSky(bbox.getCenter())
@@ -217,7 +217,7 @@ class AssociationTask(pipeBase.Task):
             test against our bounding box.
         bbox : `lsst.geom.Box2D`
             Bounding box of exposure.
-        wcs : `lsst.geom.SkyWcs`
+        wcs : `lsst.afw.geom.SkyWcs`
             WCS of exposure.
 
         Return
@@ -249,7 +249,7 @@ class AssociationTask(pipeBase.Task):
 
         scores = self.score(
             dia_objects, dia_sources,
-            self.config.maxDistArcSeconds * afwGeom.arcseconds)
+            self.config.maxDistArcSeconds * geom.arcseconds)
         match_result = self.match(dia_objects, dia_sources, scores)
 
         self._add_association_meta_data(match_result)
@@ -339,7 +339,7 @@ class AssociationTask(pipeBase.Task):
         dia_sources : `lsst.afw.table.SourceCatalog`
             A contiguous catalog of dia_sources to "score" based on distance
             and (in the future) other metrics.
-        max_dist : `lsst.afw.geom.Angle`
+        max_dist : `lsst.geom.Angle`
             Maximum allowed distance to compute a score for a given DIAObject
             DIASource pair.
 
