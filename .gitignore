@@ -19,3 +19,4 @@ doc/doxygen.conf
 pytest_session.txt
 tests/.tests
 version.py
+_build.*
