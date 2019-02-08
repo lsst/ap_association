@@ -23,8 +23,12 @@
 locations.
 """
 
-__all__ = []
+__all__ = ["DiaForcedSourceTask", "DiaForcedSourcedConfig"]
 
+from lsst.meas.base.pluginRegistry import register
+from lsst.meas.base import (
+    ForcedTransformedCentroidConfig,
+    ForcedTransformedCentroidPlugin)
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.afw.table as afwTable
@@ -33,41 +37,85 @@ from lsst.meas.base import ForcedMeasurementTask
 from .afwUtils import make_dia_object_schema, make_dia_forced_source_schema
 
 
+class ForcedTransformedCentroidFromCoordConfig(ForcedTransformedCentroidConfig):
+    """Configuration for the forced transformed coord algorithm.
+    """
+    pass
+
+
+@register("ap_assoc_TransformedCentroid")
+class ForcedTransformedCentroidFromCoordPlugin(ForcedTransformedCentroidPlugin):
+    """Record the transformation of the reference catalog coord.
+    The coord recorded in the reference catalog is tranformed to the
+    measurement coordinate system and stored.
+
+    Parameters
+    ----------
+    config : `ForcedTransformedCentroidFromCoordConfig`
+        Plugin configuration
+    name : `str`
+        Plugin name
+    schemaMapper : `lsst.afw.table.SchemaMapper`
+        A mapping from reference catalog fields to output
+        catalog fields. Output fields are added to the output schema.
+    metadata : `lsst.daf.base.PropertySet`
+        Plugin metadata that will be attached to the output catalog.
+
+    Notes
+    -----
+    This can be used as the slot centroid in forced measurement when only a
+    reference coord exits, allowing subsequent measurements to simply refer to
+    the slot value just as they would in single-frame measurement.
+    """
+
+    ConfigClass = ForcedTransformedCentroidFromCoordConfig
+
+    def measure(self, measRecord, exposure, refRecord, refWcs):
+        targetWcs = exposure.getWcs()
+
+        targetPos = targetWcs.skyToPixel(refRecord.getCoord())
+        measRecord.set(self.centroidKey, targetPos)
+
+        if self.flagKey is not None:
+            measRecord.set(self.flagKey, refRecord.getCentroidFlag())
+
+
 class DiaForcedSourcedConfig(pexConfig.Config):
     """Configuration for the generic DiaForcedSourcedTask class.
     """
     forcedMeasurement = pexConfig.ConfigurableField(
         target=ForcedMeasurementTask,
-        doc="Subtask to force photometer  DiaObjects in the direct and "
+        doc="Subtask to force photometer DiaObjects in the direct and "
             "difference images.",
     )
 
     def setDefaults(self):
-        self.forcedMeasurement.plugins = ["base_TransformedCentroid",
+        self.forcedMeasurement.plugins = ["ap_assoc_TransformedCentroid",
                                           "base_PsfFlux"]
+        self.forcedMeasurement.doReplaceWithNoise = False
         self.forcedMeasurement.copyColumns = {
             "id": "objectId",
             "coord_ra": "coord_ra",
             "coord_dec": "coord_dec"}
-        self.forcedMeasurement.slots.centroid = "base_TransformedCentroid"
+        self.forcedMeasurement.slots.centroid = "ap_assoc_TransformedCentroid"
         self.forcedMeasurement.slots.psfFlux = "base_PsfFlux"
         self.forcedMeasurement.slots.shape = None
 
 
-class DiaForcedSourceTask(pexConfig.Task):
+class DiaForcedSourceTask(pipeBase.Task):
     """Task for measuring and storing forced sources at DiaObject locations
     in both difference and direct images.
     """
     ConfigClass = DiaForcedSourcedConfig
     _DefaultName = "diaForcedSource"
 
-    def __init__(self, expBits, **kwargs):
+    def __init__(self, **kwargs):
         pipeBase.Task.__init__(self, **kwargs)
         self.dia_forced_source_schema = make_dia_forced_source_schema()
         self.makeSubtask("forcedMeasurement",
                          refSchema=make_dia_object_schema())
 
-    def run(self, dia_objects, expBits, exposure, diffim):
+    def run(self, dia_objects, expIdBits, exposure, diffim):
         """Measure forced sources on the direct and different images,
         calibrate, and store them in the Ppdb.
 
@@ -76,9 +124,8 @@ class DiaForcedSourceTask(pexConfig.Task):
         dia_objects : `lsst.afw.table.SourceCatalog`
             Catalog of previously observed and newly created DiaObjects
             contained within the difference and direct images.
-        expBits : `int`
-            Number of bits taken up by the CcdExposureId in the output forced
-            source ids.
+        expIdBits : `int`
+            Bit length of the exposure id.
         exposure : `lsst.afw.image.Exposure`
             Direct image exposure.
         diffim : `lsst.afw.image.Exposure`
@@ -94,15 +141,18 @@ class DiaForcedSourceTask(pexConfig.Task):
             - ``directForcedSources`` : Psf forced photometry on the direct
               image at the DiaObject location (`lsst.afw.table.SourceCatalog`)
         """
-        idFactory = afwTable.IdFactory.makeSource(
+        idFactoryDiff = afwTable.IdFactory.makeSource(
             diffim.getInfo().getVisitInfo().getExposureId(),
-            64 - self.expIdBits)
+            64 - expIdBits)
+        idFactoryDirect = afwTable.IdFactory.makeSource(
+            diffim.getInfo().getVisitInfo().getExposureId(),
+            64 - expIdBits)
 
         diffForcedSources = self.forcedMeasurement.generateMeasCat(
             diffim,
             dia_objects,
             diffim.getWcs(),
-            idFactory=idFactory)
+            idFactory=idFactoryDiff)
         self.forcedMeasurement.run(
             diffForcedSources, diffim, dia_objects, diffim.getWcs())
 
@@ -110,7 +160,7 @@ class DiaForcedSourceTask(pexConfig.Task):
             exposure,
             dia_objects,
             exposure.getWcs(),
-            idFactory=idFactory)
+            idFactory=idFactoryDirect)
         self.forcedMeasurement.run(
             directForcedSources, exposure, dia_objects, exposure.getWcs())
 
