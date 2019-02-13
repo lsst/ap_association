@@ -141,12 +141,13 @@ class DiaForcedSourceTask(pipeBase.Task):
             - ``directForcedSources`` : Psf forced photometry on the direct
               image at the DiaObject location (`lsst.afw.table.SourceCatalog`)
         """
+
         idFactoryDiff = afwTable.IdFactory.makeSource(
             diffim.getInfo().getVisitInfo().getExposureId(),
-            64 - expIdBits)
+            afwTable.IdFactory.computeReservedFromMaxBits(int(expIdBits)))
         idFactoryDirect = afwTable.IdFactory.makeSource(
             diffim.getInfo().getVisitInfo().getExposureId(),
-            64 - expIdBits)
+            afwTable.IdFactory.computeReservedFromMaxBits(int(expIdBits)))
 
         diffForcedSources = self.forcedMeasurement.generateMeasCat(
             diffim,

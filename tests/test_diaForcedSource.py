@@ -42,7 +42,7 @@ def create_test_dia_objects(n_points, wcs, startPos=100):
     n_points : `int`
         Number of DiaObject test points to create.
     wcs : `lsst.afw.geom.SkyWcs`
-        Wcs to convert RA/Dec to x/y if provided.
+        Wcs to convert RA/Dec to pixel x/y.
     startPos : `int`
         Start position to iterate from when creating test DiaObjects
 
@@ -109,16 +109,16 @@ class TestDiaForcedSource(unittest.TestCase):
         # Make images  with one source in them and distinct values and
         # variance for each image.
         # Direct Image
-        ms = afwImage.MaskedImageF(lsst.geom.ExtentI(self.imageSize[0] + 1,
-                                                     self.imageSize[1] + 1))
-        ms.image[100, 100, afwImage.LOCAL] = 10
-        ms.getVariance().set(1)
+        source_image = afwImage.MaskedImageF(
+            lsst.geom.ExtentI(self.imageSize[0] + 1, self.imageSize[1] + 1))
+        source_image.image[100, 100, afwImage.LOCAL] = 10
+        source_image.getVariance().set(1)
         bbox = lsst.geom.BoxI(
             lsst.geom.PointI(1, 1),
             lsst.geom.ExtentI(self.imageSize[0],
                               self.imageSize[1]))
-        self.mi = afwImage.MaskedImageF(ms, bbox, afwImage.LOCAL)
-        self.exposure = afwImage.makeExposure(self.mi, self.wcs)
+        masked_image = afwImage.MaskedImageF(source_image, bbox, afwImage.LOCAL)
+        self.exposure = afwImage.makeExposure(masked_image, self.wcs)
 
         detector = DetectorWrapper(
             id=23, bbox=self.exposure.getBBox()).detector
@@ -133,16 +133,16 @@ class TestDiaForcedSource(unittest.TestCase):
         self.exposure.getCalib().setFluxMag0((self.flux0, self.flux0_err))
 
         # Difference Image
-        ms = afwImage.MaskedImageF(lsst.geom.ExtentI(self.imageSize[0] + 1,
-                                                     self.imageSize[1] + 1))
-        ms.image[100, 100, afwImage.LOCAL] = 20
-        ms.getVariance().set(2)
+        source_image = afwImage.MaskedImageF(
+            lsst.geom.ExtentI(self.imageSize[0] + 1, self.imageSize[1] + 1))
+        source_image.image[100, 100, afwImage.LOCAL] = 20
+        source_image.getVariance().set(2)
         bbox = lsst.geom.BoxI(
             lsst.geom.PointI(1, 1),
             lsst.geom.ExtentI(self.imageSize[0],
                               self.imageSize[1]))
-        self.mi = afwImage.MaskedImageF(ms, bbox, afwImage.LOCAL)
-        self.diffim = afwImage.makeExposure(self.mi, self.wcs)
+        masked_image = afwImage.MaskedImageF(source_image, bbox, afwImage.LOCAL)
+        self.diffim = afwImage.makeExposure(masked_image, self.wcs)
         self.diffim.setDetector(detector)
         self.diffim.getInfo().setVisitInfo(visit)
         self.diffim.setFilter(afwImage.Filter('g'))
@@ -151,8 +151,7 @@ class TestDiaForcedSource(unittest.TestCase):
         self.expIdBits = 16
 
         FWHM = 5
-        psf = measAlg.DoubleGaussianPsf(
-            15, 15, FWHM/(2*np.sqrt(2*np.log(2))))
+        psf = measAlg.DoubleGaussianPsf(15, 15, FWHM/(2*np.sqrt(2*np.log(2))))
         self.exposure.setPsf(psf)
         self.diffim.setPsf(psf)
 
