@@ -21,5 +21,6 @@
 
 from .version import *
 from .association import *
+from .diaForcedSource import *
 from .mapApData import *
 from .afwUtils import *

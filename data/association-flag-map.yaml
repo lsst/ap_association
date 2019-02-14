@@ -76,4 +76,3 @@ columns:
     - name: ip_diffim_forced_PsfFlux_flag_edge
       bit: 22
       doc: Forced PSF flux object was too close to the edge of the image to use the full PSF model.
----

@@ -29,6 +29,7 @@ different catalogs and the DB.
 
 __all__ = ["make_dia_object_schema",
            "make_dia_source_schema",
+           "make_dia_forced_source_schema",
            "getCcdVisitSchemaSql"]
 
 from collections import OrderedDict as oDict
@@ -264,7 +265,7 @@ def make_dia_source_schema():
     Returns
     -------
     schema : `lsst.afw.table.Schema`
-        Minimal schema for DIAObjects.
+        Minimal schema for DiaSources.
     """
 
     # Generated automatically from ppdb-schema.yaml in dax_ppdb/data.
@@ -504,6 +505,42 @@ def make_dia_source_schema():
     schema.addField("filterId", type='L',
                     doc='Obs package id of the filter this source was '
                         'observed in.')
+    return schema
+
+
+def make_dia_forced_source_schema():
+    """ Define and create the minimal schema required for a DiaForcedSource.
+
+    Returns
+    -------
+    schema : `lsst.afw.table.Schema`
+        Minimal schema for DiaForcedSources.
+    """
+
+    # Generated automatically from ppdb-schema.yaml in dax_ppdb/data.
+    schema = afwTable.SourceTable.makeMinimalSchema()
+    schema.addField('ccdVisitId', type='L',
+                    doc='Id of the ccdVisit where this diaSource was measured. Note that we are allowing a '
+                        'diaSource to belong to multiple amplifiers, but it may not span multiple ccds.')
+    schema.addField('psFlux', type='D',
+                    doc='Calibrated flux for Point Source model. Note this actually measures the flux '
+                        'difference between the template and the visit image.')
+    schema.addField('psFluxErr', type='D',
+                    doc='Uncertainty of psFlux.')
+    schema.addField('totFlux', type='D',
+                    doc='Calibrated flux measured in direct image.')
+    schema.addField('totFluxErr', type='D',
+                    doc='Uncertainty of totFlux.')
+    schema.addField('x', type='D',
+                    doc='x position at which psFlux has been measured.')
+    schema.addField('y', type='D',
+                    doc='y position at which psFlux has been measured.')
+    schema.addField('flags', type='L',
+                    doc='Flags from measurement on the difference image, '
+                        'bitwise OR tbd')
+    schema.addField('flagsDirectIm', type='L',
+                    doc='Flags from measurement on the direct image, bitwise '
+                        'OR tbd')
     return schema
 
 

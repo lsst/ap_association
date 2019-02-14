@@ -146,6 +146,15 @@ class AssociationTask(pipeBase.Task):
         ppdb : `lsst.dax.ppdb.Ppdb`
             Ppdb connection object to retrieve DIASources/Objects from and
             write to.
+
+        Returns
+        -------
+        result : `lsst.pipe.base.Struct`
+            Results struct with components.
+
+            - ``dia_objects`` : Complete set of dia_objects covering the input
+              exposure. Catalog contains newly created, updated, and untouched
+              diaObjects. (`lsst.afw.table.SourceCatalog`)
         """
         # Assure we have a Box2D and can use the getCenter method.
 
@@ -162,6 +171,10 @@ class AssociationTask(pipeBase.Task):
                                 updated_obj_ids,
                                 exposure,
                                 ppdb)
+
+        return pipeBase.Struct(
+            dia_objects=dia_objects,
+        )
 
     @pipeBase.timeMethod
     def retrieve_dia_objects(self, exposure, ppdb):
@@ -261,6 +274,9 @@ class AssociationTask(pipeBase.Task):
         """Update select dia_objects currently stored within the database or
         create new ones.
 
+        Modify the dia_object catalog in place to post-pend newly created
+        DiaObjects.
+
         Parameters
         ----------
         dia_objects : `lsst.afw.table.SourceCatalog`
@@ -293,6 +309,7 @@ class AssociationTask(pipeBase.Task):
             if dia_object is None:
                 dia_object = updated_dia_objects.addNew()
                 dia_object.set('id', obj_id)
+                dia_objects.append(dia_object)
             else:
                 updated_dia_objects.append(dia_object)
 
