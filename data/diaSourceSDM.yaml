@@ -1,0 +1,4 @@
+funcs:
+    psFlux:
+        functor: NanoJansky
+        args: base_PsfFlux_instFlux
