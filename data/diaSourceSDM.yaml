@@ -1,4 +1,237 @@
 funcs:
-    psFlux:
-        functor: NanoJansky
-        args: base_PsfFlux_instFlux
+  diaSourceId:
+    functor: IDColumn
+  # ccdVisitId:
+  #   functor: CcdVisitId
+  # diaObjectId:
+  #   functor: Column
+  # ssObjectId:
+  #   functor: Column
+  # parentDiaSourceId:
+  #   functor: Column
+  #   args: parent
+  # prv_procOrder:
+  #   functor: Column
+  # ssObjectReassocTime:
+  #   functor: Column
+  # midPointTai:
+  #   functor: Column
+  ra:
+    functor: RAColumn
+  # raERr:
+  #   functor: Column
+  decl:
+    functor: DecColumn
+  # declERr:
+  #   functor: Column
+  ra_decl_Cov:
+    functor: DecColumn
+  x:
+    functor: Column
+    args: slot_Centroid_x
+  xErr:
+    functor: Column
+    args: slot_Centroid_xErr
+  y:
+    functor: Column
+    args: slot_Centroid_y
+  yErr:
+    functor: Column
+    args: slot_Centroid_yErr
+  # x_y_Cov:
+  #   functor: Column
+  xy_flag:
+    functor: Column
+    args: slot_Centroid_flag
+  apFlux:
+    functor: NanoJansky
+    args: slot_ApFlux_instFlux
+  apFluxErr:
+    functor: NanoJansky
+    args: slot_ApFlux_instFluxErr
+  # snr:
+  #   functor: Column
+  psFlux:
+    functor: NanoJansky
+    args: base_PsfFlux_instFlux
+  psFluxErr:
+    functor: NanoJanskyErr
+  # psRa:
+  #   function: Column
+  # psRaErr:
+  #   function: Column
+  # psDecl:
+  #   function: Column
+  # psDeclErr:
+  #   function: Column
+  # psFlux_psRa_Cov:
+  #   function: Column
+  # psFlux_psDecl_Cov:
+  #   function: Column
+  # psLnL:
+  #   function: Column
+  # psChi2:
+  #   function: Column
+  # psNdata:
+  #   function: Column
+  # trailFlux:
+  #   function: Column
+  # trailFluxErr:
+  #   function: Column
+  # trailRa:
+  #   function: Column
+  # trailRaErr:
+  #   function: Column
+  # trailDecl:
+  #   function: Column
+  # trailDeclErr:
+  #   function: Column
+  # trailLength:
+  #   function: Column
+  # trailLengthErr:
+  #   function: Column
+  # trailAngle:
+  #   function: Column
+  # trailAngleErr:
+  #   function: Column
+  # trailFlux_trailRa_Cov:
+  #   function: Column
+  # trailFlux_trailDecl_Cov:
+  #   function: Column
+  # trailFlux_trailLength_Cov:
+  #   function: Column
+  # trailFlux_trailAngle_Cov:
+  #   function: Column
+  # trailRa_trailDecl_Cov:
+  #   function: Column
+  # trailRa_trailLength_Cov:
+  #   function: Column
+  # trailRa_trailAngle_Cov:
+  #   function: Column
+  # trailDecl_trailLength_Cov:
+  #   function: Column
+  # trailDecl_trailAngle_Cov:
+  #   function: Column
+  # trailLength_trailAngle_Cov:
+  #   function: Column
+  # trailLnL:
+  #   function: Column
+  # trailChi2:
+  #   function: Column
+  # trailNdata:
+  #   function: Column
+  # dipMeanFlux:
+  #   function: NanoJansky
+  # dipMeanFluxErr:
+  #   function: NanoJanskyErr
+  # dipFluxDiff:
+  #   function: NanoJansky
+  # dipFluxDiffErr:
+  #   function: NanoJanskyErr
+  # dipRa:
+  #   function: Column
+  # dipRaErr:
+  #   function: Column
+  # dipDecl:
+  #   function: Column
+  # dipDeclErr:
+  #   function: Column
+  # dipLength:
+  #   function: Column
+  # dipLengthErr:
+  #   function: Column
+  # dipAngle:
+  #   function: Column
+  # dipAngleErr:
+  #   funciton: Column
+  # dipMeanFlux_dipFluxDiff_Cov:
+  #   function: Column
+  # dipMeanFlux_dipRa_Cov:
+  #   function: Column
+  # dipMeanFlux_dipDecl_Cov:
+  #   function: Column
+  # dipMeanFlux_dipLength_Cov:
+  #   function: Column
+  # dipMeanFlux_dipAngle_Cov:
+  #   function: Column
+  # dipFluxDiff_dipRa_Cov:
+  #   function: Column
+  # dipFluxDiff_dipDecl_Cov:
+  #   function: Column
+  # dipFluxDiff_dipLength_Cov:
+  #   function: Column
+  # dipFluxDiff_dipAngle_Cov:
+  #   function: Column
+  # dipRa_dipDecl_Cov:
+  #   function: Column
+  # dipRa_dipLength_Cov:
+  #   function: Column
+  # dipRa_dipAngle_Cov:
+  #   function: Column
+  # dipDecl_dipLength_Cov:
+  #   function: Column
+  # dipDecl_dipAngle_Cov:
+  #   function: Column
+  # dipLength_dipAngle_Cov:
+  #   function: Column
+  # dipLnL:
+  #   function: Column
+  # dipChi2:
+  #   function: Column
+  # dipNdata:
+  #   function: Column
+  totFlux:
+    function: NanoJansky
+    args: ip_diffim_forced_PsfFlux_instFlux
+  totFluxErr:
+    function: NanoJanskyErr
+    args: ip_diffim_forced_PsfFlux_instFluxErr
+  # diffFlux:
+  #   function: Column
+  # diffFluxErr:
+  #   function: Column
+  # fpBkgd:
+  #   function: Column
+  # fpBkgdErr:
+  #   function: Column
+  ixx:
+    function: Column
+    args: slot_Shape_xx
+  ixxErr:
+    function: Column
+    args: slot_Shape_xxErr
+  iyy:
+    function: Column
+    args: slot_Shape_yy
+  iyyErr:
+    function: Column
+    args: slot_Shape_yyErr
+  ixy:
+    function: Column
+    args: slot_Shape_xy
+  ixyErr:
+    function: Column
+    args: slot_Shape_xyErr
+  # ixx_iyy_Cov:
+  #   function: Column
+  # ixx_ixy_Cov:
+  #   function: Column
+  # iyy_ixy_Cov:
+  #   function: Column
+  ixxPSF:
+    function: Column
+    args: slot_PsfShape_xx
+  iyyPSF:
+    function: Column
+    args: slot_PsfShape_yy
+  ixyPSF:
+    function: Column
+    args: slot_PsfShape_xy
+  # extendedness:
+  #   function: Column
+  # spuriousness:
+  #   function: Column
+  # flags:
+  #   function: Column
+  # pixelId:
+  #   function: Column
