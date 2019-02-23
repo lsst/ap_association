@@ -1,6 +1,7 @@
 funcs:
   diaSourceId:
-    functor: IDColumn
+    functor: Column
+    args: id
   # ccdVisitId:
   #   functor: CcdVisitId
   # diaObjectId:
