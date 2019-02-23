@@ -47,191 +47,192 @@ funcs:
     functor: NanoJansky
     args: slot_ApFlux_instFlux
   apFluxErr:
-    functor: NanoJansky
+    functor: NanoJanskyErr
     args: slot_ApFlux_instFluxErr
   # snr:
   #   functor: Column
   psFlux:
     functor: NanoJansky
-    args: base_PsfFlux_instFlux
+    args: slot_PsfFlux_instFlux
   psFluxErr:
     functor: NanoJanskyErr
+    args: slot_PsfFlux_instFluxErr
   # psRa:
-  #   function: Column
+  #   functor: Column
   # psRaErr:
-  #   function: Column
+  #   functor: Column
   # psDecl:
-  #   function: Column
+  #   functor: Column
   # psDeclErr:
-  #   function: Column
+  #   functor: Column
   # psFlux_psRa_Cov:
-  #   function: Column
+  #   functor: Column
   # psFlux_psDecl_Cov:
-  #   function: Column
+  #   functor: Column
   # psLnL:
-  #   function: Column
+  #   functor: Column
   # psChi2:
-  #   function: Column
+  #   functor: Column
   # psNdata:
-  #   function: Column
+  #   functor: Column
   # trailFlux:
-  #   function: Column
+  #   functor: Column
   # trailFluxErr:
-  #   function: Column
+  #   functor: Column
   # trailRa:
-  #   function: Column
+  #   functor: Column
   # trailRaErr:
-  #   function: Column
+  #   functor: Column
   # trailDecl:
-  #   function: Column
+  #   functor: Column
   # trailDeclErr:
-  #   function: Column
+  #   functor: Column
   # trailLength:
-  #   function: Column
+  #   functor: Column
   # trailLengthErr:
-  #   function: Column
+  #   functor: Column
   # trailAngle:
-  #   function: Column
+  #   functor: Column
   # trailAngleErr:
-  #   function: Column
+  #   functor: Column
   # trailFlux_trailRa_Cov:
-  #   function: Column
+  #   functor: Column
   # trailFlux_trailDecl_Cov:
-  #   function: Column
+  #   functor: Column
   # trailFlux_trailLength_Cov:
-  #   function: Column
+  #   functor: Column
   # trailFlux_trailAngle_Cov:
-  #   function: Column
+  #   functor: Column
   # trailRa_trailDecl_Cov:
-  #   function: Column
+  #   functor: Column
   # trailRa_trailLength_Cov:
-  #   function: Column
+  #   functor: Column
   # trailRa_trailAngle_Cov:
-  #   function: Column
+  #   functor: Column
   # trailDecl_trailLength_Cov:
-  #   function: Column
+  #   functor: Column
   # trailDecl_trailAngle_Cov:
-  #   function: Column
+  #   functor: Column
   # trailLength_trailAngle_Cov:
-  #   function: Column
+  #   functor: Column
   # trailLnL:
-  #   function: Column
+  #   functor: Column
   # trailChi2:
-  #   function: Column
+  #   functor: Column
   # trailNdata:
-  #   function: Column
+  #   functor: Column
   # dipMeanFlux:
-  #   function: NanoJansky
+  #   functor: NanoJansky
   # dipMeanFluxErr:
-  #   function: NanoJanskyErr
+  #   functor: NanoJanskyErr
   # dipFluxDiff:
-  #   function: NanoJansky
+  #   functor: NanoJansky
   # dipFluxDiffErr:
-  #   function: NanoJanskyErr
+  #   functor: NanoJanskyErr
   # dipRa:
-  #   function: Column
+  #   functor: Column
   # dipRaErr:
-  #   function: Column
+  #   functor: Column
   # dipDecl:
-  #   function: Column
+  #   functor: Column
   # dipDeclErr:
-  #   function: Column
+  #   functor: Column
   # dipLength:
-  #   function: Column
+  #   functor: Column
   # dipLengthErr:
-  #   function: Column
+  #   functor: Column
   # dipAngle:
-  #   function: Column
+  #   functor: Column
   # dipAngleErr:
   #   funciton: Column
   # dipMeanFlux_dipFluxDiff_Cov:
-  #   function: Column
+  #   functor: Column
   # dipMeanFlux_dipRa_Cov:
-  #   function: Column
+  #   functor: Column
   # dipMeanFlux_dipDecl_Cov:
-  #   function: Column
+  #   functor: Column
   # dipMeanFlux_dipLength_Cov:
-  #   function: Column
+  #   functor: Column
   # dipMeanFlux_dipAngle_Cov:
-  #   function: Column
+  #   functor: Column
   # dipFluxDiff_dipRa_Cov:
-  #   function: Column
+  #   functor: Column
   # dipFluxDiff_dipDecl_Cov:
-  #   function: Column
+  #   functor: Column
   # dipFluxDiff_dipLength_Cov:
-  #   function: Column
+  #   functor: Column
   # dipFluxDiff_dipAngle_Cov:
-  #   function: Column
+  #   functor: Column
   # dipRa_dipDecl_Cov:
-  #   function: Column
+  #   functor: Column
   # dipRa_dipLength_Cov:
-  #   function: Column
+  #   functor: Column
   # dipRa_dipAngle_Cov:
-  #   function: Column
+  #   functor: Column
   # dipDecl_dipLength_Cov:
-  #   function: Column
+  #   functor: Column
   # dipDecl_dipAngle_Cov:
-  #   function: Column
+  #   functor: Column
   # dipLength_dipAngle_Cov:
-  #   function: Column
+  #   functor: Column
   # dipLnL:
-  #   function: Column
+  #   functor: Column
   # dipChi2:
-  #   function: Column
+  #   functor: Column
   # dipNdata:
-  #   function: Column
+  #   functor: Column
   totFlux:
-    function: NanoJansky
+    functor: NanoJansky
     args: ip_diffim_forced_PsfFlux_instFlux
   totFluxErr:
-    function: NanoJanskyErr
+    functor: NanoJanskyErr
     args: ip_diffim_forced_PsfFlux_instFluxErr
   # diffFlux:
-  #   function: Column
+  #   functor: Column
   # diffFluxErr:
-  #   function: Column
+  #   functor: Column
   # fpBkgd:
-  #   function: Column
+  #   functor: Column
   # fpBkgdErr:
-  #   function: Column
+  #   functor: Column
   ixx:
-    function: Column
+    functor: Column
     args: slot_Shape_xx
   ixxErr:
-    function: Column
+    functor: Column
     args: slot_Shape_xxErr
   iyy:
-    function: Column
+    functor: Column
     args: slot_Shape_yy
   iyyErr:
-    function: Column
+    functor: Column
     args: slot_Shape_yyErr
   ixy:
-    function: Column
+    functor: Column
     args: slot_Shape_xy
   ixyErr:
-    function: Column
+    functor: Column
     args: slot_Shape_xyErr
   # ixx_iyy_Cov:
-  #   function: Column
+  #   functor: Column
   # ixx_ixy_Cov:
-  #   function: Column
+  #   functor: Column
   # iyy_ixy_Cov:
-  #   function: Column
+  #   functor: Column
   ixxPSF:
-    function: Column
+    functor: Column
     args: slot_PsfShape_xx
   iyyPSF:
-    function: Column
+    functor: Column
     args: slot_PsfShape_yy
   ixyPSF:
-    function: Column
+    functor: Column
     args: slot_PsfShape_xy
   # extendedness:
-  #   function: Column
+  #   functor: Column
   # spuriousness:
-  #   function: Column
+  #   functor: Column
   # flags:
-  #   function: Column
+  #   functor: Column
   # pixelId:
-  #   function: Column
+  #   functor: Column
