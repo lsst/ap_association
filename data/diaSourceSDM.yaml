@@ -48,7 +48,9 @@ funcs:
     args: slot_ApFlux_instFlux
   apFluxErr:
     functor: NanoJanskyErr
-    args: slot_ApFlux_instFluxErr
+    args:
+      - slot_ApFlux_instFlux
+      - slot_ApFlux_instFluxErr
   # snr:
   #   functor: Column
   psFlux:
@@ -56,7 +58,9 @@ funcs:
     args: slot_PsfFlux_instFlux
   psFluxErr:
     functor: NanoJanskyErr
-    args: slot_PsfFlux_instFluxErr
+    args:
+      - slot_PsfFlux_instFlux
+      - slot_PsfFlux_instFluxErr
   # psRa:
   #   functor: Column
   # psRaErr:
@@ -186,7 +190,9 @@ funcs:
     args: ip_diffim_forced_PsfFlux_instFlux
   totFluxErr:
     functor: NanoJanskyErr
-    args: ip_diffim_forced_PsfFlux_instFluxErr
+    args:
+      - ip_diffim_forced_PsfFlux_instFlux
+      - ip_diffim_forced_PsfFlux_instFluxErr
   # diffFlux:
   #   functor: Column
   # diffFluxErr:
