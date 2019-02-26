@@ -23,14 +23,17 @@
 __all__ = ["NumberNewDiaObjectsMetricTask",
            "NumberUnassociatedDiaObjectsMetricTask",
            "FractionUpdatedDiaObjectsMetricTask",
+           "TotalUnassociatedDiaObjectsMetricTask",
            ]
 
 
 import astropy.units as u
 
+from lsst.dax.ppdb import countUnassociatedObjects
+
 from lsst.verify import Measurement
 from lsst.verify.gen2tasks import register
-from lsst.verify.tasks import MetadataMetricTask, MetricComputationError
+from lsst.verify.tasks import MetadataMetricTask, PpdbMetricTask, MetricComputationError
 
 
 @register("numNewDiaObjects")
@@ -200,3 +203,52 @@ class FractionUpdatedDiaObjectsMetricTask(MetadataMetricTask):
     @classmethod
     def getOutputMetricName(cls, config):
         return "ap_association.fracUpdatedDiaObjects"
+
+
+@register("totalUnassociatedDiaObjects")
+class TotalUnassociatedDiaObjectsMetricTask(PpdbMetricTask):
+    """Task that computes the number of DIAObjects with only one
+    associated DIASource.
+    """
+    _DefaultName = "totalUnassociatedDiaObjects"
+
+    def makeMeasurement(self, dbHandle, outputDataId):
+        """Compute the number of unassociated DIAObjects.
+
+        Parameters
+        ----------
+        dbHandle : `lsst.dax.ppdb.Ppdb`
+            A database instance.
+        outputDataId : any data ID type
+            The subset of the database to which this measurement applies.
+            Must be empty, as the number of unassociated sources is
+            ill-defined for subsets of the dataset.
+
+        Returns
+        -------
+        measurement : `lsst.verify.Measurement`
+            The total number of unassociated objects.
+
+        Raises
+        ------
+        MetricComputationError
+            Raised on any failure to query the database.
+        ValueError
+            Raised if outputDataId is not empty
+        """
+        # All data ID types define keys()
+        if outputDataId.keys():
+            raise ValueError("%s must not be associated with specific data IDs."
+                             % self.getOutputMetricName(self.config))
+
+        try:
+            nUnassociatedDiaObjects = countUnassociatedObjects(dbHandle)
+        except Exception as e:
+            raise MetricComputationError("Could not get unassociated objects from database") from e
+
+        meas = Measurement(self.getOutputMetricName(self.config), nUnassociatedDiaObjects * u.count)
+        return meas
+
+    @classmethod
+    def getOutputMetricName(cls, config):
+        return "ap_association.totalUnassociatedDiaObjects"

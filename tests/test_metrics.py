@@ -20,21 +20,26 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import unittest
+import unittest.mock
 
 import astropy.units as u
 from astropy.tests.helper import assert_quantity_allclose
 
 import lsst.utils.tests
+from lsst.pex.config import Config
 from lsst.daf.base import PropertySet
-from lsst.verify import Name
+from lsst.dax.ppdb import Ppdb
+from lsst.pipe.base import Task, Struct
+from lsst.verify import Name, Measurement
 from lsst.verify.gen2tasks.testUtils import MetricTaskTestCase
 from lsst.verify.tasks import MetricComputationError
-from lsst.verify.tasks.testUtils import MetadataMetricTestCase
+from lsst.verify.tasks.testUtils import MetadataMetricTestCase, PpdbMetricTestCase
 
 from lsst.ap.association.metrics import \
     NumberNewDiaObjectsMetricTask, \
     NumberUnassociatedDiaObjectsMetricTask, \
-    FractionUpdatedDiaObjectsMetricTask
+    FractionUpdatedDiaObjectsMetricTask, \
+    TotalUnassociatedDiaObjectsMetricTask
 
 
 def _makeAssociationMetadata(numUpdated=27, numNew=4, numUnassociated=15):
@@ -283,9 +288,90 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
         assert_quantity_allclose(measMany.quantity, measDirect.quantity)
 
 
+class TestTotalUnassociatedObjects(PpdbMetricTestCase):
+
+    @staticmethod
+    def _makePpdb():
+        ppdb = unittest.mock.Mock(Ppdb)
+        return ppdb
+
+    @classmethod
+    def makeTask(cls):
+        class SimpleDbLoader(Task):
+            ConfigClass = Config
+
+            def run(self, dummy):
+                if dummy is not None:
+                    return Struct(ppdb=cls._makePpdb())
+                else:
+                    return Struct(ppdb=None)
+
+        config = TotalUnassociatedDiaObjectsMetricTask.ConfigClass()
+        config.dbLoader.retarget(SimpleDbLoader)
+        return TotalUnassociatedDiaObjectsMetricTask(config=config)
+
+    def setUp(self):
+        super().setUp()
+        # Do the patch here to avoid passing extra arguments to superclass tests
+        patcher = unittest.mock.patch("lsst.ap.association.metrics.countUnassociatedObjects", return_value=42)
+        self.mockCounter = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def testValid(self):
+        result = self.task.adaptArgsAndRun({"dbInfo": "DB source"}, {"dbInfo": {}}, {"measurement": {}})
+        meas = result.measurement
+
+        self.assertEqual(meas.metric_name, Name(metric="ap_association.totalUnassociatedDiaObjects"))
+        nObjects = self.mockCounter(self._makePpdb())
+        self.assertEqual(meas.quantity, nObjects * u.count)
+
+    def testAllAssociated(self):
+        with unittest.mock.patch("lsst.ap.association.metrics.countUnassociatedObjects", return_value=0):
+            result = self.task.adaptArgsAndRun({"dbInfo": "DB source"}, {"dbInfo": {}}, {"measurement": {}})
+        meas = result.measurement
+
+        self.assertEqual(meas.metric_name, Name(metric="ap_association.totalUnassociatedDiaObjects"))
+        self.assertEqual(meas.quantity, 0.0 * u.count)
+
+    def testMissingData(self):
+        result = self.task.adaptArgsAndRun({"dbInfo": None}, {"dbInfo": {}}, {"measurement": {}})
+        meas = result.measurement
+        self.assertIsNone(meas)
+
+    def testFineGrainedMetric(self):
+        with self.assertRaises(ValueError):
+            self.task.adaptArgsAndRun({"dbInfo": "DB source"}, {"dbInfo": {}}, {"measurement": {"visit": 42}})
+
+    def testGetInputDatasetTypes(self):
+        config = self.taskClass.ConfigClass()
+        config.dbInfo.name = "absolutely anything"
+        types = self.taskClass.getInputDatasetTypes(config)
+        # dict.keys() is a collections.abc.Set, which has a narrower interface than __builtins__.set...
+        self.assertSetEqual(set(types.keys()), {"dbInfo"})
+        self.assertEqual(types["dbInfo"], "absolutely anything")
+
+    # Override because of non-standard adaptArgsAndRun
+    def testCallAddStandardMetadata(self):
+        dummy = Measurement('foo.bar', 0.0)
+        with unittest.mock.patch.multiple(
+                self.taskClass, autospec=True,
+                makeMeasurement=unittest.mock.DEFAULT,
+                addStandardMetadata=unittest.mock.DEFAULT) as mockDict:
+            mockDict['makeMeasurement'].return_value = Struct(measurement=dummy)
+
+            dataId = {}
+            result = self.task.adaptArgsAndRun(
+                {"dbInfo": "DB Source"},
+                {"dbInfo": dataId},
+                {'measurement': dataId})
+            mockDict['addStandardMetadata'].assert_called_once_with(
+                self.task, result.measurement, dataId)
+
+
 # Hack around unittest's hacky test setup system
 del MetricTaskTestCase
 del MetadataMetricTestCase
+del PpdbMetricTestCase
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
