@@ -390,6 +390,8 @@ class TestAssociationTask(unittest.TestCase):
         dateTime = dafBase.DateTime("2014-05-13T16:00:00.000000000",
                                     dafBase.DateTime.Timescale.TAI)
         ppdb.storeDiaObjects(dia_objects, dateTime.toPython())
+        loaded_dia_objects = ppdb.getDiaObjects(self.index_ranges)
+        self.assertTrue(loaded_dia_objects.schema == dia_objects.schema)
 
         # Create DIASources, update their ccdVisitId and fluxes, and store
         # them.
