@@ -17,6 +17,366 @@ columns:
   type: INT
   nullable: false
   description: Total number of DiaSources associated with this DiaObject.
+- name: uPsfFluxMedian
+  type: FLOAT
+  nullable: true
+  description: Median u band flux.
+- name: uPsfFluxMAD
+  type: FLOAT
+  nullable: true
+  description: Median absolute deviation u band fluxes.
+- name: uPsfFluxSkew
+  type: FLOAT
+  nullable: true
+  description: Skewness of the u band fluxes.
+- name: uPsfFluxPercentile05
+  type: FLOAT
+  nullable: true
+  description: Value at the 5% percentile of the u band fluxes.
+- name: uPsfFluxPercentile25
+  type: FLOAT
+  nullable: true
+  description: Value at the 25% percentile of the u band fluxes.
+- name: uPsfFluxPercentile75
+  type: FLOAT
+  nullable: true
+  description: Value at the 75% percentile of the u band fluxes.
+- name: uPsfFluxPercentile95
+  type: FLOAT
+  nullable: true
+  description: Value at the 95% percentile of the u band fluxes.
+- name: uPsfFluxMin
+  type: FLOAT
+  nullable: true
+  description: Minimum observed u band fluxes.
+- name: uPsfFluxMax
+  type: FLOAT
+  nullable: true
+  description: Maximum observed u band fluxes.
+- name: uPsfFluxSkew
+  type: FLOAT
+  nullable: true
+  description: Skewness of the u band fluxes.
+- name: uPsfFluxStetsonJ
+  type: FLOAT
+  nullable: true
+  description: StetsonJ statistic for the u band fluxes.
+- name: uPsfFluxLinearSlope
+  type: FLOAT
+  nullable: true
+  description: Linear best fit slope of the u band fluxes.
+- name: uPsfFluxLinearIntercept
+  type: FLOAT
+  nullable: true
+  description: Linear best fit Intercept of the u band fluxes.
+- name: uPsfFluxMaxSlope
+  type: FLOAT
+  nullable: true
+  description: Maximum slope between u band flux obsevations max(delta_flux/delta_time)
+- name: uPsfFluxErrMean
+  type: FLOAT
+  nullable: true
+  description: Mean of the u band flux errors.
+- name: gPsfFluxMedian
+  type: FLOAT
+  nullable: true
+  description: Median g band flux.
+- name: gPsfFluxMAD
+  type: FLOAT
+  nullable: true
+  description: Median absolute deviation g band fluxes.
+- name: gPsfFluxSkew
+  type: FLOAT
+  nullable: true
+  description: Skewness of the g band fluxes.
+- name: gPsfFluxPercentile05
+  type: FLOAT
+  nullable: true
+  description: Value at the 5% percentile of the g band fluxes.
+- name: gPsfFluxPercentile25
+  type: FLOAT
+  nullable: true
+  description: Value at the 25% percentile of the g band fluxes.
+- name: gPsfFluxPercentile75
+  type: FLOAT
+  nullable: true
+  description: Value at the 75% percentile of the g band fluxes.
+- name: gPsfFluxPercentile95
+  type: FLOAT
+  nullable: true
+  description: Value at the 95% percentile of the g band fluxes.
+- name: gPsfFluxMin
+  type: FLOAT
+  nullable: true
+  description: Minimum observed g band fluxes.
+- name: gPsfFluxMax
+  type: FLOAT
+  nullable: true
+  description: Maximum observed g band fluxes.
+- name: gPsfFluxSkew
+  type: FLOAT
+  nullable: true
+  description: Skewness of the g band fluxes.
+- name: gPsfFluxStetsonJ
+  type: FLOAT
+  nullable: true
+  description: StetsonJ statistic for the g band fluxes.
+- name: gPsfFluxLinearSlope
+  type: FLOAT
+  nullable: true
+  description: Linear best fit slope of the g band fluxes.
+- name: gPsfFluxLinearIntercept
+  type: FLOAT
+  nullable: true
+  description: Linear best fit Intercept of the g band fluxes.
+- name: gPsfFluxMaxSlope
+  type: FLOAT
+  nullable: true
+  description: Maximum slope between g band flux obsevations max(delta_flux/delta_time)
+- name: gPsfFluxErrMean
+  type: FLOAT
+  nullable: true
+  description: Mean of the g band flux errors.
+- name: rPsfFluxMedian
+  type: FLOAT
+  nullable: true
+  description: Median r band flux.
+- name: rPsfFluxMAD
+  type: FLOAT
+  nullable: true
+  description: Median absolute deviation r band fluxes.
+- name: rPsfFluxSkew
+  type: FLOAT
+  nullable: true
+  description: Skewness of the r band fluxes.
+- name: rPsfFluxPercentile05
+  type: FLOAT
+  nullable: true
+  description: Value at the 5% percentile of the r band fluxes.
+- name: rPsfFluxPercentile25
+  type: FLOAT
+  nullable: true
+  description: Value at the 25% percentile of the r band fluxes.
+- name: rPsfFluxPercentile75
+  type: FLOAT
+  nullable: true
+  description: Value at the 75% percentile of the r band fluxes.
+- name: rPsfFluxPercentile95
+  type: FLOAT
+  nullable: true
+  description: Value at the 95% percentile of the r band fluxes.
+- name: rPsfFluxMin
+  type: FLOAT
+  nullable: true
+  description: Minimum observed r band fluxes.
+- name: rPsfFluxMax
+  type: FLOAT
+  nullable: true
+  description: Maximum observed r band fluxes.
+- name: rPsfFluxSkew
+  type: FLOAT
+  nullable: true
+  description: Skewness of the r band fluxes.
+- name: rPsfFluxStetsonJ
+  type: FLOAT
+  nullable: true
+  description: StetsonJ statistic for the r band fluxes.
+- name: rPsfFluxLinearSlope
+  type: FLOAT
+  nullable: true
+  description: Linear best fit slope of the r band fluxes.
+- name: rPsfFluxLinearIntercept
+  type: FLOAT
+  nullable: true
+  description: Linear best fit Intercept of the r band fluxes.
+- name: rPsfFluxMaxSlope
+  type: FLOAT
+  nullable: true
+  description: Maximum slope between r band flux obsevations max(delta_flux/delta_time)
+- name: rPsfFluxErrMean
+  type: FLOAT
+  nullable: true
+  description: Mean of the r band flux errors.
+- name: iPsfFluxMedian
+  type: FLOAT
+  nullable: true
+  description: Median i band flux.
+- name: iPsfFluxMAD
+  type: FLOAT
+  nullable: true
+  description: Median absolute deviation i band fluxes.
+- name: iPsfFluxSkew
+  type: FLOAT
+  nullable: true
+  description: Skewness of the i band fluxes.
+- name: iPsfFluxPercentile05
+  type: FLOAT
+  nullable: true
+  description: Value at the 5% percentile of the i band fluxes.
+- name: iPsfFluxPercentile25
+  type: FLOAT
+  nullable: true
+  description: Value at the 25% percentile of the i band fluxes.
+- name: iPsfFluxPercentile75
+  type: FLOAT
+  nullable: true
+  description: Value at the 75% percentile of the i band fluxes.
+- name: iPsfFluxPercentile95
+  type: FLOAT
+  nullable: true
+  description: Value at the 95% percentile of the i band fluxes.
+- name: iPsfFluxMin
+  type: FLOAT
+  nullable: true
+  description: Minimum observed i band fluxes.
+- name: iPsfFluxMax
+  type: FLOAT
+  nullable: true
+  description: Maximum observed i band fluxes.
+- name: iPsfFluxSkew
+  type: FLOAT
+  nullable: true
+  description: Skewness of the i band fluxes.
+- name: iPsfFluxStetsonJ
+  type: FLOAT
+  nullable: true
+  description: StetsonJ statistic for the i band fluxes.
+- name: iPsfFluxLinearSlope
+  type: FLOAT
+  nullable: true
+  description: Linear best fit slope of the i band fluxes.
+- name: iPsfFluxLinearIntercept
+  type: FLOAT
+  nullable: true
+  description: Linear best fit Intercept of the i band fluxes.
+- name: iPsfFluxMaxSlope
+  type: FLOAT
+  nullable: true
+  description: Maximum slope between i band flux obsevations max(delta_flux/delta_time)
+- name: iPsfFluxErrMean
+  type: FLOAT
+  nullable: true
+  description: Mean of the i band flux errors.
+- name: zPsfFluxMedian
+  type: FLOAT
+  nullable: true
+  description: Median z band flux.
+- name: zPsfFluxMAD
+  type: FLOAT
+  nullable: true
+  description: Median absolute deviation z band fluxes.
+- name: zPsfFluxSkew
+  type: FLOAT
+  nullable: true
+  description: Skewness of the z band fluxes.
+- name: zPsfFluxPercentile05
+  type: FLOAT
+  nullable: true
+  description: Value at the 5% percentile of the z band fluxes.
+- name: zPsfFluxPercentile25
+  type: FLOAT
+  nullable: true
+  description: Value at the 25% percentile of the z band fluxes.
+- name: zPsfFluxPercentile75
+  type: FLOAT
+  nullable: true
+  description: Value at the 75% percentile of the z band fluxes.
+- name: zPsfFluxPercentile95
+  type: FLOAT
+  nullable: true
+  description: Value at the 95% percentile of the z band fluxes.
+- name: zPsfFluxMin
+  type: FLOAT
+  nullable: true
+  description: Minimum observed z band fluxes.
+- name: zPsfFluxMax
+  type: FLOAT
+  nullable: true
+  description: Maximum observed z band fluxes.
+- name: zPsfFluxSkew
+  type: FLOAT
+  nullable: true
+  description: Skewness of the z band fluxes.
+- name: zPsfFluxStetsonJ
+  type: FLOAT
+  nullable: true
+  description: StetsonJ statistic for the z band fluxes.
+- name: zPsfFluxLinearSlope
+  type: FLOAT
+  nullable: true
+  description: Linear best fit slope of the z band fluxes.
+- name: zPsfFluxLinearIntercept
+  type: FLOAT
+  nullable: true
+  description: Linear best fit Intercept of the z band fluxes.
+- name: zPsfFluxMaxSlope
+  type: FLOAT
+  nullable: true
+  description: Maximum slope between z band flux obsevations max(delta_flux/delta_time)
+- name: zPsfFluxErrMean
+  type: FLOAT
+  nullable: true
+  description: Mean of the z band flux errors.
+- name: yPsfFluxMedian
+  type: FLOAT
+  nullable: true
+  description: Median y band flux.
+- name: yPsfFluxMAD
+  type: FLOAT
+  nullable: true
+  description: Median absolute deviation y band fluxes.
+- name: yPsfFluxSkew
+  type: FLOAT
+  nullable: true
+  description: Skewness of the y band fluxes.
+- name: yPsfFluxPercentile05
+  type: FLOAT
+  nullable: true
+  description: Value at the 5% percentile of the y band fluxes.
+- name: yPsfFluxPercentile25
+  type: FLOAT
+  nullable: true
+  description: Value at the 25% percentile of the y band fluxes.
+- name: yPsfFluxPercentile75
+  type: FLOAT
+  nullable: true
+  description: Value at the 75% percentile of the y band fluxes.
+- name: yPsfFluxPercentile95
+  type: FLOAT
+  nullable: true
+  description: Value at the 95% percentile of the y band fluxes.
+- name: yPsfFluxMin
+  type: FLOAT
+  nullable: true
+  description: Minimum observed y band fluxes.
+- name: yPsfFluxMax
+  type: FLOAT
+  nullable: true
+  description: Maximum observed y band fluxes.
+- name: yPsfFluxSkew
+  type: FLOAT
+  nullable: true
+  description: Skewness of the y band fluxes.
+- name: yPsfFluxStetsonJ
+  type: FLOAT
+  nullable: true
+  description: StetsonJ statistic for the y band fluxes.
+- name: yPsfFluxLinearSlope
+  type: FLOAT
+  nullable: true
+  description: Linear best fit slope of the y band fluxes.
+- name: yPsfFluxLinearIntercept
+  type: FLOAT
+  nullable: true
+  description: Linear best fit Intercept of the y band fluxes.
+- name: yPsfFluxMaxSlope
+  type: FLOAT
+  nullable: true
+  description: Maximum slope between y band flux obsevations max(delta_flux/delta_time)
+- name: yPsfFluxErrMean
+  type: FLOAT
+  nullable: true
+  description: Mean of the y band flux errors.
 
 ---
 # DiaObjectLast uses the same columns as DiaObject but has different index
