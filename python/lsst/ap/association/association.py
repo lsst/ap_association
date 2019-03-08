@@ -24,8 +24,11 @@
 
 __all__ = ["AssociationConfig", "AssociationTask"]
 
+from astropy.stats import median_absolute_deviation
 import numpy as np
+from scipy.optimize import least_squares
 from scipy.spatial import cKDTree
+from scipy.stats import skew
 
 import lsst.geom as geom
 import lsst.afw.table as afwTable
@@ -82,19 +85,156 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
         dia_object_record['%sPSFluxMeanErr' % filter_name] = np.nan
         dia_object_record["%sPSFluxChi2" % filter_name] = np.nan
         dia_object_record['%sPSFluxNdata' % filter_name] = n_sources
+
+        dia_object_record['%sTotFluxMean' % filter_name] = dia_sources[0]['totFlux']
+        dia_object_record['%sTotFluxSigma' % filter_name] = np.nan
+        dia_object_record['%sTotFluxMeanErr' % filter_name] = np.nan
     else:
-        fluxes = dia_sources.get("psFlux")[
-            dia_sources.get("filterId") == filter_id]
-        fluxErrors = dia_sources.get("psFluxErr")[
-            dia_sources.get("filterId") == filter_id]
-        fluxMean = np.mean(fluxes)
-        dia_object_record['%sPSFluxMean' % filter_name] = np.mean(fluxes)
-        dia_object_record['%sPSFluxSigma' % filter_name] = np.std(fluxes, ddof=1)
-        dia_object_record['%sPSFluxMeanErr' % filter_name] = \
-            dia_object_record['%sPSFluxSigma' % filter_name] / len(fluxes)
+        currentFluxMask = dia_sources.get("filterId") == filter_id
+        fluxes = dia_sources.get("psFlux")[currentFluxMask]
+        fluxErrors = dia_sources.get("psFluxErr")[currentFluxMask]
+
+        totFluxes = dia_sources.get("totFlux")[currentFluxMask]
+        totFluxErrors = dia_sources.get("totFluxErr")[currentFluxMask]
+
+        midpointTais = dia_sources.get("midPointTai")[currentFluxMask]
+
+        fluxMean = np.average(fluxes, weights=1 / fluxErrors ** 2)
+        totFluxMean = np.average(totFluxes, weights=1 / totFluxErrors ** 2)
+
+        # Standard, DDPD defined columns.
+        dia_object_record['%sPSFluxMean' % filter_name] = fluxMean
+        dia_object_record['%sPSFluxSigma' % filter_name] = np.std(fluxes,
+                                                                  ddof=1)
+        dia_object_record['%sPSFluxMeanErr' % filter_name] = np.sqrt(
+            1 / np.sum(1 / fluxErrors ** 2))
         dia_object_record["%sPSFluxChi2" % filter_name] = np.sum(
             ((fluxMean - fluxes) / fluxErrors) ** 2)
         dia_object_record['%sPSFluxNdata' % filter_name] = len(fluxes)
+
+        dia_object_record['%sTotFluxMean' % filter_name] = totFluxMean
+        dia_object_record['%sTotFluxSigma' % filter_name] = np.std(totFluxes,
+                                                                  ddof=1)
+        dia_object_record['%sTotFluxMeanErr' % filter_name] = np.sqrt(
+            1 / np.sum(1 / totFluxErrors ** 2))
+        # Columns below are created in DM-18316 for use in ap_pipe/verify
+        # testing.
+        ptiles = np.percentile(fluxes, [5, 25, 50, 75, 95])
+        dia_object_record['%sPsfFluxPercentile05' % filter_name] = ptiles[0]
+        dia_object_record['%sPsfFluxPercentile25' % filter_name] = ptiles[1]
+        dia_object_record['%sPsfFluxMedian' % filter_name] = ptiles[2]
+        dia_object_record['%sPsfFluxPercentile75' % filter_name] = ptiles[3]
+        dia_object_record['%sPsfFluxPercentile95' % filter_name] = ptiles[4]
+
+        dia_object_record['%sPsfFluxMAD' % filter_name] = \
+            median_absolute_deviation(fluxes)
+
+        dia_object_record['%sPsfFluxSkew' % filter_name] = skew(fluxes)
+
+        dia_object_record['%sPsfFluxMin' % filter_name] = fluxes.min()
+        dia_object_record['%sPsfFluxMax' % filter_name] = fluxes.max()
+
+        deltaFluxes = fluxes[1:] - fluxes[:-1]
+        deltaTimes = midpointTais[1:] - midpointTais[:-1]
+        dia_object_record['%sPsfFluxMaxSlope' % filter_name] = np.max(
+            deltaFluxes / deltaTimes)
+
+        m, b = _fit_linear_flux_model(fluxes, fluxErrors, midpointTais)
+        dia_object_record['%sPsfFluxLinearSlope' % filter_name] = m
+        dia_object_record['%sPsfFluxLinearIntercept' % filter_name] = b
+
+        dia_object_record['%sPsfFluxErrMean' % filter_name] = \
+            np.mean(fluxErrors)
+
+
+def _fit_linear_flux_model(fluxes, errors, times):
+    """
+    """
+    mask = np.logical_and(np.isfinite(fluxes), np.isfinite(errors))
+    tmp_fluxes = fluxes[mask]
+    if len(tmp_fluxes) <= 0:
+        return (np.nan, np.nan)
+
+    tmp_errors = errors[mask]
+    tmp_times = times[mask]
+
+    def model(x):
+        return ((x[0] * tmp_times + x[1] - tmp_fluxes) / tmp_errors) ** 2
+
+    try:
+        ans = least_squares(model, x0=[0., np.mean(tmp_fluxes)]).x
+    except ValueError:
+        import pdb; pdb.set_trace()
+    return ans
+
+
+def _stentson_J(fluxes, errors):
+    """Compute the single band StentsonJ statistic.
+
+    Parameters
+    ----------
+    fluxes : `numpy.ndarray` (N,)
+        Calibrated lightcurve flux values.
+    errors : `numpy.ndarray`
+        Errors on the calibrated lightcurve fluxes.
+
+    Returns
+    -------
+    stentsonJ : `float`
+        StentsonJ statistic for the input fluxes and errors.
+    """
+    n_points = len(fluxes)
+    flux_mean = _stentson_mean(fluxes, errors)
+    delta_val = (
+        np.sqrt(n_points / (n_points - 1)) * (fluxes - flux_mean) / errors)
+    p_k = delta_val ** 2 - 1
+
+    return np.mean(np.sign(p_k) * np.sqrt(np.fabs(p_k)))
+
+
+def _stentson_mean(values, errors, alpha=2., beta=2., n_iter=20, tol=1e-6):
+    """Compute the Stentson mean of the fluxes which down-weights outliers.
+
+    Weighted biased on an error weighted difference scaled by a constant
+    (1/``a``) and raised to the power beta. Higher beta's more harshly penalize
+    outliers and ``a`` sets the number of sigma where a weighted difference of
+    1 occurs.
+
+    Parameters
+    ----------
+    values : `numpy.dnarray`, (N,)
+        Input values to compute the mean of.
+    errors : `numpy.ndarray`, (N,)
+        Errors on the input values.
+    alpha : `float`
+        Scalar downweighting of the fractional difference. lower->more clipping
+    beta : `float`
+        Power law slope of the used to down-weight outliers. higher->more
+        clipping
+    n_iter : `int`
+        Number of iterations of clipping.
+    tol : `float`
+        Fractional and absolute tolerance goal on the change in the mean before
+        exiting early.
+
+    Returns
+    -------
+    wmean : `float`
+        Weighted Stentson mean result.
+    """
+    n_points = len(values)
+    n_factor = np.sqrt(n_points / (n_points - 1))
+
+    wmean = np.average(values / errors ** 2) / np.sum(1 / errors ** 2)
+    for iter_idx in range(n_iter):
+        chi = np.fabs(n_factor * (values - wmean) / errors)
+        weights = 1 / (1 + (chi / alpha) ** beta)
+        tmp_wmean = np.sum(weights * values) / np.sum(weights)
+        diff = np.fabs(wmean - wmean)
+        wmean = tmp_wmean
+        if diff / wmean < tol and diff < tol:
+            break
+    return wmean
 
 
 class AssociationConfig(pexConfig.Config):

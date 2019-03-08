@@ -391,6 +391,7 @@ class TestAssociationTask(unittest.TestCase):
                                     dafBase.DateTime.Timescale.TAI)
         ppdb.storeDiaObjects(dia_objects, dateTime.toPython())
         loaded_dia_objects = ppdb.getDiaObjects(self.index_ranges)
+
         self.assertTrue(loaded_dia_objects.schema == dia_objects.schema)
 
         # Create DIASources, update their ccdVisitId and fluxes, and store
@@ -473,16 +474,16 @@ class TestAssociationTask(unittest.TestCase):
              'gPSFluxMean': 1., 'gPSFluxMeanErr': 1., 'gPSFluxSigma': 1.,
              'rPSFluxMean': 1., 'rPSFluxMeanErr': 1., 'rPSFluxSigma': 1.},
             {'id': 1,
-             'gPSFluxMean': 1.5, 'gPSFluxMeanErr': 0.35355338, 'gPSFluxSigma': 0.70710678,
+             'gPSFluxMean': 1.2857141, 'gPSFluxMeanErr': 0.01195228, 'gPSFluxSigma': 0.70710678,
              'rPSFluxMean': 1., 'rPSFluxMeanErr': 1., 'rPSFluxSigma': 1.},
             {'id': 2,
-             'gPSFluxMean': 1.5, 'gPSFluxMeanErr': 0.35355338, 'gPSFluxSigma': 0.70710678,
+             'gPSFluxMean': 1.2857141, 'gPSFluxMeanErr': 0.01195228, 'gPSFluxSigma': 0.70710678,
              'rPSFluxMean': 1., 'rPSFluxMeanErr': 1., 'rPSFluxSigma': 1.},
             {'id': 3,
-             'gPSFluxMean': 1.5, 'gPSFluxMeanErr': 0.35355338, 'gPSFluxSigma': 0.70710678,
+             'gPSFluxMean': 1.2857141, 'gPSFluxMeanErr': 0.01195228, 'gPSFluxSigma': 0.70710678,
              'rPSFluxMean': 1., 'rPSFluxMeanErr': 1., 'rPSFluxSigma': 1.},
             {'id': 4,
-             'gPSFluxMean': 1.5, 'gPSFluxMeanErr': 0.35355338, 'gPSFluxSigma': 0.70710678,
+             'gPSFluxMean': 1.2857141, 'gPSFluxMeanErr': 0.01195228, 'gPSFluxSigma': 0.70710678,
              'rPSFluxMean': 1., 'rPSFluxMeanErr': 1., 'rPSFluxSigma': 1.},
             {'id': 14,
              'gPSFluxMean': 2., 'gPSFluxMeanErr': np.nan, 'gPSFluxSigma': np.nan,

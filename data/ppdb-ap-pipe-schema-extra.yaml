@@ -17,6 +17,7 @@ columns:
   type: INT
   nullable: false
   description: Total number of DiaSources associated with this DiaObject.
+
 - name: uPsfFluxMedian
   type: FLOAT
   nullable: true
@@ -53,10 +54,6 @@ columns:
   type: FLOAT
   nullable: true
   description: Maximum observed u band fluxes.
-- name: uPsfFluxSkew
-  type: FLOAT
-  nullable: true
-  description: Skewness of the u band fluxes.
 - name: uPsfFluxStetsonJ
   type: FLOAT
   nullable: true
@@ -77,6 +74,7 @@ columns:
   type: FLOAT
   nullable: true
   description: Mean of the u band flux errors.
+
 - name: gPsfFluxMedian
   type: FLOAT
   nullable: true
@@ -113,10 +111,6 @@ columns:
   type: FLOAT
   nullable: true
   description: Maximum observed g band fluxes.
-- name: gPsfFluxSkew
-  type: FLOAT
-  nullable: true
-  description: Skewness of the g band fluxes.
 - name: gPsfFluxStetsonJ
   type: FLOAT
   nullable: true
@@ -173,10 +167,6 @@ columns:
   type: FLOAT
   nullable: true
   description: Maximum observed r band fluxes.
-- name: rPsfFluxSkew
-  type: FLOAT
-  nullable: true
-  description: Skewness of the r band fluxes.
 - name: rPsfFluxStetsonJ
   type: FLOAT
   nullable: true
@@ -233,10 +223,6 @@ columns:
   type: FLOAT
   nullable: true
   description: Maximum observed i band fluxes.
-- name: iPsfFluxSkew
-  type: FLOAT
-  nullable: true
-  description: Skewness of the i band fluxes.
 - name: iPsfFluxStetsonJ
   type: FLOAT
   nullable: true
@@ -293,10 +279,6 @@ columns:
   type: FLOAT
   nullable: true
   description: Maximum observed z band fluxes.
-- name: zPsfFluxSkew
-  type: FLOAT
-  nullable: true
-  description: Skewness of the z band fluxes.
 - name: zPsfFluxStetsonJ
   type: FLOAT
   nullable: true
@@ -353,10 +335,6 @@ columns:
   type: FLOAT
   nullable: true
   description: Maximum observed y band fluxes.
-- name: yPsfFluxSkew
-  type: FLOAT
-  nullable: true
-  description: Skewness of the y band fluxes.
 - name: yPsfFluxStetsonJ
   type: FLOAT
   nullable: true
@@ -377,6 +355,84 @@ columns:
   type: FLOAT
   nullable: true
   description: Mean of the y band flux errors.
+
+- name: uTotFluxMean
+  type: FLOAT
+  nullable: true
+  description: Weighted mean direct flux in u band
+- name: uTotFluxMeanErr
+  type: FLOAT
+  nullable: true
+  description: Error on the direct flux weighted mean in u band
+- name: uTotFluxSigma
+  type: FLOAT
+  nullable: true
+  description: Scatter on the u band mean flux
+
+- name: gTotFluxMean
+  type: FLOAT
+  nullable: true
+  description: Weighted mean direct flux in g band
+- name: gTotFluxMeanErr
+  type: FLOAT
+  nullable: true
+  description: Error on the direct flux weighted mean in g band
+- name: gTotFluxSigma
+  type: FLOAT
+  nullable: true
+  description: Scatter on the g band mean flux
+
+- name: rTotFluxMean
+  type: FLOAT
+  nullable: true
+  description: Weighted mean direct flux in r band
+- name: rTotFluxMeanErr
+  type: FLOAT
+  nullable: true
+  description: Error on the direct flux weighted mean in r band
+- name: rTotFluxSigma
+  type: FLOAT
+  nullable: true
+  description: Scatter on the r band mean flux
+
+- name: iTotFluxMean
+  type: FLOAT
+  nullable: true
+  description: Weighted mean direct flux in i band
+- name: iTotFluxMeanErr
+  type: FLOAT
+  nullable: true
+  description: Error on the direct flux weighted mean in i band
+- name: iTotFluxSigma
+  type: FLOAT
+  nullable: true
+  description: Scatter on the i band mean flux
+
+- name: zTotFluxMean
+  type: FLOAT
+  nullable: true
+  description: Weighted mean direct flux in z band
+- name: zTotFluxMeanErr
+  type: FLOAT
+  nullable: true
+  description: Error on the direct flux weighted mean in z band
+- name: zTotFluxSigma
+  type: FLOAT
+  nullable: true
+  description: Scatter on the z band mean flux
+
+- name: yTotFluxMean
+  type: FLOAT
+  nullable: true
+  description: Weighted mean direct flux in y band
+- name: yTotFluxMeanErr
+  type: FLOAT
+  nullable: true
+  description: Error on the direct flux weighted mean in y band
+- name: yTotFluxSigma
+  type: FLOAT
+  nullable: true
+  description: Scatter on the u band mean flux
 
 ---
 # DiaObjectLast uses the same columns as DiaObject but has different index

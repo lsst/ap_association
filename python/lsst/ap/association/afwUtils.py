@@ -104,6 +104,7 @@ def make_dia_object_schema(filter_names=None):
                     doc='Standard error of uPSFluxMean.')
     schema.addField('uPSFluxSigma', type='F',
                     doc='Standard deviation of the distribution of uPSFlux.')
+
     schema.addField('uPSFluxChi2', type='F',
                     doc='Chi^2 statistic for the scatter of uPSFlux around uPSFluxMean.')
     schema.addField('uPSFluxNdata', type='I',
@@ -120,6 +121,7 @@ def make_dia_object_schema(filter_names=None):
                     doc='Standard error of gPSFluxMean.')
     schema.addField('gPSFluxSigma', type='F',
                     doc='Standard deviation of the distribution of gPSFlux.')
+
     schema.addField('gPSFluxChi2', type='F',
                     doc='Chi^2 statistic for the scatter of gPSFlux around gPSFluxMean.')
     schema.addField('gPSFluxNdata', type='I',
@@ -430,6 +432,14 @@ def make_dia_object_schema(filter_names=None):
                     doc='Maximum slope between y band flux observations max(delta_flux/delta_time)')
     schema.addField('yPsfFluxErrMean', type='F',
                     doc='Mean of the y band flux errors.')
+
+    for f in ['u', 'g', 'r', 'i', 'z', 'y']:
+        schema.addField('%sTotFluxMean' % f, type='F',
+                        doc='Weighted mean point-source model magnitude for %s filter.' % f)
+        schema.addField('%sTotFluxMeanErr' % f, type='F',
+                        doc='Standard error of %sTotFluxMean.' % f)
+        schema.addField('%sTotFluxSigma' % f, type='F',
+                        doc='Standard deviation of the distribution of %sTotFlux.' % f)
 
     return schema
 
