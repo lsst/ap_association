@@ -113,8 +113,8 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
         dia_object_record['%sPSFluxNdata' % filter_name] = len(fluxes)
 
         dia_object_record['%sTotFluxMean' % filter_name] = totFluxMean
-        dia_object_record['%sTotFluxSigma' % filter_name] = np.std(totFluxes,
-                                                                  ddof=1)
+        dia_object_record['%sTotFluxSigma' % filter_name] = np.std(
+            totFluxes, ddof=1)
         dia_object_record['%sTotFluxMeanErr' % filter_name] = np.sqrt(
             1 / np.sum(1 / totFluxErrors ** 2))
         # Columns below are created in DM-18316 for use in ap_pipe/verify
@@ -143,6 +143,9 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
         dia_object_record['%sPsfFluxLinearSlope' % filter_name] = m
         dia_object_record['%sPsfFluxLinearIntercept' % filter_name] = b
 
+        dia_object_record['%sPsfFluxStetsonJ' % filter_name] = _stentson_J(
+            fluxes, fluxErrors)
+
         dia_object_record['%sPsfFluxErrMean' % filter_name] = \
             np.mean(fluxErrors)
 
@@ -161,10 +164,7 @@ def _fit_linear_flux_model(fluxes, errors, times):
     def model(x):
         return ((x[0] * tmp_times + x[1] - tmp_fluxes) / tmp_errors) ** 2
 
-    try:
-        ans = least_squares(model, x0=[0., np.mean(tmp_fluxes)]).x
-    except ValueError:
-        import pdb; pdb.set_trace()
+    ans = least_squares(model, x0=[0., np.mean(tmp_fluxes)]).x
     return ans
 
 
@@ -225,12 +225,12 @@ def _stentson_mean(values, errors, alpha=2., beta=2., n_iter=20, tol=1e-6):
     n_points = len(values)
     n_factor = np.sqrt(n_points / (n_points - 1))
 
-    wmean = np.average(values / errors ** 2) / np.sum(1 / errors ** 2)
+    wmean = np.average(values, weights=1 / errors ** 2)
     for iter_idx in range(n_iter):
         chi = np.fabs(n_factor * (values - wmean) / errors)
         weights = 1 / (1 + (chi / alpha) ** beta)
-        tmp_wmean = np.sum(weights * values) / np.sum(weights)
-        diff = np.fabs(wmean - wmean)
+        tmp_wmean = np.average(values, weights=weights)
+        diff = np.fabs(tmp_wmean - wmean)
         wmean = tmp_wmean
         if diff / wmean < tol and diff < tol:
             break
