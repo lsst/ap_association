@@ -86,9 +86,9 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
         dia_object_record["%sPSFluxChi2" % filter_name] = np.nan
         dia_object_record['%sPSFluxNdata' % filter_name] = n_sources
 
-        dia_object_record['%sTotFluxMean' % filter_name] = dia_sources[0]['totFlux']
-        dia_object_record['%sTotFluxSigma' % filter_name] = np.nan
-        dia_object_record['%sTotFluxMeanErr' % filter_name] = np.nan
+        dia_object_record['%sFPFluxMean' % filter_name] = dia_sources[0]['totFlux']
+        dia_object_record['%sFPFluxSigma' % filter_name] = np.nan
+        dia_object_record['%sFPFluxMeanErr' % filter_name] = np.nan
     else:
         currentFluxMask = dia_sources.get("filterId") == filter_id
         fluxes = dia_sources.get("psFlux")[currentFluxMask]
@@ -112,41 +112,41 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
             ((fluxMean - fluxes) / fluxErrors) ** 2)
         dia_object_record['%sPSFluxNdata' % filter_name] = len(fluxes)
 
-        dia_object_record['%sTotFluxMean' % filter_name] = totFluxMean
-        dia_object_record['%sTotFluxSigma' % filter_name] = np.std(
+        dia_object_record['%sFPFluxMean' % filter_name] = totFluxMean
+        dia_object_record['%sFPFluxSigma' % filter_name] = np.std(
             totFluxes, ddof=1)
-        dia_object_record['%sTotFluxMeanErr' % filter_name] = np.sqrt(
+        dia_object_record['%sFPFluxMeanErr' % filter_name] = np.sqrt(
             1 / np.sum(1 / totFluxErrors ** 2))
         # Columns below are created in DM-18316 for use in ap_pipe/verify
         # testing.
         ptiles = np.percentile(fluxes, [5, 25, 50, 75, 95])
-        dia_object_record['%sPsfFluxPercentile05' % filter_name] = ptiles[0]
-        dia_object_record['%sPsfFluxPercentile25' % filter_name] = ptiles[1]
-        dia_object_record['%sPsfFluxMedian' % filter_name] = ptiles[2]
-        dia_object_record['%sPsfFluxPercentile75' % filter_name] = ptiles[3]
-        dia_object_record['%sPsfFluxPercentile95' % filter_name] = ptiles[4]
+        dia_object_record['%sPSFluxPercentile05' % filter_name] = ptiles[0]
+        dia_object_record['%sPSFluxPercentile25' % filter_name] = ptiles[1]
+        dia_object_record['%sPSFluxMedian' % filter_name] = ptiles[2]
+        dia_object_record['%sPSFluxPercentile75' % filter_name] = ptiles[3]
+        dia_object_record['%sPSFluxPercentile95' % filter_name] = ptiles[4]
 
-        dia_object_record['%sPsfFluxMAD' % filter_name] = \
+        dia_object_record['%sPSFluxMAD' % filter_name] = \
             median_absolute_deviation(fluxes)
 
-        dia_object_record['%sPsfFluxSkew' % filter_name] = skew(fluxes)
+        dia_object_record['%sPSFluxSkew' % filter_name] = skew(fluxes)
 
-        dia_object_record['%sPsfFluxMin' % filter_name] = fluxes.min()
-        dia_object_record['%sPsfFluxMax' % filter_name] = fluxes.max()
+        dia_object_record['%sPSFluxMin' % filter_name] = fluxes.min()
+        dia_object_record['%sPSFluxMax' % filter_name] = fluxes.max()
 
         deltaFluxes = fluxes[1:] - fluxes[:-1]
         deltaTimes = midpointTais[1:] - midpointTais[:-1]
-        dia_object_record['%sPsfFluxMaxSlope' % filter_name] = np.max(
+        dia_object_record['%sPSFluxMaxSlope' % filter_name] = np.max(
             deltaFluxes / deltaTimes)
 
         m, b = _fit_linear_flux_model(fluxes, fluxErrors, midpointTais)
-        dia_object_record['%sPsfFluxLinearSlope' % filter_name] = m
-        dia_object_record['%sPsfFluxLinearIntercept' % filter_name] = b
+        dia_object_record['%sPSFluxLinearSlope' % filter_name] = m
+        dia_object_record['%sPSFluxLinearIntercept' % filter_name] = b
 
-        dia_object_record['%sPsfFluxStetsonJ' % filter_name] = _stentson_J(
+        dia_object_record['%sPSFluxStetsonJ' % filter_name] = _stentson_J(
             fluxes, fluxErrors)
 
-        dia_object_record['%sPsfFluxErrMean' % filter_name] = \
+        dia_object_record['%sPSFluxErrMean' % filter_name] = \
             np.mean(fluxErrors)
 
 
