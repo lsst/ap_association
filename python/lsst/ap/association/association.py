@@ -78,45 +78,32 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
     filter_id : `int`
         id of the filter in the AssociationDB.
     """
-    n_sources = len(dia_sources)
-    if n_sources == 1 and dia_sources[0]["filterId"] == filter_id:
-        dia_object_record['%sPSFluxMean' % filter_name] = dia_sources[0]['psFlux']
-        dia_object_record['%sPSFluxSigma' % filter_name] = np.nan
-        dia_object_record['%sPSFluxMeanErr' % filter_name] = np.nan
-        dia_object_record["%sPSFluxChi2" % filter_name] = np.nan
-        dia_object_record['%sPSFluxNdata' % filter_name] = n_sources
+    currentFluxMask = dia_sources.get("filterId") == filter_id
+    fluxes = dia_sources.get("psFlux")[currentFluxMask]
+    fluxErrors = dia_sources.get("psFluxErr")[currentFluxMask]
 
-        dia_object_record['%sFPFluxMean' % filter_name] = dia_sources[0]['totFlux']
-        dia_object_record['%sFPFluxSigma' % filter_name] = np.nan
-        dia_object_record['%sFPFluxMeanErr' % filter_name] = np.nan
-    else:
-        currentFluxMask = dia_sources.get("filterId") == filter_id
-        fluxes = dia_sources.get("psFlux")[currentFluxMask]
-        fluxErrors = dia_sources.get("psFluxErr")[currentFluxMask]
+    noNanMask = np.logical_and(np.isfinite(fluxes), np.isfinite(fluxErrors))
+    fluxes = fluxes[noNanMask]
+    fluxErrors = fluxErrors[noNanMask]
+    midpointTais = dia_sources.get("midPointTai")[
+        np.logical_and(currentFluxMask, noNanMask)]
 
-        totFluxes = dia_sources.get("totFlux")[currentFluxMask]
-        totFluxErrors = dia_sources.get("totFluxErr")[currentFluxMask]
-
-        midpointTais = dia_sources.get("midPointTai")[currentFluxMask]
-
+    if len(fluxes) == 1:
+        dia_object_record['%sPSFluxMean' % filter_name] = fluxes
+        dia_object_record['%sPSFluxNdata' % filter_name] = 1
+    elif len(fluxes > 1):
         fluxMean = np.average(fluxes, weights=1 / fluxErrors ** 2)
-        totFluxMean = np.average(totFluxes, weights=1 / totFluxErrors ** 2)
 
         # Standard, DDPD defined columns.
         dia_object_record['%sPSFluxMean' % filter_name] = fluxMean
-        dia_object_record['%sPSFluxSigma' % filter_name] = np.std(fluxes,
-                                                                  ddof=1)
         dia_object_record['%sPSFluxMeanErr' % filter_name] = np.sqrt(
             1 / np.sum(1 / fluxErrors ** 2))
+        dia_object_record['%sPSFluxSigma' % filter_name] = np.std(fluxes,
+                                                                  ddof=1)
         dia_object_record["%sPSFluxChi2" % filter_name] = np.sum(
             ((fluxMean - fluxes) / fluxErrors) ** 2)
         dia_object_record['%sPSFluxNdata' % filter_name] = len(fluxes)
 
-        dia_object_record['%sFPFluxMean' % filter_name] = totFluxMean
-        dia_object_record['%sFPFluxSigma' % filter_name] = np.std(
-            totFluxes, ddof=1)
-        dia_object_record['%sFPFluxMeanErr' % filter_name] = np.sqrt(
-            1 / np.sum(1 / totFluxErrors ** 2))
         # Columns below are created in DM-18316 for use in ap_pipe/verify
         # testing.
         ptiles = np.percentile(fluxes, [5, 25, 50, 75, 95])
@@ -149,22 +136,45 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
         dia_object_record['%sPSFluxErrMean' % filter_name] = \
             np.mean(fluxErrors)
 
+    totFluxes = dia_sources.get("totFlux")[currentFluxMask]
+    totFluxErrors = dia_sources.get("totFluxErr")[currentFluxMask]
+    noNanMask = np.logical_and(np.isfinite(totFluxes),
+                               np.isfinite(totFluxErrors))
+    totFluxes = totFluxes[noNanMask]
+    totFluxErrors = totFluxErrors[noNanMask]
+
+    if len(totFluxes) == 1:
+        dia_object_record['%sFPFluxMean' % filter_name] = totFluxes
+    elif len(totFluxes) > 1:
+        fluxMean = np.average(totFluxes, weights=1 / totFluxErrors ** 2)
+        dia_object_record['%sFPFluxMean' % filter_name] = fluxMean
+        dia_object_record['%sFPFluxMeanErr' % filter_name] = np.sqrt(
+            1 / np.sum(1 / totFluxErrors ** 2))
+        dia_object_record['%sFPFluxSigma' % filter_name] = np.std(totFluxes,
+                                                                  ddof=1)
+
 
 def _fit_linear_flux_model(fluxes, errors, times):
-    """
-    """
-    mask = np.logical_and(np.isfinite(fluxes), np.isfinite(errors))
-    tmp_fluxes = fluxes[mask]
-    if len(tmp_fluxes) <= 0:
-        return (np.nan, np.nan)
+    """Fit a linear model (m*x + b) to flux vs time.
 
-    tmp_errors = errors[mask]
-    tmp_times = times[mask]
+    Parameters
+    ----------
+    fluxes : `numpy.ndarray`, (N,)
+        Input fluxes.
+    errors : `numpy.ndarray`, (N,)
+        Import errors associated with fluxes.
+    times : `numpy.ndarray`, (N,)
+        Time of the flux observation.
 
+    Returns
+    -------
+    ans : tuple, (2,)
+        Slope (m) and intercept (b) values fit to the light-curve.
+    """
     def model(x):
-        return ((x[0] * tmp_times + x[1] - tmp_fluxes) / tmp_errors) ** 2
+        return ((x[0] * times + x[1] - fluxes) / errors) ** 2
 
-    ans = least_squares(model, x0=[0., np.mean(tmp_fluxes)]).x
+    ans = least_squares(model, x0=[0., np.mean(fluxes)]).x
     return ans
 
 
