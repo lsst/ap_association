@@ -85,8 +85,7 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
     noNanMask = np.logical_and(np.isfinite(fluxes), np.isfinite(fluxErrors))
     fluxes = fluxes[noNanMask]
     fluxErrors = fluxErrors[noNanMask]
-    midpointTais = dia_sources.get("midPointTai")[
-        np.logical_and(currentFluxMask, noNanMask)]
+    midpointTais = dia_sources.get("midPointTai")[currentFluxMask][noNanMask]
 
     if len(fluxes) == 1:
         dia_object_record['%sPSFluxMean' % filter_name] = fluxes

@@ -22,10 +22,12 @@ columns:
   type: FLOAT
   nullable: true
   description: Median u band flux.
+  unit: nJy
 - name: uPSFluxMAD
   type: FLOAT
   nullable: true
   description: Median absolute deviation u band fluxes.
+  unit: nJy
 - name: uPSFluxSkew
   type: FLOAT
   nullable: true
@@ -34,26 +36,32 @@ columns:
   type: FLOAT
   nullable: true
   description: Value at the 5% percentile of the u band fluxes.
+  unit: nJy
 - name: uPSFluxPercentile25
   type: FLOAT
   nullable: true
   description: Value at the 25% percentile of the u band fluxes.
+  unit: nJy
 - name: uPSFluxPercentile75
   type: FLOAT
   nullable: true
   description: Value at the 75% percentile of the u band fluxes.
+  unit: nJy
 - name: uPSFluxPercentile95
   type: FLOAT
   nullable: true
   description: Value at the 95% percentile of the u band fluxes.
+  unit: nJy
 - name: uPSFluxMin
   type: FLOAT
   nullable: true
   description: Minimum observed u band fluxes.
+  unit: nJy
 - name: uPSFluxMax
   type: FLOAT
   nullable: true
   description: Maximum observed u band fluxes.
+  unit: nJy
 - name: uPSFluxStetsonJ
   type: FLOAT
   nullable: true
@@ -62,6 +70,7 @@ columns:
   type: FLOAT
   nullable: true
   description: Linear best fit slope of the u band fluxes.
+  unit: nJy/MJD
 - name: uPSFluxLinearIntercept
   type: FLOAT
   nullable: true
@@ -70,19 +79,23 @@ columns:
   type: FLOAT
   nullable: true
   description: Maximum slope between u band flux obsevations max(delta_flux/delta_time)
+  unit: nJy/MJD
 - name: uPSFluxErrMean
   type: FLOAT
   nullable: true
   description: Mean of the u band flux errors.
+  unit: nJy
 
 - name: gPSFluxMedian
   type: FLOAT
   nullable: true
   description: Median g band flux.
+  unit: nJy
 - name: gPSFluxMAD
   type: FLOAT
   nullable: true
   description: Median absolute deviation g band fluxes.
+  unit: nJy
 - name: gPSFluxSkew
   type: FLOAT
   nullable: true
@@ -91,26 +104,32 @@ columns:
   type: FLOAT
   nullable: true
   description: Value at the 5% percentile of the g band fluxes.
+  unit: nJy
 - name: gPSFluxPercentile25
   type: FLOAT
   nullable: true
   description: Value at the 25% percentile of the g band fluxes.
+  unit: nJy
 - name: gPSFluxPercentile75
   type: FLOAT
   nullable: true
   description: Value at the 75% percentile of the g band fluxes.
+  unit: nJy
 - name: gPSFluxPercentile95
   type: FLOAT
   nullable: true
   description: Value at the 95% percentile of the g band fluxes.
+  unit: nJy
 - name: gPSFluxMin
   type: FLOAT
   nullable: true
   description: Minimum observed g band fluxes.
+  unit: nJy
 - name: gPSFluxMax
   type: FLOAT
   nullable: true
   description: Maximum observed g band fluxes.
+  unit: nJy
 - name: gPSFluxStetsonJ
   type: FLOAT
   nullable: true
@@ -119,26 +138,33 @@ columns:
   type: FLOAT
   nullable: true
   description: Linear best fit slope of the g band fluxes.
+  unit: nJy/MJD
 - name: gPSFluxLinearIntercept
   type: FLOAT
   nullable: true
   description: Linear best fit Intercept of the g band fluxes.
+  unit: nJy
 - name: gPSFluxMaxSlope
   type: FLOAT
   nullable: true
   description: Maximum slope between g band flux obsevations max(delta_flux/delta_time)
+  unit: nJy/MJD
 - name: gPSFluxErrMean
   type: FLOAT
   nullable: true
   description: Mean of the g band flux errors.
+  unit: nJy
+
 - name: rPSFluxMedian
   type: FLOAT
   nullable: true
   description: Median r band flux.
+  unit: nJy
 - name: rPSFluxMAD
   type: FLOAT
   nullable: true
   description: Median absolute deviation r band fluxes.
+  unit: nJy
 - name: rPSFluxSkew
   type: FLOAT
   nullable: true
@@ -147,26 +173,32 @@ columns:
   type: FLOAT
   nullable: true
   description: Value at the 5% percentile of the r band fluxes.
+  unit: nJy
 - name: rPSFluxPercentile25
   type: FLOAT
   nullable: true
   description: Value at the 25% percentile of the r band fluxes.
+  unit: nJy
 - name: rPSFluxPercentile75
   type: FLOAT
   nullable: true
   description: Value at the 75% percentile of the r band fluxes.
+  unit: nJy
 - name: rPSFluxPercentile95
   type: FLOAT
   nullable: true
   description: Value at the 95% percentile of the r band fluxes.
+  unit: nJy
 - name: rPSFluxMin
   type: FLOAT
   nullable: true
   description: Minimum observed r band fluxes.
+  unit: nJy
 - name: rPSFluxMax
   type: FLOAT
   nullable: true
   description: Maximum observed r band fluxes.
+  unit: nJy
 - name: rPSFluxStetsonJ
   type: FLOAT
   nullable: true
@@ -175,26 +207,33 @@ columns:
   type: FLOAT
   nullable: true
   description: Linear best fit slope of the r band fluxes.
+  unit: nJy/MJD
 - name: rPSFluxLinearIntercept
   type: FLOAT
   nullable: true
   description: Linear best fit Intercept of the r band fluxes.
+  unit: nJy
 - name: rPSFluxMaxSlope
   type: FLOAT
   nullable: true
   description: Maximum slope between r band flux obsevations max(delta_flux/delta_time)
+  unit: nJy/MJD
 - name: rPSFluxErrMean
   type: FLOAT
   nullable: true
   description: Mean of the r band flux errors.
+  unit: nJy
+
 - name: iPSFluxMedian
   type: FLOAT
   nullable: true
   description: Median i band flux.
+  unit: nJy
 - name: iPSFluxMAD
   type: FLOAT
   nullable: true
   description: Median absolute deviation i band fluxes.
+  unit: nJy
 - name: iPSFluxSkew
   type: FLOAT
   nullable: true
@@ -203,26 +242,32 @@ columns:
   type: FLOAT
   nullable: true
   description: Value at the 5% percentile of the i band fluxes.
+  unit: nJy
 - name: iPSFluxPercentile25
   type: FLOAT
   nullable: true
   description: Value at the 25% percentile of the i band fluxes.
+  unit: nJy
 - name: iPSFluxPercentile75
   type: FLOAT
   nullable: true
   description: Value at the 75% percentile of the i band fluxes.
+  unit: nJy
 - name: iPSFluxPercentile95
   type: FLOAT
   nullable: true
   description: Value at the 95% percentile of the i band fluxes.
+  unit: nJy
 - name: iPSFluxMin
   type: FLOAT
   nullable: true
   description: Minimum observed i band fluxes.
+  unit: nJy
 - name: iPSFluxMax
   type: FLOAT
   nullable: true
   description: Maximum observed i band fluxes.
+  unit: nJy
 - name: iPSFluxStetsonJ
   type: FLOAT
   nullable: true
@@ -231,26 +276,33 @@ columns:
   type: FLOAT
   nullable: true
   description: Linear best fit slope of the i band fluxes.
+  unit: nJy/MJD
 - name: iPSFluxLinearIntercept
   type: FLOAT
   nullable: true
   description: Linear best fit Intercept of the i band fluxes.
+  unit: nJy
 - name: iPSFluxMaxSlope
   type: FLOAT
   nullable: true
   description: Maximum slope between i band flux obsevations max(delta_flux/delta_time)
+  unit: nJy/MJD
 - name: iPSFluxErrMean
   type: FLOAT
   nullable: true
   description: Mean of the i band flux errors.
+  unit: nJy
+
 - name: zPSFluxMedian
   type: FLOAT
   nullable: true
   description: Median z band flux.
+  unit: nJy
 - name: zPSFluxMAD
   type: FLOAT
   nullable: true
   description: Median absolute deviation z band fluxes.
+  unit: nJy
 - name: zPSFluxSkew
   type: FLOAT
   nullable: true
@@ -259,26 +311,32 @@ columns:
   type: FLOAT
   nullable: true
   description: Value at the 5% percentile of the z band fluxes.
+  unit: nJy
 - name: zPSFluxPercentile25
   type: FLOAT
   nullable: true
   description: Value at the 25% percentile of the z band fluxes.
+  unit: nJy
 - name: zPSFluxPercentile75
   type: FLOAT
   nullable: true
   description: Value at the 75% percentile of the z band fluxes.
+  unit: nJy
 - name: zPSFluxPercentile95
   type: FLOAT
   nullable: true
   description: Value at the 95% percentile of the z band fluxes.
+  unit: nJy
 - name: zPSFluxMin
   type: FLOAT
   nullable: true
   description: Minimum observed z band fluxes.
+  unit: nJy
 - name: zPSFluxMax
   type: FLOAT
   nullable: true
   description: Maximum observed z band fluxes.
+  unit: nJy
 - name: zPSFluxStetsonJ
   type: FLOAT
   nullable: true
@@ -287,26 +345,33 @@ columns:
   type: FLOAT
   nullable: true
   description: Linear best fit slope of the z band fluxes.
+  unit: nJy/MJD
 - name: zPSFluxLinearIntercept
   type: FLOAT
   nullable: true
   description: Linear best fit Intercept of the z band fluxes.
+  unit: nJy
 - name: zPSFluxMaxSlope
   type: FLOAT
   nullable: true
   description: Maximum slope between z band flux obsevations max(delta_flux/delta_time)
+  unit: nJy/MJD
 - name: zPSFluxErrMean
   type: FLOAT
   nullable: true
   description: Mean of the z band flux errors.
+  unit: nJy
+
 - name: yPSFluxMedian
   type: FLOAT
   nullable: true
   description: Median y band flux.
+  unit: nJy
 - name: yPSFluxMAD
   type: FLOAT
   nullable: true
   description: Median absolute deviation y band fluxes.
+  unit: nJy
 - name: yPSFluxSkew
   type: FLOAT
   nullable: true
@@ -315,26 +380,32 @@ columns:
   type: FLOAT
   nullable: true
   description: Value at the 5% percentile of the y band fluxes.
+  unit: nJy
 - name: yPSFluxPercentile25
   type: FLOAT
   nullable: true
   description: Value at the 25% percentile of the y band fluxes.
+  unit: nJy
 - name: yPSFluxPercentile75
   type: FLOAT
   nullable: true
   description: Value at the 75% percentile of the y band fluxes.
+  unit: nJy
 - name: yPSFluxPercentile95
   type: FLOAT
   nullable: true
   description: Value at the 95% percentile of the y band fluxes.
+  unit: nJy
 - name: yPSFluxMin
   type: FLOAT
   nullable: true
   description: Minimum observed y band fluxes.
+  unit: nJy
 - name: yPSFluxMax
   type: FLOAT
   nullable: true
   description: Maximum observed y band fluxes.
+  unit: nJy
 - name: yPSFluxStetsonJ
   type: FLOAT
   nullable: true
@@ -343,18 +414,22 @@ columns:
   type: FLOAT
   nullable: true
   description: Linear best fit slope of the y band fluxes.
+  unit: nJy/MJD
 - name: yPSFluxLinearIntercept
   type: FLOAT
   nullable: true
   description: Linear best fit Intercept of the y band fluxes.
+  unit: nJy
 - name: yPSFluxMaxSlope
   type: FLOAT
   nullable: true
   description: Maximum slope between y band flux obsevations max(delta_flux/delta_time)
+  unit: nJy/MJD
 - name: yPSFluxErrMean
   type: FLOAT
   nullable: true
   description: Mean of the y band flux errors.
+  unit: nJy
 
 ---
 # DiaObjectLast uses the same columns as DiaObject but has different index
