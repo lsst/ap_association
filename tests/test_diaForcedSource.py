@@ -99,8 +99,8 @@ class TestDiaForcedSource(unittest.TestCase):
 
         self.wcs = afwGeom.makeSkyWcs(self.metadata)
 
-        self.flux0 = 10000
-        self.flux0_err = 100
+        self.calibration = 10000
+        self.calibrationErr = 100
         self.exposureId = 1234
         self.exposureTime = 200.
         self.imageSize = [1024, 1153]
@@ -130,7 +130,7 @@ class TestDiaForcedSource(unittest.TestCase):
         self.exposure.setDetector(detector)
         self.exposure.getInfo().setVisitInfo(visit)
         self.exposure.setFilter(afwImage.Filter('g'))
-        self.exposure.getCalib().setFluxMag0((self.flux0, self.flux0_err))
+        self.exposure.setPhotoCalib(afwImage.PhotoCalib(self.calibration, self.calibrationErr))
 
         # Difference Image
         source_image = afwImage.MaskedImageF(
@@ -146,7 +146,7 @@ class TestDiaForcedSource(unittest.TestCase):
         self.diffim.setDetector(detector)
         self.diffim.getInfo().setVisitInfo(visit)
         self.diffim.setFilter(afwImage.Filter('g'))
-        self.diffim.getCalib().setFluxMag0((self.flux0, self.flux0_err))
+        self.diffim.setPhotoCalib(afwImage.PhotoCalib(self.calibration, self.calibrationErr))
 
         self.expIdBits = 16
 
