@@ -129,7 +129,7 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
         dia_object_record['%sPSFluxLinearSlope' % filter_name] = m
         dia_object_record['%sPSFluxLinearIntercept' % filter_name] = b
 
-        dia_object_record['%sPSFluxStetsonJ' % filter_name] = _stentson_J(
+        dia_object_record['%sPSFluxStetsonJ' % filter_name] = _stetson_J(
             fluxes, fluxErrors)
 
         dia_object_record['%sPSFluxErrMean' % filter_name] = \
@@ -143,14 +143,14 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
     totFluxErrors = totFluxErrors[noNanMask]
 
     if len(totFluxes) == 1:
-        dia_object_record['%sFPFluxMean' % filter_name] = totFluxes
+        dia_object_record['%sTOTFluxMean' % filter_name] = totFluxes
     elif len(totFluxes) > 1:
         fluxMean = np.average(totFluxes, weights=1 / totFluxErrors ** 2)
-        dia_object_record['%sFPFluxMean' % filter_name] = fluxMean
-        dia_object_record['%sFPFluxMeanErr' % filter_name] = np.sqrt(
+        dia_object_record['%sTOTFluxMean' % filter_name] = fluxMean
+        dia_object_record['%sTOTFluxMeanErr' % filter_name] = np.sqrt(
             1 / np.sum(1 / totFluxErrors ** 2))
-        dia_object_record['%sFPFluxSigma' % filter_name] = np.std(totFluxes,
-                                                                  ddof=1)
+        dia_object_record['%sTOTFluxSigma' % filter_name] = np.std(totFluxes,
+                                                                   ddof=1)
 
 
 def _fit_linear_flux_model(fluxes, errors, times):
@@ -177,8 +177,8 @@ def _fit_linear_flux_model(fluxes, errors, times):
     return ans
 
 
-def _stentson_J(fluxes, errors):
-    """Compute the single band StentsonJ statistic.
+def _stetson_J(fluxes, errors):
+    """Compute the single band stetsonJ statistic.
 
     Parameters
     ----------
@@ -189,11 +189,16 @@ def _stentson_J(fluxes, errors):
 
     Returns
     -------
-    stentsonJ : `float`
-        StentsonJ statistic for the input fluxes and errors.
+    stetsonJ : `float`
+        stetsonJ statistic for the input fluxes and errors.
+
+    References
+    ----------
+    .. [1] Stetson, P. B., "On the Automatic Determination of Light-Curve
+       Parameters for Cepheid Variables", PASP, 108, 851S, 1996
     """
     n_points = len(fluxes)
-    flux_mean = _stentson_mean(fluxes, errors)
+    flux_mean = _stetson_mean(fluxes, errors)
     delta_val = (
         np.sqrt(n_points / (n_points - 1)) * (fluxes - flux_mean) / errors)
     p_k = delta_val ** 2 - 1
@@ -201,11 +206,11 @@ def _stentson_J(fluxes, errors):
     return np.mean(np.sign(p_k) * np.sqrt(np.fabs(p_k)))
 
 
-def _stentson_mean(values, errors, alpha=2., beta=2., n_iter=20, tol=1e-6):
-    """Compute the Stentson mean of the fluxes which down-weights outliers.
+def _stetson_mean(values, errors, alpha=2., beta=2., n_iter=20, tol=1e-6):
+    """Compute the stetson mean of the fluxes which down-weights outliers.
 
     Weighted biased on an error weighted difference scaled by a constant
-    (1/``a``) and raised to the power beta. Higher beta's more harshly penalize
+    (1/``a``) and raised to the power beta. Higher betas more harshly penalize
     outliers and ``a`` sets the number of sigma where a weighted difference of
     1 occurs.
 
@@ -229,7 +234,12 @@ def _stentson_mean(values, errors, alpha=2., beta=2., n_iter=20, tol=1e-6):
     Returns
     -------
     wmean : `float`
-        Weighted Stentson mean result.
+        Weighted stetson mean result.
+
+    References
+    ----------
+    .. [1] Stetson, P. B., "On the Automatic Determination of Light-Curve
+       Parameters for Cepheid Variables", PASP, 108, 851S, 1996
     """
     n_points = len(values)
     n_factor = np.sqrt(n_points / (n_points - 1))
