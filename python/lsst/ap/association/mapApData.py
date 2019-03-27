@@ -118,8 +118,20 @@ class MapDiaSourceConfig(pexConfig.Config):
                  "slot_ApFlux_instFluxErr": "apFluxErr",
                  "slot_PsfFlux_instFlux": "psFlux",
                  "slot_PsfFlux_instFluxErr": "psFluxErr",
+                 "ip_diffim_DipoleFit_orientation": "dipAngle",
+                 "ip_diffim_DipoleFit_chi2dof": "dipChi2",
                  "ip_diffim_forced_PsfFlux_instFlux": "totFlux",
-                 "ip_diffim_forced_PsfFlux_instFluxErr": "totFluxErr"}
+                 "ip_diffim_forced_PsfFlux_instFluxErr": "totFluxErr",
+                 "ip_diffim_DipoleFit_flag_classification": "isDipole",
+                 "slot_Shape_xx": "ixx",
+                 "slot_Shape_xxErr": "ixxErr",
+                 "slot_Shape_yy": "iyy",
+                 "slot_Shape_yyErr": "iyyErr",
+                 "slot_Shape_xy": "ixy",
+                 "slot_Shape_xyErr": "ixyErr",
+                 "slot_PsfShape_xx": "ixxPSF",
+                 "slot_PsfShape_yy": "iyyPSF",
+                 "slot_PsfShape_xy": "ixyPSF"}
     )
     calibrateColumns = pexConfig.ListField(
         dtype=str,
@@ -132,6 +144,18 @@ class MapDiaSourceConfig(pexConfig.Config):
         default=os.path.join(getPackageDir("ap_association"),
                              "data",
                              "association-flag-map.yaml"),
+    )
+    dipFluxPrefix = pexConfig.Field(
+        dtype=str,
+        doc="Prefix of the Dipole measurement column containing negative and "
+            "positive flux lobes.",
+        default="ip_diffim_DipoleFit",
+    )
+    dipSepColumn = pexConfig.Field(
+        dtype=str,
+        doc="Column of the separation of the negative and positive poles of "
+            "the dipole.",
+        default="ip_diffim_DipoleFit_separation"
     )
 
 
@@ -190,7 +214,7 @@ class MapDiaSourceTask(MapApDataTask):
 
         Parameters
         ----------
-        inputCatalog: `lsst.afw.table.SourceCatalog`
+        inputCatalog : `lsst.afw.table.SourceCatalog`
             Input catalog with data to be copied into new output catalog.
         exposure: `lsst.afw.image.Exposure`
             Exposure with containing the PhotoCalib object relevant to this catalog.
@@ -204,6 +228,7 @@ class MapDiaSourceTask(MapApDataTask):
         midPointTaiMJD = visit_info.getDate().get(system=DateTime.MJD)
         filterId = exposure.getFilter().getId()
         filterName = exposure.getFilter().getName()
+        wcs = exposure.getWcs()
 
         photoCalib = exposure.getPhotoCalib()
 
@@ -214,8 +239,9 @@ class MapDiaSourceTask(MapApDataTask):
             outputRecord = outputCatalog.addNew()
             outputRecord.assign(inputRecord, self.mapper)
             self.calibrateFluxes(inputRecord, outputRecord, photoCalib)
+            self.computeDipoleFluxes(inputRecord, outputRecord, photoCalib)
+            self.computeDipoleSep(inputRecord, outputRecord, wcs)
             self.bitPackFlags(inputRecord, outputRecord)
-
             outputRecord.set("ccdVisitId", ccdVisitId)
             outputRecord.set("midPointTai", midPointTaiMJD)
             outputRecord.set("filterId", filterId)
@@ -231,11 +257,11 @@ class MapDiaSourceTask(MapApDataTask):
 
         Parameters
         ----------
-        inputRecord: `lsst.afw.table.SourceRecord`
+        inputRecord : `lsst.afw.table.SourceRecord`
             Record to copy flux values from.
-        outputRecord: `lsst.afw.table.SourceRecord`
+        outputRecord : `lsst.afw.table.SourceRecord`
             Record to copy and calibrate values into.
-        photoCalib: `lsst.afw.image.PhotoCalib`
+        photoCalib : `lsst.afw.image.PhotoCalib`
             Calibration object from the difference exposure.
         """
         for col_name in self.config.calibrateColumns:
@@ -246,15 +272,61 @@ class MapDiaSourceTask(MapApDataTask):
                 self.config.copyColumns[col_name + "_instFluxErr"],
                 meas.error)
 
+    def computeDipoleFluxes(self, inputRecord, outputRecord, photoCalib):
+        """Calibrate and compute dipole mean flux and diff flux.
+
+        Parameters
+        ----------
+        inputRecord : `lsst.afw.table.SourceRecord`
+            Record to copy flux values from.
+        outputRecord : `lsst.afw.table.SourceRecord`
+            Record to copy and calibrate values into.
+        photoCalib  `lsst.afw.image.PhotoCalib`
+            Calibration object from the difference exposure.
+        """
+
+        neg_meas = photoCalib.instFluxToNanojansky(
+            inputRecord, self.config.dipFluxPrefix + "_neg")
+        pos_meas = photoCalib.instFluxToNanojansky(
+            inputRecord, self.config.dipFluxPrefix + "_pos")
+        outputRecord.set(
+            "dipMeanFlux",
+            0.5 * (np.abs(neg_meas.value) + np.abs(pos_meas.value)))
+        outputRecord.set(
+            "dipMeanFluxErr",
+            0.5 * np.sqrt(neg_meas.error ** 2 + pos_meas.error ** 2))
+        outputRecord.set(
+            "dipFluxDiff",
+            np.abs(pos_meas.value) - np.abs(neg_meas.value))
+        outputRecord.set(
+            "dipFluxDiffErr",
+            np.sqrt(neg_meas.error ** 2 + pos_meas.error ** 2))
+
+    def computeDipoleSep(self, inputRecord, outputRecord, wcs):
+        """Convert the dipole separation from pixels to arcseconds.
+
+        Parameters
+        ----------
+        inputRecord : `lsst.afw.table.SourceRecord`
+            Record to copy flux values from.
+        outputRecord : `lsst.afw.table.SourceRecord`
+            Record to copy and calibrate values into.
+        wcs : `lsst.afw.geom.SkyWcs`
+            Wcs of image inputRecords was observed.
+        """
+        pixScale = wcs.getPixelScale(inputRecord.getCentroid())
+        dipSep = pixScale * inputRecord.get(self.config.dipSepColumn)
+        outputRecord.set("dipLength", dipSep.asArcseconds())
+
     def bitPackFlags(self, inputRecord, outputRecord):
         """Pack requested flag columns in inputRecord into single columns in
         outputRecord.
 
         Parameters
         ----------
-        inputRecord: `lsst.afw.table.SourceRecord`
+        inputRecord : `lsst.afw.table.SourceRecord`
             Record to copy flux values from.
-        outputRecord: `lsst.afw.table.SourceRecord`
+        outputRecord : `lsst.afw.table.SourceRecord`
             Record to copy and calibrate values into.
         """
         for outputFlag in self.bit_pack_columns:

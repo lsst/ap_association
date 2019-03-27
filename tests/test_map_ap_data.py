@@ -53,6 +53,14 @@ def make_input_source_catalog(n_objects, add_flags=False):
     schema.addField("base_NaiveCentroid_y", type="D")
     schema.addField("base_PsfFlux_instFlux", type="D")
     schema.addField("base_PsfFlux_instFluxErr", type="D")
+    schema.addField("ip_diffim_DipoleFit_separation", type="D")
+    schema.addField("ip_diffim_DipoleFit_orientation", type="D")
+    schema.addField("ip_diffim_DipoleFit_neg_instFlux", type="D")
+    schema.addField("ip_diffim_DipoleFit_neg_instFluxErr", type="D")
+    schema.addField("ip_diffim_DipoleFit_pos_instFlux", type="D")
+    schema.addField("ip_diffim_DipoleFit_pos_instFluxErr", type="D")
+    schema.addField("ip_diffim_forced_PsfFlux_instFlux", type="D")
+    schema.addField("ip_diffim_forced_PsfFlux_instFluxErr", type="D")
     if add_flags:
         schema.addField("base_PixelFlags_flag", type="Flag")
         schema.addField("base_PixelFlags_flag_offimage", type="Flag")
@@ -67,6 +75,8 @@ def make_input_source_catalog(n_objects, add_flags=False):
         for subSchema in schema:
             if isinstance(obj.get(subSchema.getKey()), geom.Angle):
                 obj.set(subSchema.getKey(), 1. * geom.degrees)
+            elif subSchema.getField().getName() == "ip_diffim_DipoleFit_neg_instFlux":
+                obj.set(subSchema.getKey(), -1)
             else:
                 obj.set(subSchema.getKey(), 1)
     return objects
@@ -159,6 +169,10 @@ class TestAPDataMapperTask(unittest.TestCase):
                                   config=mapApDConfig)
         outputCatalog = mapApD.run(self.inputCatalog, self.exposure)
 
+        expectedMeanDip = 2.
+        expectedDiffFlux = 0.
+        expectedLength = 0.18379083
+
         for inObj, outObj in zip(self.inputCatalog, outputCatalog):
             self.assertEqual(
                 outObj["ccdVisitId"],
@@ -171,10 +185,13 @@ class TestAPDataMapperTask(unittest.TestCase):
                 outObj["flags"],
                 1 * 2 ** 0 + 1 * 2 ** 1)
             for inputName, outputName in mapApDConfig.copyColumns.items():
-                if inputName.startswith("slot"):
+                if inputName.startswith("slot_PsfFlux"):
                     self._test_calibrated_flux(inObj, outObj)
                 else:
                     self.assertEqual(inObj[inputName], outObj[outputName])
+                self.assertEqual(outObj["dipMeanFlux"], expectedMeanDip)
+                self.assertEqual(outObj["dipFluxDiff"], expectedDiffFlux)
+                self.assertAlmostEqual(outObj["dipLength"], expectedLength)
 
     def _create_map_dia_source_config(self):
         """Create a test config for use in MapDiaSourceTask.

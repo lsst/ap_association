@@ -584,3 +584,7 @@ columns:
   type: INT
   nullable: false
   description: id number of stored filter.
+- name: isDipole
+  type: BOOL
+  nullable: true
+  description: Object determined to be a dipole.
