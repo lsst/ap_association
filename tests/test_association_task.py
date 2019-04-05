@@ -187,7 +187,7 @@ class TestAssociationTask(unittest.TestCase):
         self.exposure.setFilter(afwImage.Filter('g'))
         self.flux0 = 10000
         self.flux0_err = 100
-        self.exposure.getCalib().setFluxMag0((self.flux0, self.flux0_err))
+        self.exposure.setPhotoCalib(afwImage.PhotoCalib(self.flux0, self.flux0_err))
 
         bbox = geom.Box2D(self.exposure.getBBox())
         wcs = self.exposure.getWcs()

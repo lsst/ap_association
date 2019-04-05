@@ -35,7 +35,6 @@ __all__ = ["make_dia_object_schema",
 from collections import OrderedDict as oDict
 
 import lsst.afw.table as afwTable
-import lsst.afw.image as afwImage
 from lsst.daf.base import DateTime
 
 
@@ -770,8 +769,8 @@ def getCcdVisitSchemaSql():
                   ("decl", "REAL"),
                   ("expTime", "REAL"),
                   ("expMidptMJD", "REAL"),
-                  ("fluxZeroPoint", "REAL"),
-                  ("fluxZeroPointErr", "REAL")])
+                  ("calibrationMean", "REAL"),
+                  ("calibrationErr", "REAL")])
 
 
 def get_ccd_visit_info_from_exposure(exposure):
@@ -791,11 +790,6 @@ def get_ccd_visit_info_from_exposure(exposure):
     visit_info = exposure.getInfo().getVisitInfo()
     date = visit_info.getDate()
     sphPoint = exposure.getWcs().getSkyOrigin()
-    # TODO: Calib is going away and being replaced with photoCalib as in
-    # DM-10153.
-    flux0, flux0_err = exposure.getCalib().getFluxMag0()
-    # TODO: need to scale these until DM-10153 is completed and PhotoCalib has replaced Calib entirely
-    referenceFlux = 1e23 * 10**(48.6 / -2.5) * 1e9
     filter_obj = exposure.getFilter()
     # Values list is:
     # [CcdVisitId ``int``,
@@ -815,8 +809,7 @@ def get_ccd_visit_info_from_exposure(exposure):
               'decl': sphPoint.getDec().asDegrees(),
               'expTime': visit_info.getExposureTime(),
               'expMidptMJD': date.get(system=DateTime.MJD),
-              'fluxZeroPoint': flux0,
-              'fluxZeroPointErr': flux0_err,
-              'photoCalib': afwImage.PhotoCalib(referenceFlux / flux0,
-                                                referenceFlux*flux0_err / flux0 ** 2)}
+              'calibrationMean': exposure.getPhotoCalib().getCalibrationMean(),
+              'calibrationErr': exposure.getPhotoCalib().getCalibrationErr(),
+              'photoCalib': exposure.getPhotoCalib()}
     return values

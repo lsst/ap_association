@@ -117,14 +117,10 @@ class TestAPDataMapperTask(unittest.TestCase):
         self.exposure.setDetector(detector)
         self.exposure.getInfo().setVisitInfo(visit)
         self.exposure.setFilter(afwImage.Filter('g'))
-        # TODO: Need to save the PhotoCalib until DM-10153 is done and Calib is replaced by PhotoCalib.
         scale = 2
         scaleErr = 1
         self.photoCalib = afwImage.PhotoCalib(scale, scaleErr)
-        flux0 = self.photoCalib.getInstFluxAtZeroMagnitude()
-        referenceFlux = 1e23 * 10**(48.6 / -2.5) * 1e9
-        flux0Err = (referenceFlux * scaleErr / scale**2)
-        self.exposure.getCalib().setFluxMag0(flux0, flux0Err)
+        self.exposure.setPhotoCalib(self.photoCalib)
 
         self.inputCatalogNoFlags = make_input_source_catalog(10, False)
         self.inputCatalog = make_input_source_catalog(10, True)

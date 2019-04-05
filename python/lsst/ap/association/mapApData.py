@@ -36,7 +36,6 @@ from lsst.daf.base import DateTime
 import lsst.pipe.base as pipeBase
 import lsst.pex.config as pexConfig
 from lsst.pex.exceptions import RuntimeError
-import lsst.afw.image as afwImage
 from lsst.utils import getPackageDir
 from .afwUtils import make_dia_source_schema
 
@@ -194,7 +193,7 @@ class MapDiaSourceTask(MapApDataTask):
         inputCatalog: `lsst.afw.table.SourceCatalog`
             Input catalog with data to be copied into new output catalog.
         exposure: `lsst.afw.image.Exposure`
-            Exposure with containing the calib object relevant to this catalog.
+            Exposure with containing the PhotoCalib object relevant to this catalog.
         Returns
         -------
         outputCatalog: `lsst.afw.table.SourceCatalog`
@@ -206,10 +205,7 @@ class MapDiaSourceTask(MapApDataTask):
         filterId = exposure.getFilter().getId()
         filterName = exposure.getFilter().getName()
 
-        flux0, flux0Err = exposure.getCalib().getFluxMag0()
-        # TODO: need to scale these until DM-10153 is completed and PhotoCalib has replaced Calib entirely
-        referenceFlux = 1e23 * 10**(48.6 / -2.5) * 1e9
-        photoCalib = afwImage.PhotoCalib(referenceFlux / flux0, referenceFlux*flux0Err / flux0 ** 2)
+        photoCalib = exposure.getPhotoCalib()
 
         outputCatalog = afwTable.SourceCatalog(self.outputSchema)
         outputCatalog.reserve(len(inputCatalog))
