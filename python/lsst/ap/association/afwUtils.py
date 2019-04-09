@@ -672,15 +672,15 @@ def make_dia_source_schema():
                     doc='Estimated uncertainty of fpBkgd.')
     schema.addField('ixx', type='D',
                     doc='Adaptive second moment of the source intensity.')
-    schema.addField('ixxErr', type='D',
+    schema.addField('ixxErr', type='F',
                     doc='Uncertainty of ixx.')
     schema.addField('iyy', type='D',
                     doc='Adaptive second moment of the source intensity.')
-    schema.addField('iyyErr', type='D',
+    schema.addField('iyyErr', type='F',
                     doc='Uncertainty of iyy.')
     schema.addField('ixy', type='D',
                     doc='Adaptive second moment of the source intensity.')
-    schema.addField('ixyErr', type='D',
+    schema.addField('ixyErr', type='F',
                     doc='Uncertainty of ixy.')
     schema.addField('ixx_iyy_Cov', type='D',
                     doc='Covariance of ixx and iyy.')
@@ -714,6 +714,8 @@ def make_dia_source_schema():
     schema.addField("filterId", type='L',
                     doc='Obs package id of the filter this source was '
                         'observed in.')
+    schema.addField("isDipole", type='Flag',
+                    doc='Object determined to be a dipole.')
     return schema
 
 

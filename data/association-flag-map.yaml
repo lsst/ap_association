@@ -76,3 +76,21 @@ columns:
     - name: ip_diffim_forced_PsfFlux_flag_edge
       bit: 22
       doc: Forced PSF flux object was too close to the edge of the image to use the full PSF model.
+    - name: slot_Shape_flag
+      bit: 23
+      doc: General Failure Flag
+    - name: slot_Shape_flag_unweightedBad
+      bit: 24
+      doc: Both weighted and unweighted moments were invalid
+    - name: slot_Shape_flag_unweighted
+      bit: 25
+      doc: Weighted moments converged to an invalid value; using unweighted moments
+    - name: slot_Shape_flag_shift
+      bit: 26
+      doc: centroid shifted by more than the maximum allowed amount
+    - name: slot_Shape_flag_maxIter
+      bit: 27
+      doc: Too many iterations in adaptive moments
+    - name: slot_Shape_flag_psf
+      bit: 28
+      doc: Failure in measuring PSF model shape
