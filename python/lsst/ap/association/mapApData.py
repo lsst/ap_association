@@ -220,7 +220,7 @@ class MapDiaSourceTask(MapApDataTask):
             Exposure with containing the PhotoCalib object relevant to this catalog.
         Returns
         -------
-        outputCatalog: `lsst.afw.table.SourceCatalog`
+        outputCatalog: `pandas.DataFrame`
             Output catalog with data copied from input and new column names.
         """
         visit_info = exposure.getInfo().getVisitInfo()

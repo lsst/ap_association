@@ -26,12 +26,12 @@ __all__ = ["AssociationConfig", "AssociationTask"]
 
 from astropy.stats import median_absolute_deviation
 import numpy as np
+import pandas
 from scipy.optimize import least_squares
 from scipy.spatial import cKDTree
 from scipy.stats import skew
 
 import lsst.geom as geom
-import lsst.afw.table as afwTable
 from lsst.daf.base import DateTime
 from lsst.meas.algorithms.indexerRegistry import IndexerRegistry
 import lsst.pex.config as pexConfig
@@ -46,21 +46,16 @@ def _set_mean_position(dia_object_record, dia_sources):
 
     Parameters
     ----------
-    dia_object_record : `lsst.afw.table.SourceRecord`
+    dia_object_record : `dict` or `pandas.Series`
         SourceRecord of the DIAObject to edit.
-    dia_sources : `lsst.afw.table.SourceCatalog`
+    dia_sources : `pandas.DataFrame`
         Catalog of DIASources to compute a mean position from.
-
-    Returns
-    -------
-    ave_coord : `lsst.geom.SpherePoint`
-        Average position of the dia_sources.
     """
-    coord_list = [src.getCoord() for src in dia_sources]
+    coord_list = [geom.SpherePoint(src["ra"], src["decl"], geom.degrees)
+                  for src in dia_sources]
     ave_coord = geom.averageSpherePoint(coord_list)
-    dia_object_record.setCoord(ave_coord)
-
-    return ave_coord
+    dia_object_record["ra"] = ave_coord.getRa()
+    dia_object_record["decl"] = ave_coord.getDec()
 
 
 def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
@@ -69,23 +64,23 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
 
     Parameters
     ----------
-    dia_object_record : `lsst.afw.table.SourceRecord`
+    dia_object_record : `dict` or `pandas.Series`
         SourceRecord of the DIAObject to edit.
-    dia_sources : `lsst.afw.table.SourceCatalog`
+    dia_sources : `pandas.DataFrame`
         Catalog of DIASources to compute a mean position from.
     filter_name : `str`
         Name of the band pass filter to update.
     filter_id : `int`
         id of the filter in the AssociationDB.
     """
-    currentFluxMask = dia_sources.get("filterId") == filter_id
-    fluxes = dia_sources.get("psFlux")[currentFluxMask]
-    fluxErrors = dia_sources.get("psFluxErr")[currentFluxMask]
+    currentFluxMask = dia_sources["filterId"] == filter_id
+    fluxes = dia_sources["psFlux"][currentFluxMask]
+    fluxErrors = dia_sources["psFluxErr"][currentFluxMask]
 
     noNanMask = np.logical_and(np.isfinite(fluxes), np.isfinite(fluxErrors))
     fluxes = fluxes[noNanMask]
     fluxErrors = fluxErrors[noNanMask]
-    midpointTais = dia_sources.get("midPointTai")[currentFluxMask][noNanMask]
+    midpointTais = dia_sources["midPointTai"][currentFluxMask][noNanMask]
 
     if len(fluxes) == 1:
         dia_object_record['%sPSFluxMean' % filter_name] = fluxes
@@ -135,8 +130,8 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
         dia_object_record['%sPSFluxErrMean' % filter_name] = \
             np.mean(fluxErrors)
 
-    totFluxes = dia_sources.get("totFlux")[currentFluxMask]
-    totFluxErrors = dia_sources.get("totFluxErr")[currentFluxMask]
+    totFluxes = dia_sources["totFlux"][currentFluxMask]
+    totFluxErrors = dia_sources["totFluxErr"][currentFluxMask]
     noNanMask = np.logical_and(np.isfinite(totFluxes),
                                np.isfinite(totFluxErrors))
     totFluxes = totFluxes[noNanMask]
@@ -296,7 +291,7 @@ class AssociationTask(pipeBase.Task):
 
         Parameters
         ----------
-        dia_sources : `lsst.afw.table.SourceCatalog`
+        dia_sources : `pandas.DataFrame`
             DIASources to be associated with existing DIAObjects.
         exposure : `lsst.afw.image`
             Input exposure representing the region of the sky the dia_sources
@@ -313,7 +308,7 @@ class AssociationTask(pipeBase.Task):
 
             - ``dia_objects`` : Complete set of dia_objects covering the input
               exposure. Catalog contains newly created, updated, and untouched
-              diaObjects. (`lsst.afw.table.SourceCatalog`)
+              diaObjects. (`pandas.DataFrame`)
         """
         # Assure we have a Box2D and can use the getCenter method.
 
@@ -326,10 +321,10 @@ class AssociationTask(pipeBase.Task):
         # Update previously existing DIAObjects with the information from their
         # newly association DIASources and create new DIAObjects from
         # unassociated sources.
-        self.update_dia_objects(dia_objects,
-                                updated_obj_ids,
-                                exposure,
-                                ppdb)
+        dia_objects = self.update_dia_objects(dia_objects,
+                                              updated_obj_ids,
+                                              exposure,
+                                              ppdb)
 
         return pipeBase.Struct(
             dia_objects=dia_objects,
@@ -350,9 +345,8 @@ class AssociationTask(pipeBase.Task):
 
         Returns
         -------
-        diaObjects : `lsst.afw.table.SourceCatalog`
-            DiaObjects within the exposure boundary. Resultant catalog is
-            contiguous.
+        diaObjects : `pandas.DataFrame`
+            DiaObjects within the exposure boundary.
         """
         bbox = geom.Box2D(exposure.getBBox())
         wcs = exposure.getWcs()
@@ -367,16 +361,15 @@ class AssociationTask(pipeBase.Task):
         # Index types must be cast to int to work with dax_ppdb.
         index_ranges = [[int(indexer_idx), int(indexer_idx) + 1]
                         for indexer_idx in indexer_indices]
-        covering_dia_objects = ppdb.getDiaObjects(index_ranges)
+        covering_dia_objects = ppdb.getDiaObjects(index_ranges,
+                                                  return_pandas=True)
+        ccd_mask = np.zeros(len(covering_dia_objects), dtype=bool)
 
-        output_dia_objects = afwTable.SourceCatalog(
-            covering_dia_objects.getSchema())
-        for cov_dia_object in covering_dia_objects:
+        for idx, cov_dia_object in enumerate(covering_dia_objects.itertuples()):
             if self._check_dia_object_position(cov_dia_object, bbox, wcs):
-                output_dia_objects.append(cov_dia_object)
+                ccd_mask[idx] = True
 
-        # Return deep copy to enforce contiguity.
-        return output_dia_objects.copy(deep=True)
+        return covering_dia_objects[ccd_mask]
 
     def _check_dia_object_position(self, dia_object_record, bbox, wcs):
         """Check the RA, DEC position of the current dia_object_record against
@@ -384,7 +377,7 @@ class AssociationTask(pipeBase.Task):
 
         Parameters
         ----------
-        dia_object_record : `lsst.afw.table.SourceRecord`
+        dia_object_record : `pandas.Series`
             A SourceRecord object containing the DIAObject we would like to
             test against our bounding box.
         bbox : `lsst.geom.Box2D`
@@ -397,7 +390,9 @@ class AssociationTask(pipeBase.Task):
         is_contained : `bool`
             Object position is contained within the bounding box.
         """
-        point = wcs.skyToPixel(dia_object_record.getCoord())
+        point = wcs.skyToPixel(geom.SpherePoint(dia_object_record["ra"],
+                                                dia_object_record["decl"],
+                                                geom.degrees))
         return bbox.contains(point)
 
     @pipeBase.timeMethod
@@ -406,10 +401,10 @@ class AssociationTask(pipeBase.Task):
 
         Parameters
         ----------
-        dia_objects : `lsst.afw.table.SourceCatalog`
+        dia_objects : `pandas.DataFrame`
             Catalog of DIAObjects to attempt to associate the input
             DIASources into.
-        dia_sources : `lsst.afw.table.SourceCatalog`
+        dia_sources : `pandas.DataFrame`
             DIASources to associate into the DIAObjectCollection.
 
         Returns
@@ -438,7 +433,7 @@ class AssociationTask(pipeBase.Task):
 
         Parameters
         ----------
-        dia_objects : `lsst.afw.table.SourceCatalog`
+        dia_objects : `pandas.DataFrame`
             Pre-existing/loaded DIAObjects to copy values that are not updated
             from.
         updated_obj_ids : array-like of `int`
@@ -451,41 +446,48 @@ class AssociationTask(pipeBase.Task):
             Ppdb connection object to retrieve DIASources from and
             write DIAObjects to.
         """
-        updated_dia_objects = afwTable.SourceCatalog(
-            self.dia_object_schema)
-
         filter_name = exposure.getFilter().getName()
         filter_id = exposure.getFilter().getId()
 
+        updated_obj_ids.sort()
+
+        dia_objects.sort(["diaObjectId"])
+
         dateTime = exposure.getInfo().getVisitInfo().getDate()
 
-        dia_sources = ppdb.getDiaSources(updated_obj_ids, dateTime.toPython())
-        diaObjectId_key = dia_sources.schema['diaObjectId'].asKey()
-        dia_sources.sort(diaObjectId_key)
+        dia_sources = ppdb.getDiaSources(updated_obj_ids, dateTime.toPython(),
+                                         return_pandas=True)
+        dia_sources.sort(["diaObjectId"])
+
+        dia_object_used = np.zeros(len(dia_objects), dtype=bool)
+        updated_dia_objects = []
 
         for obj_id in updated_obj_ids:
-            dia_object = dia_objects.find(obj_id)
-            if dia_object is None:
-                dia_object = updated_dia_objects.addNew()
-                dia_object.set('id', obj_id)
-                dia_objects.append(dia_object)
-            else:
-                updated_dia_objects.append(dia_object)
+            updated_dia_object = dict()
+            obj_idx = np.searchsorted(dia_objects["diaObjectId"],
+                                      obj_id)
+            if dia_objects["diaObjectId"][obj_idx] == obj_id:
+                updated_dia_object = dia_objects[obj_idx]
+                dia_object_used[obj_idx] = True
 
             # Select the dia_sources associated with this DIAObject id and
             # copy the subcatalog for fast slicing.
-            start_idx = dia_sources.lower_bound(obj_id, diaObjectId_key)
-            end_idx = dia_sources.upper_bound(obj_id, diaObjectId_key)
+            start_idx = np.searchsorted(dia_sources["diaObjectId"],
+                                        obj_id,
+                                        side="left")
+            end_idx = np.searchsorted(dia_sources["diaObjectId"],
+                                      obj_id,
+                                      side="right")
             obj_dia_sources = dia_sources[start_idx:end_idx].copy(deep=True)
 
-            ave_coord = _set_mean_position(dia_object, obj_dia_sources)
+            _set_mean_position(updated_dia_object, obj_dia_sources)
             indexer_id = self.indexer.indexPoints(
-                [ave_coord.getRa().asDegrees()],
-                [ave_coord.getDec().asDegrees()])[0]
-            dia_object.set('pixelId', indexer_id)
-            dia_object.set("radecTai", dateTime.get(system=DateTime.MJD))
-            dia_object.set("nDiaSources", len(obj_dia_sources))
-            _set_flux_stats(dia_object,
+                [updated_dia_object["ra"]],
+                [updated_dia_object["decl"]])[0]
+            updated_dia_object['pixelId'] = indexer_id
+            updated_dia_object["radecTai"] = dateTime.get(system=DateTime.MJD)
+            updated_dia_object["nDiaSources"] = len(obj_dia_sources)
+            _set_flux_stats(updated_dia_object,
                             obj_dia_sources,
                             filter_name,
                             filter_id)
@@ -494,10 +496,14 @@ class AssociationTask(pipeBase.Task):
             #     Define and improve flagging for DiaObjects
             # Set a flag on this DiaObject if any DiaSource that makes up this
             # object has a flag set for any reason.
-            if np.any(obj_dia_sources.get("flags") > 0):
-                dia_object.set("flags", 1)
+            if np.any(obj_dia_sources["flags"] > 0):
+                updated_dia_object["flags"] = 1
+
+        updated_dia_objects = pandas.DataFrame(data=updated_dia_objects)
 
         ppdb.storeDiaObjects(updated_dia_objects, dateTime.toPython())
+
+        return dia_objects[dia_object_used].append(updated_dia_objects)
 
     @pipeBase.timeMethod
     def score(self, dia_objects, dia_sources, max_dist):
@@ -510,9 +516,9 @@ class AssociationTask(pipeBase.Task):
 
         Parameters
         ----------
-        dia_objects : `lsst.afw.table.SourceCatalog`
+        dia_objects : `pandas.DataFrame`
             A contiguous catalog of DIAObjects to score against dia_sources.
-        dia_sources : `lsst.afw.table.SourceCatalog`
+        dia_sources : `pandas.DataFrame`
             A contiguous catalog of dia_sources to "score" based on distance
             and (in the future) other metrics.
         max_dist : `lsst.geom.Angle`
@@ -548,14 +554,11 @@ class AssociationTask(pipeBase.Task):
 
         max_dist_rad = max_dist.asRadians()
 
-        for src_idx, dia_source in enumerate(dia_sources):
+        vectors = self._radec_to_xyz(dia_sources)
 
-            src_point = dia_source.getCoord().getVector()
-            dist, obj_idx = spatial_tree.query(src_point)
-            if dist < max_dist_rad:
-                scores[src_idx] = dist
-                obj_ids[src_idx] = dia_objects[obj_idx].getId()
-                obj_idxs[src_idx] = obj_idx
+        dists, obj_idxs = spatial_tree.query(vectors)
+        scores = np.where(dists < max_dist_rad, dists, np.inf)
+        obj_ids = dia_objects["diaObjectId"][obj_idxs]
 
         return pipeBase.Struct(
             scores=scores,
@@ -567,7 +570,7 @@ class AssociationTask(pipeBase.Task):
 
         Parameters
         ----------
-        dia_objects : `lsst.afw.table.SourceCatalog`
+        dia_objects : `pandas.DataFrame`
             A catalog of DIAObjects to create the tree from.
 
         Returns
@@ -575,14 +578,32 @@ class AssociationTask(pipeBase.Task):
         kd_tree : `scipy.spatical.cKDTree`
             Searchable kd-tree created from the positions of the DIAObjects.
         """
+        vectors = self._radec_to_xyz(dia_objects)
+        return cKDTree(vectors)
 
-        coord_key = dia_objects.getCoordKey()
-        coord_vects = np.empty((len(dia_objects), 3))
+    def _radec_to_xyz(self, catalog):
+        """Convert input ra/dec coordinates to spherical unit-vectors.
 
-        for obj_idx, dia_object in enumerate(dia_objects):
-            coord_vects[obj_idx] = dia_object[coord_key].getVector()
+        Parameters
+        ----------
+        catalog : `pandas.DataFrame`
+            Catalog to produce spherical unit-vector from.
 
-        return cKDTree(coord_vects)
+        Returns
+        -------
+        vectors : `numpy.ndarray`, (N, 3)
+            Output unit-vectors
+        """
+        ras = np.radians(catalog["ra"])
+        decs = np.radians(catalog["decl"])
+        vectors = np.empty((len(ras), 3))
+
+        sin_dec = np.sin(np.pi / 2 - decs)
+        vectors[:, 0] = sin_dec * np.cos(ras)
+        vectors[:, 1] = sin_dec * np.sin(ras)
+        vectors[:, 2] = np.cos(np.pi / 2 - decs)
+
+        return vectors
 
     @pipeBase.timeMethod
     def match(self, dia_objects, dia_sources, score_struct):
@@ -591,9 +612,9 @@ class AssociationTask(pipeBase.Task):
 
         Parameters
         ----------
-        dia_objects : `lsst.afw.table.SourceCatalog`
+        dia_objects : `pandas.DataFrame`
             A SourceCatalog of DIAObjects to associate to DIASources.
-        dia_sources : `lsst.afw.table.SourceCatalog`
+        dia_sources : `pandas.DataFrame`
             A contiguous catalog of dia_sources for which the set of scores
             has been computed on with DIAObjectCollection.score.
         score_struct : `lsst.pipe.base.Struct`
@@ -654,14 +675,14 @@ class AssociationTask(pipeBase.Task):
             obj_id = score_struct.obj_ids[score_idx]
             associated_dia_object_ids[score_idx] = obj_id
             n_updated_dia_objects += 1
-            dia_sources[int(score_idx)].set("diaObjectId", int(obj_id))
+            dia_sources[score_idx]["diaObjectId"] = obj_id
 
         # Argwhere returns a array shape (N, 1) so we access the index
         # thusly to retrieve the value rather than the tuple
         for (src_idx,) in np.argwhere(np.logical_not(used_dia_source)):
             src_id = dia_sources[int(src_idx)].getId()
             associated_dia_object_ids[src_idx] = src_id
-            dia_sources[int(src_idx)].set("diaObjectId", int(src_id))
+            dia_sources[src_idx]["diaObjectId"] = src_id
             n_new_dia_objects += 1
 
         # Return the ids of the DIAObjects in this DIAObjectCollection that
