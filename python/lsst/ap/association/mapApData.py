@@ -208,7 +208,7 @@ class MapDiaSourceTask(MapApDataTask):
                         "schema. Please check that the requested input column "
                         "exists." % outputFlag['columnName'])
 
-    def run(self, inputCatalog, exposure):
+    def run(self, inputCatalog, exposure, return_pandas=False):
         """Copy data from the inputCatalog into an output catalog with
         requested columns.
 
@@ -250,6 +250,8 @@ class MapDiaSourceTask(MapApDataTask):
         if not outputCatalog.isContiguous():
             raise RuntimeError("Output catalogs must be contiguous.")
 
+        if return_pandas:
+            return self._convert_to_pandas(outputCatalog)
         return outputCatalog
 
     def calibrateFluxes(self, inputRecord, outputRecord, photoCalib):
@@ -335,6 +337,33 @@ class MapDiaSourceTask(MapApDataTask):
             for bit in bitList:
                 value += inputRecord[bit['name']] * 2 ** bit['bit']
             outputRecord.set(outputFlag['columnName'], value)
+
+    def _convert_to_pandas(self, inputCatalog):
+        """Convert input afw table to pandas.
+
+        Using afwTable.toAstropy().to_pandas() alone is not sufficient to
+        properly store data in the Ppdb. We must also convert the RA/DEC values
+        from radians to degrees and rename several columns.
+
+        Parameters
+        ----------
+        inputCatalog : `lsst.afw.table.SourceCatalog`
+            Catalog to convert to panads and rename columns.
+
+        Returns
+        -------
+        catalog : `pandas.DataFrame`
+        """
+        catalog = inputCatalog.asAstropy().to_pandas()
+        catalog.rename(columns={"coord_ra": "ra",
+                                "coord_dec": "decl",
+                                "id": "diaSourceId",
+                                "parent": "parentDiaSourceId"},
+                       inplace=True)
+        catalog["ra"] = np.degrees(catalog["ra"])
+        catalog["decl"] = np.degrees(catalog["decl"])
+
+        return catalog
 
 
 class UnpackPpdbFlags(object):

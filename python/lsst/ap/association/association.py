@@ -31,8 +31,6 @@ from scipy.optimize import least_squares
 from scipy.spatial import cKDTree
 from scipy.stats import skew
 
-pandas.options.mode.chained_assignment = 'raise'
-
 import lsst.geom as geom
 from lsst.daf.base import DateTime
 from lsst.meas.algorithms.indexerRegistry import IndexerRegistry
@@ -40,6 +38,8 @@ import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 
 from .afwUtils import make_dia_object_schema
+
+pandas.options.mode.chained_assignment = 'raise'
 
 
 def _set_mean_position(dia_object_record, dia_sources):
@@ -134,17 +134,17 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
         dia_object_record['%sPSFluxErrMean' % filter_name] = \
             np.mean(fluxErrors)
 
-    totFluxes = dia_sources["totFlux"].replace([None], np.nan).array
-    totFluxes = totFluxes[currentFluxMask]
-    totFluxErrors = dia_sources["totFluxErr"].replace([None], value=np.nan).array
-    totFluxErrors = totFluxErrors[currentFluxMask]
+    totFluxes = dia_sources.loc[:, "totFlux"].replace([None], np.nan)
+    totFluxes = totFluxes.array[currentFluxMask]
+    totFluxErrors = dia_sources.loc[:, "totFluxErr"].replace([None], value=np.nan)
+    totFluxErrors = totFluxErrors.array[currentFluxMask]
     noNanMask = np.logical_and(np.isfinite(totFluxes),
                                np.isfinite(totFluxErrors))
     totFluxes = totFluxes[noNanMask]
     totFluxErrors = totFluxErrors[noNanMask]
 
     if len(totFluxes) == 1:
-        dia_object_record['%sTOTFluxMean' % filter_name] = totFluxes
+        dia_object_record['%sTOTFluxMean' % filter_name] = totFluxes[0]
     elif len(totFluxes) > 1:
         fluxMean = np.average(totFluxes, weights=1 / totFluxErrors ** 2)
         dia_object_record['%sTOTFluxMean' % filter_name] = fluxMean
@@ -456,27 +456,26 @@ class AssociationTask(pipeBase.Task):
         filter_id = exposure.getFilter().getId()
 
         updated_obj_ids.sort()
+        dia_object_used = np.zeros(len(dia_objects), dtype=bool)
 
-        dia_objects.sort_values(by=["diaObjectId"])
+        dia_object_ids = dia_objects.loc[:, "diaObjectId"].array
 
         dateTime = exposure.getInfo().getVisitInfo().getDate()
 
         dia_sources = ppdb.getDiaSources(updated_obj_ids, dateTime.toPython(),
                                          return_pandas=True)
-        dia_sources.sort_values(by=["diaObjectId"])
+        dia_sources.sort_values(by=["diaObjectId"], inplace=True)
 
-        dia_object_used = np.zeros(len(dia_objects), dtype=bool)
         updated_dia_objects = []
 
         for obj_id in updated_obj_ids:
-            updated_dia_object = dict()
-            obj_idx = np.searchsorted(dia_objects["diaObjectId"],
-                                      obj_id)
-            if obj_idx < len(dia_objects) and dia_objects["diaObjectId"][obj_idx] == obj_id:
-                updated_dia_object = dia_objects.loc[obj_idx].to_dict()
-                dia_object_used[obj_idx] = True
+
+
+            updated_dia_obj_df = dia_objects[dia_object_ids == obj_id]
+            if len(updated_dia_obj_df) == 0:
+                updated_dia_object = self._initialize_dia_object(obj_id)
             else:
-                updated_dia_object["diaObjectId"] = obj_id
+                updated_dia_object = updated_dia_obj_df.to_dict("records")[0]
 
             # Select the dia_sources associated with this DIAObject id and
             # copy the subcatalog for fast slicing.
@@ -486,7 +485,7 @@ class AssociationTask(pipeBase.Task):
             end_idx = np.searchsorted(dia_sources["diaObjectId"],
                                       obj_id,
                                       side="right")
-            obj_dia_sources = dia_sources[start_idx:end_idx]
+            obj_dia_sources = dia_sources.iloc[start_idx:end_idx]
 
             _set_mean_position(updated_dia_object, obj_dia_sources)
             indexer_id = self.indexer.indexPoints(
@@ -494,6 +493,7 @@ class AssociationTask(pipeBase.Task):
                 [updated_dia_object["decl"]])[0]
             updated_dia_object['pixelId'] = indexer_id
             updated_dia_object["radecTai"] = dateTime.get(system=DateTime.MJD)
+
             updated_dia_object["nDiaSources"] = len(obj_dia_sources)
             _set_flux_stats(updated_dia_object,
                             obj_dia_sources,
@@ -514,8 +514,30 @@ class AssociationTask(pipeBase.Task):
 
         ppdb.storeDiaObjects(updated_dia_objects, dateTime.toPython())
 
-        return dia_objects[dia_object_used].append(updated_dia_objects,
-                                                   sort=True)
+        return dia_objects[np.logical_not(dia_object_used)].append(updated_dia_objects,
+                                                                   sort=True)
+
+    def _initialize_dia_object(self, obj_id):
+        """Input default values for non-Nullable DiaObject columns.
+
+        Parameters
+        ----------
+        obj_id : `int`
+            Id to asign to the new object.
+
+        Returns
+        -------
+        new_dia_object : `dict`
+            Dictionary with default values.
+        """
+        new_dia_object = {"diaObjectId": obj_id,
+                          "pmParallaxNdata": 0,
+                          "nearbyObj1": 0,
+                          "nearbyObj2": 0,
+                          "nearbyObj3": 0}
+        for f in ["u", "g", "r", "i", "z", "y"]:
+            new_dia_object["%sPSFluxNdata" % f] = 0
+        return new_dia_object
 
     @pipeBase.timeMethod
     def score(self, dia_objects, dia_sources, max_dist):
@@ -662,7 +684,6 @@ class AssociationTask(pipeBase.Task):
         used_dia_source = np.zeros(len(dia_sources), dtype=np.bool)
         associated_dia_object_ids = np.zeros(len(dia_sources),
                                              dtype=np.uint64)
-        dia_source_ids = dia_sources["diaSourceId"].array
 
         n_updated_dia_objects = 0
         n_new_dia_objects = 0
