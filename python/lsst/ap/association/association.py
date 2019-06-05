@@ -39,6 +39,7 @@ import lsst.pipe.base as pipeBase
 
 from .afwUtils import make_dia_object_schema
 
+# Enforce an error for unsafe column/array value setting in pandas.
 pandas.options.mode.chained_assignment = 'raise'
 
 
@@ -75,19 +76,18 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
     filter_id : `int`
         id of the filter in the AssociationDB.
     """
-    currentFluxMask = dia_sources["filterId"].array == filter_id
-    fluxes = dia_sources.loc[:, "psFlux"].replace([None], np.nan)
-    fluxes = fluxes.array[currentFluxMask]
-    fluxErrors = dia_sources.loc[:, "psFluxErr"].replace([None], np.nan)
-    fluxErrors = fluxErrors.array[currentFluxMask]
+    currentFluxMask = dia_sources.loc[:, "filterId"] == filter_id
+    fluxes = dia_sources.loc[currentFluxMask, "psFlux"].replace([None], np.nan)
+    fluxErrors = dia_sources.loc[currentFluxMask, "psFluxErr"].replace([None], np.nan)
+    midpointTais = dia_sources.loc[currentFluxMask, "midPointTai"]
 
     noNanMask = np.logical_and(np.isfinite(fluxes), np.isfinite(fluxErrors))
     fluxes = fluxes[noNanMask]
     fluxErrors = fluxErrors[noNanMask]
-    midpointTais = dia_sources["midPointTai"].array[currentFluxMask][noNanMask]
+    midpointTais = midpointTais[noNanMask]
 
     if len(fluxes) == 1:
-        dia_object_record['%sPSFluxMean' % filter_name] = fluxes[0]
+        dia_object_record['%sPSFluxMean' % filter_name] = fluxes.iloc[0]
         dia_object_record['%sPSFluxNdata' % filter_name] = 1
     elif len(fluxes > 1):
         fluxMean = np.average(fluxes, weights=1 / fluxErrors ** 2)
@@ -135,16 +135,16 @@ def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
             np.mean(fluxErrors)
 
     totFluxes = dia_sources.loc[:, "totFlux"].replace([None], np.nan)
-    totFluxes = totFluxes.array[currentFluxMask]
+    totFluxes = totFluxes[currentFluxMask]
     totFluxErrors = dia_sources.loc[:, "totFluxErr"].replace([None], value=np.nan)
-    totFluxErrors = totFluxErrors.array[currentFluxMask]
+    totFluxErrors = totFluxErrors[currentFluxMask]
     noNanMask = np.logical_and(np.isfinite(totFluxes),
                                np.isfinite(totFluxErrors))
     totFluxes = totFluxes[noNanMask]
     totFluxErrors = totFluxErrors[noNanMask]
 
     if len(totFluxes) == 1:
-        dia_object_record['%sTOTFluxMean' % filter_name] = totFluxes[0]
+        dia_object_record['%sTOTFluxMean' % filter_name] = totFluxes.iloc[0]
     elif len(totFluxes) > 1:
         fluxMean = np.average(totFluxes, weights=1 / totFluxErrors ** 2)
         dia_object_record['%sTOTFluxMean' % filter_name] = fluxMean
@@ -341,6 +341,8 @@ class AssociationTask(pipeBase.Task):
         """Convert the exposure object into HTM pixels and retrieve DIAObjects
         contained within the exposure.
 
+        DiaObject DataFrame will be indexed on ``diaObjectId``.
+
         Parameters
         ----------
         exposure : `lsst.afw.image.Exposure`
@@ -369,13 +371,16 @@ class AssociationTask(pipeBase.Task):
                         for indexer_idx in indexer_indices]
         covering_dia_objects = ppdb.getDiaObjects(index_ranges,
                                                   return_pandas=True)
-        ccd_mask = np.zeros(len(covering_dia_objects), dtype=bool)
+        ccd_mask = pandas.Series(False, index=covering_dia_objects.index)
 
-        for idx, cov_dia_object in covering_dia_objects.iterrows():
+        for df_idx, cov_dia_object in covering_dia_objects.iterrows():
             if self._check_dia_object_position(cov_dia_object, bbox, wcs):
-                ccd_mask[idx] = True
+                ccd_mask.loc[df_idx] = True
 
-        return covering_dia_objects[ccd_mask]
+        diaObjects = covering_dia_objects[ccd_mask]
+        diaObjects.set_index("diaObjectId", inplace=True)
+
+        return diaObjects
 
     def _check_dia_object_position(self, dia_object_record, bbox, wcs):
         """Check the RA, DEC position of the current dia_object_record against
@@ -404,6 +409,8 @@ class AssociationTask(pipeBase.Task):
     @pipeBase.timeMethod
     def associate_sources(self, dia_objects, dia_sources):
         """Associate the input DIASources with the catalog of DIAObjects.
+
+        DiaObject DataFrame must be indexed on ``diaObjectId``.
 
         Parameters
         ----------
@@ -451,41 +458,43 @@ class AssociationTask(pipeBase.Task):
         ppdb : `lsst.dax.ppdb.Ppdb`
             Ppdb connection object to retrieve DIASources from and
             write DIAObjects to.
+
+        Returns
+        -------
+        outputDiaObjects : `pandas.DataFrame`
+            Union of updated and un-touched DiaObjects indexed on
+            ``diaObjectId``.
         """
         filter_name = exposure.getFilter().getName()
         filter_id = exposure.getFilter().getId()
 
         updated_obj_ids.sort()
-        dia_object_used = np.zeros(len(dia_objects), dtype=bool)
-
-        dia_object_ids = dia_objects.loc[:, "diaObjectId"].array
+        dia_object_used = pandas.DataFrame(
+            False,
+            index=dia_objects.index,
+            columns=["used"])
 
         dateTime = exposure.getInfo().getVisitInfo().getDate()
 
         dia_sources = ppdb.getDiaSources(updated_obj_ids, dateTime.toPython(),
                                          return_pandas=True)
-        dia_sources.sort_values(by=["diaObjectId"], inplace=True)
+        dia_sources.set_index(["diaObjectId", "diaSourceId"], inplace=True)
 
         updated_dia_objects = []
 
         for obj_id in updated_obj_ids:
 
-
-            updated_dia_obj_df = dia_objects[dia_object_ids == obj_id]
-            if len(updated_dia_obj_df) == 0:
+            try:
+                updated_dia_obj_df = dia_objects.loc[obj_id]
+                updated_dia_object = updated_dia_obj_df.to_dict()
+                updated_dia_object["diaObjectId"] = obj_id
+                dia_object_used.loc[obj_id] = True
+            except KeyError:
                 updated_dia_object = self._initialize_dia_object(obj_id)
-            else:
-                updated_dia_object = updated_dia_obj_df.to_dict("records")[0]
 
             # Select the dia_sources associated with this DIAObject id and
             # copy the subcatalog for fast slicing.
-            start_idx = np.searchsorted(dia_sources["diaObjectId"],
-                                        obj_id,
-                                        side="left")
-            end_idx = np.searchsorted(dia_sources["diaObjectId"],
-                                      obj_id,
-                                      side="right")
-            obj_dia_sources = dia_sources.iloc[start_idx:end_idx]
+            obj_dia_sources = dia_sources.loc[obj_id]
 
             _set_mean_position(updated_dia_object, obj_dia_sources)
             indexer_id = self.indexer.indexPoints(
@@ -508,13 +517,21 @@ class AssociationTask(pipeBase.Task):
                 updated_dia_object["flags"] = 1
             else:
                 updated_dia_object["flags"] = 0
+
             updated_dia_objects.append(updated_dia_object)
 
-        updated_dia_objects = pandas.DataFrame(data=updated_dia_objects)
+        # Initialize DataFrame with full set of columns to properly set
+        # NaN/Null values.
+        updated_dia_objects = pandas.DataFrame(
+            data=updated_dia_objects,
+            columns=list(ppdb._schema.getColumnMap('DiaObject').keys()))
 
         ppdb.storeDiaObjects(updated_dia_objects, dateTime.toPython())
 
-        return dia_objects[np.logical_not(dia_object_used)].append(updated_dia_objects,
+        updated_dia_objects.set_index(["diaObjectId"], inplace=True)
+
+        return dia_objects[
+            np.logical_not(dia_object_used.loc[:, "used"])].append(updated_dia_objects,
                                                                    sort=True)
 
     def _initialize_dia_object(self, obj_id):
@@ -592,7 +609,7 @@ class AssociationTask(pipeBase.Task):
 
         dists, obj_idxs = spatial_tree.query(vectors)
         scores = np.where(dists < max_dist_rad, dists, np.inf)
-        obj_ids = dia_objects["diaObjectId"].array[obj_idxs]
+        obj_ids = dia_objects.index[obj_idxs]
 
         return pipeBase.Struct(
             scores=scores,

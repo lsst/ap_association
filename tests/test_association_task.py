@@ -288,14 +288,14 @@ class TestAssociationTask(unittest.TestCase):
 
         # Test to make sure the number of DIAObjects have been properly
         # associated within the db.
-        for obj_idx, dia_object in dia_objects.iterrows():
+        for obj_idx, (df_idx, dia_object) in enumerate(dia_objects.iterrows()):
             if obj_idx == not_updated_idx:
                 # Test the DIAObject we expect to not be associated with any
                 # new DIASources.
                 self.assertEqual(dia_object['gPSFluxNdata'], 1)
                 self.assertEqual(dia_object['rPSFluxNdata'], 1)
                 self.assertEqual(dia_object['nDiaSources'], 2)
-                self.assertEqual(dia_object['diaObjectId'], obj_idx)
+                self.assertEqual(df_idx, obj_idx)
             elif updated_idx_start <= obj_idx < new_idx_start:
                 # Test that associating to the existing DIAObjects went
                 # as planned and test that the IDs of the newly associated
@@ -303,11 +303,11 @@ class TestAssociationTask(unittest.TestCase):
                 self.assertEqual(dia_object['gPSFluxNdata'], 2)
                 self.assertEqual(dia_object['rPSFluxNdata'], 1)
                 self.assertEqual(dia_object['nDiaSources'], 3)
-                self.assertEqual(dia_object['diaObjectId'], obj_idx)
+                self.assertEqual(df_idx, obj_idx)
             else:
                 self.assertEqual(dia_object['gPSFluxNdata'], 1)
                 self.assertEqual(dia_object['nDiaSources'], 1)
-                self.assertEqual(dia_object['diaObjectId'], obj_idx + 4 + 5)
+                self.assertEqual(df_idx, obj_idx + 4 + 5)
 
     def test_run_no_existing_objects(self):
         """Test the run method with a completely empty database.
@@ -316,10 +316,9 @@ class TestAssociationTask(unittest.TestCase):
         total_expected_dia_objects = 9
         self.assertEqual(len(dia_objects),
                          total_expected_dia_objects)
-        for obj_idx, output_dia_object in dia_objects.iterrows():
+        for obj_idx, (df_idx, output_dia_object) in enumerate(dia_objects.iterrows()):
             self.assertEqual(output_dia_object['gPSFluxNdata'], 1)
-            self.assertEqual(output_dia_object["diaObjectId"],
-                             obj_idx + 10)
+            self.assertEqual(df_idx, obj_idx + 10)
 
     def _make_ppdb(self):
         """Create an empty ppdb database.

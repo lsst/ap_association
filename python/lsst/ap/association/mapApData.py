@@ -217,10 +217,14 @@ class MapDiaSourceTask(MapApDataTask):
         inputCatalog : `lsst.afw.table.SourceCatalog`
             Input catalog with data to be copied into new output catalog.
         exposure: `lsst.afw.image.Exposure`
-            Exposure with containing the PhotoCalib object relevant to this catalog.
+            Exposure with containing the PhotoCalib object relevant to this
+            catalog.
+        return_pandas : `bool`
+            Return `pandas.DataFrame` instead of `lsst.afw.table.SourceCatalog`
+
         Returns
         -------
-        outputCatalog: `pandas.DataFrame`
+        outputCatalog: `lsst.afw.table.SourceCatalog` or `pandas.DataFrame`
             Output catalog with data copied from input and new column names.
         """
         visit_info = exposure.getInfo().getVisitInfo()
