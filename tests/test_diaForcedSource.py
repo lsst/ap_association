@@ -156,41 +156,73 @@ class TestDiaForcedSource(unittest.TestCase):
         self.diffim.setPsf(psf)
 
         self.testDiaObjects = create_test_dia_objects(5, self.wcs)
+        self.expected_n_columns = 10
 
     def testRun(self):
         """Test that forced source catalogs are successfully created and have
         sensible values.
         """
+
+        test_objects = self._convert_to_pandas(self.testDiaObjects)
+
         dfs = DiaForcedSourceTask()
-        result = dfs.run(
-            self.testDiaObjects, self.expIdBits, self.exposure, self.diffim)
+        dia_forced_sources = dfs.run(
+            test_objects, self.expIdBits, self.exposure, self.diffim)
 
-        direct_values = [19.98544842, 16.00974072, 8.2299179, 2.71486044, 0.57469884]
-        direct_var = 7.52143925
-        diff_values = [39.97089683, 32.01948144, 16.45983579, 5.42972089, 1.14939768]
-        diff_var = 10.6369214
+        direct_values = [199854.48417094944, 160097.40719241602,
+                         82299.17897267535, 27148.604434624354,
+                         5746.988388215507]
+        direct_var = [75240.939811168, 75231.42933749466,
+                      75218.89495113207, 75214.88248249644,
+                      75214.41447602339]
+        diff_values = [399708.9683418989, 320194.81438483205,
+                       164598.3579453507, 54297.20886924871,
+                       11493.976776431015]
+        diff_var = [106444.28782374493, 106417.39592887461,
+                    106381.94840437356, 106370.59980584883,
+                    106369.27608815048]
 
-        self.assertEqual(len(result.directForcedSources), len(self.testDiaObjects))
-        self.assertEqual(len(result.diffForcedSources), len(self.testDiaObjects))
+        self.assertEqual(len(dia_forced_sources), len(self.testDiaObjects))
+        self.assertEqual(len(dia_forced_sources.columns),
+                         self.expected_n_columns)
 
-        for dirRec, diffRec, testObj, dirVal, diffVal in zip(result.directForcedSources,
-                                                             result.diffForcedSources,
-                                                             self.testDiaObjects,
-                                                             direct_values,
-                                                             diff_values):
-            self.assertEqual(dirRec["id"], diffRec["id"])
-            self.assertEqual(dirRec["coord_ra"], testObj["coord_ra"])
-            self.assertEqual(dirRec["coord_dec"], testObj["coord_dec"])
-            self.assertEqual(diffRec["coord_ra"], testObj["coord_ra"])
-            self.assertEqual(diffRec["coord_dec"], testObj["coord_dec"])
+        for (diaFS_id, diaFS), testObj, dirVal, diffVal, dirVar, diffVar in zip(dia_forced_sources.iterrows(),
+                                                                                self.testDiaObjects,
+                                                                                direct_values,
+                                                                                diff_values,
+                                                                                direct_var,
+                                                                                diff_var):
+            self.assertAlmostEqual(diaFS["psFlux"], diffVal)
+            self.assertAlmostEqual(diaFS["psFluxErr"], diffVar)
 
-            self.assertAlmostEqual(dirRec["slot_PsfFlux_instFlux"], dirVal)
-            self.assertAlmostEqual(dirRec["slot_PsfFlux_instFluxErr"],
-                                   direct_var)
+            self.assertAlmostEqual(diaFS["totFlux"], dirVal)
+            self.assertAlmostEqual(diaFS["totFluxErr"], dirVar)
 
-            self.assertAlmostEqual(diffRec["slot_PsfFlux_instFlux"], diffVal)
-            self.assertAlmostEqual(diffRec["slot_PsfFlux_instFluxErr"],
-                                   diff_var)
+            self.assertEqual(diaFS["ccdVisitId"], self.exposureId)
+
+    def _convert_to_pandas(self, dia_objects):
+        """Convert input afw table to pandas.
+
+        Parameters
+        ----------
+        dia_objects : `lsst.afw.table.SourceCatalog`
+            Catalog to convert
+
+        Returns
+        -------
+        output_catalog : `pandas.DataFrame`
+            Converted catalog
+        """
+        output_catalog = dia_objects.asAstropy().to_pandas()
+        output_catalog.rename(columns={"id": "diaObjectId",
+                                       "coord_ra": "ra",
+                                       "coord_dec": "decl"},
+                              inplace=True)
+
+        output_catalog.loc[:, "ra"] = np.degrees(output_catalog["ra"])
+        output_catalog.loc[:, "decl"] = np.degrees(output_catalog["decl"])
+
+        return output_catalog
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

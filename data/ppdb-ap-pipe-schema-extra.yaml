@@ -539,6 +539,34 @@ columns:
   unit: nJy
 
 ---
+# DiaObject needs a special column for time of last seen DiaSource,
+# validityEnd should be allowed to have NULL (for +Infinity)
+table: DiaForcedSource
+columns:
+- name: diaForcedSourceId
+  type: BIGINT
+  nullable: false
+  description: Unique id for forced soure.
+- name: totFlux
+  type: FLOAT
+  nullable: true
+  description: Point Source model flux measured on the direct image.
+  ucd: phot.count
+  unit: nJy
+- name: totFluxErr
+  type: FLOAT
+  nullable: true
+  description: Uncertainty of totFlux.
+  ucd: stat.error;phot.count
+  unit: nJy
+- name: midPointTai
+  type: DOUBLE
+  nullable: false
+  description: Effective mid-exposure time for this diaForcedSource
+  ucd: time.epoch
+  unit: d
+
+---
 # DiaObjectLast uses the same columns as DiaObject but has different index
 table: DiaObjectLast
 indices:

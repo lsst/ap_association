@@ -25,16 +25,16 @@ locations.
 
 __all__ = ["DiaForcedSourceTask", "DiaForcedSourcedConfig"]
 
+import lsst.afw.table as afwTable
+from lsst.daf.base import DateTime
+import lsst.geom as geom
 from lsst.meas.base.pluginRegistry import register
 from lsst.meas.base import (
+    ForcedMeasurementTask,
     ForcedTransformedCentroidConfig,
     ForcedTransformedCentroidPlugin)
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
-import lsst.afw.table as afwTable
-from lsst.meas.base import ForcedMeasurementTask
-
-from .afwUtils import make_dia_object_schema, make_dia_forced_source_schema
 
 
 class ForcedTransformedCentroidFromCoordConfig(ForcedTransformedCentroidConfig):
@@ -88,18 +88,33 @@ class DiaForcedSourcedConfig(pexConfig.Config):
         doc="Subtask to force photometer DiaObjects in the direct and "
             "difference images.",
     )
+    dropColumns = pexConfig.ListField(
+        dtype=str,
+        doc="Columns produced in forced measurement that can be dropped upon "
+            "creation and storage of the final pandas data.",
+    )
 
     def setDefaults(self):
         self.forcedMeasurement.plugins = ["ap_assoc_TransformedCentroid",
                                           "base_PsfFlux"]
         self.forcedMeasurement.doReplaceWithNoise = False
         self.forcedMeasurement.copyColumns = {
-            "id": "objectId",
+            "id": "diaObjectId",
             "coord_ra": "coord_ra",
             "coord_dec": "coord_dec"}
         self.forcedMeasurement.slots.centroid = "ap_assoc_TransformedCentroid"
         self.forcedMeasurement.slots.psfFlux = "base_PsfFlux"
         self.forcedMeasurement.slots.shape = None
+        self.dropColumns = ['coord_ra', 'coord_dec', 'parent',
+                            'ap_assoc_TransformedCentroid_x',
+                            'ap_assoc_TransformedCentroid_y',
+                            'base_PsfFlux_instFlux',
+                            'base_PsfFlux_instFluxErr', 'base_PsfFlux_area',
+                            'slot_PsfFlux_area', 'base_PsfFlux_flag',
+                            'slot_PsfFlux_flag',
+                            'base_PsfFlux_flag_noGoodPixels',
+                            'slot_PsfFlux_flag_noGoodPixels',
+                            'base_PsfFlux_flag_edge', 'slot_PsfFlux_flag_edge']
 
 
 class DiaForcedSourceTask(pipeBase.Task):
@@ -111,17 +126,16 @@ class DiaForcedSourceTask(pipeBase.Task):
 
     def __init__(self, **kwargs):
         pipeBase.Task.__init__(self, **kwargs)
-        self.dia_forced_source_schema = make_dia_forced_source_schema()
         self.makeSubtask("forcedMeasurement",
-                         refSchema=make_dia_object_schema())
+                         refSchema=afwTable.SourceTable.makeMinimalSchema())
 
-    def run(self, dia_objects, expIdBits, exposure, diffim):
+    def run(self, dia_objects, expIdBits, exposure, diffim, ppdb=None):
         """Measure forced sources on the direct and different images,
         calibrate, and store them in the Ppdb.
 
         Parameters
         ----------
-        dia_objects : `lsst.afw.table.SourceCatalog`
+        dia_objects : `pandas.DataFrame`
             Catalog of previously observed and newly created DiaObjects
             contained within the difference and direct images.
         expIdBits : `int`
@@ -133,39 +147,121 @@ class DiaForcedSourceTask(pipeBase.Task):
 
         Returns
         -------
-        result : `lsst.pipe.base.Struct`
-            Results struct with components.
-
-            - ``diffForcedSources`` : Psf forced photometry on the difference
-              image at the DiaObject location (`lsst.afw.table.SourceCatalog`)
-            - ``directForcedSources`` : Psf forced photometry on the direct
-              image at the DiaObject location (`lsst.afw.table.SourceCatalog`)
+        output_forced_sources : `pandas.DataFrame`
+            Catalog of calibrated forced photometered fluxes on both the
+            difference and direct images at DiaObject locations.
         """
 
+        afw_dia_objects = self._convert_from_pandas(dia_objects)
+
         idFactoryDiff = afwTable.IdFactory.makeSource(
-            diffim.getInfo().getVisitInfo().getExposureId(),
-            afwTable.IdFactory.computeReservedFromMaxBits(int(expIdBits)))
-        idFactoryDirect = afwTable.IdFactory.makeSource(
             diffim.getInfo().getVisitInfo().getExposureId(),
             afwTable.IdFactory.computeReservedFromMaxBits(int(expIdBits)))
 
         diffForcedSources = self.forcedMeasurement.generateMeasCat(
             diffim,
-            dia_objects,
+            afw_dia_objects,
             diffim.getWcs(),
             idFactory=idFactoryDiff)
         self.forcedMeasurement.run(
-            diffForcedSources, diffim, dia_objects, diffim.getWcs())
+            diffForcedSources, diffim, afw_dia_objects, diffim.getWcs())
 
         directForcedSources = self.forcedMeasurement.generateMeasCat(
             exposure,
-            dia_objects,
-            exposure.getWcs(),
-            idFactory=idFactoryDirect)
+            afw_dia_objects,
+            exposure.getWcs())
         self.forcedMeasurement.run(
-            directForcedSources, exposure, dia_objects, exposure.getWcs())
+            directForcedSources, exposure, afw_dia_objects, exposure.getWcs())
 
-        return pipeBase.Struct(
-            diffForcedSources=diffForcedSources,
-            directForcedSources=directForcedSources,
-        )
+        output_forced_sources = self._convert_to_pandas(diffForcedSources,
+                                                        directForcedSources,
+                                                        diffim,
+                                                        exposure)
+
+        return output_forced_sources
+
+    def _convert_from_pandas(self, input_objects):
+        """Create minimal schema SourceCatalog from a pandas DataFrame.
+
+        We need a catalog of this type to run within the forced measurement
+        subtask.
+
+        Parameters
+        ----------
+        input_objects : `pandas.DataFrame`
+            DiaObjects with locations and ids. ``
+
+        Returns
+        -------
+        outputCatalog : `lsst.afw.table.SourceTable`
+            Output catalog with minimal schema.
+        """
+        schema = afwTable.SourceTable.makeMinimalSchema()
+
+        outputCatalog = afwTable.SourceCatalog(schema)
+        outputCatalog.reserve(len(input_objects))
+
+        for obj_id, df_row in input_objects.iterrows():
+            outputRecord = outputCatalog.addNew()
+            outputRecord.setId(obj_id)
+            outputRecord.setCoord(
+                geom.SpherePoint(df_row["ra"],
+                                 df_row["decl"],
+                                 geom.degrees))
+        return outputCatalog
+
+    def _convert_to_pandas(self,
+                           diff_sources,
+                           direct_sources,
+                           diff_exp,
+                           direct_exp):
+        """Take the two output catalogs from the ForcedMeasurementTasks and
+        calibrate, combine, and convert them to Pandas.
+
+        Parameters
+        ----------
+        diff_sources : `lsst.afw.table.SourceTable`
+            Catalog with PsFluxes measured on the difference image.
+        direct_sources : `lsst.afw.table.SourceTable`
+            Catalog with PsfFluxes measured on the direct (calexp) image.
+        diff_exp : `lsst.afw.image.Exposure`
+            Difference exposure ``diff_sources`` were measured on.
+        direct_exp : `lsst.afw.image.Exposure`
+            Direct (calexp) exposure ``direct_sources`` were measured on.
+
+        Returns
+        -------
+        output_catalog : `pandas.DataFrame`
+            Catalog calibrated diaForcedSources.
+        """
+        diff_calib = diff_exp.getPhotoCalib()
+        direct_calib = direct_exp.getPhotoCalib()
+
+        diff_fluxes = diff_calib.instFluxToNanojansky(diff_sources,
+                                                      "slot_PsfFlux")
+        direct_fluxes = direct_calib.instFluxToNanojansky(direct_sources,
+                                                          "slot_PsfFlux")
+
+        output_catalog = diff_sources.asAstropy().to_pandas()
+        output_catalog.rename(columns={"id": "diaForcedSourceId",
+                                       "slot_PsfFlux_instFlux": "psFlux",
+                                       "slot_PsfFlux_instFluxErr": "psFluxErr",
+                                       "slot_Centroid_x": "x",
+                                       "slot_Centroid_y": "y"},
+                              inplace=True)
+        output_catalog.loc[:, "psFlux"] = diff_fluxes[:, 0]
+        output_catalog.loc[:, "psFluxErr"] = diff_fluxes[:, 1]
+
+        output_catalog["totFlux"] = direct_fluxes[:, 0]
+        output_catalog["totFluxErr"] = direct_fluxes[:, 1]
+
+        visit_info = direct_exp.getInfo().getVisitInfo()
+        ccdVisitId = visit_info.getExposureId()
+        midPointTaiMJD = visit_info.getDate().get(system=DateTime.MJD)
+        output_catalog["ccdVisitId"] = ccdVisitId
+        output_catalog["midPointTai"] = midPointTaiMJD
+
+        # Drop superfluous columns from output DataFrame.
+        output_catalog.drop(columns=self.config.dropColumns, inplace=True)
+
+        return output_catalog
