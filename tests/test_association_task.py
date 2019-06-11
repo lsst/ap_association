@@ -98,6 +98,66 @@ def create_test_points(point_locs_deg,
     return sources
 
 
+def create_test_points_pandas(point_locs_deg,
+                              wcs=None,
+                              start_id=0,
+                              schema=None,
+                              scatter_arcsec=1.0,
+                              indexer_ids=None,
+                              associated_ids=None):
+    """Create dummy DIASources or DIAObjects for use in our tests.
+    Parameters
+    ----------
+    point_locs_deg : array-like (N, 2) of `float`s
+        Positions of the test points to create in RA, DEC.
+    wcs : `lsst.afw.geom.SkyWcs`
+        Wcs to convert RA/Dec to x/y if provided.
+    start_id : `int`
+        Unique id of the first object to create. The remaining sources are
+        incremented by one from the first id.
+    schema : `lsst.afw.table.Schema`
+        Schema of the objects to create. Defaults to the DIASource schema.
+    scatter_arcsec : `float`
+        Scatter to add to the position of each DIASource.
+    indexer_ids : `list` of `ints`s
+        Id numbers of pixelization indexer to store. Must be the same length
+        as the first dimension of point_locs_deg.
+    associated_ids : `list` of `ints`s
+        Id numbers of associated DIAObjects to store. Must be the same length
+        as the first dimension of point_locs_deg.
+    Returns
+    -------
+    test_points : `pandas.DataFrame`
+        Catalog of points to test.
+    """
+    if schema is None:
+        schema = make_dia_source_schema()
+    sources = afwTable.SourceCatalog(schema)
+
+    for src_idx, (ra, dec,) in enumerate(point_locs_deg):
+        src = sources.addNew()
+        src['id'] = src_idx + start_id
+        coord = geom.SpherePoint(ra, dec, geom.degrees)
+        if scatter_arcsec > 0.0:
+            coord = coord.offset(
+                np.random.rand() * 360 * geom.degrees,
+                np.random.rand() * scatter_arcsec * geom.arcseconds)
+        if indexer_ids is not None:
+            src['pixelId'] = indexer_ids[src_idx]
+        if associated_ids is not None:
+            src['diaObjectId'] = associated_ids[src_idx]
+        src.setCoord(coord)
+
+        if wcs is not None:
+            xyCentroid = wcs.skykToPixel(coord)
+            src.set("x", xyCentroid.getX())
+            src.set("y", xyCentroid.getY())
+
+    sources = sources.asAstropy().to_pandas()
+
+    return sources
+
+
 def _data_file_name(basename, module_name):
     """Return path name of a data file.
 
@@ -228,14 +288,14 @@ class TestAssociationTask(unittest.TestCase):
 
         # Test to make sure the number of DIAObjects have been properly
         # associated within the db.
-        for obj_idx, dia_object in enumerate(dia_objects):
+        for obj_idx, (df_idx, dia_object) in enumerate(dia_objects.iterrows()):
             if obj_idx == not_updated_idx:
                 # Test the DIAObject we expect to not be associated with any
                 # new DIASources.
                 self.assertEqual(dia_object['gPSFluxNdata'], 1)
                 self.assertEqual(dia_object['rPSFluxNdata'], 1)
                 self.assertEqual(dia_object['nDiaSources'], 2)
-                self.assertEqual(dia_object.getId(), obj_idx)
+                self.assertEqual(df_idx, obj_idx)
             elif updated_idx_start <= obj_idx < new_idx_start:
                 # Test that associating to the existing DIAObjects went
                 # as planned and test that the IDs of the newly associated
@@ -243,11 +303,11 @@ class TestAssociationTask(unittest.TestCase):
                 self.assertEqual(dia_object['gPSFluxNdata'], 2)
                 self.assertEqual(dia_object['rPSFluxNdata'], 1)
                 self.assertEqual(dia_object['nDiaSources'], 3)
-                self.assertEqual(dia_object.getId(), obj_idx)
+                self.assertEqual(df_idx, obj_idx)
             else:
                 self.assertEqual(dia_object['gPSFluxNdata'], 1)
                 self.assertEqual(dia_object['nDiaSources'], 1)
-                self.assertEqual(dia_object.getId(), obj_idx + 4 + 5)
+                self.assertEqual(df_idx, obj_idx + 4 + 5)
 
     def test_run_no_existing_objects(self):
         """Test the run method with a completely empty database.
@@ -256,11 +316,9 @@ class TestAssociationTask(unittest.TestCase):
         total_expected_dia_objects = 9
         self.assertEqual(len(dia_objects),
                          total_expected_dia_objects)
-        for obj_idx, output_dia_object in enumerate(dia_objects):
+        for obj_idx, (df_idx, output_dia_object) in enumerate(dia_objects.iterrows()):
             self.assertEqual(output_dia_object['gPSFluxNdata'], 1)
-            self.assertEqual(output_dia_object.getId(),
-                             obj_idx + 10)
-            self.assertEqual(output_dia_object.getId(), obj_idx + 10)
+            self.assertEqual(df_idx, obj_idx + 10)
 
     def _make_ppdb(self):
         """Create an empty ppdb database.
@@ -315,6 +373,14 @@ class TestAssociationTask(unittest.TestCase):
         assoc_task = AssociationTask()
 
         ppdb = self._make_ppdb()
+        dia_sources = dia_sources.asAstropy().to_pandas()
+        dia_sources.rename(columns={"coord_ra": "ra",
+                                    "coord_dec": "decl",
+                                    "id": "diaSourceId",
+                                    "parent": "parentDiaSourceId"},
+                           inplace=True)
+        dia_sources["ra"] = np.degrees(dia_sources["ra"])
+        dia_sources["decl"] = np.degrees(dia_sources["decl"])
 
         assoc_task.run(dia_sources, self.exposure, ppdb)
 
@@ -449,11 +515,20 @@ class TestAssociationTask(unittest.TestCase):
                 filterId=1,
                 ccdVisitId=self.exposure.getInfo().getVisitInfo().getExposureId(),
                 midPointTai=self.exposure.getInfo().getVisitInfo().getDate().get(system=dafBase.DateTime.MJD))
+        dia_sources = dia_sources.asAstropy().to_pandas()
+        dia_sources.rename(columns={"coord_ra": "ra",
+                                    "coord_dec": "decl",
+                                    "id": "diaSourceId",
+                                    "parent": "parentDiaSourceId"},
+                           inplace=True)
+        dia_sources["ra"] = np.degrees(dia_sources["ra"])
+        dia_sources["decl"] = np.degrees(dia_sources["decl"])
 
         # Store them in the DB containing pre-existing objects.
         ppdb = self._make_ppdb()
         # Load the Existing DIAObjects for use in the update method.
-        loaded_dia_objects = ppdb.getDiaObjects(self.index_ranges)
+        loaded_dia_objects = ppdb.getDiaObjects(self.index_ranges,
+                                                return_pandas=True)
 
         # Store the new DIASources with associations and an exposure.
         ppdb.storeDiaSources(dia_sources)
@@ -474,16 +549,16 @@ class TestAssociationTask(unittest.TestCase):
              'gPSFluxMean': 1., 'gPSFluxMeanErr': 1., 'gPSFluxSigma': 1.,
              'rPSFluxMean': 1., 'rPSFluxMeanErr': 1., 'rPSFluxSigma': 1.},
             {'id': 1,
-             'gPSFluxMean': 1.2857141, 'gPSFluxMeanErr': 0.01195228, 'gPSFluxSigma': 0.70710678,
+             'gPSFluxMean': 1.28571426, 'gPSFluxMeanErr': 0.01195228, 'gPSFluxSigma': 0.70710678,
              'rPSFluxMean': 1., 'rPSFluxMeanErr': 1., 'rPSFluxSigma': 1.},
             {'id': 2,
-             'gPSFluxMean': 1.2857141, 'gPSFluxMeanErr': 0.01195228, 'gPSFluxSigma': 0.70710678,
+             'gPSFluxMean': 1.28571426, 'gPSFluxMeanErr': 0.01195228, 'gPSFluxSigma': 0.70710678,
              'rPSFluxMean': 1., 'rPSFluxMeanErr': 1., 'rPSFluxSigma': 1.},
             {'id': 3,
-             'gPSFluxMean': 1.2857141, 'gPSFluxMeanErr': 0.01195228, 'gPSFluxSigma': 0.70710678,
+             'gPSFluxMean': 1.28571426, 'gPSFluxMeanErr': 0.01195228, 'gPSFluxSigma': 0.70710678,
              'rPSFluxMean': 1., 'rPSFluxMeanErr': 1., 'rPSFluxSigma': 1.},
             {'id': 4,
-             'gPSFluxMean': 1.2857141, 'gPSFluxMeanErr': 0.01195228, 'gPSFluxSigma': 0.70710678,
+             'gPSFluxMean': 1.28571426, 'gPSFluxMeanErr': 0.01195228, 'gPSFluxSigma': 0.70710678,
              'rPSFluxMean': 1., 'rPSFluxMeanErr': 1., 'rPSFluxSigma': 1.},
             {'id': 14,
              'gPSFluxMean': 2., 'gPSFluxMeanErr': np.nan, 'gPSFluxSigma': np.nan,
@@ -509,21 +584,29 @@ class TestAssociationTask(unittest.TestCase):
         AssociationTask.
         """
         n_objects = 5
-        dia_objects = create_test_points(
+        dia_objects = create_test_points_pandas(
             point_locs_deg=[[0.04 * obj_idx, 0.04 * obj_idx]
                             for obj_idx in range(n_objects)],
             start_id=0,
             schema=self.dia_object_schema,
             scatter_arcsec=-1,)
+        dia_objects.rename(columns={"coord_ra": "ra",
+                                    "coord_dec": "decl",
+                                    "id": "diaObjectId"},
+                           inplace=True)
 
         n_sources = 5
-        dia_sources = create_test_points(
+        dia_sources = create_test_points_pandas(
             point_locs_deg=[
                 [0.04 * (src_idx + 1),
                  0.04 * (src_idx + 1)]
                 for src_idx in range(n_sources)],
             start_id=n_objects,
             scatter_arcsec=0.1)
+        dia_sources.rename(columns={"coord_ra": "ra",
+                                    "coord_dec": "decl",
+                                    "id": "diaSourceId"},
+                           inplace=True)
 
         assoc_task = AssociationTask()
         assoc_result = assoc_task.associate_sources(
@@ -544,21 +627,29 @@ class TestAssociationTask(unittest.TestCase):
         assoc_task = AssociationTask()
         # Create a set of DIAObjects that contain only one DIASource
         n_objects = 5
-        dia_objects = create_test_points(
+        dia_objects = create_test_points_pandas(
             point_locs_deg=[[0.04 * obj_idx, 0.04 * obj_idx]
                             for obj_idx in range(n_objects)],
             start_id=0,
             schema=self.dia_object_schema,
             scatter_arcsec=-1,)
+        dia_objects.rename(columns={"coord_ra": "ra",
+                                    "coord_dec": "decl",
+                                    "id": "diaObjectId"},
+                           inplace=True)
 
         n_sources = 5
-        dia_sources = create_test_points(
+        dia_sources = create_test_points_pandas(
             point_locs_deg=[
                 [0.04 * (src_idx + 1),
                  0.04 * (src_idx + 1)]
                 for src_idx in range(n_sources)],
             start_id=n_objects,
             scatter_arcsec=-1)
+        dia_sources.rename(columns={"coord_ra": "ra",
+                                    "coord_dec": "decl",
+                                    "id": "diaSourceId"},
+                           inplace=True)
 
         score_struct = assoc_task.score(dia_objects,
                                         dia_sources,
