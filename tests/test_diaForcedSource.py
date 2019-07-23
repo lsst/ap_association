@@ -192,11 +192,11 @@ class TestDiaForcedSource(unittest.TestCase):
                                                                                 diff_values,
                                                                                 direct_var,
                                                                                 diff_var):
-            self.assertAlmostEqual(diaFS["psFlux"], diffVal)
-            self.assertAlmostEqual(diaFS["psFluxErr"], diffVar)
+            self.assertAlmostEqual(diaFS["psFlux"] / diffVal, 1.)
+            self.assertAlmostEqual(diaFS["psFluxErr"] / diffVar, 1.)
 
-            self.assertAlmostEqual(diaFS["totFlux"], dirVal)
-            self.assertAlmostEqual(diaFS["totFluxErr"], dirVar)
+            self.assertAlmostEqual(diaFS["totFlux"] / dirVal, 1.)
+            self.assertAlmostEqual(diaFS["totFluxErr"] / dirVar, 1.)
 
             self.assertEqual(diaFS["ccdVisitId"], self.exposureId)
 
