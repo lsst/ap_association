@@ -173,10 +173,10 @@ class DiaForcedSourceTask(pipeBase.Task):
         self.forcedMeasurement.run(
             directForcedSources, exposure, afw_dia_objects, exposure.getWcs())
 
-        output_forced_sources = self._convert_to_pandas(diffForcedSources,
-                                                        directForcedSources,
-                                                        diffim,
-                                                        exposure)
+        output_forced_sources = self._calibrate_and_merge(diffForcedSources,
+                                                          directForcedSources,
+                                                          diffim,
+                                                          exposure)
 
         return output_forced_sources
 
@@ -210,11 +210,11 @@ class DiaForcedSourceTask(pipeBase.Task):
                                  geom.degrees))
         return outputCatalog
 
-    def _convert_to_pandas(self,
-                           diff_sources,
-                           direct_sources,
-                           diff_exp,
-                           direct_exp):
+    def _calibrate_and_merge(self,
+                             diff_sources,
+                             direct_sources,
+                             diff_exp,
+                             direct_exp):
         """Take the two output catalogs from the ForcedMeasurementTasks and
         calibrate, combine, and convert them to Pandas.
 
