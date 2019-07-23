@@ -637,9 +637,12 @@ class AssociationTask(pipeBase.Task):
 
         vectors = self._radec_to_xyz(dia_sources)
 
-        dists, obj_idxs = spatial_tree.query(vectors)
-        scores = np.where(dists < max_dist_rad, dists, np.inf)
-        obj_ids = dia_objects.index[obj_idxs]
+        scores, obj_idxs = spatial_tree.query(
+            vectors,
+            distance_upper_bound=max_dist_rad)
+        matched_src_idxs = np.argwhere(np.isfinite(scores))
+        obj_ids[matched_src_idxs] = dia_objects.index[
+            obj_idxs[matched_src_idxs]]
 
         return pipeBase.Struct(
             scores=scores,
