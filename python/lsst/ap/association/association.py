@@ -27,7 +27,7 @@ __all__ = ["AssociationConfig", "AssociationTask"]
 from astropy.stats import median_absolute_deviation
 import numpy as np
 import pandas
-from scipy.optimize import least_squares
+from scipy.optimize import lsq_linear
 from scipy.spatial import cKDTree
 from scipy.stats import skew
 
@@ -171,10 +171,9 @@ def _fit_linear_flux_model(fluxes, errors, times):
     ans : tuple, (2,)
         Slope (m) and intercept (b) values fit to the light-curve.
     """
-    def model(x):
-        return ((x[0] * times + x[1] - fluxes) / errors) ** 2
+    A = np.array([times / errors, 1 / errors]).transpose()
+    ans = lsq_linear(A, fluxes / errors).x
 
-    ans = least_squares(model, x0=[0., np.mean(fluxes)]).x
     return ans
 
 
