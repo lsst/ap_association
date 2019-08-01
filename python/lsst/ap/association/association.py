@@ -424,8 +424,8 @@ class AssociationTask(pipeBase.Task):
             DataFrame of DiaSources trimmed of all entries with NaN values for
             RA/DEC.
         """
-        nan_mask = np.logical_or(np.isnan(dia_sources.loc[:, "ra"]),
-                                 np.isnan(dia_sources.loc[:, "decl"]))
+        nan_mask = (dia_sources.loc[:, "ra"].isnull() |
+                    dia_sources.loc[:, "decl"].isnull())
         if np.any(nan_mask):
             nan_idxs = np.argwhere(nan_mask).flatten()
             for nan_idx in nan_idxs:
@@ -433,7 +433,7 @@ class AssociationTask(pipeBase.Task):
                     "DiaSource %i has NaN value for RA/DEC, "
                     "dropping from association." %
                     dia_sources.loc[nan_idx, "diaSourceId"])
-            dia_sources = dia_sources[np.logical_not(nan_mask)]
+            dia_sources = dia_sources[~nan_mask]
         return dia_sources
 
     @pipeBase.timeMethod

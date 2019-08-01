@@ -673,7 +673,7 @@ class TestAssociationTask(unittest.TestCase):
         self.assertEqual(match_result.n_unassociated_dia_objects, 1)
 
     def test_remove_nan_dia_sources(self):
-        n_sources = 5
+        n_sources = 6
         dia_sources = create_test_points_pandas(
             point_locs_deg=[
                 [0.04 * (src_idx + 1),
@@ -688,9 +688,11 @@ class TestAssociationTask(unittest.TestCase):
 
         dia_sources.loc[2, "ra"] = np.nan
         dia_sources.loc[3, "decl"] = np.nan
+        dia_sources.loc[4, "ra"] = np.nan
+        dia_sources.loc[4, "decl"] = np.nan
         assoc_task = AssociationTask()
         out_dia_sources = assoc_task.check_dia_souce_radec(dia_sources)
-        self.assertEqual(len(out_dia_sources), n_sources - 2)
+        self.assertEqual(len(out_dia_sources), n_sources - 3)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
