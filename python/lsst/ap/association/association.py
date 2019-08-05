@@ -316,8 +316,9 @@ class AssociationTask(pipeBase.Task):
               diaObjects. (`pandas.DataFrame`)
         """
         # Assure we have a Box2D and can use the getCenter method.
-
         dia_objects = self.retrieve_dia_objects(exposure, ppdb)
+
+        dia_sources = self.check_dia_souce_radec(dia_sources)
 
         updated_obj_ids = self.associate_sources(dia_objects, dia_sources)
 
@@ -404,6 +405,36 @@ class AssociationTask(pipeBase.Task):
                                                 dia_object_record["decl"],
                                                 geom.degrees))
         return bbox.contains(point)
+
+    def check_dia_souce_radec(self, dia_sources):
+        """Check that all DiaSources have non-NaN values for RA/DEC.
+
+        If one or more DiaSources are found to have NaN values, throw a
+        warning to the log with the ids of the offending sources. Drop them
+        from the table.
+
+        Parameters
+        ----------
+        dia_sources : `pandas.DataFrame`
+            Input DiaSources to check for NaN values.
+
+        Returns
+        -------
+        trimmed_sources : `pandas.DataFrame`
+            DataFrame of DiaSources trimmed of all entries with NaN values for
+            RA/DEC.
+        """
+        nan_mask = (dia_sources.loc[:, "ra"].isnull() |
+                    dia_sources.loc[:, "decl"].isnull())
+        if np.any(nan_mask):
+            nan_idxs = np.argwhere(nan_mask).flatten()
+            for nan_idx in nan_idxs:
+                self.log.warning(
+                    "DiaSource %i has NaN value for RA/DEC, "
+                    "dropping from association." %
+                    dia_sources.loc[nan_idx, "diaSourceId"])
+            dia_sources = dia_sources[~nan_mask]
+        return dia_sources
 
     @pipeBase.timeMethod
     def associate_sources(self, dia_objects, dia_sources):
