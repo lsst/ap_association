@@ -29,8 +29,6 @@ __all__ = ["NumberNewDiaObjectsMetricTask",
 
 import astropy.units as u
 
-from lsst.dax.ppdb import countUnassociatedObjects
-
 from lsst.verify import Measurement
 from lsst.verify.gen2tasks import register
 from lsst.verify.tasks import MetadataMetricTask, PpdbMetricTask, MetricComputationError
@@ -242,7 +240,7 @@ class TotalUnassociatedDiaObjectsMetricTask(PpdbMetricTask):
                              % self.getOutputMetricName(self.config))
 
         try:
-            nUnassociatedDiaObjects = countUnassociatedObjects(dbHandle)
+            nUnassociatedDiaObjects = dbHandle.countUnassociatedObjects()
         except Exception as e:
             raise MetricComputationError("Could not get unassociated objects from database") from e
 
