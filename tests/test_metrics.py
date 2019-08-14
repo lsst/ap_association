@@ -291,8 +291,22 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
 class TestTotalUnassociatedObjects(PpdbMetricTestCase):
 
     @staticmethod
-    def _makePpdb():
+    def _makePpdb(dummy_dbInfo):
+        """Create a dummy ppdb.
+
+        We don't have access to the ppdb in the task directly so mocking
+        return values is difficult. We thus make use of the dummy dbInfo
+        that is passed to the init task to pass values to the ppdb object
+        instantiated.
+        """
         ppdb = unittest.mock.Mock(Ppdb)
+        try:
+            test_value = dummy_dbInfo["test_value"]
+            ppdb.countUnassociatedObjects = unittest.mock.MagicMock(
+                return_value=test_value)
+        except TypeError:
+            ppdb.countUnassociatedObjects = unittest.mock.MagicMock(
+                return_value=42)
         return ppdb
 
     @classmethod
@@ -302,7 +316,7 @@ class TestTotalUnassociatedObjects(PpdbMetricTestCase):
 
             def run(self, dummy):
                 if dummy is not None:
-                    return Struct(ppdb=cls._makePpdb())
+                    return Struct(ppdb=cls._makePpdb(dummy))
                 else:
                     return Struct(ppdb=None)
 
@@ -313,21 +327,20 @@ class TestTotalUnassociatedObjects(PpdbMetricTestCase):
     def setUp(self):
         super().setUp()
         # Do the patch here to avoid passing extra arguments to superclass tests
-        patcher = unittest.mock.patch("lsst.ap.association.metrics.countUnassociatedObjects", return_value=42)
-        self.mockCounter = patcher.start()
-        self.addCleanup(patcher.stop)
 
     def testValid(self):
-        result = self.task.adaptArgsAndRun({"dbInfo": "DB source"}, {"dbInfo": {}}, {"measurement": {}})
+        result = self.task.adaptArgsAndRun({"dbInfo": [{"test_value": 42}]},
+                                           {"dbInfo": {}},
+                                           {"measurement": {}})
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.totalUnassociatedDiaObjects"))
-        nObjects = self.mockCounter(self._makePpdb())
-        self.assertEqual(meas.quantity, nObjects * u.count)
+        self.assertEqual(meas.quantity, 42 * u.count)
 
     def testAllAssociated(self):
-        with unittest.mock.patch("lsst.ap.association.metrics.countUnassociatedObjects", return_value=0):
-            result = self.task.adaptArgsAndRun({"dbInfo": "DB source"}, {"dbInfo": {}}, {"measurement": {}})
+        result = self.task.adaptArgsAndRun({"dbInfo": [{"test_value": 0}]},
+                                           {"dbInfo": {}},
+                                           {"measurement": {}})
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.totalUnassociatedDiaObjects"))
