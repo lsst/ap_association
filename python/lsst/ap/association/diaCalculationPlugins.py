@@ -26,7 +26,10 @@ import lsst.geom as geom
 from .diaCalculation import (
     DiaObjectCalculationPluginConfig,
     DiaObjectCalculationPlugin)
-from .pluginRegistry import register
+from lsst.meas.base.pluginRegistry import register
+
+__all__ = ("MeanDiaPositionConfig", "MeanDiaPosition",
+           "WeightedMeanDiaPsFluxConfig", "WeightedMeanDiaPsFlux")
 
 
 class MeanDiaPositionConfig(DiaObjectCalculationPluginConfig):
@@ -34,8 +37,8 @@ class MeanDiaPositionConfig(DiaObjectCalculationPluginConfig):
 
 
 @register("ap_meanPosition")
-class MeanDiaPositionPlugin(DiaObjectCalculationPlugin):
-    """
+class MeanDiaPosition(DiaObjectCalculationPlugin):
+    """Compute the mean position of a DiaObject given a set of DiaSources.
     """
 
     ConfigClass = MeanDiaPositionConfig
@@ -44,7 +47,7 @@ class MeanDiaPositionPlugin(DiaObjectCalculationPlugin):
         return cls.DEFAULT_CATALOGCALCULATION
 
     def __init__(self, config, name, metadata):
-        DiaObjectCalculationPlugin.__init__(config, name, metadata)
+        DiaObjectCalculationPlugin.__init__(self, config, name, metadata)
 
     def calculate(self, diaObject, diaSources, **kwargs):
         """Compute the mean ra/dec position of the diaObject given the
@@ -87,7 +90,8 @@ class WeightedMeanDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
 
 @register("ap_meanFlux")
 class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
-    """
+    """Compute the weighted mean and mean error on the point source fluxes
+    of the DiaSource measured on the difference image.
     """
 
     ConfigClass = WeightedMeanDiaPsFluxConfig
@@ -96,7 +100,7 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
         return cls.DEFAULT_CATALOGCALCULATION
 
     def __init__(self, config, name, metadata):
-        DiaObjectCalculationPlugin.__init__(config, name, metadata)
+        DiaObjectCalculationPlugin.__init__(self, config, name, metadata)
 
     def calculate(self, diaObject, psFluxes, psFluxErrs, filterName, **kwargs):
         """Compute the mean ra/dec position of the diaObject given the

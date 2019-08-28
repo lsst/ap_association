@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import namedtuple
+from collections import namedtuple
 import numpy as np
 import pandas as pd
 
@@ -29,9 +29,9 @@ from lsst.meas.base import (
     CatalogCalculationPlugin,
     CatalogCalculationConfig,
     CatalogCalculationTask,
-    CCContext,
     PluginRegistry,
     PluginMap)
+from lsst.meas.base.catalogCalculation import CCContext
 import lsst.pipe.base
 
 # Enforce an error for unsafe column/array value setting in pandas.
