@@ -124,9 +124,9 @@ class DiaObjectCalculationConfig(CatalogCalculationConfig):
     """
 
     plugins = DiaObjectCalculationPlugin.registry.makeField(
-        multi=True,
-        default=["",
-                 ""],
+        multi=False,
+        default=["ap_meanPosition",
+                 "ap_meanFlux"],
         doc="Plugins to be run and their configuration")
 
 

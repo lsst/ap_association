@@ -126,7 +126,7 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
             psFluxMean = np.nan
             psFluxMeanErr = np.nan
 
-        if np.isfinite(psFluxMean) and np.isfinite(psFluxMean):
+        if np.isfinite(psFluxMean) and np.isfinite(psFluxMeanErr):
             diaObject["%sPSFluxMean" % filterName] = psFluxMean
             diaObject["%sPSFluxMeanErr" % filterName] = psFluxMeanErr
         else:
