@@ -96,7 +96,7 @@ class TestNewDiaObjects(MetadataMetricTestCase):
 
     def testGetInputDatasetTypes(self):
         config = self.taskClass.ConfigClass()
-        config.metadata.name = "test_metadata"
+        config.connections.taskName = "test"
         types = self.taskClass.getInputDatasetTypes(config)
         # dict.keys() is a collections.abc.Set, which has a narrower interface than __builtins__.set...
         self.assertSetEqual(set(types.keys()), {"metadata"})
@@ -171,7 +171,7 @@ class TestUnassociatedDiaObjects(MetadataMetricTestCase):
 
     def testGetInputDatasetTypes(self):
         config = self.taskClass.ConfigClass()
-        config.metadata.name = "test_metadata"
+        config.connections.taskName = "test"
         types = self.taskClass.getInputDatasetTypes(config)
         # dict.keys() is a collections.abc.Set, which has a narrower interface than __builtins__.set...
         self.assertSetEqual(set(types.keys()), {"metadata"})
@@ -260,7 +260,7 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
 
     def testGetInputDatasetTypes(self):
         config = self.taskClass.ConfigClass()
-        config.metadata.name = "test_metadata"
+        config.connections.taskName = "test"
         types = self.taskClass.getInputDatasetTypes(config)
         # dict.keys() is a collections.abc.Set, which has a narrower interface than __builtins__.set...
         self.assertSetEqual(set(types.keys()), {"metadata"})
@@ -357,7 +357,7 @@ class TestTotalUnassociatedObjects(PpdbMetricTestCase):
 
     def testGetInputDatasetTypes(self):
         config = self.taskClass.ConfigClass()
-        config.dbInfo.name = "absolutely anything"
+        config.connections.dbInfo = "absolutely anything"
         types = self.taskClass.getInputDatasetTypes(config)
         # dict.keys() is a collections.abc.Set, which has a narrower interface than __builtins__.set...
         self.assertSetEqual(set(types.keys()), {"dbInfo"})
