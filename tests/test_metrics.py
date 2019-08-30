@@ -329,7 +329,7 @@ class TestTotalUnassociatedObjects(PpdbMetricTestCase):
         # Do the patch here to avoid passing extra arguments to superclass tests
 
     def testValid(self):
-        result = self.task.adaptArgsAndRun({"dbInfo": [{"test_value": 42}]},
+        result = self.task.adaptArgsAndRun({"dbInfo": {"test_value": 42}},
                                            {"dbInfo": {}},
                                            {"measurement": {}})
         meas = result.measurement
@@ -338,7 +338,7 @@ class TestTotalUnassociatedObjects(PpdbMetricTestCase):
         self.assertEqual(meas.quantity, 42 * u.count)
 
     def testAllAssociated(self):
-        result = self.task.adaptArgsAndRun({"dbInfo": [{"test_value": 0}]},
+        result = self.task.adaptArgsAndRun({"dbInfo": {"test_value": 0}},
                                            {"dbInfo": {}},
                                            {"measurement": {}})
         meas = result.measurement
