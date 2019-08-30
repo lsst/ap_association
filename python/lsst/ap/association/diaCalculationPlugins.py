@@ -43,6 +43,7 @@ class MeanDiaPosition(DiaObjectCalculationPlugin):
 
     ConfigClass = MeanDiaPositionConfig
 
+    @classmethod
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
@@ -96,6 +97,7 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
 
     ConfigClass = WeightedMeanDiaPsFluxConfig
 
+    @classmethod
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 

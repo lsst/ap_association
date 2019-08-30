@@ -24,7 +24,7 @@ import pandas as pd
 import unittest
 
 from lsst.ap.association import (
-    MeanDiaPosition, 
+    MeanDiaPosition,
     MeanDiaPositionConfig,
     WeightedMeanDiaPsFlux,
     WeightedMeanDiaPsFluxConfig)
@@ -41,6 +41,8 @@ class TestMeanPosition(unittest.TestCase):
         sensible values.
         """
         n_sources = 10
+
+        # Test expected means.
         diaObject = dict()
         diaSources = pd.DataFrame(data={"ra": np.linspace(-1, 1, n_sources),
                                         "decl": np.zeros(n_sources)})
@@ -60,16 +62,10 @@ class TestMeanPosition(unittest.TestCase):
         self.assertAlmostEqual(diaObject["ra"], 0.0)
         self.assertAlmostEqual(diaObject["decl"], 0.0)
 
-    def testFail(self):
-        """Test that nan values are correctly filled when present.
-        """
-        n_sources = 10
+        # Test failure modes.
         diaObject = dict()
         diaSources = pd.DataFrame(data={"ra": np.full(n_sources, np.nan),
                                         "decl": np.zeros(n_sources)})
-        mean_pos = MeanDiaPosition(MeanDiaPositionConfig(),
-                                   "ap_meanPosition",
-                                   None)
         mean_pos.calculate(diaObject, diaSources)
 
         self.assertTrue(np.isnan(diaObject["ra"]))

@@ -37,6 +37,9 @@ import lsst.pipe.base
 # Enforce an error for unsafe column/array value setting in pandas.
 pd.options.mode.chained_assignment = 'raise'
 
+__all__ = ("DiaObjectCalculationPlugin", "DiaObjectCalculationPluginConfig",
+           "DiaObjectCalculationTask", "DiaObjectCalculationConfig")
+
 
 class DiaObjectCalculationPluginConfig(CatalogCalculationPluginConfig):
     """Default configuration class DIA catalog calculation plugins.
@@ -69,10 +72,6 @@ class DiaObjectCalculationPlugin(CatalogCalculationPlugin):
     """
     FLUX_MOMMENTS_CALCULATED = 5.0
 
-    """Plugins to call after the diaObject coordinate has been updated.
-    """
-    COORDINATE_UPDATED = 6.0
-
     plugType = 'single'
     """Does the plugin operate on a single source or the whole catalog (`str`)?
     If the plugin operates on a single source at a time, this should be set to
@@ -90,6 +89,7 @@ class DiaObjectCalculationPlugin(CatalogCalculationPlugin):
         r"""Used to set the relative order of plugin execution.
         The values returned by `getExecutionOrder` are compared across all
         plugins, and smaller numbers run first.
+
         Notes
         -----
         `DiaObjectCalculationPlugin`\s must run with
@@ -103,8 +103,10 @@ class DiaObjectCalculationPlugin(CatalogCalculationPlugin):
         This method can either be used to operate on a single catalog record
         or a whole catalog, populating it with the output defined by this
         plugin.
+
         Note that results may be added to catalog records as new columns, or
         may result in changes to existing values.
+
         Parameters
         ----------
         cat : `lsst.afw.table.SourceCatalog` or `lsst.afw.table.SourceRecord`
@@ -124,7 +126,7 @@ class DiaObjectCalculationConfig(CatalogCalculationConfig):
     """
 
     plugins = DiaObjectCalculationPlugin.registry.makeField(
-        multi=False,
+        multi=True,
         default=["ap_meanPosition",
                  "ap_meanFlux"],
         doc="Plugins to be run and their configuration")
@@ -133,8 +135,9 @@ class DiaObjectCalculationConfig(CatalogCalculationConfig):
 class DiaObjectCalculationTask(CatalogCalculationTask):
     """Run plugins which operate on a catalog of sources.
     This task facilitates running plugins which will operate on a source
-    catalog. These plugins may do things such as classifying an object based
+    catalog. These plugins may do things such as classifynig an object based
     on source record entries inserted during a measurement task.
+
     Parameters
     ----------
     plugMetaData : `lsst.daf.base.PropertyList` or `None`
@@ -143,6 +146,7 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
         created.
     **kwargs
         Additional arguments passed to the superclass constructor.
+
     Notes
     -----
     Plugins may either take an entire catalog to work on at a time, or work on
@@ -188,7 +192,7 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
                                  "plugin. Value {} : Minimum {}".format(*errorTuple))
 
     @lsst.pipe.base.timeMethod
-    def run(self, diaObjectCat, diaSourceCat, updatedDiaObjectIds, exposure):
+    def run(self, diaObjectCat, diaSourceCat, updatedDiaObjectIds, filterName):
         """The entry point for the DIA catalog calculation task.
 
         Run method both updates the values in the diaObjectCat and appends
@@ -204,8 +208,8 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
             should be indexed on `["diaObjectId", "filterName", "diaSourceId"]`
         updatedDiaObjectIds : `numpy.ndarray`
             Integer ids of the DiaObjects to update and create.
-        exposure : `lsst.afw.image.Exposure`
-            .
+        filterName : `str`
+            String name of the filter being processed.
 
         Returns
         -------
@@ -214,13 +218,13 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
         return self.callCompute(diaObjectCat,
                                 diaSourceCat,
                                 updatedDiaObjectIds,
-                                exposure)
+                                filterName)
 
     def callCompute(self,
                     diaObjectCat,
                     diaSourceCat,
                     updatedDiaObjectIds,
-                    exposure):
+                    filterName):
         """Run each of the plugins on the catalog.
 
         Parameters
@@ -233,8 +237,6 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
             False,
             index=diaObjectCat.index,
             columns=["used"])
-
-        filterName = exposure.getFilter().getName()
 
         updatedDiaObjects = []
 
@@ -271,7 +273,7 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
                 for plug in self.executionDict[runlevel].single:
                     with CCContext(plug, updatedDiaObject, self.log):
                         plug.calculate(diaObject=updatedDiaObject,
-                                       disSources=objDiaSources,
+                                       diaSources=objDiaSources,
                                        filterDiaSources=filterObjDiaSources,
                                        psFluxes=psFluxes,
                                        psFluxErrs=psFluxErrs,
@@ -281,14 +283,15 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
 
             updatedDiaObjects.append(updatedDiaObject)
 
-            updatedDiaObjects = pd.DataFrame(data=updatedDiaObjects)
+        updatedDiaObjects = pd.DataFrame(data=updatedDiaObjects)
 
-            return lsst.pipe.base.Struct(
-                diaObjectCat=diaObjectCat[~diaObjectUsed["used"]].append(
-                    updatedDiaObjects.set_index("diaObjectId")),
-                updatedDiaObjects=updatedDiaObjects)
+        return lsst.pipe.base.Struct(
+            diaObjectCat=diaObjectCat[~diaObjectUsed["used"]].append(
+                updatedDiaObjects.set_index("diaObjectId"),
+                sort=False),
+            updatedDiaObjects=updatedDiaObjects)
 
-    def _initialize_dia_object(objId):
+    def _initialize_dia_object(self, objId):
         """
         """
         new_dia_object = {"diaObjectId": objId,
