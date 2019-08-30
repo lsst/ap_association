@@ -46,9 +46,9 @@ class NumberNewDiaObjectsMetricTask(MetadataMetricTask):
 
         Parameters
         ----------
-        values : sequence [`dict` [`str`, `int` or `None`]]
-            A list where each element corresponds to a metadata object passed
-            to `run`. Each `dict` has the following key:
+        values : `dict` [`str`, `int` or `None`]
+            A `dict` representation of the metadata. Each `dict` has the
+            following key:
 
             ``"newObjects"``
                 The number of new objects created for this image (`int`
@@ -60,19 +60,14 @@ class NumberNewDiaObjectsMetricTask(MetadataMetricTask):
         measurement : `lsst.verify.Measurement` or `None`
             The total number of new objects.
         """
-        nNew = 0
-        associated = False
-        for value in values:
-            if value["newObjects"] is not None:
-                try:
-                    nNew += value["newObjects"]
-                except TypeError as e:
-                    raise MetricComputationError("Corrupted value of numNewDiaObjects") from e
-                associated = True
-
-        if associated:
-            return Measurement(self.getOutputMetricName(self.config),
-                               nNew * u.count)
+        if values["newObjects"] is not None:
+            try:
+                nNew = int(values["newObjects"])
+            except (ValueError, TypeError) as e:
+                raise MetricComputationError("Corrupted value of numNewDiaObjects") from e
+            else:
+                return Measurement(self.getOutputMetricName(self.config),
+                                   nNew * u.count)
         else:
             self.log.info("Nothing to do: no association results found.")
             return None
@@ -98,9 +93,9 @@ class NumberUnassociatedDiaObjectsMetricTask(MetadataMetricTask):
 
         Parameters
         ----------
-        values : sequence [`dict` [`str`, `int` or `None`]]
-            A list where each element corresponds to a metadata object passed
-            to `run`. Each `dict` has the following key:
+        values : `dict` [`str`, `int` or `None`]
+            A `dict` representation of the metadata. Each `dict` has the
+            following key:
 
             ``"unassociatedObjects"``
                 The number of DIAObjects not associated with a DiaSource in
@@ -112,19 +107,14 @@ class NumberUnassociatedDiaObjectsMetricTask(MetadataMetricTask):
         measurement : `lsst.verify.Measurement` or `None`
             The total number of unassociated objects.
         """
-        nNew = 0
-        associated = False
-        for value in values:
-            if value["unassociatedObjects"] is not None:
-                try:
-                    nNew += value["unassociatedObjects"]
-                except TypeError as e:
-                    raise MetricComputationError("Corrupted value of numUnassociatedDiaObjects") from e
-                associated = True
-
-        if associated:
-            return Measurement(self.getOutputMetricName(self.config),
-                               nNew * u.count)
+        if values["unassociatedObjects"] is not None:
+            try:
+                nNew = int(values["unassociatedObjects"])
+            except (ValueError, TypeError) as e:
+                raise MetricComputationError("Corrupted value of numUnassociatedDiaObjects") from e
+            else:
+                return Measurement(self.getOutputMetricName(self.config),
+                                   nNew * u.count)
         else:
             self.log.info("Nothing to do: no association results found.")
             return None
@@ -150,9 +140,9 @@ class FractionUpdatedDiaObjectsMetricTask(MetadataMetricTask):
 
         Parameters
         ----------
-        values : sequence [`dict` [`str`, `int` or `None`]]
-            A list where each element corresponds to a metadata object passed
-            to `run`. Each `dict` has the following keys:
+        values : `dict` [`str`, `int` or `None`]
+            A `dict` representation of the metadata. Each `dict` has the
+            following keys:
 
             ``"updatedObjects"``
                 The number of DIAObjects updated for this image (`int` or
@@ -168,27 +158,22 @@ class FractionUpdatedDiaObjectsMetricTask(MetadataMetricTask):
         measurement : `lsst.verify.Measurement` or `None`
             The total number of unassociated objects.
         """
-        nUpdated = 0
-        nUnassociated = 0
-        associated = False
-        for value in values:
-            if value["updatedObjects"] is not None \
-                    and value["unassociatedObjects"] is not None:
-                try:
-                    nUpdated += value["updatedObjects"]
-                    nUnassociated += value["unassociatedObjects"]
-                except TypeError as e:
-                    raise MetricComputationError("Corrupted value of numUpdatedDiaObjects "
-                                                 "or numUnassociatedDiaObjects") from e
-                associated = True
-
-        if associated:
-            if nUpdated <= 0 and nUnassociated <= 0:
-                raise MetricComputationError("No pre-existing DIAObjects; can't compute updated fraction.")
+        if values["updatedObjects"] is not None \
+                and values["unassociatedObjects"] is not None:
+            try:
+                nUpdated = int(values["updatedObjects"])
+                nUnassociated = int(values["unassociatedObjects"])
+            except (ValueError, TypeError) as e:
+                raise MetricComputationError("Corrupted value of numUpdatedDiaObjects "
+                                             "or numUnassociatedDiaObjects") from e
             else:
-                fraction = nUpdated / (nUpdated + nUnassociated)
-                return Measurement(self.getOutputMetricName(self.config),
-                                   fraction * u.dimensionless_unscaled)
+                if nUpdated <= 0 and nUnassociated <= 0:
+                    raise MetricComputationError(
+                        "No pre-existing DIAObjects; can't compute updated fraction.")
+                else:
+                    fraction = nUpdated / (nUpdated + nUnassociated)
+                    return Measurement(self.getOutputMetricName(self.config),
+                                       fraction * u.dimensionless_unscaled)
         else:
             self.log.info("Nothing to do: no association results found.")
             return None
