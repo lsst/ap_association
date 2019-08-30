@@ -509,10 +509,6 @@ class AssociationTask(pipeBase.Task):
         dia_sources = ppdb.getDiaSources(updated_obj_ids, dateTime.toPython(),
                                          return_pandas=True)
         dia_sources.set_index(["diaObjectId", "diaSourceId"], inplace=True)
-        dia_sources["psFlux"].replace(None, np.nan, inplace=True)
-        dia_sources["psFluxErr"].replace(None, np.nan, inplace=True)
-        dia_sources["totFlux"].replace(None, np.nan, inplace=True)
-        dia_sources["totFluxErr"].replace(None, np.nan, inplace=True)
 
         updated_dia_objects = []
 

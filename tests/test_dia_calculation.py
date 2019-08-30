@@ -32,8 +32,9 @@ import lsst.utils.tests
 
 
 @register("testDiaPlugin")
-class TestDiaPlugin(DiaObjectCalculationPlugin):
-
+class DiaPlugin(DiaObjectCalculationPlugin):
+    """Simple mean function.
+    """
     def __init__(self, config, name, metadata):
         DiaObjectCalculationPlugin.__init__(self, config, name, metadata)
 
@@ -49,8 +50,9 @@ class TestDiaPlugin(DiaObjectCalculationPlugin):
 
 
 @register("testDependentDiaPlugin")
-class TestDependentDiaPlugin(DiaObjectCalculationPlugin):
-
+class DependentDiaPlugin(DiaObjectCalculationPlugin):
+    """Simple calculation using the previously calculated mean.
+    """
     def __init__(self, config, name, metadata):
         DiaObjectCalculationPlugin.__init__(self, config, name, metadata)
 
@@ -59,8 +61,6 @@ class TestDependentDiaPlugin(DiaObjectCalculationPlugin):
         return cls.FLUX_MOMMENTS_CALCULATED
 
     def calculate(self, diaObject, psFluxes, psFluxErrs, **kwargs):
-        """
-        """
         diaObject["chiFlux"] = np.sum(
             ((psFluxes - diaObject["meanFlux"]) / psFluxErrs) ** 2)
 
@@ -68,10 +68,12 @@ class TestDependentDiaPlugin(DiaObjectCalculationPlugin):
 class TestMeanPosition(unittest.TestCase):
 
     def setUp(self):
+        # Create diaObjects
         self.diaObjects = pd.DataFrame(
             data=[{"diaObjectId": objId} for objId in range(5)])
         self.diaObjects.set_index("diaObjectId", inplace=True)
 
+        # Create diaSources from "previous runs" and newly created ones.
         diaSources = [{"diaSourceId": objId, "diaObjectId": objId,
                        "psFlux": 0., "psFluxErr": 1.,
                        "totFlux": 0., "totFluxErr": 1.,
@@ -121,10 +123,12 @@ class TestMeanPosition(unittest.TestCase):
         updatedDiaObjects = results.updatedDiaObjects
         updatedDiaObjects.set_index("diaObjectId", inplace=True)
 
+        # Test the lengths of the output dataframes.
         self.assertEqual(len(diaObjectCat), len(self.diaObjects) + 1)
         self.assertEqual(len(updatedDiaObjects),
                          len(self.updatedDiaObjectIds))
 
+        # Test values stored computed in the task.
         for objId, diaObject in updatedDiaObjects.iterrows():
             if objId == self.newDiaObjectId:
                 self.assertEqual(diaObject["meanFlux"], 1.)
