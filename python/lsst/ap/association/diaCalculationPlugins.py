@@ -104,7 +104,12 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
     def __init__(self, config, name, metadata):
         DiaObjectCalculationPlugin.__init__(self, config, name, metadata)
 
-    def calculate(self, diaObject, psFluxes, psFluxErrs, filterName, **kwargs):
+    def calculate(self,
+                  diaObject,
+                  diaSources,
+                  filterDiaFluxes,
+                  filterName,
+                  **kwargs):
         """Compute the mean ra/dec position of the diaObject given the
         diaSource locations.
 
@@ -112,25 +117,28 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
         ----------
         diaObject : `dict`
             Summary object to store values in.
-        psFluxes : `numpy.ndarray`
-            Point source fluxes on the difference image trimmed of nans and in
-            one filter.
-        psFluxErrs : `numpy.ndarray`
-            Point source flux errors on the difference image trimmed of nans
-            and in one filter.
+        diaSources : `pandas.DataFrame`
+            DataFrame representing all diaSources associated with this
+            diaObject.
+        filterDiaFluxes : `pandas.DataFrame`
+            DataFrame representing diaSources associated with this
+            diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple name of the filter for the flux being calculated.
         """
-        if len(psFluxes) > 0:
-            psFluxMean = np.average(psFluxes, weights=1 / psFluxErrs ** 2)
-            psFluxMeanErr = np.sqrt(1 / np.sum(1 / psFluxErrs ** 2))
+        if len(filterDiaFluxes) > 0:
+            tot_weight = np.nansum(1 / filterDiaFluxes["psFluxErr"] ** 2)
+            fluxMean = np.nansum(filterDiaFluxes["psFlux"] /
+                                 filterDiaFluxes["psFluxErr"] ** 2)
+            fluxMean /= tot_weight
+            fluxMeanErr = np.sqrt(1 / tot_weight)
         else:
-            psFluxMean = np.nan
-            psFluxMeanErr = np.nan
+            fluxMean = np.nan
+            fluxMeanErr = np.nan
 
-        if np.isfinite(psFluxMean) and np.isfinite(psFluxMeanErr):
-            diaObject["%sPSFluxMean" % filterName] = psFluxMean
-            diaObject["%sPSFluxMeanErr" % filterName] = psFluxMeanErr
+        if np.isfinite(fluxMean) and np.isfinite(fluxMeanErr):
+            diaObject["%sPSFluxMean" % filterName] = fluxMean
+            diaObject["%sPSFluxMeanErr" % filterName] = fluxMeanErr
         else:
             self.fail(diaObject, filterName)
 

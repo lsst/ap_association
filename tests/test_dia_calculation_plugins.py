@@ -93,13 +93,11 @@ class TestWeightedMeanDiaPsFlux(unittest.TestCase):
         diaObject = dict()
         diaSources = pd.DataFrame(data={"psFlux": np.linspace(-1, 1, n_sources),
                                         "psFluxErr": np.ones(n_sources)})
-        psFluxes = diaSources["psFlux"]
-        psFluxErrors = diaSources["psFluxErr"]
 
         mean_flux = WeightedMeanDiaPsFlux(WeightedMeanDiaPsFluxConfig(),
                                           "ap_meanFlux",
                                           None)
-        mean_flux.calculate(diaObject, psFluxes, psFluxErrors, "u")
+        mean_flux.calculate(diaObject, diaSources, diaSources, "u")
 
         self.assertAlmostEqual(diaObject["uPSFluxMean"], 0.0)
         self.assertAlmostEqual(diaObject["uPSFluxMeanErr"], np.sqrt(1 / n_sources))
@@ -111,11 +109,11 @@ class TestWeightedMeanDiaPsFlux(unittest.TestCase):
         self.assertTrue(np.isnan(diaObject["gPSFluxMeanErr"]))
 
         diaObject = dict()
-        psFluxes[4] = np.nan
-        mean_flux.calculate(diaObject, psFluxes, psFluxErrors, "r")
+        diaSources.loc[4, "psFlux"] = np.nan
+        mean_flux.calculate(diaObject, diaSources, diaSources, "r")
 
-        self.assertTrue(np.isnan(diaObject["rPSFluxMean"]))
-        self.assertTrue(np.isnan(diaObject["rPSFluxMeanErr"]))
+        self.assertTrue(~np.isnan(diaObject["rPSFluxMean"]))
+        self.assertTrue(~np.isnan(diaObject["rPSFluxMeanErr"]))
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

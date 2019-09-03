@@ -249,25 +249,16 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
             except KeyError:
                 updatedDiaObject = self._initialize_dia_object(objId)
 
+            # Sub-select diaSources associated with this diaObject.
             objDiaSources = diaSourceCat.loc[objId]
+            # Currently needed as dataFrames loaded from sql do not currently
+            # map Null to NaN for custom queries. This can either stay here
+            # or move to dax_ppdb or ap_association.
+            objDiaSources.replace(to_replace=[None],
+                                  value=np.nan)
+
+            # Sub-select on diaSources observed in the current filter.
             filterObjDiaSources = objDiaSources.loc[filterName]
-
-            psFluxes = filterObjDiaSources["psFlux"]
-            psFluxErrs = filterObjDiaSources["psFluxErr"]
-            noNanMask = np.logical_and(np.isfinite(psFluxes),
-                                       np.logical_and(np.isfinite(psFluxErrs),
-                                                      psFluxErrs > 0))
-            psFluxes = psFluxes[noNanMask]
-            psFluxErrs = psFluxErrs[noNanMask]
-            midpointTais = filterObjDiaSources["midPointTai"][noNanMask]
-
-            totFluxes = filterObjDiaSources["totFlux"]
-            totFluxErrs = filterObjDiaSources["totFluxErr"]
-            noNanMask = np.logical_and(np.isfinite(totFluxes),
-                                       np.logical_and(np.isfinite(totFluxErrs),
-                                                      totFluxErrs > 0))
-            totFluxes = totFluxes[noNanMask]
-            totFluxErrs = totFluxErrs[noNanMask]
 
             for runlevel in sorted(self.executionDict):
                 for plug in self.executionDict[runlevel].single:
@@ -275,11 +266,7 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
                         plug.calculate(diaObject=updatedDiaObject,
                                        diaSources=objDiaSources,
                                        filterDiaSources=filterObjDiaSources,
-                                       psFluxes=psFluxes,
-                                       psFluxErrs=psFluxErrs,
-                                       midpointTais=midpointTais,
-                                       totFluxes=totFluxes,
-                                       totFluxErrs=totFluxErrs)
+                                       filterName=filterName)
 
             updatedDiaObjects.append(updatedDiaObject)
 

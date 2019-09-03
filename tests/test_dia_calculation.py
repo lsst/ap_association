@@ -42,11 +42,18 @@ class DiaPlugin(DiaObjectCalculationPlugin):
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
-    def calculate(self, diaObject, psFluxes, **kwargs):
+    def calculate(self,
+                  diaObject,
+                  diaSources,
+                  filterDiaSources,
+                  filterName,
+                  **kwargs):
         """
         """
-        diaObject["meanFlux"] = np.mean(psFluxes)
-        diaObject["stdFlux"] = np.std(psFluxes, ddof=1)
+        diaObject["%sMeanFlux" % filterName] = np.mean(
+            filterDiaSources["psFlux"])
+        diaObject["%sStdFlux" % filterName] = np.std(
+            filterDiaSources["psFlux"], ddof=1)
 
 
 @register("testDependentDiaPlugin")
@@ -60,9 +67,16 @@ class DependentDiaPlugin(DiaObjectCalculationPlugin):
     def getExecutionOrder(cls):
         return cls.FLUX_MOMMENTS_CALCULATED
 
-    def calculate(self, diaObject, psFluxes, psFluxErrs, **kwargs):
-        diaObject["chiFlux"] = np.sum(
-            ((psFluxes - diaObject["meanFlux"]) / psFluxErrs) ** 2)
+    def calculate(self,
+                  diaObject,
+                  diaSources,
+                  filterDiaSources,
+                  filterName,
+                  **kwargs):
+        diaObject["%sChiFlux" % filterName] = np.sum(
+            ((filterDiaSources["psFlux"] -
+              diaObject["%sMeanFlux" % filterName]) /
+             filterDiaSources["psFluxErr"]) ** 2)
 
 
 class TestMeanPosition(unittest.TestCase):
@@ -122,7 +136,6 @@ class TestMeanPosition(unittest.TestCase):
         diaObjectCat = results.diaObjectCat
         updatedDiaObjects = results.updatedDiaObjects
         updatedDiaObjects.set_index("diaObjectId", inplace=True)
-
         # Test the lengths of the output dataframes.
         self.assertEqual(len(diaObjectCat), len(self.diaObjects) + 1)
         self.assertEqual(len(updatedDiaObjects),
@@ -131,18 +144,18 @@ class TestMeanPosition(unittest.TestCase):
         # Test values stored computed in the task.
         for objId, diaObject in updatedDiaObjects.iterrows():
             if objId == self.newDiaObjectId:
-                self.assertEqual(diaObject["meanFlux"], 1.)
-                self.assertTrue(np.isnan(diaObject["stdFlux"]))
-                self.assertAlmostEqual(diaObject["chiFlux"], 0.0)
+                self.assertEqual(diaObject["gMeanFlux"], 1.)
+                self.assertTrue(np.isnan(diaObject["gStdFlux"]))
+                self.assertAlmostEqual(diaObject["gChiFlux"], 0.0)
             elif objId == 2:
-                self.assertAlmostEqual(diaObject["meanFlux"], 0.0)
-                self.assertTrue(np.isnan(diaObject["stdFlux"]))
-                self.assertAlmostEqual(diaObject["chiFlux"], 0.0)
+                self.assertAlmostEqual(diaObject["gMeanFlux"], 0.0)
+                self.assertTrue(np.isnan(diaObject["gStdFlux"]))
+                self.assertAlmostEqual(diaObject["gChiFlux"], 0.0)
             else:
-                self.assertAlmostEqual(diaObject["meanFlux"], 0.5)
-                self.assertAlmostEqual(diaObject["stdFlux"],
+                self.assertAlmostEqual(diaObject["gMeanFlux"], 0.5)
+                self.assertAlmostEqual(diaObject["gStdFlux"],
                                        0.7071067811865476)
-                self.assertAlmostEqual(diaObject["chiFlux"], 0.5)
+                self.assertAlmostEqual(diaObject["gChiFlux"], 0.5)
 
 
 def setup_module(module):
