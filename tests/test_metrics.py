@@ -58,7 +58,7 @@ class TestNewDiaObjects(MetadataMetricTestCase):
 
     def testValid(self):
         metadata = _makeAssociationMetadata()
-        result = self.task.run([metadata])
+        result = self.task.run(metadata)
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.numNewDiaObjects"))
@@ -66,24 +66,19 @@ class TestNewDiaObjects(MetadataMetricTestCase):
 
     def testNoNew(self):
         metadata = _makeAssociationMetadata(numNew=0)
-        result = self.task.run([metadata])
+        result = self.task.run(metadata)
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.numNewDiaObjects"))
         self.assertEqual(meas.quantity, 0.0 * u.count)
 
     def testMissingData(self):
-        result = self.task.run([None])
-        meas = result.measurement
-        self.assertIsNone(meas)
-
-    def testNoDataExpected(self):
-        result = self.task.run([])
+        result = self.task.run(None)
         meas = result.measurement
         self.assertIsNone(meas)
 
     def testAssociationFailed(self):
-        result = self.task.run([PropertySet()])
+        result = self.task.run(PropertySet())
         meas = result.measurement
         self.assertIsNone(meas)
 
@@ -92,7 +87,7 @@ class TestNewDiaObjects(MetadataMetricTestCase):
         metadata.set("association.numNewDiaObjects", "Ultimate Answer")
 
         with self.assertRaises(MetricComputationError):
-            self.task.run([metadata])
+            self.task.run(metadata)
 
     def testGetInputDatasetTypes(self):
         config = self.taskClass.ConfigClass()
@@ -104,24 +99,13 @@ class TestNewDiaObjects(MetadataMetricTestCase):
 
     def testFineGrainedMetric(self):
         metadata = _makeAssociationMetadata()
-        inputData = {"metadata": [metadata]}
-        inputDataIds = {"metadata": [{"visit": 42, "ccd": 1}]}
+        inputData = {"metadata": metadata}
+        inputDataIds = {"metadata": {"visit": 42, "ccd": 1}}
         outputDataId = {"measurement": {"visit": 42, "ccd": 1}}
-        measDirect = self.task.run([metadata]).measurement
+        measDirect = self.task.run(metadata).measurement
         measIndirect = self.task.adaptArgsAndRun(inputData, inputDataIds, outputDataId).measurement
 
         assert_quantity_allclose(measIndirect.quantity, measDirect.quantity)
-
-    def testCoarseGrainedMetric(self):
-        metadata = _makeAssociationMetadata()
-        nCcds = 3
-        inputData = {"metadata": [metadata] * nCcds}
-        inputDataIds = {"metadata": [{"visit": 42, "ccd": x} for x in range(nCcds)]}
-        outputDataId = {"measurement": {"visit": 42}}
-        measDirect = self.task.run([metadata]).measurement
-        measMany = self.task.adaptArgsAndRun(inputData, inputDataIds, outputDataId).measurement
-
-        assert_quantity_allclose(measMany.quantity, nCcds * measDirect.quantity)
 
 
 class TestUnassociatedDiaObjects(MetadataMetricTestCase):
@@ -132,7 +116,7 @@ class TestUnassociatedDiaObjects(MetadataMetricTestCase):
 
     def testValid(self):
         metadata = _makeAssociationMetadata()
-        result = self.task.run([metadata])
+        result = self.task.run(metadata)
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.numUnassociatedDiaObjects"))
@@ -141,24 +125,19 @@ class TestUnassociatedDiaObjects(MetadataMetricTestCase):
 
     def testAllUpdated(self):
         metadata = _makeAssociationMetadata(numUnassociated=0)
-        result = self.task.run([metadata])
+        result = self.task.run(metadata)
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.numUnassociatedDiaObjects"))
         self.assertEqual(meas.quantity, 0.0 * u.count)
 
     def testMissingData(self):
-        result = self.task.run([None])
-        meas = result.measurement
-        self.assertIsNone(meas)
-
-    def testNoDataExpected(self):
-        result = self.task.run([])
+        result = self.task.run(None)
         meas = result.measurement
         self.assertIsNone(meas)
 
     def testAssociationFailed(self):
-        result = self.task.run([PropertySet()])
+        result = self.task.run(PropertySet())
         meas = result.measurement
         self.assertIsNone(meas)
 
@@ -167,7 +146,7 @@ class TestUnassociatedDiaObjects(MetadataMetricTestCase):
         metadata.set("association.numUnassociatedDiaObjects", "Ultimate Answer")
 
         with self.assertRaises(MetricComputationError):
-            self.task.run([metadata])
+            self.task.run(metadata)
 
     def testGetInputDatasetTypes(self):
         config = self.taskClass.ConfigClass()
@@ -179,24 +158,13 @@ class TestUnassociatedDiaObjects(MetadataMetricTestCase):
 
     def testFineGrainedMetric(self):
         metadata = _makeAssociationMetadata()
-        inputData = {"metadata": [metadata]}
-        inputDataIds = {"metadata": [{"visit": 42, "ccd": 1}]}
+        inputData = {"metadata": metadata}
+        inputDataIds = {"metadata": {"visit": 42, "ccd": 1}}
         outputDataId = {"measurement": {"visit": 42, "ccd": 1}}
-        measDirect = self.task.run([metadata]).measurement
+        measDirect = self.task.run(metadata).measurement
         measIndirect = self.task.adaptArgsAndRun(inputData, inputDataIds, outputDataId).measurement
 
         assert_quantity_allclose(measIndirect.quantity, measDirect.quantity)
-
-    def testCoarseGrainedMetric(self):
-        metadata = _makeAssociationMetadata()
-        nCcds = 3
-        inputData = {"metadata": [metadata] * nCcds}
-        inputDataIds = {"metadata": [{"visit": 42, "ccd": x} for x in range(nCcds)]}
-        outputDataId = {"measurement": {"visit": 42}}
-        measDirect = self.task.run([metadata]).measurement
-        measMany = self.task.adaptArgsAndRun(inputData, inputDataIds, outputDataId).measurement
-
-        assert_quantity_allclose(measMany.quantity, nCcds * measDirect.quantity)
 
 
 class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
@@ -207,7 +175,7 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
 
     def testValid(self):
         metadata = _makeAssociationMetadata()
-        result = self.task.run([metadata])
+        result = self.task.run(metadata)
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.fracUpdatedDiaObjects"))
@@ -217,7 +185,7 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
 
     def testNoUpdated(self):
         metadata = _makeAssociationMetadata(numUpdated=0)
-        result = self.task.run([metadata])
+        result = self.task.run(metadata)
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.fracUpdatedDiaObjects"))
@@ -225,7 +193,7 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
 
     def testAllUpdated(self):
         metadata = _makeAssociationMetadata(numUnassociated=0)
-        result = self.task.run([metadata])
+        result = self.task.run(metadata)
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.fracUpdatedDiaObjects"))
@@ -234,20 +202,15 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
     def testNoObjects(self):
         metadata = _makeAssociationMetadata(numUpdated=0, numUnassociated=0)
         with self.assertRaises(MetricComputationError):
-            self.task.run([metadata])
+            self.task.run(metadata)
 
     def testMissingData(self):
-        result = self.task.run([None])
-        meas = result.measurement
-        self.assertIsNone(meas)
-
-    def testNoDataExpected(self):
-        result = self.task.run([])
+        result = self.task.run(None)
         meas = result.measurement
         self.assertIsNone(meas)
 
     def testAssociationFailed(self):
-        result = self.task.run([PropertySet()])
+        result = self.task.run(PropertySet())
         meas = result.measurement
         self.assertIsNone(meas)
 
@@ -256,7 +219,7 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
         metadata.set("association.numUnassociatedDiaObjects", "Ultimate Answer")
 
         with self.assertRaises(MetricComputationError):
-            self.task.run([metadata])
+            self.task.run(metadata)
 
     def testGetInputDatasetTypes(self):
         config = self.taskClass.ConfigClass()
@@ -268,24 +231,13 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
 
     def testFineGrainedMetric(self):
         metadata = _makeAssociationMetadata()
-        inputData = {"metadata": [metadata]}
-        inputDataIds = {"metadata": [{"visit": 42, "ccd": 1}]}
+        inputData = {"metadata": metadata}
+        inputDataIds = {"metadata": {"visit": 42, "ccd": 1}}
         outputDataId = {"measurement": {"visit": 42, "ccd": 1}}
-        measDirect = self.task.run([metadata]).measurement
+        measDirect = self.task.run(metadata).measurement
         measIndirect = self.task.adaptArgsAndRun(inputData, inputDataIds, outputDataId).measurement
 
         assert_quantity_allclose(measIndirect.quantity, measDirect.quantity)
-
-    def testCoarseGrainedMetric(self):
-        metadata = _makeAssociationMetadata()
-        nCcds = 3
-        inputData = {"metadata": [metadata] * nCcds}
-        inputDataIds = {"metadata": [{"visit": 42, "ccd": x} for x in range(nCcds)]}
-        outputDataId = {"measurement": {"visit": 42}}
-        measDirect = self.task.run([metadata]).measurement
-        measMany = self.task.adaptArgsAndRun(inputData, inputDataIds, outputDataId).measurement
-
-        assert_quantity_allclose(measMany.quantity, measDirect.quantity)
 
 
 class TestTotalUnassociatedObjects(PpdbMetricTestCase):
@@ -329,7 +281,7 @@ class TestTotalUnassociatedObjects(PpdbMetricTestCase):
         # Do the patch here to avoid passing extra arguments to superclass tests
 
     def testValid(self):
-        result = self.task.adaptArgsAndRun({"dbInfo": [{"test_value": 42}]},
+        result = self.task.adaptArgsAndRun({"dbInfo": {"test_value": 42}},
                                            {"dbInfo": {}},
                                            {"measurement": {}})
         meas = result.measurement
@@ -338,7 +290,7 @@ class TestTotalUnassociatedObjects(PpdbMetricTestCase):
         self.assertEqual(meas.quantity, 42 * u.count)
 
     def testAllAssociated(self):
-        result = self.task.adaptArgsAndRun({"dbInfo": [{"test_value": 0}]},
+        result = self.task.adaptArgsAndRun({"dbInfo": {"test_value": 0}},
                                            {"dbInfo": {}},
                                            {"measurement": {}})
         meas = result.measurement
