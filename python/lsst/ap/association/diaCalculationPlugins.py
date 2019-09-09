@@ -47,9 +47,6 @@ class MeanDiaPosition(DiaObjectCalculationPlugin):
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
-    def __init__(self, config, name, metadata):
-        DiaObjectCalculationPlugin.__init__(self, config, name, metadata)
-
     def calculate(self, diaObject, diaSources, **kwargs):
         """Compute the mean ra/dec position of the diaObject given the
         diaSource locations.
@@ -61,9 +58,9 @@ class MeanDiaPosition(DiaObjectCalculationPlugin):
         diaSources : `pandas.DataFrame`
             Catalog of DiaSources summarized by this DiaObject.
         """
-        coordList = [geom.SpherePoint(src["ra"], src["decl"], geom.degrees)
-                     for idx, src in diaSources.iterrows()]
-        aveCoord = geom.averageSpherePoint(coordList)
+        aveCoord = geom.averageSpherePoint(
+            list(geom.SpherePoint(src["ra"], src["decl"], geom.degrees)
+                 for idx, src in diaSources.iterrows()))
         if not (np.isfinite(aveCoord.getRa().asDegrees()) and
                 np.isfinite(aveCoord.getDec().asDegrees())):
             self.fail(diaObject)
@@ -101,17 +98,13 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
-    def __init__(self, config, name, metadata):
-        DiaObjectCalculationPlugin.__init__(self, config, name, metadata)
-
     def calculate(self,
                   diaObject,
                   diaSources,
                   filterDiaFluxes,
                   filterName,
                   **kwargs):
-        """Compute the mean ra/dec position of the diaObject given the
-        diaSource locations.
+        """Compute the weighted mean and mean error of the point source flux.
 
         Parameters
         ----------

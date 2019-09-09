@@ -35,9 +35,6 @@ import lsst.utils.tests
 class DiaPlugin(DiaObjectCalculationPlugin):
     """Simple mean function.
     """
-    def __init__(self, config, name, metadata):
-        DiaObjectCalculationPlugin.__init__(self, config, name, metadata)
-
     @classmethod
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
@@ -60,12 +57,9 @@ class DiaPlugin(DiaObjectCalculationPlugin):
 class DependentDiaPlugin(DiaObjectCalculationPlugin):
     """Simple calculation using the previously calculated mean.
     """
-    def __init__(self, config, name, metadata):
-        DiaObjectCalculationPlugin.__init__(self, config, name, metadata)
-
     @classmethod
     def getExecutionOrder(cls):
-        return cls.FLUX_MOMMENTS_CALCULATED
+        return cls.FLUX_MOMENTS_CALCULATED
 
     def calculate(self,
                   diaObject,

@@ -42,7 +42,7 @@ __all__ = ("DiaObjectCalculationPlugin", "DiaObjectCalculationPluginConfig",
 
 
 class DiaObjectCalculationPluginConfig(CatalogCalculationPluginConfig):
-    """Default configuration class DIA catalog calculation plugins.
+    """Default configuration class for DIA catalog calculation plugins.
     """
     pass
 
@@ -62,15 +62,15 @@ class DiaObjectCalculationPlugin(CatalogCalculationPlugin):
         Plugin metadata that will be attached to the output catalog
     """
 
-    ConfigClass = DiaObjectCalculationPluginConfig  # documentation inherited
+    ConfigClass = DiaObjectCalculationPluginConfig
 
     registry = PluginRegistry(DiaObjectCalculationPluginConfig)
     """List of available plugins (`lsst.meas.base.PluginRegistry`).
     """
 
+    FLUX_MOMENTS_CALCULATED = 5.0
     """Add order after flux means and stds are calculated.
     """
-    FLUX_MOMMENTS_CALCULATED = 5.0
 
     plugType = 'single'
     """Does the plugin operate on a single source or the whole catalog (`str`)?
@@ -87,6 +87,7 @@ class DiaObjectCalculationPlugin(CatalogCalculationPlugin):
     @classmethod
     def getExecutionOrder(cls):
         r"""Used to set the relative order of plugin execution.
+
         The values returned by `getExecutionOrder` are compared across all
         plugins, and smaller numbers run first.
 
@@ -98,8 +99,14 @@ class DiaObjectCalculationPlugin(CatalogCalculationPlugin):
         """
         raise NotImplementedError()
 
-    def calculate(self, cat, **kwargs):
+    def calculate(self,
+                  diaObject,
+                  diaSources,
+                  filterDiaFluxes=None,
+                  filterName=None,
+                  **kwargs):
         """Perform the calculation specified by this plugin.
+
         This method can either be used to operate on a single catalog record
         or a whole catalog, populating it with the output defined by this
         plugin.
@@ -109,10 +116,16 @@ class DiaObjectCalculationPlugin(CatalogCalculationPlugin):
 
         Parameters
         ----------
-        cat : `lsst.afw.table.SourceCatalog` or `lsst.afw.table.SourceRecord`
-            May either be a `~lsst.afw.table.SourceCatalog` or a single
-            `~lsst.afw.table.SourceRecord`, depending on the plugin type. Will
-            be updated in place to contain the results of plugin execution.
+        diaObject : `dict`
+            Summary object to store values in.
+        diaSources : `pandas.DataFrame`
+            DataFrame representing all diaSources associated with this
+            diaObject.
+        filterDiaFluxes : `pandas.DataFrame`
+            DataFrame representing diaSources associated with this
+            diaObject that are observed in the band pass ``filterName``.
+        filterName : `str`
+            Simple name of the filter for the flux being calculated.
         **kwargs
             Any additional keyword arguments that may be passed to the plugin.
         """
@@ -121,6 +134,7 @@ class DiaObjectCalculationPlugin(CatalogCalculationPlugin):
 
 class DiaObjectCalculationConfig(CatalogCalculationConfig):
     """Config class for the catalog calculation driver task.
+
     Specifies which plugins will execute when the `CatalogCalculationTask`
     associated with this configuration is run.
     """
@@ -133,10 +147,21 @@ class DiaObjectCalculationConfig(CatalogCalculationConfig):
 
 
 class DiaObjectCalculationTask(CatalogCalculationTask):
-    """Run plugins which operate on a catalog of sources.
+    """Run plugins which operate on a catalog of DIA sources.
+
     This task facilitates running plugins which will operate on a source
-    catalog. These plugins may do things such as classifynig an object based
+    catalog. These plugins may do things such as classifying an object based
     on source record entries inserted during a measurement task.
+
+    This task differs from CatalogCaculationTask in the following ways:
+
+    -No multi mode is available for pluggins. All pluggins are assumed to run
+     in single mode.
+
+    -Input and output catalog types are assumed to be `pandas.DataFrames` with
+     columns following those used in the Ppdb.
+
+    -
 
     Parameters
     ----------
@@ -168,7 +193,7 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
         """Initialize the plugins according to the configuration.
         """
 
-        pluginType = namedtuple('pluginType', 'single multi')
+        pluginType = namedtuple('pluginType', 'single')
         self.executionDict = {}
         # Read the properties for each plugin. Allocate a dictionary entry for
         # each run level. Verify that the plugins are above the minimum run
@@ -177,14 +202,18 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
         # to later be run appropriately
         for executionOrder, name, config, PluginClass in sorted(self.config.plugins.apply()):
             if executionOrder not in self.executionDict:
-                self.executionDict[executionOrder] = pluginType(single=[], multi=[])
+                self.executionDict[executionOrder] = pluginType(single=[])
             if PluginClass.getExecutionOrder() >= BasePlugin.DEFAULT_CATALOGCALCULATION:
                 plug = PluginClass(config, name, metadata=self.plugMetadata)
                 self.plugins[name] = plug
                 if plug.plugType == 'single':
                     self.executionDict[executionOrder].single.append(plug)
                 elif plug.plugType == 'multi':
-                    self.executionDict[executionOrder].multi.append(plug)
+                    errorTuple = (PluginClass,)
+                    raise ValueError(
+                        "{} requested `multi` for execution type. `multi` is "
+                        "not supported by DiaObjectCalculationTask. Please "
+                        "use `single`.".format(*errorTuple))
             else:
                 errorTuple = (PluginClass, PluginClass.getExecutionOrder(),
                               BasePlugin.DEFAULT_CATALOGCALCULATION)
@@ -204,8 +233,9 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
             DiaObjects to update values of and append new objects to. DataFrame
             should be indexed on "diaObjectId"
         diaSourceCat : `pandas.DataFrame`
-            DiaSources associated with the DiaObjects in diaObjectCat. DataFrame
-            should be indexed on `["diaObjectId", "filterName", "diaSourceId"]`
+            DiaSources associated with the DiaObjects in diaObjectCat.
+            DataFrame should be indexed on
+            `["diaObjectId", "filterName", "diaSourceId"]`
         updatedDiaObjectIds : `numpy.ndarray`
             Integer ids of the DiaObjects to update and create.
         filterName : `str`
@@ -214,6 +244,14 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
         Returns
         -------
         returnStruct : `lsst.pipe.base.Struct`
+            Struct containing:
+
+            ``diaObjectCat``
+                Full set of DiaObjects including both un-updated and
+                updated/new DiaObjects (`pandas.DataFrame`).
+            ``updatedDiaObjects``
+                Catalog of DiaObjects  that were updated or created by this
+                task (`pandas.DataFrame`).
         """
         return self.callCompute(diaObjectCat,
                                 diaSourceCat,
@@ -229,8 +267,29 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
 
         Parameters
         ----------
-        catalog : `lsst.afw.table.SourceCatalog`
-            The catalog on which the plugins will operate.
+        diaObjectCat : `pandas.DataFrame`
+            DiaObjects to update values of and append new objects to. DataFrame
+            should be indexed on "diaObjectId"
+        diaSourceCat : `pandas.DataFrame`
+            DiaSources associated with the DiaObjects in diaObjectCat.
+            DataFrame should be indexed on
+            ["diaObjectId", "filterName", "diaSourceId"]`
+        updatedDiaObjectIds : `numpy.ndarray`
+            Integer ids of the DiaObjects to update and create.
+        filterName : `str`
+            String name of the filter being processed.
+
+        Returns
+        -------
+        returnStruct : `lsst.pipe.base.Struct`
+            Struct containing:
+
+            ``diaObjectCat``
+                Full set of DiaObjects including both un-updated and
+                updated/new DiaObjects (`pandas.DataFrame`).
+            ``updatedDiaObjects``
+                Catalog of DiaObjects  that were updated or created by this
+                task (`pandas.DataFrame`).
         """
 
         diaObjectUsed = pd.DataFrame(
@@ -279,7 +338,32 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
             updatedDiaObjects=updatedDiaObjects)
 
     def _initialize_dia_object(self, objId):
-        """
+        """Create a new DiaObject with values required to be initialized by the
+        Ppdb.
+
+        Parameters
+        ----------
+        objid : `int`
+            ``diaObjectId`` value for the of the new DiaObject.
+
+        Returns
+        -------
+        diaObject : `dict`
+            Newly created DiaObject with keys:
+
+            ``diaObjectId``
+                Unique DiaObjectId (`int`).
+            ``pmParallaxNdata``
+                Number of data points used for parallax calculation (`int`).
+            ``nearbyObj1``
+                Id of the a nearbyObject in the Object table (`int`).
+            ``nearbyObj2``
+                Id of the a nearbyObject in the Object table (`int`).
+            ``nearbyObj3``
+                Id of the a nearbyObject in the Object table (`int`).
+            ``?PSFluxData``
+                Number of data points used to calculate point source flux
+                summary statistics in each bandpass (`int`).
         """
         new_dia_object = {"diaObjectId": objId,
                           "pmParallaxNdata": 0,

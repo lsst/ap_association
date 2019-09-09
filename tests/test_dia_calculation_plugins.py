@@ -33,9 +33,6 @@ import lsst.utils.tests
 
 class TestMeanPosition(unittest.TestCase):
 
-    def setUp(self):
-        pass
-
     def testCalculate(self):
         """Test that forced source catalogs are successfully created and have
         sensible values.
@@ -81,9 +78,6 @@ class TestMeanPosition(unittest.TestCase):
 
 
 class TestWeightedMeanDiaPsFlux(unittest.TestCase):
-
-    def setUp(self):
-        pass
 
     def testCalculate(self):
         """Test that forced source catalogs are successfully created and have
