@@ -42,6 +42,7 @@ class MeanDiaPosition(DiaObjectCalculationPlugin):
     """
 
     ConfigClass = MeanDiaPositionConfig
+    outputCols = ["ra", "decl"]
 
     @classmethod
     def getExecutionOrder(cls):
@@ -93,6 +94,7 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
     """
 
     ConfigClass = WeightedMeanDiaPsFluxConfig
+    outputCols = ["PSFluxMean", "PSFluxMeanErr"]
 
     @classmethod
     def getExecutionOrder(cls):

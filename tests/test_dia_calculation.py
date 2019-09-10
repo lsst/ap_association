@@ -35,6 +35,8 @@ import lsst.utils.tests
 class DiaPlugin(DiaObjectCalculationPlugin):
     """Simple mean function.
     """
+    outputCols = ["MeanFlux", "StdFlux"]
+
     @classmethod
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
@@ -57,6 +59,9 @@ class DiaPlugin(DiaObjectCalculationPlugin):
 class DependentDiaPlugin(DiaObjectCalculationPlugin):
     """Simple calculation using the previously calculated mean.
     """
+    inputCols = ["MeanFlux"]
+    outputCols = ["ChiFlux"]
+
     @classmethod
     def getExecutionOrder(cls):
         return cls.FLUX_MOMENTS_CALCULATED
@@ -71,6 +76,25 @@ class DependentDiaPlugin(DiaObjectCalculationPlugin):
             ((filterDiaSources["psFlux"] -
               diaObject["%sMeanFlux" % filterName]) /
              filterDiaSources["psFluxErr"]) ** 2)
+
+
+@register("testCollidingDiaPlugin")
+class CollidingDiaPlugin(DiaObjectCalculationPlugin):
+    """Simple calculation using the previously calculated mean.
+    """
+    outputCols = ["MeanFlux"]
+
+    @classmethod
+    def getExecutionOrder(cls):
+        return cls.FLUX_MOMENTS_CALCULATED
+
+    def calculate(self,
+                  diaObject,
+                  diaSources,
+                  filterDiaSources,
+                  filterName,
+                  **kwargs):
+        diaObject["%sMeanFlux" % filterName] = 0.0
 
 
 class TestMeanPosition(unittest.TestCase):
@@ -150,6 +174,21 @@ class TestMeanPosition(unittest.TestCase):
                 self.assertAlmostEqual(diaObject["gStdFlux"],
                                        0.7071067811865476)
                 self.assertAlmostEqual(diaObject["gChiFlux"], 0.5)
+
+    def testConflictingPlugins(self):
+        """Test that code properly exits upon plugin collision.
+        """
+        with self.assertRaises(ValueError):
+            conf = DiaObjectCalculationConfig()
+            conf.plugins = ["testDependentDiaPlugin"]
+            DiaObjectCalculationTask(config=conf)
+
+        with self.assertRaises(ValueError):
+            conf = DiaObjectCalculationConfig()
+            conf.plugins = ["testDiaPlugin",
+                            "testCollidingDiaPlugin",
+                            "testDependentDiaPlugin"]
+            DiaObjectCalculationTask(config=conf)
 
 
 def setup_module(module):

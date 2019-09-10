@@ -81,6 +81,22 @@ class DiaObjectCalculationPlugin(CatalogCalculationPlugin):
     should accept a single source record.
     """
 
+    inputCols = []
+    """DiaObject column names required by the plugin in order to run and
+    complete its calculation. DiaCalculationTask should raise an error is a
+    plugin is instantiated without the needed column available. Input columns
+    should be defined in the DPDD/cat/Ppdb schema. Filter dependent columns
+    should be specified without the filter name perpended to them. eg
+    ``PSFluxMean`` instead of ``uPSFluxMean``.
+    """
+    outputCols = []
+    """DiaObject column names output by the plugin. DiaCalculationTask should
+    raise an error if another pluging is run output to the same column.
+    Output columns should be defined in the DPDD/cat/Ppdb schema. Filter
+    dependent columns should be specified without the filter name perpended to
+    them. eg ``PSFluxMean`` instead of ``uPSFluxMean``.
+    """
+
     def __init__(self, config, name, metadata):
         BasePlugin.__init__(self, config, name)
 
@@ -155,7 +171,7 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
 
     This task differs from CatalogCaculationTask in the following ways:
 
-    -No multi mode is available for pluggins. All pluggins are assumed to run
+    -No multi mode is available for plugins. All plugins are assumed to run
      in single mode.
 
     -Input and output catalog types are assumed to be `pandas.DataFrames` with
@@ -186,6 +202,7 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
             plugMetadata = lsst.daf.base.PropertyList()
         self.plugMetadata = plugMetadata
         self.plugins = PluginMap()
+        self.outputCols = []
 
         self.initializePlugins()
 
@@ -205,6 +222,9 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
                 self.executionDict[executionOrder] = pluginType(single=[])
             if PluginClass.getExecutionOrder() >= BasePlugin.DEFAULT_CATALOGCALCULATION:
                 plug = PluginClass(config, name, metadata=self.plugMetadata)
+
+                self._validatePluginCols(plug)
+
                 self.plugins[name] = plug
                 if plug.plugType == 'single':
                     self.executionDict[executionOrder].single.append(plug)
@@ -219,6 +239,36 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
                               BasePlugin.DEFAULT_CATALOGCALCULATION)
                 raise ValueError("{} has an execution order less than the minimum for an catalogCalculation "
                                  "plugin. Value {} : Minimum {}".format(*errorTuple))
+
+    def _validatePluginCols(self, plug):
+        """Assert that output columns are not duplicated and input columns
+        exist for dependent plugins.
+
+        Parameters
+        ----------
+        plug : `lsst.ap.association.DiaCalculationPlugin`
+            Plugin to test for output collisions and input needs.
+        """
+        for inputName in plug.inputCols:
+            if inputName not in self.outputCols:
+                errorTuple = (plug.name, plug.getExecutionOrder(),
+                              inputName)
+                raise ValueError(
+                    "Plugin, {} with execution order {} requires DiaObject "
+                    "column {} to exist. Check the execution order of the "
+                    "plugin and make sure it runs after a plugin creating "
+                    "the column is run.".format(*errorTuple))
+        for outputName in plug.outputCols:
+            if outputName in self.outputCols:
+                errorTuple = (plug.name, plug.getExecutionOrder(),
+                              outputName)
+                raise ValueError(
+                    "Plugin, {} with execution order {} is attempting to "
+                    "output a column {}, however the column is already being "
+                    "produced by another plugin. Check other plugins for "
+                    "collisions with this one.".format(*errorTuple))
+            else:
+                self.outputCols.append(outputName)
 
     @lsst.pipe.base.timeMethod
     def run(self, diaObjectCat, diaSourceCat, updatedDiaObjectIds, filterName):
