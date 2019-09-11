@@ -24,3 +24,5 @@ from .association import *
 from .diaForcedSource import *
 from .mapApData import *
 from .afwUtils import *
+from .diaCalculation import *
+from .diaCalculationPlugins import *
