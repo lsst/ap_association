@@ -190,6 +190,14 @@ class TestMeanPosition(unittest.TestCase):
                             "testDependentDiaPlugin"]
             DiaObjectCalculationTask(config=conf)
 
+        # Test that ordering in the config does not matter and dependent
+        # plugin is instantiated after independent plugin. Would raise
+        # ValueError on failure.
+        conf = DiaObjectCalculationConfig()
+        conf.plugins = ["testDependentDiaPlugin",
+                        "testDiaPlugin"]
+        DiaObjectCalculationTask(config=conf)
+
 
 def setup_module(module):
     lsst.utils.tests.init()

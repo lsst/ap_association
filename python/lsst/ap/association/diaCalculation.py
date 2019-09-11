@@ -100,21 +100,6 @@ class DiaObjectCalculationPlugin(CatalogCalculationPlugin):
     def __init__(self, config, name, metadata):
         BasePlugin.__init__(self, config, name)
 
-    @classmethod
-    def getExecutionOrder(cls):
-        r"""Used to set the relative order of plugin execution.
-
-        The values returned by `getExecutionOrder` are compared across all
-        plugins, and smaller numbers run first.
-
-        Notes
-        -----
-        `DiaObjectCalculationPlugin`\s must run with
-        `BasePlugin.DEFAULT_CATALOGCALCULATION` or higher.
-        All plugins must implement this method with an appropriate run level
-        """
-        raise NotImplementedError()
-
     def calculate(self,
                   diaObject,
                   diaSources,
@@ -177,7 +162,8 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
     -Input and output catalog types are assumed to be `pandas.DataFrames` with
      columns following those used in the Ppdb.
 
-    -
+    -No schema argument is passed to the plugins. Each plugin specifies
+     output columns and required inputs.
 
     Parameters
     ----------
@@ -275,7 +261,9 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
         """The entry point for the DIA catalog calculation task.
 
         Run method both updates the values in the diaObjectCat and appends
-        newly created DiaObjects to the catalog.
+        newly created DiaObjects to the catalog. For catalog column names
+        see the lsst.cat schema definitions for the DiaObject and DiaSource
+        tables (http://github.com/lsst/cat).
 
         Parameters
         ----------
@@ -315,6 +303,9 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
                     filterName):
         """Run each of the plugins on the catalog.
 
+        For catalog column names see the lsst.cat schema definitions for the
+        DiaObject and DiaSource tables (http://github.com/lsst/cat).
+
         Parameters
         ----------
         diaObjectCat : `pandas.DataFrame`
@@ -322,7 +313,7 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
             should be indexed on "diaObjectId"
         diaSourceCat : `pandas.DataFrame`
             DiaSources associated with the DiaObjects in diaObjectCat.
-            DataFrame should be indexed on
+            DataFrame must be indexed on
             ["diaObjectId", "filterName", "diaSourceId"]`
         updatedDiaObjectIds : `numpy.ndarray`
             Integer ids of the DiaObjects to update and create.
@@ -340,6 +331,11 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
             ``updatedDiaObjects``
                 Catalog of DiaObjects  that were updated or created by this
                 task (`pandas.DataFrame`).
+
+        Raises
+        ------
+        KeyError
+            Raises if `pandas.DataFrame` indexing is not properly set.
         """
 
         diaObjectUsed = pd.DataFrame(

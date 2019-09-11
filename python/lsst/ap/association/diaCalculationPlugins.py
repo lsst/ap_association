@@ -77,7 +77,8 @@ class MeanDiaPosition(DiaObjectCalculationPlugin):
         diaObject : `dict`
             Summary object to store values in.
         error : `BaseException`
-            Error to pass.
+            Error to pass. Kept for consistency with CatologCalculationPlugin.
+            Unused.
         """
         diaObject["ra"] = np.nan
         diaObject["decl"] = np.nan
@@ -119,7 +120,7 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
             DataFrame representing diaSources associated with this
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
-            Simple name of the filter for the flux being calculated.
+            Simple, string name of the filter for the flux being calculated.
         """
         if len(filterDiaFluxes) > 0:
             tot_weight = np.nansum(1 / filterDiaFluxes["psFluxErr"] ** 2)
