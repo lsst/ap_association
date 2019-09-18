@@ -88,14 +88,6 @@ class TestNewDiaObjects(MetadataMetricTestCase):
         with self.assertRaises(MetricComputationError):
             self.task.run(metadata)
 
-    def testGetInputDatasetTypes(self):
-        config = self.taskClass.ConfigClass()
-        config.connections.taskName = "test"
-        types = self.taskClass.getInputDatasetTypes(config)
-        # dict.keys() is a collections.abc.Set, which has a narrower interface than __builtins__.set...
-        self.assertSetEqual(set(types.keys()), {"metadata"})
-        self.assertEqual(types["metadata"], "test_metadata")
-
 
 class TestUnassociatedDiaObjects(MetadataMetricTestCase):
 
@@ -136,14 +128,6 @@ class TestUnassociatedDiaObjects(MetadataMetricTestCase):
 
         with self.assertRaises(MetricComputationError):
             self.task.run(metadata)
-
-    def testGetInputDatasetTypes(self):
-        config = self.taskClass.ConfigClass()
-        config.connections.taskName = "test"
-        types = self.taskClass.getInputDatasetTypes(config)
-        # dict.keys() is a collections.abc.Set, which has a narrower interface than __builtins__.set...
-        self.assertSetEqual(set(types.keys()), {"metadata"})
-        self.assertEqual(types["metadata"], "test_metadata")
 
 
 class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
@@ -199,14 +183,6 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
 
         with self.assertRaises(MetricComputationError):
             self.task.run(metadata)
-
-    def testGetInputDatasetTypes(self):
-        config = self.taskClass.ConfigClass()
-        config.connections.taskName = "test"
-        types = self.taskClass.getInputDatasetTypes(config)
-        # dict.keys() is a collections.abc.Set, which has a narrower interface than __builtins__.set...
-        self.assertSetEqual(set(types.keys()), {"metadata"})
-        self.assertEqual(types["metadata"], "test_metadata")
 
 
 class TestTotalUnassociatedObjects(PpdbMetricTestCase):
@@ -271,14 +247,6 @@ class TestTotalUnassociatedObjects(PpdbMetricTestCase):
     def testFineGrainedMetric(self):
         with self.assertRaises(ValueError):
             self.task.run(self.makeDbInfo(), outputDataId={"visit": 42})
-
-    def testGetInputDatasetTypes(self):
-        config = self.taskClass.ConfigClass()
-        config.connections.dbInfo = "absolutely anything"
-        types = self.taskClass.getInputDatasetTypes(config)
-        # dict.keys() is a collections.abc.Set, which has a narrower interface than __builtins__.set...
-        self.assertSetEqual(set(types.keys()), {"dbInfo"})
-        self.assertEqual(types["dbInfo"], "absolutely anything")
 
 
 # Hack around unittest's hacky test setup system
