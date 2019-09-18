@@ -23,7 +23,6 @@ import unittest
 import unittest.mock
 
 import astropy.units as u
-from astropy.tests.helper import assert_quantity_allclose
 
 import lsst.utils.tests
 from lsst.pex.config import Config
@@ -97,16 +96,6 @@ class TestNewDiaObjects(MetadataMetricTestCase):
         self.assertSetEqual(set(types.keys()), {"metadata"})
         self.assertEqual(types["metadata"], "test_metadata")
 
-    def testFineGrainedMetric(self):
-        metadata = _makeAssociationMetadata()
-        inputData = {"metadata": metadata}
-        inputDataIds = {"metadata": {"visit": 42, "ccd": 1}}
-        outputDataId = {"measurement": {"visit": 42, "ccd": 1}}
-        measDirect = self.task.run(metadata).measurement
-        measIndirect = self.task.adaptArgsAndRun(inputData, inputDataIds, outputDataId).measurement
-
-        assert_quantity_allclose(measIndirect.quantity, measDirect.quantity)
-
 
 class TestUnassociatedDiaObjects(MetadataMetricTestCase):
 
@@ -155,16 +144,6 @@ class TestUnassociatedDiaObjects(MetadataMetricTestCase):
         # dict.keys() is a collections.abc.Set, which has a narrower interface than __builtins__.set...
         self.assertSetEqual(set(types.keys()), {"metadata"})
         self.assertEqual(types["metadata"], "test_metadata")
-
-    def testFineGrainedMetric(self):
-        metadata = _makeAssociationMetadata()
-        inputData = {"metadata": metadata}
-        inputDataIds = {"metadata": {"visit": 42, "ccd": 1}}
-        outputDataId = {"measurement": {"visit": 42, "ccd": 1}}
-        measDirect = self.task.run(metadata).measurement
-        measIndirect = self.task.adaptArgsAndRun(inputData, inputDataIds, outputDataId).measurement
-
-        assert_quantity_allclose(measIndirect.quantity, measDirect.quantity)
 
 
 class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
@@ -228,16 +207,6 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
         # dict.keys() is a collections.abc.Set, which has a narrower interface than __builtins__.set...
         self.assertSetEqual(set(types.keys()), {"metadata"})
         self.assertEqual(types["metadata"], "test_metadata")
-
-    def testFineGrainedMetric(self):
-        metadata = _makeAssociationMetadata()
-        inputData = {"metadata": metadata}
-        inputDataIds = {"metadata": {"visit": 42, "ccd": 1}}
-        outputDataId = {"measurement": {"visit": 42, "ccd": 1}}
-        measDirect = self.task.run(metadata).measurement
-        measIndirect = self.task.adaptArgsAndRun(inputData, inputDataIds, outputDataId).measurement
-
-        assert_quantity_allclose(measIndirect.quantity, measDirect.quantity)
 
 
 class TestTotalUnassociatedObjects(PpdbMetricTestCase):
