@@ -221,13 +221,9 @@ class TestTotalUnassociatedObjects(PpdbMetricTestCase):
         instantiated.
         """
         ppdb = unittest.mock.Mock(Ppdb)
-        try:
-            test_value = dummy_dbInfo["test_value"]
-            ppdb.countUnassociatedObjects = unittest.mock.MagicMock(
-                return_value=test_value)
-        except TypeError:
-            ppdb.countUnassociatedObjects = unittest.mock.MagicMock(
-                return_value=42)
+        test_value = dummy_dbInfo["test_value"]
+        ppdb.countUnassociatedObjects = unittest.mock.MagicMock(
+            return_value=test_value)
         return ppdb
 
     @classmethod
@@ -244,6 +240,10 @@ class TestTotalUnassociatedObjects(PpdbMetricTestCase):
         config = TotalUnassociatedDiaObjectsMetricTask.ConfigClass()
         config.dbLoader.retarget(SimpleDbLoader)
         return TotalUnassociatedDiaObjectsMetricTask(config=config)
+
+    @classmethod
+    def makeDbInfo(cls):
+        return {"test_value": "whatever"}
 
     def setUp(self):
         super().setUp()
@@ -270,7 +270,7 @@ class TestTotalUnassociatedObjects(PpdbMetricTestCase):
 
     def testFineGrainedMetric(self):
         with self.assertRaises(ValueError):
-            self.task.run("DB source", outputDataId={"visit": 42})
+            self.task.run(self.makeDbInfo(), outputDataId={"visit": 42})
 
     def testGetInputDatasetTypes(self):
         config = self.taskClass.ConfigClass()
