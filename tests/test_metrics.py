@@ -29,7 +29,7 @@ from lsst.pex.config import Config
 from lsst.daf.base import PropertySet
 from lsst.dax.ppdb import Ppdb
 from lsst.pipe.base import Task, Struct
-from lsst.verify import Name, Measurement
+from lsst.verify import Name
 from lsst.verify.gen2tasks.testUtils import MetricTaskTestCase
 from lsst.verify.tasks import MetricComputationError
 from lsst.verify.tasks.testUtils import MetadataMetricTestCase, PpdbMetricTestCase
@@ -250,31 +250,27 @@ class TestTotalUnassociatedObjects(PpdbMetricTestCase):
         # Do the patch here to avoid passing extra arguments to superclass tests
 
     def testValid(self):
-        result = self.task.adaptArgsAndRun({"dbInfo": {"test_value": 42}},
-                                           {"dbInfo": {}},
-                                           {"measurement": {}})
+        result = self.task.run({"test_value": 42})
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.totalUnassociatedDiaObjects"))
         self.assertEqual(meas.quantity, 42 * u.count)
 
     def testAllAssociated(self):
-        result = self.task.adaptArgsAndRun({"dbInfo": {"test_value": 0}},
-                                           {"dbInfo": {}},
-                                           {"measurement": {}})
+        result = self.task.run({"test_value": 0})
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.totalUnassociatedDiaObjects"))
         self.assertEqual(meas.quantity, 0.0 * u.count)
 
     def testMissingData(self):
-        result = self.task.adaptArgsAndRun({"dbInfo": None}, {"dbInfo": {}}, {"measurement": {}})
+        result = self.task.run(None)
         meas = result.measurement
         self.assertIsNone(meas)
 
     def testFineGrainedMetric(self):
         with self.assertRaises(ValueError):
-            self.task.adaptArgsAndRun({"dbInfo": "DB source"}, {"dbInfo": {}}, {"measurement": {"visit": 42}})
+            self.task.run("DB source", outputDataId={"visit": 42})
 
     def testGetInputDatasetTypes(self):
         config = self.taskClass.ConfigClass()
@@ -283,23 +279,6 @@ class TestTotalUnassociatedObjects(PpdbMetricTestCase):
         # dict.keys() is a collections.abc.Set, which has a narrower interface than __builtins__.set...
         self.assertSetEqual(set(types.keys()), {"dbInfo"})
         self.assertEqual(types["dbInfo"], "absolutely anything")
-
-    # Override because of non-standard adaptArgsAndRun
-    def testCallAddStandardMetadata(self):
-        dummy = Measurement('foo.bar', 0.0)
-        with unittest.mock.patch.multiple(
-                self.taskClass, autospec=True,
-                makeMeasurement=unittest.mock.DEFAULT,
-                addStandardMetadata=unittest.mock.DEFAULT) as mockDict:
-            mockDict['makeMeasurement'].return_value = Struct(measurement=dummy)
-
-            dataId = {}
-            result = self.task.adaptArgsAndRun(
-                {"dbInfo": "DB Source"},
-                {"dbInfo": dataId},
-                {'measurement': dataId})
-            mockDict['addStandardMetadata'].assert_called_once_with(
-                self.task, result.measurement, dataId)
 
 
 # Hack around unittest's hacky test setup system
