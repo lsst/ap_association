@@ -24,18 +24,16 @@ import pandas as pd
 import unittest
 
 from lsst.ap.association import (
-    MeanDiaPosition,
-    MeanDiaPositionConfig,
-    WeightedMeanDiaPsFlux,
-    WeightedMeanDiaPsFluxConfig)
+    MeanDiaPosition, MeanDiaPositionConfig,
+    WeightedMeanDiaPsFlux, WeightedMeanDiaPsFluxConfig,
+    PercentileDiaPsFlux, PercentileDiaPsFluxConfig)
 import lsst.utils.tests
 
 
 class TestMeanPosition(unittest.TestCase):
 
     def testCalculate(self):
-        """Test that forced source catalogs are successfully created and have
-        sensible values.
+        """Test mean position calculation.
         """
         n_sources = 10
 
@@ -80,8 +78,7 @@ class TestMeanPosition(unittest.TestCase):
 class TestWeightedMeanDiaPsFlux(unittest.TestCase):
 
     def testCalculate(self):
-        """Test that forced source catalogs are successfully created and have
-        sensible values.
+        """Test mean value calculation.
         """
         n_sources = 10
         diaObject = dict()
@@ -95,12 +92,14 @@ class TestWeightedMeanDiaPsFlux(unittest.TestCase):
 
         self.assertAlmostEqual(diaObject["uPSFluxMean"], 0.0)
         self.assertAlmostEqual(diaObject["uPSFluxMeanErr"], np.sqrt(1 / n_sources))
+        self.assertEqual(diaObject["uPSFluxNdata"], n_sources)
 
         diaObject = dict()
         mean_flux.calculate(diaObject, [], [], "g")
 
         self.assertTrue(np.isnan(diaObject["gPSFluxMean"]))
         self.assertTrue(np.isnan(diaObject["gPSFluxMeanErr"]))
+        self.assertEqual(diaObject["gPSFluxNdata"], 0)
 
         diaObject = dict()
         diaSources.loc[4, "psFlux"] = np.nan
@@ -108,6 +107,46 @@ class TestWeightedMeanDiaPsFlux(unittest.TestCase):
 
         self.assertTrue(~np.isnan(diaObject["rPSFluxMean"]))
         self.assertTrue(~np.isnan(diaObject["rPSFluxMeanErr"]))
+        self.assertEqual(diaObject["rPSFluxNdata"], n_sources - 1)
+
+
+class TestPercentileDiaPsFlux(unittest.TestCase):
+
+    def testCalculate(self):
+        """Test flux percentile calculation.
+        """
+        n_sources = 10
+        diaObject = dict()
+        fluxes = np.linspace(-1, 1, n_sources)
+        diaSources = pd.DataFrame(data={"psFlux": fluxes,
+                                        "psFluxErr": np.ones(n_sources)})
+
+        pTileFlux = PercentileDiaPsFlux(PercentileDiaPsFluxConfig(),
+                                        "ap_percentileFlux",
+                                        None)
+        pTileFlux.calculate(diaObject, diaSources, diaSources, "u")
+        for pTile, testVal in zip(pTileFlux.config.percentiles,
+                                  np.nanpercentile(fluxes)):
+            self.assertAlmostEqual(
+                diaObject["uPSFluxPercentile{:02d}".format(pTile)],
+                testVal)
+
+        diaObject = dict()
+        pTileFlux.calculate(diaObject, [], [], "g")
+        for pTile, testVal in zip(pTileFlux.config.percentiles,
+                                  np.nanpercentile(fluxes)):
+            self.assertTrue(np.isnan(
+                diaObject["uPSFluxPercentile{:02d}".format(pTile)]))
+
+        diaObject = dict()
+        diaSources.loc[4, "psFlux"] = np.nan
+        fluxes[4] = np.nan
+        pTileFlux.calculate(diaObject, diaSources, diaSources, "r")
+        for pTile, testVal in zip(pTileFlux.config.percentiles,
+                                  np.nanpercentile(fluxes)):
+            self.assertAlmostEqual(
+                diaObject["uPSFluxPercentile{:02d}".format(pTile)],
+                testVal)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
