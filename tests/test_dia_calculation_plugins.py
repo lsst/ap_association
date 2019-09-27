@@ -35,7 +35,8 @@ from lsst.ap.association import (
     SkewDiaPsFlux, SkewDiaPsFluxConfig,
     MinMaxDiaPsFlux, MinMaxDiaPsFluxConfig,
     MaxSlopeDiaPsFlux, MaxSlopeDiaPsFluxConfig,
-    ErrMeanDiaPsFlux, ErrMeanDiaPsFluxConfig)
+    ErrMeanDiaPsFlux, ErrMeanDiaPsFluxConfig,
+    LinearFitDiaPsFlux, LinearFitDiaPsFluxConfig)
 import lsst.utils.tests
 
 
@@ -381,7 +382,7 @@ class TestMaxSlopeDiaPsFlux(unittest.TestCase):
 class TestErrMeanDiaPsFlux(unittest.TestCase):
 
     def testCalculate(self):
-        """Test flux maximum slope.
+        """Test error mean calculation.
         """
         n_sources = 10
         diaObject = dict()
@@ -407,6 +408,53 @@ class TestErrMeanDiaPsFlux(unittest.TestCase):
                                         "psFluxErr": errors})
         plug.calculate(diaObject, diaSources, diaSources, "r")
         self.assertEqual(diaObject["rPSFluxErrMean"], np.nanmean(errors))
+
+
+class TestLinearFitDiaPsFlux(unittest.TestCase):
+
+    def testCalculate(self):
+        """Test a linear fit to flux vs time.
+        """
+        n_sources = 10
+        diaObject = dict()
+        fluxes = np.linspace(-1, 1, n_sources)
+        errors = np.linspace(1, 2, n_sources)
+        times = np.linspace(0, 1, n_sources)
+        diaSources = pd.DataFrame(data={"psFlux": fluxes,
+                                        "psFluxErr": errors,
+                                        "midPointTai": times})
+
+        plug = LinearFitDiaPsFlux(LinearFitDiaPsFluxConfig(),
+                                  "ap_LinearFit",
+                                  None)
+        plug.calculate(diaObject, diaSources, diaSources, "u")
+        self.assertAlmostEqual(diaObject["uPSFluxLinearSlope"], 2.)
+        self.assertAlmostEqual(diaObject["uPSFluxLinearIntercept"], -1.)
+
+        # test no inputs
+        diaObject = dict()
+        plug.calculate(diaObject, [], [], "g")
+        self.assertTrue(np.isnan(diaObject["gPSFluxLinearSlope"]))
+        self.assertTrue(np.isnan(diaObject["gPSFluxLinearIntercept"]))
+
+        # test no inputs
+        diaObject = dict()
+        diaSources = pd.DataFrame(data={"psFlux": [fluxes[0]],
+                                        "psFluxErr": [errors[0]],
+                                        "midPointTai": [times[0]]})
+        plug.calculate(diaObject, diaSources, diaSources, "g")
+        self.assertTrue(np.isnan(diaObject["gPSFluxLinearSlope"]))
+        self.assertTrue(np.isnan(diaObject["gPSFluxLinearIntercept"]))
+
+        diaObject = dict()
+        fluxes[7] = np.nan
+        errors[4] = np.nan
+        diaSources = pd.DataFrame(data={"psFlux": fluxes,
+                                        "psFluxErr": errors,
+                                        "midPointTai": times})
+        plug.calculate(diaObject, diaSources, diaSources, "r")
+        self.assertAlmostEqual(diaObject["rPSFluxLinearSlope"], 2.)
+        self.assertAlmostEqual(diaObject["rPSFluxLinearIntercept"], -1.)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

@@ -21,6 +21,7 @@
 
 from astropy.stats import median_absolute_deviation
 import numpy as np
+from scipy.optimize import lsq_linear
 from scipy.stats import skew
 
 import lsst.geom as geom
@@ -40,7 +41,8 @@ __all__ = ("MeanDiaPositionConfig", "MeanDiaPosition",
            "SkewDiaPsFlux", "SkewDiaPsFluxConfig",
            "MinMaxDiaPsFlux", "MinMaxDiaPsFluxConfig",
            "MaxSlopeDiaPsFlux", "MaxSlopeDiaPsFluxConfig",
-           "ErrMeanDiaPsFlux", "ErrMeanDiaPsFluxConfig")
+           "ErrMeanDiaPsFlux", "ErrMeanDiaPsFluxConfig",
+           "LinearFitDiaPsFlux", "LinearFitDiaPsFluxConfig")
 
 
 class MeanDiaPositionConfig(DiaObjectCalculationPluginConfig):
@@ -190,7 +192,7 @@ class PercentileDiaPsFlux(DiaObjectCalculationPlugin):
 
     def __init__(self, config, name, metadata, **kwargs):
         DiaObjectCalculationPlugin.__init__(self,
-                                            config, 
+                                            config,
                                             name,
                                             metadata,
                                             **kwargs)
@@ -684,3 +686,73 @@ class ErrMeanDiaPsFlux(DiaObjectCalculationPlugin):
             Error to pass.
         """
         diaObject["{}PSFluxErrMean".format(filterName)] = np.nan
+
+
+class LinearFitDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
+    pass
+
+
+@register("ap_linearFit")
+class LinearFitDiaPsFlux(DiaObjectCalculationPlugin):
+    """Compute fit a linear model to flux vs time.
+    """
+
+    ConfigClass = LinearFitDiaPsFluxConfig
+
+    # Required input Cols
+    # Output columns are created upon instantiation of the class.
+    outputCols = ["PSFluxLinearSlope", "PSFluxLinearIntercept"]
+
+    @classmethod
+    def getExecutionOrder(cls):
+        return cls.DEFAULT_CATALOGCALCULATION
+
+    def calculate(self,
+                  diaObject,
+                  diaSources,
+                  filterDiaFluxes,
+                  filterName,
+                  **kwargs):
+        """Compute fit a linear model to flux vs time.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in.
+        diaSources : `pandas.DataFrame`
+            DataFrame representing all diaSources associated with this
+            diaObject.
+        filterDiaFluxes : `pandas.DataFrame`
+            DataFrame representing diaSources associated with this
+            diaObject that are observed in the band pass ``filterName``.
+        filterName : `str`
+            Simple, string name of the filter for the flux being calculated.
+        """
+        if len(filterDiaFluxes) > 1:
+            tmpDiaSources = filterDiaFluxes[
+                ~np.logical_or(np.isnan(filterDiaFluxes["psFlux"]),
+                               np.isnan(filterDiaFluxes["psFluxErr"]))]
+            fluxes = tmpDiaSources["psFlux"].to_numpy()
+            errors = tmpDiaSources["psFluxErr"].to_numpy()
+            times = tmpDiaSources["midPointTai"].to_numpy()
+            A = np.array([times / errors, 1 / errors]).transpose()
+            m, b = lsq_linear(A, fluxes / errors).x
+            diaObject["{}PSFluxLinearSlope".format(filterName)] = m
+            diaObject["{}PSFluxLinearIntercept".format(filterName)] = b
+        else:
+            self.fail(diaObject, filterName)
+
+    def fail(self, diaObject, filterName, error=None):
+        """Set diaObject values to nan.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in.
+        filterName : `str`
+            Simple name of the filter for the flux being calculated.
+        error : `BaseException`
+            Error to pass.
+        """
+        diaObject["{}PSFluxLinearSlope".format(filterName)] = np.nan
+        diaObject["{}PSFluxLinearIntercept".format(filterName)] = np.nan
