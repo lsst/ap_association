@@ -39,7 +39,8 @@ __all__ = ("MeanDiaPositionConfig", "MeanDiaPosition",
            "MadDiaPsFlux", "MadDiaPsFluxConfig",
            "SkewDiaPsFlux", "SkewDiaPsFluxConfig",
            "MinMaxDiaPsFlux", "MinMaxDiaPsFluxConfig",
-           "MaxSlopeDiaPsFlux", "MaxSlopeDiaPsFluxConfig")
+           "MaxSlopeDiaPsFlux", "MaxSlopeDiaPsFluxConfig",
+           "ErrMeanDiaPsFlux", "ErrMeanDiaPsFluxConfig")
 
 
 class MeanDiaPositionConfig(DiaObjectCalculationPluginConfig):
@@ -622,3 +623,64 @@ class MaxSlopeDiaPsFlux(DiaObjectCalculationPlugin):
             Error to pass.
         """
         diaObject["{}PSFluxMaxSlope".format(filterName)] = np.nan
+
+
+class ErrMeanDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
+    pass
+
+
+@register("ap_meanErrFlux")
+class ErrMeanDiaPsFlux(DiaObjectCalculationPlugin):
+    """Compute the mean of the dia source errors.
+    """
+
+    ConfigClass = ErrMeanDiaPsFluxConfig
+
+    # Required input Cols
+    # Output columns are created upon instantiation of the class.
+    outputCols = ["PSFluxErrMean"]
+
+    @classmethod
+    def getExecutionOrder(cls):
+        return cls.DEFAULT_CATALOGCALCULATION
+
+    def calculate(self,
+                  diaObject,
+                  diaSources,
+                  filterDiaFluxes,
+                  filterName,
+                  **kwargs):
+        """Compute the mean of the dia source errors.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in.
+        diaSources : `pandas.DataFrame`
+            DataFrame representing all diaSources associated with this
+            diaObject.
+        filterDiaFluxes : `pandas.DataFrame`
+            DataFrame representing diaSources associated with this
+            diaObject that are observed in the band pass ``filterName``.
+        filterName : `str`
+            Simple, string name of the filter for the flux being calculated.
+        """
+        if len(filterDiaFluxes) > 0:
+            diaObject["{}PSFluxErrMean".format(filterName)] = np.nanmean(
+                filterDiaFluxes["psFluxErr"])
+        else:
+            self.fail(diaObject, filterName)
+
+    def fail(self, diaObject, filterName, error=None):
+        """Set diaObject values to nan.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in.
+        filterName : `str`
+            Simple name of the filter for the flux being calculated.
+        error : `BaseException`
+            Error to pass.
+        """
+        diaObject["{}PSFluxErrMean".format(filterName)] = np.nan

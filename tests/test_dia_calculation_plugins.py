@@ -34,7 +34,8 @@ from lsst.ap.association import (
     MadDiaPsFlux, MadDiaPsFluxConfig,
     SkewDiaPsFlux, SkewDiaPsFluxConfig,
     MinMaxDiaPsFlux, MinMaxDiaPsFluxConfig,
-    MaxSlopeDiaPsFlux, MaxSlopeDiaPsFluxConfig)
+    MaxSlopeDiaPsFlux, MaxSlopeDiaPsFluxConfig,
+    ErrMeanDiaPsFlux, ErrMeanDiaPsFluxConfig)
 import lsst.utils.tests
 
 
@@ -375,6 +376,37 @@ class TestMaxSlopeDiaPsFlux(unittest.TestCase):
                                         "midPointTai": times})
         plug.calculate(diaObject, diaSources, diaSources, "r")
         self.assertEqual(diaObject["rPSFluxMaxSlope"], 2.)
+
+
+class TestErrMeanDiaPsFlux(unittest.TestCase):
+
+    def testCalculate(self):
+        """Test flux maximum slope.
+        """
+        n_sources = 10
+        diaObject = dict()
+        fluxes = np.linspace(-1, 1, n_sources)
+        errors = np.linspace(1, 2, n_sources)
+        diaSources = pd.DataFrame(data={"psFlux": fluxes,
+                                        "psFluxErr": errors})
+
+        plug = ErrMeanDiaPsFlux(ErrMeanDiaPsFluxConfig(),
+                                "ap_errMeanFlux",
+                                None)
+        plug.calculate(diaObject, diaSources, diaSources, "u")
+        self.assertEqual(diaObject["uPSFluxErrMean"], np.nanmean(errors))
+
+        # test no inputs
+        diaObject = dict()
+        plug.calculate(diaObject, [], [], "g")
+        self.assertTrue(np.isnan(diaObject["gPSFluxErrMean"]))
+
+        diaObject = dict()
+        errors[4] = np.nan
+        diaSources = pd.DataFrame(data={"psFlux": fluxes,
+                                        "psFluxErr": errors})
+        plug.calculate(diaObject, diaSources, diaSources, "r")
+        self.assertEqual(diaObject["rPSFluxErrMean"], np.nanmean(errors))
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
