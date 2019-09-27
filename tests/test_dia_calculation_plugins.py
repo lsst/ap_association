@@ -33,7 +33,8 @@ from lsst.ap.association import (
     Chi2DiaPsFlux, Chi2DiaPsFluxConfig,
     MadDiaPsFlux, MadDiaPsFluxConfig,
     SkewDiaPsFlux, SkewDiaPsFluxConfig,
-    MinMaxDiaPsFlux, MinMaxDiaPsFluxConfig)
+    MinMaxDiaPsFlux, MinMaxDiaPsFluxConfig,
+    MaxSlopeDiaPsFlux, MaxSlopeDiaPsFluxConfig)
 import lsst.utils.tests
 
 
@@ -314,7 +315,7 @@ class TestMinMaxDiaPsFlux(unittest.TestCase):
                                         "psFluxErr": np.ones(n_sources)})
 
         plug = MinMaxDiaPsFlux(MinMaxDiaPsFluxConfig(),
-                               "ap_skewFlux",
+                               "ap_minMaxFlux",
                                None)
         plug.calculate(diaObject, diaSources, diaSources, "u")
         self.assertEqual(diaObject["uPSFluxMin"], -1)
@@ -333,6 +334,47 @@ class TestMinMaxDiaPsFlux(unittest.TestCase):
         plug.calculate(diaObject, diaSources, diaSources, "r")
         self.assertEqual(diaObject["rPSFluxMin"], -1)
         self.assertEqual(diaObject["rPSFluxMax"], 1)
+
+
+class TestMaxSlopeDiaPsFlux(unittest.TestCase):
+
+    def testCalculate(self):
+        """Test flux maximum slope.
+        """
+        n_sources = 10
+        diaObject = dict()
+        fluxes = np.linspace(-1, 1, n_sources)
+        times = np.linspace(0, 1, n_sources)
+        diaSources = pd.DataFrame(data={"psFlux": fluxes,
+                                        "psFluxErr": np.ones(n_sources),
+                                        "midPointTai": times})
+
+        plug = MaxSlopeDiaPsFlux(MaxSlopeDiaPsFluxConfig(),
+                                 "ap_maxSlopeFlux",
+                                 None)
+        plug.calculate(diaObject, diaSources, diaSources, "u")
+        self.assertEqual(diaObject["uPSFluxMaxSlope"], 2.)
+
+        # test no inputs
+        diaObject = dict()
+        plug.calculate(diaObject, [], [], "g")
+        self.assertTrue(np.isnan(diaObject["gPSFluxMaxSlope"]))
+
+        # test one input
+        diaObject = dict()
+        diaSources = pd.DataFrame(data={"psFlux": [fluxes[0]],
+                                        "psFluxErr": [np.ones(n_sources)[0]],
+                                        "midPointTai": [times[0]]})
+        plug.calculate(diaObject, diaSources, diaSources, "g")
+        self.assertTrue(np.isnan(diaObject["gPSFluxMaxSlope"]))
+
+        diaObject = dict()
+        fluxes[4] = np.nan
+        diaSources = pd.DataFrame(data={"psFlux": fluxes,
+                                        "psFluxErr": np.ones(n_sources),
+                                        "midPointTai": times})
+        plug.calculate(diaObject, diaSources, diaSources, "r")
+        self.assertEqual(diaObject["rPSFluxMaxSlope"], 2.)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

@@ -38,7 +38,8 @@ __all__ = ("MeanDiaPositionConfig", "MeanDiaPosition",
            "Chi2DiaPsFlux", "Chi2DiaPsFluxConfig",
            "MadDiaPsFlux", "MadDiaPsFluxConfig",
            "SkewDiaPsFlux", "SkewDiaPsFluxConfig",
-           "MinMaxDiaPsFlux", "MinMaxDiaPsFluxConfig")
+           "MinMaxDiaPsFlux", "MinMaxDiaPsFluxConfig",
+           "MaxSlopeDiaPsFlux", "MaxSlopeDiaPsFluxConfig")
 
 
 class MeanDiaPositionConfig(DiaObjectCalculationPluginConfig):
@@ -557,3 +558,67 @@ class MinMaxDiaPsFlux(DiaObjectCalculationPlugin):
         """
         diaObject["{}PSFluxMin".format(filterName)] = np.nan
         diaObject["{}PSFluxMax".format(filterName)] = np.nan
+
+
+class MaxSlopeDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
+    pass
+
+
+@register("ap_maxSlopeFlux")
+class MaxSlopeDiaPsFlux(DiaObjectCalculationPlugin):
+    """Compute the maximum ratio time ordered deltaFlux / deltaTime.
+    """
+
+    ConfigClass = MinMaxDiaPsFluxConfig
+
+    # Required input Cols
+    # Output columns are created upon instantiation of the class.
+    outputCols = ["PSFluxMaxSlope"]
+
+    @classmethod
+    def getExecutionOrder(cls):
+        return cls.DEFAULT_CATALOGCALCULATION
+
+    def calculate(self,
+                  diaObject,
+                  diaSources,
+                  filterDiaFluxes,
+                  filterName,
+                  **kwargs):
+        """Compute the maximum ratio time ordered deltaFlux / deltaTime.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in.
+        diaSources : `pandas.DataFrame`
+            DataFrame representing all diaSources associated with this
+            diaObject.
+        filterDiaFluxes : `pandas.DataFrame`
+            DataFrame representing diaSources associated with this
+            diaObject that are observed in the band pass ``filterName``.
+        filterName : `str`
+            Simple, string name of the filter for the flux being calculated.
+        """
+        if len(filterDiaFluxes) > 1:
+            tmpDiaSources = filterDiaFluxes[~np.isnan(filterDiaFluxes["psFlux"])]
+            fluxes = tmpDiaSources["psFlux"].to_numpy()
+            times = tmpDiaSources["midPointTai"].to_numpy()
+            diaObject["{}PSFluxMaxSlope".format(filterName)] = np.max(
+                (fluxes[1:] - fluxes[:-1]) / (times[1:] - times[:-1]))
+        else:
+            self.fail(diaObject, filterName)
+
+    def fail(self, diaObject, filterName, error=None):
+        """Set diaObject values to nan.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in.
+        filterName : `str`
+            Simple name of the filter for the flux being calculated.
+        error : `BaseException`
+            Error to pass.
+        """
+        diaObject["{}PSFluxMaxSlope".format(filterName)] = np.nan
