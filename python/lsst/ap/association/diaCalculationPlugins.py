@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+from astropy.stats import median_absolute_deviation
 import numpy as np
 
 import lsst.geom as geom
@@ -33,7 +34,8 @@ __all__ = ("MeanDiaPositionConfig", "MeanDiaPosition",
            "WeightedMeanDiaPsFluxConfig", "WeightedMeanDiaPsFlux",
            "PercentileDiaPsFlux", "PercentileDiaPsFluxConfig",
            "SigmaDiaPsFlux", "SigmaDiaPsFluxConfig",
-           "Chi2DiaPsFlux", "Chi2DiaPsFluxConfig")
+           "Chi2DiaPsFlux", "Chi2DiaPsFluxConfig",
+           "MadDiaPsFlux", "MadDiaPsFluxConfig")
 
 
 class MeanDiaPositionConfig(DiaObjectCalculationPluginConfig):
@@ -363,3 +365,66 @@ class Chi2DiaPsFlux(DiaObjectCalculationPlugin):
             Error to pass.
         """
         diaObject["{}PSFluxChi2".format(filterName)] = np.nan
+
+
+class MadDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
+    pass
+
+
+@register("ap_madFlux")
+class MadDiaPsFlux(DiaObjectCalculationPlugin):
+    """Compute median absolute deviation of diaSource fluxes.
+    """
+
+    ConfigClass = MadDiaPsFluxConfig
+
+    # Required input Cols
+    # Output columns are created upon instantiation of the class.
+    outputCols = ["PSFluxMAD"]
+
+    @classmethod
+    def getExecutionOrder(cls):
+        return cls.DEFAULT_CATALOGCALCULATION
+
+    def calculate(self,
+                  diaObject,
+                  diaSources,
+                  filterDiaFluxes,
+                  filterName,
+                  **kwargs):
+        """Compute the median absolute deviation of the point source fluxes.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in.
+        diaSources : `pandas.DataFrame`
+            DataFrame representing all diaSources associated with this
+            diaObject.
+        filterDiaFluxes : `pandas.DataFrame`
+            DataFrame representing diaSources associated with this
+            diaObject that are observed in the band pass ``filterName``.
+        filterName : `str`
+            Simple, string name of the filter for the flux being calculated.
+        """
+        if len(filterDiaFluxes) > 0:
+            diaObject["{}PSFluxMAD".format(filterName)] = (
+                median_absolute_deviation(filterDiaFluxes["psFlux"],
+                                          ignore_nan=True)
+            )
+        else:
+            self.fail(diaObject, filterName)
+
+    def fail(self, diaObject, filterName, error=None):
+        """Set diaObject values to nan.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in.
+        filterName : `str`
+            Simple name of the filter for the flux being calculated.
+        error : `BaseException`
+            Error to pass.
+        """
+        diaObject["{}PSFluxMAD".format(filterName)] = np.nan

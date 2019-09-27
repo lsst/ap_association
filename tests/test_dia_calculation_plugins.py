@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+from astropy.stats import median_absolute_deviation
 import numpy as np
 import pandas as pd
 import unittest
@@ -28,7 +29,8 @@ from lsst.ap.association import (
     WeightedMeanDiaPsFlux, WeightedMeanDiaPsFluxConfig,
     PercentileDiaPsFlux, PercentileDiaPsFluxConfig,
     SigmaDiaPsFlux, SigmaDiaPsFluxConfig,
-    Chi2DiaPsFlux, Chi2DiaPsFluxConfig)
+    Chi2DiaPsFlux, Chi2DiaPsFluxConfig,
+    MadDiaPsFlux, MadDiaPsFluxConfig)
 import lsst.utils.tests
 
 
@@ -230,6 +232,40 @@ class TestChi2DiaPsFlux(unittest.TestCase):
             np.nansum(((diaSources["psFlux"] -
                         np.nanmean(diaSources["psFlux"])) /
                        diaSources["psFluxErr"]) ** 2))
+
+
+class TestMadDiaPsFlux(unittest.TestCase):
+
+    def testCalculate(self):
+        """Test flux median absolute deviation calculation.
+        """
+        n_sources = 10
+        diaObject = dict()
+        fluxes = np.linspace(-1, 1, n_sources)
+        diaSources = pd.DataFrame(data={"psFlux": fluxes,
+                                        "psFluxErr": np.ones(n_sources)})
+
+        plug = MadDiaPsFlux(MadDiaPsFluxConfig(),
+                            "ap_madFlux",
+                            None)
+        plug.calculate(diaObject, diaSources, diaSources, "u")
+        self.assertAlmostEqual(diaObject["uPSFluxMAD"],
+                               median_absolute_deviation(fluxes,
+                                                         ignore_nan=True))
+
+        # test no inputs
+        diaObject = dict()
+        plug.calculate(diaObject, [], [], "g")
+        self.assertTrue(np.isnan(diaObject["gPSFluxMAD"]))
+
+        diaObject = dict()
+        fluxes[4] = np.nan
+        diaSources = pd.DataFrame(data={"psFlux": fluxes,
+                                        "psFluxErr": np.ones(n_sources)})
+        plug.calculate(diaObject, diaSources, diaSources, "r")
+        self.assertAlmostEqual(diaObject["rPSFluxMAD"],
+                               median_absolute_deviation(fluxes,
+                                                         ignore_nan=True))
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
