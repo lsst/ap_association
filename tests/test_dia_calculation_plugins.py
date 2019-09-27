@@ -32,7 +32,8 @@ from lsst.ap.association import (
     SigmaDiaPsFlux, SigmaDiaPsFluxConfig,
     Chi2DiaPsFlux, Chi2DiaPsFluxConfig,
     MadDiaPsFlux, MadDiaPsFluxConfig,
-    SkewDiaPsFlux, SkewDiaPsFluxConfig)
+    SkewDiaPsFlux, SkewDiaPsFluxConfig,
+    MinMaxDiaPsFlux, MinMaxDiaPsFluxConfig)
 import lsst.utils.tests
 
 
@@ -299,6 +300,39 @@ class TestSkewDiaPsFlux(unittest.TestCase):
         plug.calculate(diaObject, diaSources, diaSources, "r")
         cutFluxes = fluxes[~np.isnan(fluxes)]
         self.assertAlmostEqual(diaObject["rPSFluxSkew"], skew(cutFluxes))
+
+
+class TestMinMaxDiaPsFlux(unittest.TestCase):
+
+    def testCalculate(self):
+        """Test flux min/max calculation.
+        """
+        n_sources = 10
+        diaObject = dict()
+        fluxes = np.linspace(-1, 1, n_sources)
+        diaSources = pd.DataFrame(data={"psFlux": fluxes,
+                                        "psFluxErr": np.ones(n_sources)})
+
+        plug = MinMaxDiaPsFlux(MinMaxDiaPsFluxConfig(),
+                               "ap_skewFlux",
+                               None)
+        plug.calculate(diaObject, diaSources, diaSources, "u")
+        self.assertEqual(diaObject["uPSFluxMin"], -1)
+        self.assertEqual(diaObject["uPSFluxMax"], 1)
+
+        # test no inputs
+        diaObject = dict()
+        plug.calculate(diaObject, [], [], "g")
+        self.assertTrue(np.isnan(diaObject["gPSFluxMin"]))
+        self.assertTrue(np.isnan(diaObject["gPSFluxMax"]))
+
+        diaObject = dict()
+        fluxes[4] = np.nan
+        diaSources = pd.DataFrame(data={"psFlux": fluxes,
+                                        "psFluxErr": np.ones(n_sources)})
+        plug.calculate(diaObject, diaSources, diaSources, "r")
+        self.assertEqual(diaObject["rPSFluxMin"], -1)
+        self.assertEqual(diaObject["rPSFluxMax"], 1)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
