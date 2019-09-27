@@ -31,7 +31,9 @@ from lsst.meas.base.pluginRegistry import register
 
 __all__ = ("MeanDiaPositionConfig", "MeanDiaPosition",
            "WeightedMeanDiaPsFluxConfig", "WeightedMeanDiaPsFlux",
-           "PercentileDiaPsFlux", "PercentileDiaPsFluxConfig")
+           "PercentileDiaPsFlux", "PercentileDiaPsFluxConfig",
+           "SigmaDiaPsFlux", "SigmaDiaPsFluxConfig",
+           "Chi2DiaPsFlux", "Chi2DiaPsFluxConfig")
 
 
 class MeanDiaPositionConfig(DiaObjectCalculationPluginConfig):
@@ -162,7 +164,6 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
 
 
 class PercentileDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
-
     percentiles = pexConfig.ListField(
         dtype=int,
         default=[5, 25, 50, 75, 95],
@@ -173,14 +174,19 @@ class PercentileDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
 
 @register("ap_percentileFlux")
 class PercentileDiaPsFlux(DiaObjectCalculationPlugin):
-    """
+    """Compute percentiles of diaSource fluxes.
     """
 
     ConfigClass = PercentileDiaPsFluxConfig
+    # Output columns are created upon instantiation of the class.
     outputCols = []
 
-    def __init__(self, config, name, metadata):
-        DiaObjectCalculationPlugin.__init__(self, config, name)
+    def __init__(self, config, name, metadata, **kwargs):
+        DiaObjectCalculationPlugin.__init__(self,
+                                            config, 
+                                            name,
+                                            metadata,
+                                            **kwargs)
         self.outputCols = ["PSFluxPercentile{:02d}".format(percent)
                            for percent in self.config.percentiles]
 
@@ -194,7 +200,7 @@ class PercentileDiaPsFlux(DiaObjectCalculationPlugin):
                   filterDiaFluxes,
                   filterName,
                   **kwargs):
-        """Compute the weighted mean and mean error of the point source flux.
+        """Compute the percentile fluxes of the point source flux.
 
         Parameters
         ----------
@@ -207,12 +213,12 @@ class PercentileDiaPsFlux(DiaObjectCalculationPlugin):
             DataFrame representing diaSources associated with this
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
-            Simple, string name of the filter for the fluxb eing calculated.
+            Simple, string name of the filter for the flux being calculated.
         """
         if len(filterDiaFluxes) > 0:
             pTiles = np.nanpercentile(filterDiaFluxes["psFlux"],
                                       self.config.percentiles)
-            for pTile, tilePercent in zip(pTiles, self.config.precentiles):
+            for pTile, tilePercent in zip(pTiles, self.config.percentiles):
                 diaObject[
                     "{}PSFluxPercentile{:02d}".format(filterName,
                                                       tilePercent)] = pTile
@@ -220,7 +226,7 @@ class PercentileDiaPsFlux(DiaObjectCalculationPlugin):
             self.fail(diaObject, filterName)
 
     def fail(self, diaObject, filterName, error=None):
-        """Set diaObject position values to nan.
+        """Set diaObject values to nan.
 
         Parameters
         ----------
@@ -231,6 +237,129 @@ class PercentileDiaPsFlux(DiaObjectCalculationPlugin):
         error : `BaseException`
             Error to pass.
         """
-        for pTile in self.config.precentiles:
+        for pTile in self.config.percentiles:
             diaObject["{}PSFluxPercentile{:02d}".format(filterName,
                                                         pTile)] = np.nan
+
+
+class SigmaDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
+    pass
+
+
+@register("ap_sigmaFlux")
+class SigmaDiaPsFlux(DiaObjectCalculationPlugin):
+    """Compute scatter of diaSource fluxes.
+    """
+
+    ConfigClass = SigmaDiaPsFluxConfig
+    # Output columns are created upon instantiation of the class.
+    outputCols = ["PSFluxSigma"]
+
+    @classmethod
+    def getExecutionOrder(cls):
+        return cls.DEFAULT_CATALOGCALCULATION
+
+    def calculate(self,
+                  diaObject,
+                  diaSources,
+                  filterDiaFluxes,
+                  filterName,
+                  **kwargs):
+        """Compute the sigma fluxes of the point source flux.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in.
+        diaSources : `pandas.DataFrame`
+            DataFrame representing all diaSources associated with this
+            diaObject.
+        filterDiaFluxes : `pandas.DataFrame`
+            DataFrame representing diaSources associated with this
+            diaObject that are observed in the band pass ``filterName``.
+        filterName : `str`
+            Simple, string name of the filter for the flux being calculated.
+        """
+        if len(filterDiaFluxes) > 1:
+            diaObject["{}PSFluxSigma".format(filterName)] = np.nanstd(
+                filterDiaFluxes["psFlux"])
+        else:
+            self.fail(diaObject, filterName)
+
+    def fail(self, diaObject, filterName, error=None):
+        """Set diaObject values to nan.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in.
+        filterName : `str`
+            Simple name of the filter for the flux being calculated.
+        error : `BaseException`
+            Error to pass.
+        """
+        diaObject["{}PSFluxSigma".format(filterName)] = np.nan
+
+
+class Chi2DiaPsFluxConfig(DiaObjectCalculationPluginConfig):
+    pass
+
+
+@register("ap_chi2Flux")
+class Chi2DiaPsFlux(DiaObjectCalculationPlugin):
+    """Compute chi2 of diaSource fluxes.
+    """
+
+    ConfigClass = Chi2DiaPsFluxConfig
+
+    # Required input Cols
+    inputCols = ["PSFlux"]
+    # Output columns are created upon instantiation of the class.
+    outputCols = ["PSFluxChi2"]
+
+    @classmethod
+    def getExecutionOrder(cls):
+        return cls.FLUX_MOMENTS_CALCULATED
+
+    def calculate(self,
+                  diaObject,
+                  diaSources,
+                  filterDiaFluxes,
+                  filterName,
+                  **kwargs):
+        """Compute the chi2 of the point source fluxes.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in.
+        diaSources : `pandas.DataFrame`
+            DataFrame representing all diaSources associated with this
+            diaObject.
+        filterDiaFluxes : `pandas.DataFrame`
+            DataFrame representing diaSources associated with this
+            diaObject that are observed in the band pass ``filterName``.
+        filterName : `str`
+            Simple, string name of the filter for the flux being calculated.
+        """
+        if len(filterDiaFluxes) > 0:
+            diaObject["{}PSFluxChi2".format(filterName)] = np.nansum(
+                ((filterDiaFluxes["psFlux"] -
+                  diaObject["{}PSFluxMean".format(filterName)]) /
+                 filterDiaFluxes["psFluxErr"]) ** 2)
+        else:
+            self.fail(diaObject, filterName)
+
+    def fail(self, diaObject, filterName, error=None):
+        """Set diaObject values to nan.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in.
+        filterName : `str`
+            Simple name of the filter for the flux being calculated.
+        error : `BaseException`
+            Error to pass.
+        """
+        diaObject["{}PSFluxChi2".format(filterName)] = np.nan
