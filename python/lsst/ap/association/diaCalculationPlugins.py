@@ -21,6 +21,7 @@
 
 from astropy.stats import median_absolute_deviation
 import numpy as np
+from scipy.stats import skew
 
 import lsst.geom as geom
 import lsst.pex.config as pexConfig
@@ -35,7 +36,8 @@ __all__ = ("MeanDiaPositionConfig", "MeanDiaPosition",
            "PercentileDiaPsFlux", "PercentileDiaPsFluxConfig",
            "SigmaDiaPsFlux", "SigmaDiaPsFluxConfig",
            "Chi2DiaPsFlux", "Chi2DiaPsFluxConfig",
-           "MadDiaPsFlux", "MadDiaPsFluxConfig")
+           "MadDiaPsFlux", "MadDiaPsFluxConfig",
+           "SkewDiaPsFlux", "SkewDiaPsFluxConfig")
 
 
 class MeanDiaPositionConfig(DiaObjectCalculationPluginConfig):
@@ -428,3 +430,66 @@ class MadDiaPsFlux(DiaObjectCalculationPlugin):
             Error to pass.
         """
         diaObject["{}PSFluxMAD".format(filterName)] = np.nan
+
+
+class SkewDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
+    pass
+
+
+@register("ap_skewFlux")
+class SkewDiaPsFlux(DiaObjectCalculationPlugin):
+    """Compute the skew of diaSource fluxes.
+    """
+
+    ConfigClass = SkewDiaPsFluxConfig
+
+    # Required input Cols
+    # Output columns are created upon instantiation of the class.
+    outputCols = ["PSFluxSkew"]
+
+    @classmethod
+    def getExecutionOrder(cls):
+        return cls.DEFAULT_CATALOGCALCULATION
+
+    def calculate(self,
+                  diaObject,
+                  diaSources,
+                  filterDiaFluxes,
+                  filterName,
+                  **kwargs):
+        """Compute the skew of the point source fluxes.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in.
+        diaSources : `pandas.DataFrame`
+            DataFrame representing all diaSources associated with this
+            diaObject.
+        filterDiaFluxes : `pandas.DataFrame`
+            DataFrame representing diaSources associated with this
+            diaObject that are observed in the band pass ``filterName``.
+        filterName : `str`
+            Simple, string name of the filter for the flux being calculated.
+        """
+        if len(filterDiaFluxes) > 0:
+            fluxes = filterDiaFluxes["psFlux"]
+            diaObject["{}PSFluxSkew".format(filterName)] = (
+                skew(fluxes[~np.isnan(fluxes)])
+            )
+        else:
+            self.fail(diaObject, filterName)
+
+    def fail(self, diaObject, filterName, error=None):
+        """Set diaObject values to nan.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in.
+        filterName : `str`
+            Simple name of the filter for the flux being calculated.
+        error : `BaseException`
+            Error to pass.
+        """
+        diaObject["{}PSFluxSkew".format(filterName)] = np.nan
