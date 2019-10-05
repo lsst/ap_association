@@ -36,7 +36,8 @@ from lsst.ap.association import (
     MinMaxDiaPsFlux, MinMaxDiaPsFluxConfig,
     MaxSlopeDiaPsFlux, MaxSlopeDiaPsFluxConfig,
     ErrMeanDiaPsFlux, ErrMeanDiaPsFluxConfig,
-    LinearFitDiaPsFlux, LinearFitDiaPsFluxConfig)
+    LinearFitDiaPsFlux, LinearFitDiaPsFluxConfig,
+    StetsonJDiaPsFlux, StetsonJDiaPsFlux)
 import lsst.utils.tests
 
 
@@ -455,6 +456,56 @@ class TestLinearFitDiaPsFlux(unittest.TestCase):
         plug.calculate(diaObject, diaSources, diaSources, "r")
         self.assertAlmostEqual(diaObject["rPSFluxLinearSlope"], 2.)
         self.assertAlmostEqual(diaObject["rPSFluxLinearIntercept"], -1.)
+
+
+class TestStetsonJDiaPsFlux(unittest.TestCase):
+
+    def testCalculate(self):
+        """Test the stetsonJ statistic.
+        """
+        n_sources = 10
+        diaObject = dict(uPSFluxMean=0)
+        fluxes = np.linspace(-1, 1, n_sources)
+        errors = np.ones(n_sources)
+        times = np.linspace(0, 1, n_sources)
+        diaSources = pd.DataFrame(data={"psFlux": fluxes,
+                                        "psFluxErr": errors,
+                                        "midPointTai": times})
+
+        plug = StetsonJDiaPsFlux(LinearFitDiaPsFluxConfig(),
+                                 "ap_LinearFit",
+                                 None)
+        plug.calculate(diaObject, diaSources, diaSources, "u")
+        # Expected StetsonJ for the values created. Confirmed using Cesimum's
+        # implementation. http://github.com/cesium-ml/cesium
+        self.assertAlmostEqual(diaObject["uPSFluxStetsonJ"],
+                               -0.5958393936080928)
+
+        # test no inputs
+        diaObject = dict(gPSFluxMean=0)
+        plug.calculate(diaObject, [], [], "g")
+        self.assertTrue(np.isnan(diaObject["gPSFluxStetsonJ"]))
+
+        # test no inputs
+        diaObject = dict(gPSFluxMean=0)
+        diaSources = pd.DataFrame(data={"psFlux": [fluxes[0]],
+                                        "psFluxErr": [errors[0]],
+                                        "midPointTai": [times[0]]})
+        plug.calculate(diaObject, diaSources, diaSources, "g")
+        self.assertTrue(np.isnan(diaObject["gPSFluxStetsonJ"]))
+
+        fluxes[7] = np.nan
+        errors[4] = np.nan
+        nonNanMask = np.logical_and(~np.isnan(fluxes),
+                                    ~np.isnan(errors))
+        diaObject = dict(rPSFluxMean=np.average(fluxes[nonNanMask],
+                                                weights=errors[nonNanMask]))
+        diaSources = pd.DataFrame(data={"psFlux": fluxes,
+                                        "psFluxErr": errors,
+                                        "midPointTai": times})
+        plug.calculate(diaObject, diaSources, diaSources, "r")
+        self.assertAlmostEqual(diaObject["rPSFluxStetsonJ"],
+                               -0.5412797916187173)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
