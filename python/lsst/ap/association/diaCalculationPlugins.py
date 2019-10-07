@@ -43,7 +43,9 @@ __all__ = ("MeanDiaPositionConfig", "MeanDiaPosition",
            "MaxSlopeDiaPsFlux", "MaxSlopeDiaPsFluxConfig",
            "ErrMeanDiaPsFlux", "ErrMeanDiaPsFluxConfig",
            "LinearFitDiaPsFlux", "LinearFitDiaPsFluxConfig",
-           "StetsonJDiaPsFlux", "StetsonJDiaPsFluxConfig")
+           "StetsonJDiaPsFlux", "StetsonJDiaPsFluxConfig",
+           "WeightedMeanDiaTotFlux", "WeightedMeanDiaTotFluxConfig",
+           "SigmaDiaTotFlux", "SigmaDiaTotFluxConfig")
 
 
 class MeanDiaPositionConfig(DiaObjectCalculationPluginConfig):
@@ -90,7 +92,7 @@ class MeanDiaPosition(DiaObjectCalculationPlugin):
         ----------
         diaObject : `dict`
             Summary object to store values in.
-        error : `BaseException`
+        error : `BaseException` or `None`
             Error to pass. Kept for consistency with CatologCalculationPlugin.
             Unused.
         """
@@ -165,7 +167,7 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
             Summary object to store values in.
         filterName : `str`
             Simple name of the filter for the flux being calculated.
-        error : `BaseException`
+        error : `BaseException` or `None`
             Error to pass.
         """
         diaObject["{}PSFluxMean".format(filterName)] = np.nan
@@ -244,7 +246,7 @@ class PercentileDiaPsFlux(DiaObjectCalculationPlugin):
             Summary object to store values in.
         filterName : `str`
             Simple name of the filter for the flux being calculated.
-        error : `BaseException`
+        error : `BaseException` or `None`
             Error to pass.
         """
         for pTile in self.config.percentiles:
@@ -305,7 +307,7 @@ class SigmaDiaPsFlux(DiaObjectCalculationPlugin):
             Summary object to store values in.
         filterName : `str`
             Simple name of the filter for the flux being calculated.
-        error : `BaseException`
+        error : `BaseException` or `None`
             Error to pass.
         """
         diaObject["{}PSFluxSigma".format(filterName)] = np.nan
@@ -323,7 +325,7 @@ class Chi2DiaPsFlux(DiaObjectCalculationPlugin):
     ConfigClass = Chi2DiaPsFluxConfig
 
     # Required input Cols
-    inputCols = ["PSFlux"]
+    inputCols = ["PSFluxMean"]
     # Output columns are created upon instantiation of the class.
     outputCols = ["PSFluxChi2"]
 
@@ -369,7 +371,7 @@ class Chi2DiaPsFlux(DiaObjectCalculationPlugin):
             Summary object to store values in.
         filterName : `str`
             Simple name of the filter for the flux being calculated.
-        error : `BaseException`
+        error : `BaseException` or `None`
             Error to pass.
         """
         diaObject["{}PSFluxChi2".format(filterName)] = np.nan
@@ -432,7 +434,7 @@ class MadDiaPsFlux(DiaObjectCalculationPlugin):
             Summary object to store values in.
         filterName : `str`
             Simple name of the filter for the flux being calculated.
-        error : `BaseException`
+        error : `BaseException` or `None`
             Error to pass.
         """
         diaObject["{}PSFluxMAD".format(filterName)] = np.nan
@@ -495,7 +497,7 @@ class SkewDiaPsFlux(DiaObjectCalculationPlugin):
             Summary object to store values in.
         filterName : `str`
             Simple name of the filter for the flux being calculated.
-        error : `BaseException`
+        error : `BaseException` or `None`
             Error to pass.
         """
         diaObject["{}PSFluxSkew".format(filterName)] = np.nan
@@ -557,7 +559,7 @@ class MinMaxDiaPsFlux(DiaObjectCalculationPlugin):
             Summary object to store values in.
         filterName : `str`
             Simple name of the filter for the flux being calculated.
-        error : `BaseException`
+        error : `BaseException` or `None`
             Error to pass.
         """
         diaObject["{}PSFluxMin".format(filterName)] = np.nan
@@ -622,7 +624,7 @@ class MaxSlopeDiaPsFlux(DiaObjectCalculationPlugin):
             Summary object to store values in.
         filterName : `str`
             Simple name of the filter for the flux being calculated.
-        error : `BaseException`
+        error : `BaseException` or `None`
             Error to pass.
         """
         diaObject["{}PSFluxMaxSlope".format(filterName)] = np.nan
@@ -683,7 +685,7 @@ class ErrMeanDiaPsFlux(DiaObjectCalculationPlugin):
             Summary object to store values in.
         filterName : `str`
             Simple name of the filter for the flux being calculated.
-        error : `BaseException`
+        error : `BaseException` or `None`
             Error to pass.
         """
         diaObject["{}PSFluxErrMean".format(filterName)] = np.nan
@@ -752,7 +754,7 @@ class LinearFitDiaPsFlux(DiaObjectCalculationPlugin):
             Summary object to store values in.
         filterName : `str`
             Simple name of the filter for the flux being calculated.
-        error : `BaseException`
+        error : `BaseException` or `None`
             Error to pass.
         """
         diaObject["{}PSFluxLinearSlope".format(filterName)] = np.nan
@@ -915,7 +917,138 @@ class StetsonJDiaPsFlux(DiaObjectCalculationPlugin):
             Summary object to store values in.
         filterName : `str`
             Simple name of the filter for the flux being calculated.
-        error : `BaseException`
+        error : `BaseException` or `None`
             Error to pass.
         """
         diaObject["{}PSFluxStetsonJ".format(filterName)] = np.nan
+
+
+class WeightedMeanDiaTotFluxConfig(DiaObjectCalculationPluginConfig):
+    pass
+
+
+@register("ap_meanTotFlux")
+class WeightedMeanDiaTotFlux(DiaObjectCalculationPlugin):
+    """Compute the weighted mean and mean error on the point source fluxes
+    forced photometered at the DiaSource location in the calibrated image.
+
+    Additionally store number of usable data points.
+    """
+
+    ConfigClass = WeightedMeanDiaPsFluxConfig
+    outputCols = ["TOTFluxMean", "TOTFluxMeanErr"]
+
+    @classmethod
+    def getExecutionOrder(cls):
+        return cls.DEFAULT_CATALOGCALCULATION
+
+    def calculate(self,
+                  diaObject,
+                  diaSources,
+                  filterDiaFluxes,
+                  filterName,
+                  **kwargs):
+        """Compute the weighted mean and mean error of the point source flux.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in.
+        diaSources : `pandas.DataFrame`
+            DataFrame representing all diaSources associated with this
+            diaObject.
+        filterDiaFluxes : `pandas.DataFrame`
+            DataFrame representing diaSources associated with this
+            diaObject that are observed in the band pass ``filterName``.
+        filterName : `str`
+            Simple, string name of the filter for the flux being calculated.
+        """
+        if len(filterDiaFluxes) > 0:
+            tot_weight = np.nansum(1 / filterDiaFluxes["totFluxErr"] ** 2)
+            fluxMean = np.nansum(filterDiaFluxes["totFlux"] /
+                                 filterDiaFluxes["totFluxErr"] ** 2)
+            fluxMean /= tot_weight
+            fluxMeanErr = np.sqrt(1 / tot_weight)
+        else:
+            fluxMean = np.nan
+            fluxMeanErr = np.nan
+        if np.isfinite(fluxMean) and np.isfinite(fluxMeanErr):
+            diaObject["{}TOTFluxMean".format(filterName)] = fluxMean
+            diaObject["{}TOTFluxMeanErr".format(filterName)] = fluxMeanErr
+        else:
+            self.fail(diaObject, filterName)
+
+    def fail(self, diaObject, filterName, error=None):
+        """Set diaObject position values to nan.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in.
+        filterName : `str`
+            Simple name of the filter for the flux being calculated.
+        error : `BaseException` or `None`
+            Error to pass.
+        """
+        diaObject["{}TOTFluxMean".format(filterName)] = np.nan
+        diaObject["{}TOTFluxMeanErr".format(filterName)] = np.nan
+
+
+class SigmaDiaTotFluxConfig(DiaObjectCalculationPluginConfig):
+    pass
+
+
+@register("ap_sigmaTotFlux")
+class SigmaDiaTotFlux(DiaObjectCalculationPlugin):
+    """Compute scatter of diaSource fluxes.
+    """
+
+    ConfigClass = SigmaDiaPsFluxConfig
+    # Output columns are created upon instantiation of the class.
+    outputCols = ["TOTFluxSigma"]
+
+    @classmethod
+    def getExecutionOrder(cls):
+        return cls.DEFAULT_CATALOGCALCULATION
+
+    def calculate(self,
+                  diaObject,
+                  diaSources,
+                  filterDiaFluxes,
+                  filterName,
+                  **kwargs):
+        """Compute the sigma fluxes of the point source flux measured on the
+        calibrated image.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in.
+        diaSources : `pandas.DataFrame`
+            DataFrame representing all diaSources associated with this
+            diaObject.
+        filterDiaFluxes : `pandas.DataFrame`
+            DataFrame representing diaSources associated with this
+            diaObject that are observed in the band pass ``filterName``.
+        filterName : `str`
+            Simple, string name of the filter for the flux being calculated.
+        """
+        if len(filterDiaFluxes) > 1:
+            diaObject["{}TOTFluxSigma".format(filterName)] = np.nanstd(
+                filterDiaFluxes["totFlux"])
+        else:
+            self.fail(diaObject, filterName)
+
+    def fail(self, diaObject, filterName, error=None):
+        """Set diaObject values to nan.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in.
+        filterName : `str`
+            Simple name of the filter for the flux being calculated.
+        error : `BaseException` or `None`
+            Error to pass.
+        """
+        diaObject["{}TOTFluxSigma".format(filterName)] = np.nan

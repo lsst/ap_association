@@ -37,7 +37,9 @@ from lsst.ap.association import (
     MaxSlopeDiaPsFlux, MaxSlopeDiaPsFluxConfig,
     ErrMeanDiaPsFlux, ErrMeanDiaPsFluxConfig,
     LinearFitDiaPsFlux, LinearFitDiaPsFluxConfig,
-    StetsonJDiaPsFlux, StetsonJDiaPsFlux)
+    StetsonJDiaPsFlux, StetsonJDiaPsFluxConfig,
+    WeightedMeanDiaTotFlux, WeightedMeanDiaTotFluxConfig,
+    SigmaDiaTotFlux, SigmaDiaTotFluxConfig)
 import lsst.utils.tests
 
 
@@ -472,7 +474,7 @@ class TestStetsonJDiaPsFlux(unittest.TestCase):
                                         "psFluxErr": errors,
                                         "midPointTai": times})
 
-        plug = StetsonJDiaPsFlux(LinearFitDiaPsFluxConfig(),
+        plug = StetsonJDiaPsFlux(StetsonJDiaPsFluxConfig(),
                                  "ap_LinearFit",
                                  None)
         plug.calculate(diaObject, diaSources, diaSources, "u")
@@ -506,6 +508,77 @@ class TestStetsonJDiaPsFlux(unittest.TestCase):
         plug.calculate(diaObject, diaSources, diaSources, "r")
         self.assertAlmostEqual(diaObject["rPSFluxStetsonJ"],
                                -0.5412797916187173)
+
+
+class TestWeightedMeanDiaTotFlux(unittest.TestCase):
+
+    def testCalculate(self):
+        """Test mean value calculation.
+        """
+        n_sources = 10
+        diaObject = dict()
+        diaSources = pd.DataFrame(data={"totFlux": np.linspace(-1, 1, n_sources),
+                                        "totFluxErr": np.ones(n_sources)})
+
+        plug = WeightedMeanDiaTotFlux(WeightedMeanDiaTotFluxConfig(),
+                                      "ap_meanTotFlux",
+                                      None)
+        plug.calculate(diaObject, diaSources, diaSources, "u")
+
+        self.assertAlmostEqual(diaObject["uTOTFluxMean"], 0.0)
+        self.assertAlmostEqual(diaObject["uTOTFluxMeanErr"], np.sqrt(1 / n_sources))
+
+        diaObject = dict()
+        plug.calculate(diaObject, [], [], "g")
+
+        self.assertTrue(np.isnan(diaObject["gTOTFluxMean"]))
+        self.assertTrue(np.isnan(diaObject["gTOTFluxMeanErr"]))
+
+        diaObject = dict()
+        diaSources.loc[4, "totFlux"] = np.nan
+        plug.calculate(diaObject, diaSources, diaSources, "r")
+
+        self.assertTrue(~np.isnan(diaObject["rTOTFluxMean"]))
+        self.assertTrue(~np.isnan(diaObject["rTOTFluxMeanErr"]))
+
+
+class TestSigmaDiaTotFlux(unittest.TestCase):
+
+    def testCalculate(self):
+        """Test flux scatter calculation.
+        """
+        n_sources = 10
+        diaObject = dict()
+        fluxes = np.linspace(-1, 1, n_sources)
+        diaSources = pd.DataFrame(data={"totFlux": fluxes,
+                                        "totFluxErr": np.ones(n_sources)})
+
+        plug = SigmaDiaTotFlux(SigmaDiaTotFluxConfig(),
+                               "ap_sigmaTotFlux",
+                               None)
+        plug.calculate(diaObject, diaSources, diaSources, "u")
+        self.assertAlmostEqual(diaObject["uTOTFluxSigma"],
+                               np.nanstd(fluxes))
+
+        # test no inputs
+        diaObject = dict()
+        plug.calculate(diaObject, [], [], "g")
+        self.assertTrue(np.isnan(diaObject["gTOTFluxSigma"]))
+
+        # test one input
+        diaObject = dict()
+        diaSources = pd.DataFrame(data={"totFlux": [fluxes[0]],
+                                        "totFluxErr": [np.ones(n_sources)[0]]})
+        plug.calculate(diaObject, diaSources, diaSources, "g")
+        self.assertTrue(np.isnan(diaObject["gTOTFluxSigma"]))
+
+        diaObject = dict()
+        fluxes[4] = np.nan
+        diaSources = pd.DataFrame(data={"totFlux": fluxes,
+                                        "totFluxErr": np.ones(n_sources)})
+        plug.calculate(diaObject, diaSources, diaSources, "r")
+        self.assertAlmostEqual(diaObject["rTOTFluxSigma"],
+                               np.nanstd(fluxes))
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
