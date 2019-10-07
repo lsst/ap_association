@@ -23,14 +23,13 @@ import unittest
 import unittest.mock
 
 import astropy.units as u
-from astropy.tests.helper import assert_quantity_allclose
 
 import lsst.utils.tests
 from lsst.pex.config import Config
 from lsst.daf.base import PropertySet
 from lsst.dax.ppdb import Ppdb
 from lsst.pipe.base import Task, Struct
-from lsst.verify import Name, Measurement
+from lsst.verify import Name
 from lsst.verify.gen2tasks.testUtils import MetricTaskTestCase
 from lsst.verify.tasks import MetricComputationError
 from lsst.verify.tasks.testUtils import MetadataMetricTestCase, PpdbMetricTestCase
@@ -89,24 +88,6 @@ class TestNewDiaObjects(MetadataMetricTestCase):
         with self.assertRaises(MetricComputationError):
             self.task.run(metadata)
 
-    def testGetInputDatasetTypes(self):
-        config = self.taskClass.ConfigClass()
-        config.connections.taskName = "test"
-        types = self.taskClass.getInputDatasetTypes(config)
-        # dict.keys() is a collections.abc.Set, which has a narrower interface than __builtins__.set...
-        self.assertSetEqual(set(types.keys()), {"metadata"})
-        self.assertEqual(types["metadata"], "test_metadata")
-
-    def testFineGrainedMetric(self):
-        metadata = _makeAssociationMetadata()
-        inputData = {"metadata": metadata}
-        inputDataIds = {"metadata": {"visit": 42, "ccd": 1}}
-        outputDataId = {"measurement": {"visit": 42, "ccd": 1}}
-        measDirect = self.task.run(metadata).measurement
-        measIndirect = self.task.adaptArgsAndRun(inputData, inputDataIds, outputDataId).measurement
-
-        assert_quantity_allclose(measIndirect.quantity, measDirect.quantity)
-
 
 class TestUnassociatedDiaObjects(MetadataMetricTestCase):
 
@@ -147,24 +128,6 @@ class TestUnassociatedDiaObjects(MetadataMetricTestCase):
 
         with self.assertRaises(MetricComputationError):
             self.task.run(metadata)
-
-    def testGetInputDatasetTypes(self):
-        config = self.taskClass.ConfigClass()
-        config.connections.taskName = "test"
-        types = self.taskClass.getInputDatasetTypes(config)
-        # dict.keys() is a collections.abc.Set, which has a narrower interface than __builtins__.set...
-        self.assertSetEqual(set(types.keys()), {"metadata"})
-        self.assertEqual(types["metadata"], "test_metadata")
-
-    def testFineGrainedMetric(self):
-        metadata = _makeAssociationMetadata()
-        inputData = {"metadata": metadata}
-        inputDataIds = {"metadata": {"visit": 42, "ccd": 1}}
-        outputDataId = {"measurement": {"visit": 42, "ccd": 1}}
-        measDirect = self.task.run(metadata).measurement
-        measIndirect = self.task.adaptArgsAndRun(inputData, inputDataIds, outputDataId).measurement
-
-        assert_quantity_allclose(measIndirect.quantity, measDirect.quantity)
 
 
 class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
@@ -221,24 +184,6 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
         with self.assertRaises(MetricComputationError):
             self.task.run(metadata)
 
-    def testGetInputDatasetTypes(self):
-        config = self.taskClass.ConfigClass()
-        config.connections.taskName = "test"
-        types = self.taskClass.getInputDatasetTypes(config)
-        # dict.keys() is a collections.abc.Set, which has a narrower interface than __builtins__.set...
-        self.assertSetEqual(set(types.keys()), {"metadata"})
-        self.assertEqual(types["metadata"], "test_metadata")
-
-    def testFineGrainedMetric(self):
-        metadata = _makeAssociationMetadata()
-        inputData = {"metadata": metadata}
-        inputDataIds = {"metadata": {"visit": 42, "ccd": 1}}
-        outputDataId = {"measurement": {"visit": 42, "ccd": 1}}
-        measDirect = self.task.run(metadata).measurement
-        measIndirect = self.task.adaptArgsAndRun(inputData, inputDataIds, outputDataId).measurement
-
-        assert_quantity_allclose(measIndirect.quantity, measDirect.quantity)
-
 
 class TestTotalUnassociatedObjects(PpdbMetricTestCase):
 
@@ -252,13 +197,9 @@ class TestTotalUnassociatedObjects(PpdbMetricTestCase):
         instantiated.
         """
         ppdb = unittest.mock.Mock(Ppdb)
-        try:
-            test_value = dummy_dbInfo["test_value"]
-            ppdb.countUnassociatedObjects = unittest.mock.MagicMock(
-                return_value=test_value)
-        except TypeError:
-            ppdb.countUnassociatedObjects = unittest.mock.MagicMock(
-                return_value=42)
+        test_value = dummy_dbInfo["test_value"]
+        ppdb.countUnassociatedObjects = unittest.mock.MagicMock(
+            return_value=test_value)
         return ppdb
 
     @classmethod
@@ -276,61 +217,36 @@ class TestTotalUnassociatedObjects(PpdbMetricTestCase):
         config.dbLoader.retarget(SimpleDbLoader)
         return TotalUnassociatedDiaObjectsMetricTask(config=config)
 
+    @classmethod
+    def makeDbInfo(cls):
+        return {"test_value": "whatever"}
+
     def setUp(self):
         super().setUp()
         # Do the patch here to avoid passing extra arguments to superclass tests
 
     def testValid(self):
-        result = self.task.adaptArgsAndRun({"dbInfo": {"test_value": 42}},
-                                           {"dbInfo": {}},
-                                           {"measurement": {}})
+        result = self.task.run({"test_value": 42})
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.totalUnassociatedDiaObjects"))
         self.assertEqual(meas.quantity, 42 * u.count)
 
     def testAllAssociated(self):
-        result = self.task.adaptArgsAndRun({"dbInfo": {"test_value": 0}},
-                                           {"dbInfo": {}},
-                                           {"measurement": {}})
+        result = self.task.run({"test_value": 0})
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.totalUnassociatedDiaObjects"))
         self.assertEqual(meas.quantity, 0.0 * u.count)
 
     def testMissingData(self):
-        result = self.task.adaptArgsAndRun({"dbInfo": None}, {"dbInfo": {}}, {"measurement": {}})
+        result = self.task.run(None)
         meas = result.measurement
         self.assertIsNone(meas)
 
     def testFineGrainedMetric(self):
         with self.assertRaises(ValueError):
-            self.task.adaptArgsAndRun({"dbInfo": "DB source"}, {"dbInfo": {}}, {"measurement": {"visit": 42}})
-
-    def testGetInputDatasetTypes(self):
-        config = self.taskClass.ConfigClass()
-        config.connections.dbInfo = "absolutely anything"
-        types = self.taskClass.getInputDatasetTypes(config)
-        # dict.keys() is a collections.abc.Set, which has a narrower interface than __builtins__.set...
-        self.assertSetEqual(set(types.keys()), {"dbInfo"})
-        self.assertEqual(types["dbInfo"], "absolutely anything")
-
-    # Override because of non-standard adaptArgsAndRun
-    def testCallAddStandardMetadata(self):
-        dummy = Measurement('foo.bar', 0.0)
-        with unittest.mock.patch.multiple(
-                self.taskClass, autospec=True,
-                makeMeasurement=unittest.mock.DEFAULT,
-                addStandardMetadata=unittest.mock.DEFAULT) as mockDict:
-            mockDict['makeMeasurement'].return_value = Struct(measurement=dummy)
-
-            dataId = {}
-            result = self.task.adaptArgsAndRun(
-                {"dbInfo": "DB Source"},
-                {"dbInfo": dataId},
-                {'measurement': dataId})
-            mockDict['addStandardMetadata'].assert_called_once_with(
-                self.task, result.measurement, dataId)
+            self.task.run(self.makeDbInfo(), outputDataId={"visit": 42})
 
 
 # Hack around unittest's hacky test setup system
