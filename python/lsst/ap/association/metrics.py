@@ -171,8 +171,7 @@ class FractionUpdatedDiaObjectsMetricTask(MetadataMetricTask):
                                              "or numUnassociatedDiaObjects") from e
             else:
                 if nUpdated <= 0 and nUnassociated <= 0:
-                    raise MetricComputationError(
-                        "No pre-existing DIAObjects; can't compute updated fraction.")
+                    return None  # No pre-existing DIAObjects; no fraction to compute
                 else:
                     fraction = nUpdated / (nUpdated + nUnassociated)
                     return Measurement(self.getOutputMetricName(self.config),
