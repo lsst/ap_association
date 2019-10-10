@@ -138,6 +138,9 @@ class FractionUpdatedDiaObjectsMetricTask(MetadataMetricTask):
     def makeMeasurement(self, values):
         """Compute the number of non-updated DIAObjects.
 
+        AssociationTask reports each pre-existing DIAObject as either updated
+        (associated with a new DIASource) or unassociated.
+
         Parameters
         ----------
         values : `dict` [`str`, `int` or `None`]
@@ -168,8 +171,7 @@ class FractionUpdatedDiaObjectsMetricTask(MetadataMetricTask):
                                              "or numUnassociatedDiaObjects") from e
             else:
                 if nUpdated <= 0 and nUnassociated <= 0:
-                    raise MetricComputationError(
-                        "No pre-existing DIAObjects; can't compute updated fraction.")
+                    return None  # No pre-existing DIAObjects; no fraction to compute
                 else:
                     fraction = nUpdated / (nUpdated + nUnassociated)
                     return Measurement(self.getOutputMetricName(self.config),

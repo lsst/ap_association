@@ -164,8 +164,10 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
 
     def testNoObjects(self):
         metadata = _makeAssociationMetadata(numUpdated=0, numUnassociated=0)
-        with self.assertRaises(MetricComputationError):
-            self.task.run(metadata)
+        result = self.task.run(metadata)
+        meas = result.measurement
+
+        self.assertIsNone(meas)
 
     def testMissingData(self):
         result = self.task.run(None)
