@@ -80,24 +80,10 @@ class MeanDiaPosition(DiaObjectCalculationPlugin):
                  for idx, src in diaSources.iterrows()))
         if not (np.isfinite(aveCoord.getRa().asDegrees()) and
                 np.isfinite(aveCoord.getDec().asDegrees())):
-            self.fail(diaObject)
+            self.fail(diaObject, self.outputCols)
         else:
             diaObject["ra"] = aveCoord.getRa().asDegrees()
             diaObject["decl"] = aveCoord.getDec().asDegrees()
-
-    def fail(self, diaObject, error=None):
-        """Set diaObject position values to nan.
-
-        Parameters
-        ----------
-        diaObject : `dict`
-            Summary object to store values in.
-        error : `BaseException` or `None`
-            Error to pass. Kept for consistency with CatologCalculationPlugin.
-            Unused.
-        """
-        diaObject["ra"] = np.nan
-        diaObject["decl"] = np.nan
 
 
 class WeightedMeanDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -113,7 +99,7 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
     """
 
     ConfigClass = WeightedMeanDiaPsFluxConfig
-    outputCols = ["PSFluxMean", "PSFluxMeanErr", "PSFFluxNdata"]
+    outputCols = ["PSFluxMean", "PSFluxMeanErr", "PSFluxNdata"]
 
     @classmethod
     def getExecutionOrder(cls):
@@ -156,23 +142,21 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
             diaObject["{}PSFluxMeanErr".format(filterName)] = fluxMeanErr
             diaObject["{}PSFluxNdata".format(filterName)] = nFluxData
         else:
-            self.fail(diaObject, filterName)
+            self.fail(diaObject,
+                      ["{}{}".format(filterName, colName)
+                       for colName in self.outputCols])
 
-    def fail(self, diaObject, filterName, error=None):
+    def fail(self, diaObject, columns, error=None):
         """Set diaObject position values to nan.
 
-        Parameters
-        ----------
-        diaObject : `dict`
-            Summary object to store values in.
-        filterName : `str`
-            Simple name of the filter for the flux being calculated.
-        error : `BaseException` or `None`
-            Error to pass.
+        Since we set an explicit value instead of nan for all, we override
+        the fail method.
         """
-        diaObject["{}PSFluxMean".format(filterName)] = np.nan
-        diaObject["{}PSFluxMeanErr".format(filterName)] = np.nan
-        diaObject["{}PSFluxNdata".format(filterName)] = 0
+        for colName in columns:
+            if colName.endswith("Ndata"):
+                diaObject[colName] = 0
+            else:
+                diaObject[colName] = np.nan
 
 
 class PercentileDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -235,23 +219,9 @@ class PercentileDiaPsFlux(DiaObjectCalculationPlugin):
                     "{}PSFluxPercentile{:02d}".format(filterName,
                                                       tilePercent)] = pTile
         else:
-            self.fail(diaObject, filterName)
-
-    def fail(self, diaObject, filterName, error=None):
-        """Set diaObject values to nan.
-
-        Parameters
-        ----------
-        diaObject : `dict`
-            Summary object to store values in.
-        filterName : `str`
-            Simple name of the filter for the flux being calculated.
-        error : `BaseException` or `None`
-            Error to pass.
-        """
-        for pTile in self.config.percentiles:
-            diaObject["{}PSFluxPercentile{:02d}".format(filterName,
-                                                        pTile)] = np.nan
+            self.fail(diaObject,
+                      ["{}{}".format(filterName, colName)
+                       for colName in self.outputCols])
 
 
 class SigmaDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -296,21 +266,9 @@ class SigmaDiaPsFlux(DiaObjectCalculationPlugin):
             diaObject["{}PSFluxSigma".format(filterName)] = np.nanstd(
                 filterDiaFluxes["psFlux"])
         else:
-            self.fail(diaObject, filterName)
-
-    def fail(self, diaObject, filterName, error=None):
-        """Set diaObject values to nan.
-
-        Parameters
-        ----------
-        diaObject : `dict`
-            Summary object to store values in.
-        filterName : `str`
-            Simple name of the filter for the flux being calculated.
-        error : `BaseException` or `None`
-            Error to pass.
-        """
-        diaObject["{}PSFluxSigma".format(filterName)] = np.nan
+            self.fail(diaObject,
+                      ["{}{}".format(filterName, colName)
+                       for colName in self.outputCols])
 
 
 class Chi2DiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -355,26 +313,14 @@ class Chi2DiaPsFlux(DiaObjectCalculationPlugin):
             Simple, string name of the filter for the flux being calculated.
         """
         if len(filterDiaFluxes) > 0:
+            delta = (filterDiaFluxes["psFlux"] -
+                     diaObject["{}PSFluxMean".format(filterName)])
             diaObject["{}PSFluxChi2".format(filterName)] = np.nansum(
-                ((filterDiaFluxes["psFlux"] -
-                  diaObject["{}PSFluxMean".format(filterName)]) /
-                 filterDiaFluxes["psFluxErr"]) ** 2)
+                (delta / filterDiaFluxes["psFluxErr"]) ** 2)
         else:
-            self.fail(diaObject, filterName)
-
-    def fail(self, diaObject, filterName, error=None):
-        """Set diaObject values to nan.
-
-        Parameters
-        ----------
-        diaObject : `dict`
-            Summary object to store values in.
-        filterName : `str`
-            Simple name of the filter for the flux being calculated.
-        error : `BaseException` or `None`
-            Error to pass.
-        """
-        diaObject["{}PSFluxChi2".format(filterName)] = np.nan
+            self.fail(diaObject,
+                      ["{}{}".format(filterName, colName)
+                       for colName in self.outputCols])
 
 
 class MadDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -423,21 +369,9 @@ class MadDiaPsFlux(DiaObjectCalculationPlugin):
                                           ignore_nan=True)
             )
         else:
-            self.fail(diaObject, filterName)
-
-    def fail(self, diaObject, filterName, error=None):
-        """Set diaObject values to nan.
-
-        Parameters
-        ----------
-        diaObject : `dict`
-            Summary object to store values in.
-        filterName : `str`
-            Simple name of the filter for the flux being calculated.
-        error : `BaseException` or `None`
-            Error to pass.
-        """
-        diaObject["{}PSFluxMAD".format(filterName)] = np.nan
+            self.fail(diaObject,
+                      ["{}{}".format(filterName, colName)
+                       for colName in self.outputCols])
 
 
 class SkewDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -486,21 +420,9 @@ class SkewDiaPsFlux(DiaObjectCalculationPlugin):
                 skew(fluxes[~np.isnan(fluxes)])
             )
         else:
-            self.fail(diaObject, filterName)
-
-    def fail(self, diaObject, filterName, error=None):
-        """Set diaObject values to nan.
-
-        Parameters
-        ----------
-        diaObject : `dict`
-            Summary object to store values in.
-        filterName : `str`
-            Simple name of the filter for the flux being calculated.
-        error : `BaseException` or `None`
-            Error to pass.
-        """
-        diaObject["{}PSFluxSkew".format(filterName)] = np.nan
+            self.fail(diaObject,
+                      ["{}{}".format(filterName, colName)
+                       for colName in self.outputCols])
 
 
 class MinMaxDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -548,22 +470,9 @@ class MinMaxDiaPsFlux(DiaObjectCalculationPlugin):
             diaObject["{}PSFluxMin".format(filterName)] = np.min(fluxes)
             diaObject["{}PSFluxMax".format(filterName)] = np.max(fluxes)
         else:
-            self.fail(diaObject, filterName)
-
-    def fail(self, diaObject, filterName, error=None):
-        """Set diaObject values to nan.
-
-        Parameters
-        ----------
-        diaObject : `dict`
-            Summary object to store values in.
-        filterName : `str`
-            Simple name of the filter for the flux being calculated.
-        error : `BaseException` or `None`
-            Error to pass.
-        """
-        diaObject["{}PSFluxMin".format(filterName)] = np.nan
-        diaObject["{}PSFluxMax".format(filterName)] = np.nan
+            self.fail(diaObject,
+                      ["{}{}".format(filterName, colName)
+                       for colName in self.outputCols])
 
 
 class MaxSlopeDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -613,21 +522,9 @@ class MaxSlopeDiaPsFlux(DiaObjectCalculationPlugin):
             diaObject["{}PSFluxMaxSlope".format(filterName)] = np.max(
                 (fluxes[1:] - fluxes[:-1]) / (times[1:] - times[:-1]))
         else:
-            self.fail(diaObject, filterName)
-
-    def fail(self, diaObject, filterName, error=None):
-        """Set diaObject values to nan.
-
-        Parameters
-        ----------
-        diaObject : `dict`
-            Summary object to store values in.
-        filterName : `str`
-            Simple name of the filter for the flux being calculated.
-        error : `BaseException` or `None`
-            Error to pass.
-        """
-        diaObject["{}PSFluxMaxSlope".format(filterName)] = np.nan
+            self.fail(diaObject,
+                      ["{}{}".format(filterName, colName)
+                       for colName in self.outputCols])
 
 
 class ErrMeanDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -674,21 +571,9 @@ class ErrMeanDiaPsFlux(DiaObjectCalculationPlugin):
             diaObject["{}PSFluxErrMean".format(filterName)] = np.nanmean(
                 filterDiaFluxes["psFluxErr"])
         else:
-            self.fail(diaObject, filterName)
-
-    def fail(self, diaObject, filterName, error=None):
-        """Set diaObject values to nan.
-
-        Parameters
-        ----------
-        diaObject : `dict`
-            Summary object to store values in.
-        filterName : `str`
-            Simple name of the filter for the flux being calculated.
-        error : `BaseException` or `None`
-            Error to pass.
-        """
-        diaObject["{}PSFluxErrMean".format(filterName)] = np.nan
+            self.fail(diaObject,
+                      ["{}{}".format(filterName, colName)
+                       for colName in self.outputCols])
 
 
 class LinearFitDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -743,22 +628,9 @@ class LinearFitDiaPsFlux(DiaObjectCalculationPlugin):
             diaObject["{}PSFluxLinearSlope".format(filterName)] = m
             diaObject["{}PSFluxLinearIntercept".format(filterName)] = b
         else:
-            self.fail(diaObject, filterName)
-
-    def fail(self, diaObject, filterName, error=None):
-        """Set diaObject values to nan.
-
-        Parameters
-        ----------
-        diaObject : `dict`
-            Summary object to store values in.
-        filterName : `str`
-            Simple name of the filter for the flux being calculated.
-        error : `BaseException` or `None`
-            Error to pass.
-        """
-        diaObject["{}PSFluxLinearSlope".format(filterName)] = np.nan
-        diaObject["{}PSFluxLinearIntercept".format(filterName)] = np.nan
+            self.fail(diaObject,
+                      ["{}{}".format(filterName, colName)
+                       for colName in self.outputCols])
 
 
 class StetsonJDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -814,7 +686,9 @@ class StetsonJDiaPsFlux(DiaObjectCalculationPlugin):
                 errors,
                 diaObject["{}PSFluxMean".format(filterName)])
         else:
-            self.fail(diaObject, filterName)
+            self.fail(diaObject,
+                      ["{}{}".format(filterName, colName)
+                       for colName in self.outputCols])
 
     def _stetson_J(self, fluxes, errors, mean=None):
         """Compute the single band stetsonJ statistic.
@@ -871,15 +745,15 @@ class StetsonJDiaPsFlux(DiaObjectCalculationPlugin):
             Starting mean value or None.
         alpha : `float`
             Scalar down-weighting of the fractional difference. lower->more
-            clipping
+            clipping. (Default value is 2.)
         beta : `float`
             Power law slope of the used to down-weight outliers. higher->more
-            clipping
+            clipping. (Default value is 2.)
         n_iter : `int`
             Number of iterations of clipping.
         tol : `float`
             Fractional and absolute tolerance goal on the change in the mean
-            before exiting early.
+            before exiting early. (Default value is 1e-6)
 
         Returns
         -------
@@ -907,20 +781,6 @@ class StetsonJDiaPsFlux(DiaObjectCalculationPlugin):
             if diff / mean < tol and diff < tol:
                 break
         return mean
-
-    def fail(self, diaObject, filterName, error=None):
-        """Set diaObject values to nan.
-
-        Parameters
-        ----------
-        diaObject : `dict`
-            Summary object to store values in.
-        filterName : `str`
-            Simple name of the filter for the flux being calculated.
-        error : `BaseException` or `None`
-            Error to pass.
-        """
-        diaObject["{}PSFluxStetsonJ".format(filterName)] = np.nan
 
 
 class WeightedMeanDiaTotFluxConfig(DiaObjectCalculationPluginConfig):
@@ -976,22 +836,9 @@ class WeightedMeanDiaTotFlux(DiaObjectCalculationPlugin):
             diaObject["{}TOTFluxMean".format(filterName)] = fluxMean
             diaObject["{}TOTFluxMeanErr".format(filterName)] = fluxMeanErr
         else:
-            self.fail(diaObject, filterName)
-
-    def fail(self, diaObject, filterName, error=None):
-        """Set diaObject position values to nan.
-
-        Parameters
-        ----------
-        diaObject : `dict`
-            Summary object to store values in.
-        filterName : `str`
-            Simple name of the filter for the flux being calculated.
-        error : `BaseException` or `None`
-            Error to pass.
-        """
-        diaObject["{}TOTFluxMean".format(filterName)] = np.nan
-        diaObject["{}TOTFluxMeanErr".format(filterName)] = np.nan
+            self.fail(diaObject,
+                      ["{}{}".format(filterName, colName)
+                       for colName in self.outputCols])
 
 
 class SigmaDiaTotFluxConfig(DiaObjectCalculationPluginConfig):
@@ -1037,18 +884,6 @@ class SigmaDiaTotFlux(DiaObjectCalculationPlugin):
             diaObject["{}TOTFluxSigma".format(filterName)] = np.nanstd(
                 filterDiaFluxes["totFlux"])
         else:
-            self.fail(diaObject, filterName)
-
-    def fail(self, diaObject, filterName, error=None):
-        """Set diaObject values to nan.
-
-        Parameters
-        ----------
-        diaObject : `dict`
-            Summary object to store values in.
-        filterName : `str`
-            Simple name of the filter for the flux being calculated.
-        error : `BaseException` or `None`
-            Error to pass.
-        """
-        diaObject["{}TOTFluxSigma".format(filterName)] = np.nan
+            self.fail(diaObject,
+                      ["{}{}".format(filterName, colName)
+                       for colName in self.outputCols])

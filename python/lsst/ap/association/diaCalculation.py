@@ -132,6 +132,22 @@ class DiaObjectCalculationPlugin(CatalogCalculationPlugin):
         """
         raise NotImplementedError()
 
+    def fail(self, diaObject, columns, error=None):
+        """Set diaObject position values to nan.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in.
+        columns : `list` of `str`
+            List of string names of columns to write a the failed value.
+        error : `BaseException` or `None`
+            Error to pass. Kept for consistency with CatologCalculationPlugin.
+            Unused.
+        """
+        for colName in columns:
+            diaObject[colName] = np.nan
+
 
 class DiaObjectCalculationConfig(CatalogCalculationConfig):
     """Config class for the catalog calculation driver task.
