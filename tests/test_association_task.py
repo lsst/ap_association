@@ -411,11 +411,17 @@ class TestAssociationTask(unittest.TestCase):
         dia_source['ccdVisitId'] = ccdVisitId
         dia_source["midPointTai"] = midPointTai
         dia_source["psFlux"] = flux / self.flux0
-        dia_source["psFluxErr"] = \
-            np.sqrt((fluxErr / self.flux0) ** 2 + (flux * self.flux0_err / self.flux0 ** 2) ** 2)
+        dia_source["psFluxErr"] = np.sqrt(
+            (fluxErr / self.flux0) ** 2 +
+            (flux * self.flux0_err / self.flux0 ** 2) ** 2)
         dia_source["apFlux"] = flux / self.flux0
-        dia_source["apFluxErr"] = \
-            np.sqrt((fluxErr / self.flux0) ** 2 + (flux * self.flux0_err / self.flux0 ** 2) ** 2)
+        dia_source["apFluxErr"] = np.sqrt(
+            (fluxErr / self.flux0) ** 2 +
+            (flux * self.flux0_err / self.flux0 ** 2) ** 2)
+        dia_source["totFlux"] = flux / self.flux0
+        dia_source["totFluxErr"] = np.sqrt(
+            (fluxErr / self.flux0) ** 2 +
+            (flux * self.flux0_err / self.flux0 ** 2) ** 2)
         dia_source["filterName"] = filterName
         dia_source["filterId"] = filterId
         dia_source["x"] = 0.
@@ -561,7 +567,7 @@ class TestAssociationTask(unittest.TestCase):
              'gPSFluxMean': 1.28571426, 'gPSFluxMeanErr': 0.01195228, 'gPSFluxSigma': 0.70710678,
              'rPSFluxMean': 1., 'rPSFluxMeanErr': 1., 'rPSFluxSigma': 1.},
             {'id': 14,
-             'gPSFluxMean': 2., 'gPSFluxMeanErr': np.nan, 'gPSFluxSigma': np.nan,
+             'gPSFluxMean': 2., 'gPSFluxMeanErr': 0.022360680624842644, 'gPSFluxSigma': np.nan,
              'rPSFluxMean': np.nan, 'rPSFluxMeanErr': np.nan, 'rPSFluxSigma': np.nan}
         ]
 

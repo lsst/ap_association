@@ -307,6 +307,24 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
                 Catalog of DiaObjects  that were updated or created by this
                 task (`pandas.DataFrame`).
         """
+        if isinstance(diaObjectCat.index, pd.RangeIndex):
+            diaObjectCat.set_index("diaObjectId", inplace=True)
+        elif diaObjectCat.index.name != "diaObjectId":
+            self.log.warn(
+                "Input diaObjectCat is indexed on column(s) incompatible with "
+                "this task. Should be indexed on 'diaObjectId'.")
+
+        if isinstance(diaSourceCat.index, pd.RangeIndex):
+            diaSourceCat.set_index(
+                ["diaObjectId", "filterName", "diaSourceId"],
+                inplace=True)
+        elif (diaSourceCat.index.names !=
+              ["diaObjectId", "filterName", "diaSourceId"]):
+            self.log.warn(
+                "Input diaSourceCat is indexed on column(s) incompatible with "
+                "this task. Should be indexed on 'multi-index, "
+                "['diaObjectId', 'filterName', 'diaSourceId'].")
+
         return self.callCompute(diaObjectCat,
                                 diaSourceCat,
                                 updatedDiaObjectIds,

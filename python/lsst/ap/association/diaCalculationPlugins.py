@@ -223,7 +223,7 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
     def calculate(self,
                   diaObject,
                   diaSources,
-                  filterDiaFluxes,
+                  filterDiaSources,
                   filterName,
                   **kwargs):
         """Compute the weighted mean and mean error of the point source flux.
@@ -235,19 +235,19 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
         diaSources : `pandas.DataFrame`
             DataFrame representing all diaSources associated with this
             diaObject.
-        filterDiaFluxes : `pandas.DataFrame`
+        filterDiaSources : `pandas.DataFrame`
             DataFrame representing diaSources associated with this
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaFluxes) > 0:
-            tot_weight = np.nansum(1 / filterDiaFluxes["psFluxErr"] ** 2)
-            fluxMean = np.nansum(filterDiaFluxes["psFlux"] /
-                                 filterDiaFluxes["psFluxErr"] ** 2)
+        if len(filterDiaSources) > 0:
+            tot_weight = np.nansum(1 / filterDiaSources["psFluxErr"] ** 2)
+            fluxMean = np.nansum(filterDiaSources["psFlux"] /
+                                 filterDiaSources["psFluxErr"] ** 2)
             fluxMean /= tot_weight
             fluxMeanErr = np.sqrt(1 / tot_weight)
-            nFluxData = np.sum(np.isfinite(filterDiaFluxes["psFlux"]))
+            nFluxData = np.sum(np.isfinite(filterDiaSources["psFlux"]))
         else:
             fluxMean = np.nan
             fluxMeanErr = np.nan
@@ -308,7 +308,7 @@ class PercentileDiaPsFlux(DiaObjectCalculationPlugin):
     def calculate(self,
                   diaObject,
                   diaSources,
-                  filterDiaFluxes,
+                  filterDiaSources,
                   filterName,
                   **kwargs):
         """Compute the percentile fluxes of the point source flux.
@@ -320,14 +320,14 @@ class PercentileDiaPsFlux(DiaObjectCalculationPlugin):
         diaSources : `pandas.DataFrame`
             DataFrame representing all diaSources associated with this
             diaObject.
-        filterDiaFluxes : `pandas.DataFrame`
+        filterDiaSources : `pandas.DataFrame`
             DataFrame representing diaSources associated with this
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaFluxes) > 0:
-            pTiles = np.nanpercentile(filterDiaFluxes["psFlux"],
+        if len(filterDiaSources) > 0:
+            pTiles = np.nanpercentile(filterDiaSources["psFlux"],
                                       self.config.percentiles)
             for pTile, tilePercent in zip(pTiles, self.config.percentiles):
                 diaObject[
@@ -359,7 +359,7 @@ class SigmaDiaPsFlux(DiaObjectCalculationPlugin):
     def calculate(self,
                   diaObject,
                   diaSources,
-                  filterDiaFluxes,
+                  filterDiaSources,
                   filterName,
                   **kwargs):
         """Compute the sigma fluxes of the point source flux.
@@ -371,15 +371,18 @@ class SigmaDiaPsFlux(DiaObjectCalculationPlugin):
         diaSources : `pandas.DataFrame`
             DataFrame representing all diaSources associated with this
             diaObject.
-        filterDiaFluxes : `pandas.DataFrame`
+        filterDiaSources : `pandas.DataFrame`
             DataFrame representing diaSources associated with this
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaFluxes) > 1:
+        # Set "delta degrees of freedom (ddf)" to 1 to calculate the unbiased
+        # estimator of scatter (i.e. 'N - 1' instead of 'N').
+        if len(filterDiaSources) > 1:
             diaObject["{}PSFluxSigma".format(filterName)] = np.nanstd(
-                filterDiaFluxes["psFlux"])
+                filterDiaSources["psFlux"],
+                ddof=1)
         else:
             self.fail(diaObject,
                       ["{}{}".format(filterName, colName)
@@ -409,7 +412,7 @@ class Chi2DiaPsFlux(DiaObjectCalculationPlugin):
     def calculate(self,
                   diaObject,
                   diaSources,
-                  filterDiaFluxes,
+                  filterDiaSources,
                   filterName,
                   **kwargs):
         """Compute the chi2 of the point source fluxes.
@@ -421,17 +424,17 @@ class Chi2DiaPsFlux(DiaObjectCalculationPlugin):
         diaSources : `pandas.DataFrame`
             DataFrame representing all diaSources associated with this
             diaObject.
-        filterDiaFluxes : `pandas.DataFrame`
+        filterDiaSources : `pandas.DataFrame`
             DataFrame representing diaSources associated with this
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaFluxes) > 0:
-            delta = (filterDiaFluxes["psFlux"] -
+        if len(filterDiaSources) > 0:
+            delta = (filterDiaSources["psFlux"] -
                      diaObject["{}PSFluxMean".format(filterName)])
             diaObject["{}PSFluxChi2".format(filterName)] = np.nansum(
-                (delta / filterDiaFluxes["psFluxErr"]) ** 2)
+                (delta / filterDiaSources["psFluxErr"]) ** 2)
         else:
             self.fail(diaObject,
                       ["{}{}".format(filterName, colName)
@@ -460,7 +463,7 @@ class MadDiaPsFlux(DiaObjectCalculationPlugin):
     def calculate(self,
                   diaObject,
                   diaSources,
-                  filterDiaFluxes,
+                  filterDiaSources,
                   filterName,
                   **kwargs):
         """Compute the median absolute deviation of the point source fluxes.
@@ -472,15 +475,15 @@ class MadDiaPsFlux(DiaObjectCalculationPlugin):
         diaSources : `pandas.DataFrame`
             DataFrame representing all diaSources associated with this
             diaObject.
-        filterDiaFluxes : `pandas.DataFrame`
+        filterDiaSources : `pandas.DataFrame`
             DataFrame representing diaSources associated with this
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaFluxes) > 0:
+        if len(filterDiaSources) > 0:
             diaObject["{}PSFluxMAD".format(filterName)] = (
-                median_absolute_deviation(filterDiaFluxes["psFlux"],
+                median_absolute_deviation(filterDiaSources["psFlux"],
                                           ignore_nan=True)
             )
         else:
@@ -511,7 +514,7 @@ class SkewDiaPsFlux(DiaObjectCalculationPlugin):
     def calculate(self,
                   diaObject,
                   diaSources,
-                  filterDiaFluxes,
+                  filterDiaSources,
                   filterName,
                   **kwargs):
         """Compute the skew of the point source fluxes.
@@ -523,14 +526,14 @@ class SkewDiaPsFlux(DiaObjectCalculationPlugin):
         diaSources : `pandas.DataFrame`
             DataFrame representing all diaSources associated with this
             diaObject.
-        filterDiaFluxes : `pandas.DataFrame`
+        filterDiaSources : `pandas.DataFrame`
             DataFrame representing diaSources associated with this
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaFluxes) > 0:
-            fluxes = filterDiaFluxes["psFlux"]
+        if len(filterDiaSources) > 0:
+            fluxes = filterDiaSources["psFlux"]
             diaObject["{}PSFluxSkew".format(filterName)] = (
                 skew(fluxes[~np.isnan(fluxes)])
             )
@@ -562,7 +565,7 @@ class MinMaxDiaPsFlux(DiaObjectCalculationPlugin):
     def calculate(self,
                   diaObject,
                   diaSources,
-                  filterDiaFluxes,
+                  filterDiaSources,
                   filterName,
                   **kwargs):
         """Compute min/max of the point source fluxes.
@@ -574,14 +577,14 @@ class MinMaxDiaPsFlux(DiaObjectCalculationPlugin):
         diaSources : `pandas.DataFrame`
             DataFrame representing all diaSources associated with this
             diaObject.
-        filterDiaFluxes : `pandas.DataFrame`
+        filterDiaSources : `pandas.DataFrame`
             DataFrame representing diaSources associated with this
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaFluxes) > 0:
-            fluxes = filterDiaFluxes["psFlux"]
+        if len(filterDiaSources) > 0:
+            fluxes = filterDiaSources["psFlux"]
             diaObject["{}PSFluxMin".format(filterName)] = np.min(fluxes)
             diaObject["{}PSFluxMax".format(filterName)] = np.max(fluxes)
         else:
@@ -612,7 +615,7 @@ class MaxSlopeDiaPsFlux(DiaObjectCalculationPlugin):
     def calculate(self,
                   diaObject,
                   diaSources,
-                  filterDiaFluxes,
+                  filterDiaSources,
                   filterName,
                   **kwargs):
         """Compute the maximum ratio time ordered deltaFlux / deltaTime.
@@ -624,14 +627,14 @@ class MaxSlopeDiaPsFlux(DiaObjectCalculationPlugin):
         diaSources : `pandas.DataFrame`
             DataFrame representing all diaSources associated with this
             diaObject.
-        filterDiaFluxes : `pandas.DataFrame`
+        filterDiaSources : `pandas.DataFrame`
             DataFrame representing diaSources associated with this
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaFluxes) > 1:
-            tmpDiaSources = filterDiaFluxes[~np.isnan(filterDiaFluxes["psFlux"])]
+        if len(filterDiaSources) > 1:
+            tmpDiaSources = filterDiaSources[~np.isnan(filterDiaSources["psFlux"])]
             fluxes = tmpDiaSources["psFlux"].to_numpy()
             times = tmpDiaSources["midPointTai"].to_numpy()
             diaObject["{}PSFluxMaxSlope".format(filterName)] = np.max(
@@ -664,7 +667,7 @@ class ErrMeanDiaPsFlux(DiaObjectCalculationPlugin):
     def calculate(self,
                   diaObject,
                   diaSources,
-                  filterDiaFluxes,
+                  filterDiaSources,
                   filterName,
                   **kwargs):
         """Compute the mean of the dia source errors.
@@ -676,15 +679,15 @@ class ErrMeanDiaPsFlux(DiaObjectCalculationPlugin):
         diaSources : `pandas.DataFrame`
             DataFrame representing all diaSources associated with this
             diaObject.
-        filterDiaFluxes : `pandas.DataFrame`
+        filterDiaSources : `pandas.DataFrame`
             DataFrame representing diaSources associated with this
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaFluxes) > 0:
+        if len(filterDiaSources) > 0:
             diaObject["{}PSFluxErrMean".format(filterName)] = np.nanmean(
-                filterDiaFluxes["psFluxErr"])
+                filterDiaSources["psFluxErr"])
         else:
             self.fail(diaObject,
                       ["{}{}".format(filterName, colName)
@@ -713,7 +716,7 @@ class LinearFitDiaPsFlux(DiaObjectCalculationPlugin):
     def calculate(self,
                   diaObject,
                   diaSources,
-                  filterDiaFluxes,
+                  filterDiaSources,
                   filterName,
                   **kwargs):
         """Compute fit a linear model to flux vs time.
@@ -725,16 +728,16 @@ class LinearFitDiaPsFlux(DiaObjectCalculationPlugin):
         diaSources : `pandas.DataFrame`
             DataFrame representing all diaSources associated with this
             diaObject.
-        filterDiaFluxes : `pandas.DataFrame`
+        filterDiaSources : `pandas.DataFrame`
             DataFrame representing diaSources associated with this
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaFluxes) > 1:
-            tmpDiaSources = filterDiaFluxes[
-                ~np.logical_or(np.isnan(filterDiaFluxes["psFlux"]),
-                               np.isnan(filterDiaFluxes["psFluxErr"]))]
+        if len(filterDiaSources) > 1:
+            tmpDiaSources = filterDiaSources[
+                ~np.logical_or(np.isnan(filterDiaSources["psFlux"]),
+                               np.isnan(filterDiaSources["psFluxErr"]))]
             fluxes = tmpDiaSources["psFlux"].to_numpy()
             errors = tmpDiaSources["psFluxErr"].to_numpy()
             times = tmpDiaSources["midPointTai"].to_numpy()
@@ -771,7 +774,7 @@ class StetsonJDiaPsFlux(DiaObjectCalculationPlugin):
     def calculate(self,
                   diaObject,
                   diaSources,
-                  filterDiaFluxes,
+                  filterDiaSources,
                   filterName,
                   **kwargs):
         """Compute the StetsonJ statistic on the DIA point source fluxes.
@@ -783,16 +786,16 @@ class StetsonJDiaPsFlux(DiaObjectCalculationPlugin):
         diaSources : `pandas.DataFrame`
             DataFrame representing all diaSources associated with this
             diaObject.
-        filterDiaFluxes : `pandas.DataFrame`
+        filterDiaSources : `pandas.DataFrame`
             DataFrame representing diaSources associated with this
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaFluxes) > 1:
-            tmpDiaSources = filterDiaFluxes[
-                ~np.logical_or(np.isnan(filterDiaFluxes["psFlux"]),
-                               np.isnan(filterDiaFluxes["psFluxErr"]))]
+        if len(filterDiaSources) > 1:
+            tmpDiaSources = filterDiaSources[
+                ~np.logical_or(np.isnan(filterDiaSources["psFlux"]),
+                               np.isnan(filterDiaSources["psFluxErr"]))]
             fluxes = tmpDiaSources["psFlux"].to_numpy()
             errors = tmpDiaSources["psFluxErr"].to_numpy()
 
@@ -920,7 +923,7 @@ class WeightedMeanDiaTotFlux(DiaObjectCalculationPlugin):
     def calculate(self,
                   diaObject,
                   diaSources,
-                  filterDiaFluxes,
+                  filterDiaSources,
                   filterName,
                   **kwargs):
         """Compute the weighted mean and mean error of the point source flux.
@@ -932,16 +935,16 @@ class WeightedMeanDiaTotFlux(DiaObjectCalculationPlugin):
         diaSources : `pandas.DataFrame`
             DataFrame representing all diaSources associated with this
             diaObject.
-        filterDiaFluxes : `pandas.DataFrame`
+        filterDiaSources : `pandas.DataFrame`
             DataFrame representing diaSources associated with this
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaFluxes) > 0:
-            tot_weight = np.nansum(1 / filterDiaFluxes["totFluxErr"] ** 2)
-            fluxMean = np.nansum(filterDiaFluxes["totFlux"] /
-                                 filterDiaFluxes["totFluxErr"] ** 2)
+        if len(filterDiaSources) > 0:
+            tot_weight = np.nansum(1 / filterDiaSources["totFluxErr"] ** 2)
+            fluxMean = np.nansum(filterDiaSources["totFlux"] /
+                                 filterDiaSources["totFluxErr"] ** 2)
             fluxMean /= tot_weight
             fluxMeanErr = np.sqrt(1 / tot_weight)
         else:
@@ -976,7 +979,7 @@ class SigmaDiaTotFlux(DiaObjectCalculationPlugin):
     def calculate(self,
                   diaObject,
                   diaSources,
-                  filterDiaFluxes,
+                  filterDiaSources,
                   filterName,
                   **kwargs):
         """Compute the sigma fluxes of the point source flux measured on the
@@ -989,15 +992,17 @@ class SigmaDiaTotFlux(DiaObjectCalculationPlugin):
         diaSources : `pandas.DataFrame`
             DataFrame representing all diaSources associated with this
             diaObject.
-        filterDiaFluxes : `pandas.DataFrame`
+        filterDiaSources : `pandas.DataFrame`
             DataFrame representing diaSources associated with this
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaFluxes) > 1:
+        # Set "delta degrees of freedom (ddf)" to 1 to calculate the unbiased
+        # estimator of scatter (i.e. 'N - 1' instead of 'N').
+        if len(filterDiaSources) > 1:
             diaObject["{}TOTFluxSigma".format(filterName)] = np.nanstd(
-                filterDiaFluxes["totFlux"])
+                filterDiaSources["totFlux"])
         else:
             self.fail(diaObject,
                       ["{}{}".format(filterName, colName)
