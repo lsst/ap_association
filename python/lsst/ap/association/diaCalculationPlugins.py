@@ -1002,7 +1002,8 @@ class SigmaDiaTotFlux(DiaObjectCalculationPlugin):
         # estimator of scatter (i.e. 'N - 1' instead of 'N').
         if len(filterDiaSources) > 1:
             diaObject["{}TOTFluxSigma".format(filterName)] = np.nanstd(
-                filterDiaSources["totFlux"])
+                filterDiaSources["totFlux"],
+                ddof=1)
         else:
             self.fail(diaObject,
                       ["{}{}".format(filterName, colName)

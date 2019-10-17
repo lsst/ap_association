@@ -318,28 +318,6 @@ class AssociationTask(pipeBase.Task):
 
         return results.diaObjectCat
 
-    def _initialize_dia_object(self, obj_id):
-        """Input default values for non-Nullable DiaObject columns.
-
-        Parameters
-        ----------
-        obj_id : `int`
-            Id to asign to the new object.
-
-        Returns
-        -------
-        new_dia_object : `dict`
-            Dictionary with default values.
-        """
-        new_dia_object = {"diaObjectId": obj_id,
-                          "pmParallaxNdata": 0,
-                          "nearbyObj1": 0,
-                          "nearbyObj2": 0,
-                          "nearbyObj3": 0}
-        for f in ["u", "g", "r", "i", "z", "y"]:
-            new_dia_object["%sPSFluxNdata" % f] = 0
-        return new_dia_object
-
     @pipeBase.timeMethod
     def score(self, dia_objects, dia_sources, max_dist):
         """Compute a quality score for each dia_source/dia_object pair
