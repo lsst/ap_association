@@ -19,12 +19,19 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+"""Plugins for use in DiaSource summary statistics.
+
+Output columns must be
+as defined in the schema of the Ppdb both in name and units.
+"""
+
 from astropy.stats import median_absolute_deviation
 import numpy as np
 from scipy.optimize import lsq_linear
 from scipy.stats import skew
 
 import lsst.geom as geom
+from lsst.meas.algorithms.indexerRegistry import IndexerRegistry
 import lsst.pex.config as pexConfig
 
 from .diaCalculation import (
@@ -33,6 +40,9 @@ from .diaCalculation import (
 from lsst.meas.base.pluginRegistry import register
 
 __all__ = ("MeanDiaPositionConfig", "MeanDiaPosition",
+           "HTMIndexDiaPosition", "HTMIndexDiaPositionConfig",
+           "NumDiaSourcesDiaPlugin", "NumDiaSourcesDiaPluginConfig",
+           "SimpleSourceFlagDiaPlugin", "SimpleSourceFlagDiaPluginConfig",
            "WeightedMeanDiaPsFluxConfig", "WeightedMeanDiaPsFlux",
            "PercentileDiaPsFlux", "PercentileDiaPsFluxConfig",
            "SigmaDiaPsFlux", "SigmaDiaPsFluxConfig",
@@ -58,7 +68,7 @@ class MeanDiaPosition(DiaObjectCalculationPlugin):
     """
 
     ConfigClass = MeanDiaPositionConfig
-    outputCols = ["ra", "decl"]
+    outputCols = ["ra", "decl", "radecTai"]
 
     @classmethod
     def getExecutionOrder(cls):
@@ -84,6 +94,111 @@ class MeanDiaPosition(DiaObjectCalculationPlugin):
         else:
             diaObject["ra"] = aveCoord.getRa().asDegrees()
             diaObject["decl"] = aveCoord.getDec().asDegrees()
+            diaObject["radecTai"] = np.max(diaSources["midPointTai"])
+
+
+class HTMIndexDiaPositionConfig(DiaObjectCalculationPluginConfig):
+
+    indexer = IndexerRegistry.makeField(
+        doc='Select the spatial indexer to use within the database. For this '
+            'plugin we enforce HTM pixelization. The configuration as is '
+            'allows for different resolutions to be used.',
+        default="HTM",
+    )
+
+    def validate(self):
+        self.indexer == "HTM"
+
+
+@register("ap_HTMIndex")
+class HTMIndexDiaPosition(DiaObjectCalculationPlugin):
+    """Compute the mean position of a DiaObject given a set of DiaSources.
+    """
+
+    ConfigClass = HTMIndexDiaPositionConfig
+    inputCols = ["ra", "decl"]
+    outputCols = ["pixelId"]
+
+    def __init__(self, config, name, metadata):
+        DiaObjectCalculationPlugin.__init__(self, config, name, metadata)
+        self.indexer = IndexerRegistry[self.config.indexer.name](
+            self.config.indexer.active)
+
+    @classmethod
+    def getExecutionOrder(cls):
+        return cls.FLUX_MOMENTS_CALCULATED
+
+    def calculate(self, diaObject, **kwargs):
+        """Compute the mean position of a DiaObject given a set of DiaSources
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in and read ra/decl from.
+        """
+        diaObject["pixelId"] = self.indexer.indexPoints([diaObject["ra"]],
+                                                        [diaObject["decl"]])[0]
+
+
+class NumDiaSourcesDiaPluginConfig(DiaObjectCalculationPluginConfig):
+    pass
+
+
+@register("ap_nDiaSources")
+class NumDiaSourcesDiaPlugin(DiaObjectCalculationPlugin):
+    """Compute the total number of DiaSources associated with this DiaObject.
+    """
+
+    ConfigClass = NumDiaSourcesDiaPluginConfig
+    outputCols = ["nDiaSources"]
+
+    @classmethod
+    def getExecutionOrder(cls):
+        return cls.DEFAULT_CATALOGCALCULATION
+
+    def calculate(self, diaObject, diaSources, **kwargs):
+        """Compute the total number of DiaSources associated with this DiaObject.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in and read ra/decl from.
+        """
+        diaObject["nDiaSources"] = len(diaSources)
+
+
+class SimpleSourceFlagDiaPluginConfig(DiaObjectCalculationPluginConfig):
+    pass
+
+
+@register("ap_diaObjectFlag")
+class SimpleSourceFlagDiaPlugin(DiaObjectCalculationPlugin):
+    """Find if any DiaSource is flagged.
+
+    Set the DiaObject flag if any DiaSource is flagged.
+    """
+
+    ConfigClass = NumDiaSourcesDiaPluginConfig
+    outputCols = ["flags"]
+
+    @classmethod
+    def getExecutionOrder(cls):
+        return cls.DEFAULT_CATALOGCALCULATION
+
+    def calculate(self, diaObject, diaSources, **kwargs):
+        """Find if any DiaSource is flagged.
+
+        Set the DiaObject flag if any DiaSource is flagged.
+
+        Parameters
+        ----------
+        diaObject : `dict`
+            Summary object to store values in and read ra/decl from.
+        """
+        if np.any(diaSources["flags"] > 0):
+            diaObject["flags"] = 1
+        else:
+            diaObject["flags"] = 0
 
 
 class WeightedMeanDiaPsFluxConfig(DiaObjectCalculationPluginConfig):

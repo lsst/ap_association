@@ -27,6 +27,9 @@ import unittest
 
 from lsst.ap.association import (
     MeanDiaPosition, MeanDiaPositionConfig,
+    HTMIndexDiaPosition, HTMIndexDiaPositionConfig,
+    NumDiaSourcesDiaPlugin, NumDiaSourcesDiaPluginConfig,
+    SimpleSourceFlagDiaPlugin, SimpleSourceFlagDiaPluginConfig,
     WeightedMeanDiaPsFlux, WeightedMeanDiaPsFluxConfig,
     PercentileDiaPsFlux, PercentileDiaPsFluxConfig,
     SigmaDiaPsFlux, SigmaDiaPsFluxConfig,
@@ -53,7 +56,10 @@ class TestMeanPosition(unittest.TestCase):
         # Test expected means.
         diaObject = dict()
         diaSources = pd.DataFrame(data={"ra": np.linspace(-1, 1, n_sources),
-                                        "decl": np.zeros(n_sources)})
+                                        "decl": np.zeros(n_sources),
+                                        "midPointTai": np.linspace(0,
+                                                                   n_sources,
+                                                                   n_sources)})
         plug = MeanDiaPosition(MeanDiaPositionConfig(),
                                "ap_meanPosition",
                                None)
@@ -61,31 +67,121 @@ class TestMeanPosition(unittest.TestCase):
 
         self.assertAlmostEqual(diaObject["ra"], 0.0)
         self.assertAlmostEqual(diaObject["decl"], 0.0)
+        self.assertEqual(diaObject["radecTai"], 10)
 
         diaObject = dict()
         diaSources = pd.DataFrame(data={"ra": np.zeros(n_sources),
-                                        "decl": np.linspace(-1, 1, n_sources)})
+                                        "decl": np.linspace(-1, 1, n_sources),
+                                        "midPointTai": np.linspace(0,
+                                                                   n_sources,
+                                                                   n_sources)})
         plug.calculate(diaObject, diaSources)
 
         self.assertAlmostEqual(diaObject["ra"], 0.0)
         self.assertAlmostEqual(diaObject["decl"], 0.0)
+        self.assertEqual(diaObject["radecTai"], 10)
 
         # Test failure modes.
         diaObject = dict()
         diaSources = pd.DataFrame(data={"ra": np.full(n_sources, np.nan),
-                                        "decl": np.zeros(n_sources)})
+                                        "decl": np.zeros(n_sources),
+                                        "midPointTai": np.linspace(0,
+                                                                   n_sources,
+                                                                   n_sources)})
         plug.calculate(diaObject, diaSources)
 
         self.assertTrue(np.isnan(diaObject["ra"]))
         self.assertTrue(np.isnan(diaObject["decl"]))
+        self.assertTrue(np.isnan(diaObject["radecTai"]))
 
         diaObject = dict()
         diaSources = pd.DataFrame(data={"ra": np.zeros(n_sources),
-                                        "decl": np.full(n_sources, np.nan)})
+                                        "decl": np.full(n_sources, np.nan),
+                                        "midPointTai": np.linspace(0,
+                                                                   n_sources,
+                                                                   n_sources)})
         plug.calculate(diaObject, diaSources)
 
         self.assertTrue(np.isnan(diaObject["ra"]))
         self.assertTrue(np.isnan(diaObject["decl"]))
+        self.assertTrue(np.isnan(diaObject["radecTai"]))
+
+
+class TestHTMIndexPosition(unittest.TestCase):
+
+    def testCalculate(self):
+        """Test HTMPixel assignment calculation.
+        """
+        # Test expected pixelIds.
+        diaObject = dict()
+        diaObject["ra"] = 0.
+        diaObject["decl"] = 0.
+        plug = HTMIndexDiaPosition(HTMIndexDiaPositionConfig(),
+                                   "ap_HTMIndex",
+                                   None)
+        plug.calculate(diaObject)
+        self.assertAlmostEqual(diaObject["pixelId"], 131072)
+
+        diaObject = dict()
+        diaObject["ra"] = 45.37
+        diaObject["decl"] = 13.67
+        plug.calculate(diaObject)
+        self.assertAlmostEqual(diaObject["pixelId"], 260033)
+
+
+class TestNDiaSourcesDiaPlugin(unittest.TestCase):
+
+    def testCalculate(self):
+        """Test that the number of DiaSources is correct.
+        """
+
+        for n_sources in [0, 8, 10]:
+            # Test expected means.
+            diaObject = dict()
+            diaSources = pd.DataFrame(data={"ra": np.linspace(-1, 1, n_sources),
+                                            "decl": np.zeros(n_sources)})
+            plug = NumDiaSourcesDiaPlugin(NumDiaSourcesDiaPluginConfig(),
+                                          "ap_nDiaSources",
+                                          None)
+            plug.calculate(diaObject, diaSources)
+
+
+class TestSimpleSourceFlagDiaPlugin(unittest.TestCase):
+
+    def testCalculate(self):
+        """Test that DiaObject flags are set.
+        """
+        n_sources = 10
+
+        # Test expected means.
+        diaObject = dict()
+        diaSources = pd.DataFrame(
+            data={"flags": np.zeros(n_sources, dtype=np.uint64)})
+        plug = SimpleSourceFlagDiaPlugin(SimpleSourceFlagDiaPluginConfig(),
+                                         "ap_diaObjectFlag",
+                                         None)
+        plug.calculate(diaObject, diaSources)
+        self.assertEqual(diaObject["flags"], 0)
+
+        diaObject = dict()
+        diaSources = diaSources = pd.DataFrame(
+            data={"flags": np.ones(n_sources, dtype=np.uint64)})
+        plug.calculate(diaObject, diaSources)
+        self.assertEqual(diaObject["flags"], 1)
+
+        diaObject = dict()
+        diaSources = diaSources = pd.DataFrame(
+            data={"flags": np.random.randint(0, 2 ** 16, size=n_sources)})
+        plug.calculate(diaObject, diaSources)
+        self.assertEqual(diaObject["flags"], 1)
+
+        diaObject = dict()
+        flag_array = np.zeros(n_sources, dtype=np.uint64)
+        flag_array[4] = 256
+        diaSources = diaSources = pd.DataFrame(
+            data={"flags": flag_array})
+        plug.calculate(diaObject, diaSources)
+        self.assertEqual(diaObject["flags"], 1)
 
 
 class TestWeightedMeanDiaPsFlux(unittest.TestCase):
