@@ -277,7 +277,7 @@ class TestSigmaDiaPsFlux(unittest.TestCase):
                               None)
         plug.calculate(diaObject, diaSources, diaSources, "u")
         self.assertAlmostEqual(diaObject["uPSFluxSigma"],
-                               np.nanstd(fluxes))
+                               np.nanstd(fluxes, ddof=1))
 
         # test no inputs
         diaObject = dict()
@@ -297,7 +297,7 @@ class TestSigmaDiaPsFlux(unittest.TestCase):
                                         "psFluxErr": np.ones(n_sources)})
         plug.calculate(diaObject, diaSources, diaSources, "r")
         self.assertAlmostEqual(diaObject["rPSFluxSigma"],
-                               np.nanstd(fluxes))
+                               np.nanstd(fluxes, ddof=1))
 
 
 class TestChi2DiaPsFlux(unittest.TestCase):
@@ -654,7 +654,7 @@ class TestSigmaDiaTotFlux(unittest.TestCase):
                                None)
         plug.calculate(diaObject, diaSources, diaSources, "u")
         self.assertAlmostEqual(diaObject["uTOTFluxSigma"],
-                               np.nanstd(fluxes))
+                               np.nanstd(fluxes, ddof=1))
 
         # test no inputs
         diaObject = dict()
@@ -674,7 +674,7 @@ class TestSigmaDiaTotFlux(unittest.TestCase):
                                         "totFluxErr": np.ones(n_sources)})
         plug.calculate(diaObject, diaSources, diaSources, "r")
         self.assertAlmostEqual(diaObject["rTOTFluxSigma"],
-                               np.nanstd(fluxes))
+                               np.nanstd(fluxes, ddof=1))
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

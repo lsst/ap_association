@@ -24,236 +24,19 @@
 
 __all__ = ["AssociationConfig", "AssociationTask"]
 
-from astropy.stats import median_absolute_deviation
 import numpy as np
 import pandas
-from scipy.optimize import lsq_linear
 from scipy.spatial import cKDTree
-from scipy.stats import skew
 
 import lsst.geom as geom
-from lsst.daf.base import DateTime
 from lsst.meas.algorithms.indexerRegistry import IndexerRegistry
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 
-from .afwUtils import make_dia_object_schema
+from .diaCalculation import DiaObjectCalculationTask
 
 # Enforce an error for unsafe column/array value setting in pandas.
 pandas.options.mode.chained_assignment = 'raise'
-
-
-def _set_mean_position(dia_object_record, dia_sources):
-    """Compute and set the mean position of the input dia_object_record using
-    the positions of the input catalog of DIASources.
-
-    Parameters
-    ----------
-    dia_object_record : `dict` or `pandas.Series`
-        SourceRecord of the DIAObject to edit.
-    dia_sources : `pandas.DataFrame`
-        Catalog of DIASources to compute a mean position from.
-    """
-    coord_list = [geom.SpherePoint(src["ra"], src["decl"], geom.degrees)
-                  for idx, src in dia_sources.iterrows()]
-    ave_coord = geom.averageSpherePoint(coord_list)
-    dia_object_record["ra"] = ave_coord.getRa().asDegrees()
-    dia_object_record["decl"] = ave_coord.getDec().asDegrees()
-
-
-def _set_flux_stats(dia_object_record, dia_sources, filter_name, filter_id):
-    """Compute the mean, standard error, and variance of a DIAObject for
-    a given band.
-
-    Parameters
-    ----------
-    dia_object_record : `dict` or `pandas.Series`
-        SourceRecord of the DIAObject to edit.
-    dia_sources : `pandas.DataFrame`
-        Catalog of DIASources to compute a mean position from.
-    filter_name : `str`
-        Name of the band pass filter to update.
-    filter_id : `int`
-        id of the filter in the AssociationDB.
-    """
-    currentFluxMask = dia_sources.loc[:, "filterId"] == filter_id
-    fluxes = dia_sources.loc[currentFluxMask, "psFlux"].replace([None], np.nan)
-    fluxErrors = dia_sources.loc[currentFluxMask, "psFluxErr"].replace([None], np.nan)
-    midpointTais = dia_sources.loc[currentFluxMask, "midPointTai"]
-
-    noNanMask = np.logical_and(np.isfinite(fluxes), np.isfinite(fluxErrors))
-    fluxes = fluxes[noNanMask]
-    fluxErrors = fluxErrors[noNanMask]
-    midpointTais = midpointTais[noNanMask]
-
-    if len(fluxes) == 1:
-        dia_object_record['%sPSFluxMean' % filter_name] = fluxes.iloc[0]
-        dia_object_record['%sPSFluxNdata' % filter_name] = 1
-    elif len(fluxes > 1):
-        fluxMean = np.average(fluxes, weights=1 / fluxErrors ** 2)
-
-        # Standard, DDPD defined columns.
-        dia_object_record['%sPSFluxMean' % filter_name] = fluxMean
-        dia_object_record['%sPSFluxMeanErr' % filter_name] = np.sqrt(
-            1 / np.sum(1 / fluxErrors ** 2))
-        dia_object_record['%sPSFluxSigma' % filter_name] = np.std(fluxes,
-                                                                  ddof=1)
-        dia_object_record["%sPSFluxChi2" % filter_name] = np.sum(
-            ((fluxMean - fluxes) / fluxErrors) ** 2)
-        dia_object_record['%sPSFluxNdata' % filter_name] = len(fluxes)
-
-        # Columns below are created in DM-18316 for use in ap_pipe/verify
-        # testing.
-        ptiles = np.percentile(fluxes, [5, 25, 50, 75, 95])
-        dia_object_record['%sPSFluxPercentile05' % filter_name] = ptiles[0]
-        dia_object_record['%sPSFluxPercentile25' % filter_name] = ptiles[1]
-        dia_object_record['%sPSFluxMedian' % filter_name] = ptiles[2]
-        dia_object_record['%sPSFluxPercentile75' % filter_name] = ptiles[3]
-        dia_object_record['%sPSFluxPercentile95' % filter_name] = ptiles[4]
-
-        dia_object_record['%sPSFluxMAD' % filter_name] = \
-            median_absolute_deviation(fluxes)
-
-        dia_object_record['%sPSFluxSkew' % filter_name] = skew(fluxes)
-
-        dia_object_record['%sPSFluxMin' % filter_name] = fluxes.min()
-        dia_object_record['%sPSFluxMax' % filter_name] = fluxes.max()
-
-        deltaFluxes = fluxes[1:] - fluxes[:-1]
-        deltaTimes = midpointTais[1:] - midpointTais[:-1]
-        dia_object_record['%sPSFluxMaxSlope' % filter_name] = np.max(
-            deltaFluxes / deltaTimes)
-
-        m, b = _fit_linear_flux_model(fluxes, fluxErrors, midpointTais)
-        dia_object_record['%sPSFluxLinearSlope' % filter_name] = m
-        dia_object_record['%sPSFluxLinearIntercept' % filter_name] = b
-
-        dia_object_record['%sPSFluxStetsonJ' % filter_name] = _stetson_J(
-            fluxes, fluxErrors)
-
-        dia_object_record['%sPSFluxErrMean' % filter_name] = \
-            np.mean(fluxErrors)
-
-    totFluxes = dia_sources.loc[:, "totFlux"].replace([None], np.nan)
-    totFluxes = totFluxes[currentFluxMask]
-    totFluxErrors = dia_sources.loc[:, "totFluxErr"].replace([None], value=np.nan)
-    totFluxErrors = totFluxErrors[currentFluxMask]
-    noNanMask = np.logical_and(np.isfinite(totFluxes),
-                               np.isfinite(totFluxErrors))
-    totFluxes = totFluxes[noNanMask]
-    totFluxErrors = totFluxErrors[noNanMask]
-
-    if len(totFluxes) == 1:
-        dia_object_record['%sTOTFluxMean' % filter_name] = totFluxes.iloc[0]
-    elif len(totFluxes) > 1:
-        fluxMean = np.average(totFluxes, weights=1 / totFluxErrors ** 2)
-        dia_object_record['%sTOTFluxMean' % filter_name] = fluxMean
-        dia_object_record['%sTOTFluxMeanErr' % filter_name] = np.sqrt(
-            1 / np.sum(1 / totFluxErrors ** 2))
-        dia_object_record['%sTOTFluxSigma' % filter_name] = np.std(totFluxes,
-                                                                   ddof=1)
-
-
-def _fit_linear_flux_model(fluxes, errors, times):
-    """Fit a linear model (m*x + b) to flux vs time.
-
-    Parameters
-    ----------
-    fluxes : `numpy.ndarray`, (N,)
-        Input fluxes.
-    errors : `numpy.ndarray`, (N,)
-        Import errors associated with fluxes.
-    times : `numpy.ndarray`, (N,)
-        Time of the flux observation.
-
-    Returns
-    -------
-    ans : tuple, (2,)
-        Slope (m) and intercept (b) values fit to the light-curve.
-    """
-    A = np.array([times / errors, 1 / errors]).transpose()
-    ans = lsq_linear(A, fluxes / errors).x
-
-    return ans
-
-
-def _stetson_J(fluxes, errors):
-    """Compute the single band stetsonJ statistic.
-
-    Parameters
-    ----------
-    fluxes : `numpy.ndarray` (N,)
-        Calibrated lightcurve flux values.
-    errors : `numpy.ndarray`
-        Errors on the calibrated lightcurve fluxes.
-
-    Returns
-    -------
-    stetsonJ : `float`
-        stetsonJ statistic for the input fluxes and errors.
-
-    References
-    ----------
-    .. [1] Stetson, P. B., "On the Automatic Determination of Light-Curve
-       Parameters for Cepheid Variables", PASP, 108, 851S, 1996
-    """
-    n_points = len(fluxes)
-    flux_mean = _stetson_mean(fluxes, errors)
-    delta_val = (
-        np.sqrt(n_points / (n_points - 1)) * (fluxes - flux_mean) / errors)
-    p_k = delta_val ** 2 - 1
-
-    return np.mean(np.sign(p_k) * np.sqrt(np.fabs(p_k)))
-
-
-def _stetson_mean(values, errors, alpha=2., beta=2., n_iter=20, tol=1e-6):
-    """Compute the stetson mean of the fluxes which down-weights outliers.
-
-    Weighted biased on an error weighted difference scaled by a constant
-    (1/``a``) and raised to the power beta. Higher betas more harshly penalize
-    outliers and ``a`` sets the number of sigma where a weighted difference of
-    1 occurs.
-
-    Parameters
-    ----------
-    values : `numpy.dnarray`, (N,)
-        Input values to compute the mean of.
-    errors : `numpy.ndarray`, (N,)
-        Errors on the input values.
-    alpha : `float`
-        Scalar downweighting of the fractional difference. lower->more clipping
-    beta : `float`
-        Power law slope of the used to down-weight outliers. higher->more
-        clipping
-    n_iter : `int`
-        Number of iterations of clipping.
-    tol : `float`
-        Fractional and absolute tolerance goal on the change in the mean before
-        exiting early.
-
-    Returns
-    -------
-    wmean : `float`
-        Weighted stetson mean result.
-
-    References
-    ----------
-    .. [1] Stetson, P. B., "On the Automatic Determination of Light-Curve
-       Parameters for Cepheid Variables", PASP, 108, 851S, 1996
-    """
-    n_points = len(values)
-    n_factor = np.sqrt(n_points / (n_points - 1))
-
-    wmean = np.average(values, weights=1 / errors ** 2)
-    for iter_idx in range(n_iter):
-        chi = np.fabs(n_factor * (values - wmean) / errors)
-        weights = 1 / (1 + (chi / alpha) ** beta)
-        tmp_wmean = np.average(values, weights=weights)
-        diff = np.fabs(tmp_wmean - wmean)
-        wmean = tmp_wmean
-        if diff / wmean < tol and diff < tol:
-            break
-    return wmean
 
 
 class AssociationConfig(pexConfig.Config):
@@ -269,6 +52,29 @@ class AssociationConfig(pexConfig.Config):
         doc='Select the spatial indexer to use within the database.',
         default='HTM'
     )
+    diaCalculation = pexConfig.ConfigurableField(
+        target=DiaObjectCalculationTask,
+        doc="Task to compute summary statistics for DiaObjects.",
+    )
+
+    def setDefaults(self):
+        self.diaCalculation.plugins = ["ap_meanPosition",
+                                       "ap_HTMIndex",
+                                       "ap_nDiaSources",
+                                       "ap_diaObjectFlag",
+                                       "ap_meanFlux",
+                                       "ap_percentileFlux",
+                                       "ap_sigmaFlux",
+                                       "ap_chi2Flux",
+                                       "ap_madFlux",
+                                       "ap_skewFlux",
+                                       "ap_minMaxFlux",
+                                       "ap_maxSlopeFlux",
+                                       "ap_meanErrFlux",
+                                       "ap_linearFit",
+                                       "ap_stetsonJ",
+                                       "ap_meanTotFlux",
+                                       "ap_sigmaTotFlux"]
 
 
 class AssociationTask(pipeBase.Task):
@@ -287,7 +93,7 @@ class AssociationTask(pipeBase.Task):
         pipeBase.Task.__init__(self, **kwargs)
         self.indexer = IndexerRegistry[self.config.indexer.name](
             self.config.indexer.active)
-        self.dia_object_schema = make_dia_object_schema()
+        self.makeSubtask("diaCalculation")
 
     @pipeBase.timeMethod
     def run(self, dia_sources, exposure, ppdb):
@@ -496,95 +302,21 @@ class AssociationTask(pipeBase.Task):
             ``diaObjectId``.
         """
         filter_name = exposure.getFilter().getName()
-        filter_id = exposure.getFilter().getId()
 
-        updated_obj_ids.sort()
-        dia_object_used = pandas.DataFrame(
-            False,
-            index=dia_objects.index,
-            columns=["used"])
+        dateTime = exposure.getInfo().getVisitInfo().getDate().toPython()
 
-        dateTime = exposure.getInfo().getVisitInfo().getDate()
-
-        dia_sources = ppdb.getDiaSources(updated_obj_ids, dateTime.toPython(),
+        dia_sources = ppdb.getDiaSources(updated_obj_ids,
+                                         dateTime,
                                          return_pandas=True)
-        dia_sources.set_index(["diaObjectId", "diaSourceId"], inplace=True)
 
-        updated_dia_objects = []
+        results = self.diaCalculation.run(dia_objects,
+                                          dia_sources,
+                                          updated_obj_ids,
+                                          filter_name)
 
-        for obj_id in updated_obj_ids:
+        ppdb.storeDiaObjects(results.updatedDiaObjects, dateTime)
 
-            try:
-                updated_dia_obj_df = dia_objects.loc[obj_id]
-                updated_dia_object = updated_dia_obj_df.to_dict()
-                updated_dia_object["diaObjectId"] = obj_id
-                dia_object_used.loc[obj_id] = True
-            except KeyError:
-                updated_dia_object = self._initialize_dia_object(obj_id)
-
-            # Select the dia_sources associated with this DIAObject id and
-            # copy the subcatalog for fast slicing.
-            obj_dia_sources = dia_sources.loc[obj_id]
-
-            _set_mean_position(updated_dia_object, obj_dia_sources)
-            indexer_id = self.indexer.indexPoints(
-                [updated_dia_object["ra"]],
-                [updated_dia_object["decl"]])[0]
-            updated_dia_object['pixelId'] = indexer_id
-            updated_dia_object["radecTai"] = dateTime.get(system=DateTime.MJD)
-
-            updated_dia_object["nDiaSources"] = len(obj_dia_sources)
-            _set_flux_stats(updated_dia_object,
-                            obj_dia_sources,
-                            filter_name,
-                            filter_id)
-
-            # TODO: DM-15930
-            #     Define and improve flagging for DiaObjects
-            # Set a flag on this DiaObject if any DiaSource that makes up this
-            # object has a flag set for any reason.
-            if np.any(obj_dia_sources["flags"] > 0):
-                updated_dia_object["flags"] = 1
-            else:
-                updated_dia_object["flags"] = 0
-
-            updated_dia_objects.append(updated_dia_object)
-
-        # Initialize DataFrame with full set of columns to properly set
-        # NaN/Null values.
-        updated_dia_objects = pandas.DataFrame(
-            data=updated_dia_objects,
-            columns=list(ppdb._schema.getColumnMap('DiaObject').keys()))
-
-        ppdb.storeDiaObjects(updated_dia_objects, dateTime.toPython())
-
-        updated_dia_objects.set_index(["diaObjectId"], inplace=True)
-
-        return dia_objects[
-            np.logical_not(dia_object_used.loc[:, "used"])].append(updated_dia_objects,
-                                                                   sort=True)
-
-    def _initialize_dia_object(self, obj_id):
-        """Input default values for non-Nullable DiaObject columns.
-
-        Parameters
-        ----------
-        obj_id : `int`
-            Id to asign to the new object.
-
-        Returns
-        -------
-        new_dia_object : `dict`
-            Dictionary with default values.
-        """
-        new_dia_object = {"diaObjectId": obj_id,
-                          "pmParallaxNdata": 0,
-                          "nearbyObj1": 0,
-                          "nearbyObj2": 0,
-                          "nearbyObj3": 0}
-        for f in ["u", "g", "r", "i", "z", "y"]:
-            new_dia_object["%sPSFluxNdata" % f] = 0
-        return new_dia_object
+        return results.diaObjectCat
 
     @pipeBase.timeMethod
     def score(self, dia_objects, dia_sources, max_dist):

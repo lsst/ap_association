@@ -125,11 +125,6 @@ columns:
   description: Standard deviation of the distribution of yTOTFlux.
   ucd: stat.stdev
   unit: nJy
-- name: uPSFluxMedian
-  type: FLOAT
-  nullable: true
-  description: Median u band flux.
-  unit: nJy
 - name: uPSFluxMAD
   type: FLOAT
   nullable: true
@@ -148,6 +143,11 @@ columns:
   type: FLOAT
   nullable: true
   description: Value at the 25% percentile of the u band fluxes.
+  unit: nJy
+- name: uPSFluxPercentile50
+  type: FLOAT
+  nullable: true
+  description: Value at the 50% percentile (median) of the u band fluxes.
   unit: nJy
 - name: uPSFluxPercentile75
   type: FLOAT
@@ -193,11 +193,6 @@ columns:
   description: Mean of the u band flux errors.
   unit: nJy
 
-- name: gPSFluxMedian
-  type: FLOAT
-  nullable: true
-  description: Median g band flux.
-  unit: nJy
 - name: gPSFluxMAD
   type: FLOAT
   nullable: true
@@ -216,6 +211,11 @@ columns:
   type: FLOAT
   nullable: true
   description: Value at the 25% percentile of the g band fluxes.
+  unit: nJy
+- name: gPSFluxPercentile50
+  type: FLOAT
+  nullable: true
+  description: Value at the 50% percentile (median) of the g band fluxes.
   unit: nJy
 - name: gPSFluxPercentile75
   type: FLOAT
@@ -262,11 +262,6 @@ columns:
   description: Mean of the g band flux errors.
   unit: nJy
 
-- name: rPSFluxMedian
-  type: FLOAT
-  nullable: true
-  description: Median r band flux.
-  unit: nJy
 - name: rPSFluxMAD
   type: FLOAT
   nullable: true
@@ -285,6 +280,11 @@ columns:
   type: FLOAT
   nullable: true
   description: Value at the 25% percentile of the r band fluxes.
+  unit: nJy
+- name: rPSFluxPercentile50
+  type: FLOAT
+  nullable: true
+  description: Value at the 50% percentile (median) of the r band fluxes.
   unit: nJy
 - name: rPSFluxPercentile75
   type: FLOAT
@@ -331,11 +331,6 @@ columns:
   description: Mean of the r band flux errors.
   unit: nJy
 
-- name: iPSFluxMedian
-  type: FLOAT
-  nullable: true
-  description: Median i band flux.
-  unit: nJy
 - name: iPSFluxMAD
   type: FLOAT
   nullable: true
@@ -354,6 +349,11 @@ columns:
   type: FLOAT
   nullable: true
   description: Value at the 25% percentile of the i band fluxes.
+  unit: nJy
+- name: iPSFluxPercentile50
+  type: FLOAT
+  nullable: true
+  description: Value at the 50% percentile (median) of the i band fluxes.
   unit: nJy
 - name: iPSFluxPercentile75
   type: FLOAT
@@ -400,11 +400,6 @@ columns:
   description: Mean of the i band flux errors.
   unit: nJy
 
-- name: zPSFluxMedian
-  type: FLOAT
-  nullable: true
-  description: Median z band flux.
-  unit: nJy
 - name: zPSFluxMAD
   type: FLOAT
   nullable: true
@@ -423,6 +418,11 @@ columns:
   type: FLOAT
   nullable: true
   description: Value at the 25% percentile of the z band fluxes.
+  unit: nJy
+- name: zPSFluxPercentile50
+  type: FLOAT
+  nullable: true
+  description: Value at the 50% percentile (median) of the z band fluxes.
   unit: nJy
 - name: zPSFluxPercentile75
   type: FLOAT
@@ -469,11 +469,6 @@ columns:
   description: Mean of the z band flux errors.
   unit: nJy
 
-- name: yPSFluxMedian
-  type: FLOAT
-  nullable: true
-  description: Median y band flux.
-  unit: nJy
 - name: yPSFluxMAD
   type: FLOAT
   nullable: true
@@ -492,6 +487,11 @@ columns:
   type: FLOAT
   nullable: true
   description: Value at the 25% percentile of the y band fluxes.
+  unit: nJy
+- name: yPSFluxPercentile50
+  type: FLOAT
+  nullable: true
+  description: Value at the 50% percentile (median) of the y band fluxes.
   unit: nJy
 - name: yPSFluxPercentile75
   type: FLOAT
