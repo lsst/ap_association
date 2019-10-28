@@ -25,7 +25,7 @@
 __all__ = ["AssociationConfig", "AssociationTask"]
 
 import numpy as np
-import pandas
+import pandas as pd
 from scipy.spatial import cKDTree
 
 import lsst.geom as geom
@@ -36,7 +36,7 @@ import lsst.pipe.base as pipeBase
 from .diaCalculation import DiaObjectCalculationTask
 
 # Enforce an error for unsafe column/array value setting in pandas.
-pandas.options.mode.chained_assignment = 'raise'
+pd.options.mode.chained_assignment = 'raise'
 
 
 class AssociationConfig(pexConfig.Config):
@@ -126,17 +126,21 @@ class AssociationTask(pipeBase.Task):
 
         dia_sources = self.check_dia_souce_radec(dia_sources)
 
-        updated_obj_ids = self.associate_sources(dia_objects, dia_sources)
+        match_result = self.associate_sources(dia_objects, dia_sources)
+
+        dia_objects = dia_objects.append(match_result.new_dia_objects,
+                                         sort=True)
 
         # Store newly associated DIASources.
         apdb.storeDiaSources(dia_sources)
         # Update previously existing DIAObjects with the information from their
         # newly association DIASources and create new DIAObjects from
         # unassociated sources.
-        dia_objects = self.update_dia_objects(dia_objects,
-                                              updated_obj_ids,
-                                              exposure,
-                                              apdb)
+        dia_objects = self.update_dia_objects(
+            dia_objects,
+            match_result.associated_dia_object_ids,
+            exposure,
+            apdb)
 
         return pipeBase.Struct(
             dia_objects=dia_objects,
@@ -177,14 +181,14 @@ class AssociationTask(pipeBase.Task):
                         for indexer_idx in indexer_indices]
         covering_dia_objects = apdb.getDiaObjects(index_ranges,
                                                   return_pandas=True)
-        ccd_mask = pandas.Series(False, index=covering_dia_objects.index)
+        ccd_mask = pd.Series(False, index=covering_dia_objects.index)
 
         for df_idx, cov_dia_object in covering_dia_objects.iterrows():
             if self._check_dia_object_position(cov_dia_object, bbox, wcs):
                 ccd_mask.loc[df_idx] = True
 
         diaObjects = covering_dia_objects[ccd_mask]
-        diaObjects.set_index("diaObjectId", inplace=True)
+        diaObjects.set_index("diaObjectId", inplace=True, drop=False)
 
         return diaObjects
 
@@ -258,9 +262,19 @@ class AssociationTask(pipeBase.Task):
 
         Returns
         -------
-        updated_ids : array-like of `int`
-            Ids of the DIAObjects that the DIASources associated to including
-            the ids of newly created DIAObjects.
+        result : `lsst.pipeBase.Struct`
+            Results struct with components:
+
+            - ``updated_and_new_dia_object_ids`` : ids of new and updated
+              dia_objects as the result of association. (`list` of `int`).
+            - ``new_dia_objects`` : Newly created DiaObjects from unassociated
+              diaSources. (`pandas.DataFrame`)
+            - ``n_updated_dia_objects`` : Number of previously know dia_objects
+              with newly associated DIASources. (`int`).
+            - ``n_new_dia_objects`` : Number of newly created DIAObjects from
+              unassociated DIASources (`int`).
+            - ``n_unupdated_dia_objects`` : Number of previous DIAObjects that
+              were not associated to a new DIASource (`int`).
         """
 
         scores = self.score(
@@ -270,7 +284,7 @@ class AssociationTask(pipeBase.Task):
 
         self._add_association_meta_data(match_result)
 
-        return match_result.associated_dia_object_ids
+        return match_result
 
     @pipeBase.timeMethod
     def update_dia_objects(self, dia_objects, updated_obj_ids, exposure, apdb):
@@ -313,7 +327,6 @@ class AssociationTask(pipeBase.Task):
                                           dia_sources,
                                           updated_obj_ids,
                                           filter_name)
-
         apdb.storeDiaObjects(results.updatedDiaObjects, dateTime)
 
         return results.diaObjectCat
@@ -453,6 +466,8 @@ class AssociationTask(pipeBase.Task):
 
             - ``updated_and_new_dia_object_ids`` : ids of new and updated
               dia_objects as the result of association. (`list` of `int`).
+            - ``new_dia_objects`` : Newly created DiaObjects from unassociated
+              diaSources. (`pandas.DataFrame`)
             - ``n_updated_dia_objects`` : Number of previously know dia_objects
               with newly associated DIASources. (`int`).
             - ``n_new_dia_objects`` : Number of newly created DIAObjects from
@@ -466,6 +481,7 @@ class AssociationTask(pipeBase.Task):
         used_dia_source = np.zeros(len(dia_sources), dtype=np.bool)
         associated_dia_object_ids = np.zeros(len(dia_sources),
                                              dtype=np.uint64)
+        new_dia_objects = []
 
         n_updated_dia_objects = 0
         n_new_dia_objects = 0
@@ -497,9 +513,14 @@ class AssociationTask(pipeBase.Task):
         # thusly to retrieve the value rather than the tuple
         for (src_idx,) in np.argwhere(np.logical_not(used_dia_source)):
             src_id = dia_sources.loc[src_idx, "diaSourceId"]
+            new_dia_objects.append(self._initialize_dia_object(src_id))
             associated_dia_object_ids[src_idx] = src_id
             dia_sources.loc[src_idx, "diaObjectId"] = src_id
             n_new_dia_objects += 1
+
+        new_dia_objects = pd.DataFrame(data=new_dia_objects,
+                                       columns=dia_objects.columns)
+        new_dia_objects.set_index("diaObjectId", inplace=True, drop=False)
 
         # Return the ids of the DIAObjects in this DIAObjectCollection that
         # were updated or newly created.
@@ -507,9 +528,47 @@ class AssociationTask(pipeBase.Task):
             n_previous_dia_objects - n_updated_dia_objects
         return pipeBase.Struct(
             associated_dia_object_ids=associated_dia_object_ids,
+            new_dia_objects=new_dia_objects,
             n_updated_dia_objects=n_updated_dia_objects,
             n_new_dia_objects=n_new_dia_objects,
             n_unassociated_dia_objects=n_unassociated_dia_objects,)
+
+    def _initialize_dia_object(self, objId):
+        """Create a new DiaObject with values required to be initialized by the
+        Ppdb.
+
+        Parameters
+        ----------
+        objid : `int`
+            ``diaObjectId`` value for the of the new DiaObject.
+
+        Returns
+        -------
+        diaObject : `dict`
+            Newly created DiaObject with keys:
+
+            ``diaObjectId``
+                Unique DiaObjectId (`int`).
+            ``pmParallaxNdata``
+                Number of data points used for parallax calculation (`int`).
+            ``nearbyObj1``
+                Id of the a nearbyObject in the Object table (`int`).
+            ``nearbyObj2``
+                Id of the a nearbyObject in the Object table (`int`).
+            ``nearbyObj3``
+                Id of the a nearbyObject in the Object table (`int`).
+            ``?PSFluxData``
+                Number of data points used to calculate point source flux
+                summary statistics in each bandpass (`int`).
+        """
+        new_dia_object = {"diaObjectId": objId,
+                          "pmParallaxNdata": 0,
+                          "nearbyObj1": 0,
+                          "nearbyObj2": 0,
+                          "nearbyObj3": 0}
+        for f in ["u", "g", "r", "i", "z", "y"]:
+            new_dia_object["%sPSFluxNdata" % f] = 0
+        return new_dia_object
 
     def _add_association_meta_data(self, match_result):
         """Store summaries of the association step in the task metadata.

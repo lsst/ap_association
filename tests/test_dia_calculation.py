@@ -63,16 +63,17 @@ class DiaPlugin(DiaObjectCalculationPlugin):
         return cls.DEFAULT_CATALOGCALCULATION
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
+                  diaObjectId,
                   diaSources,
                   filterDiaSources,
                   filterName,
                   **kwargs):
         """
         """
-        diaObject["%sMeanFlux" % filterName] = np.mean(
+        diaObjects.at[diaObjectId, "%sMeanFlux" % filterName] = np.mean(
             filterDiaSources["psFlux"])
-        diaObject["%sStdFlux" % filterName] = np.std(
+        diaObjects.at[diaObjectId, "%sStdFlux" % filterName] = np.std(
             filterDiaSources["psFlux"], ddof=1)
 
 
@@ -88,14 +89,15 @@ class DependentDiaPlugin(DiaObjectCalculationPlugin):
         return cls.FLUX_MOMENTS_CALCULATED
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
+                  diaObjectId,
                   diaSources,
                   filterDiaSources,
                   filterName,
                   **kwargs):
-        diaObject["%sChiFlux" % filterName] = np.sum(
+        diaObjects.at[diaObjectId, "%sChiFlux" % filterName] = np.sum(
             ((filterDiaSources["psFlux"] -
-              diaObject["%sMeanFlux" % filterName]) /
+              diaObjects.at[diaObjectId, "%sMeanFlux" % filterName]) /
              filterDiaSources["psFluxErr"]) ** 2)
 
 
@@ -110,15 +112,16 @@ class CollidingDiaPlugin(DiaObjectCalculationPlugin):
         return cls.FLUX_MOMENTS_CALCULATED
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
+                  diaObjectId,
                   diaSources,
                   filterDiaSources,
                   filterName,
                   **kwargs):
-        diaObject["%sMeanFlux" % filterName] = 0.0
+        diaObjects.at[diaObjectId, "%sMeanFlux" % filterName] = 0.0
 
 
-class TestDiaCalculation(unittest.TestCase):
+class TestDiaCalcluation(unittest.TestCase):
 
     def setUp(self):
         # Create diaObjects

@@ -212,7 +212,7 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
         """Initialize the plugins according to the configuration.
         """
 
-        pluginType = namedtuple('pluginType', 'single')
+        pluginType = namedtuple('pluginType', 'single multi')
         self.executionDict = {}
         # Read the properties for each plugin. Allocate a dictionary entry for
         # each run level. Verify that the plugins are above the minimum run
@@ -221,7 +221,7 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
         # to later be run appropriately
         for executionOrder, name, config, PluginClass in sorted(self.config.plugins.apply()):
             if executionOrder not in self.executionDict:
-                self.executionDict[executionOrder] = pluginType(single=[])
+                self.executionDict[executionOrder] = pluginType(single=[], multi=[])
             if PluginClass.getExecutionOrder() >= BasePlugin.DEFAULT_CATALOGCALCULATION:
                 plug = PluginClass(config, name, metadata=self.plugMetadata)
 
@@ -231,11 +231,7 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
                 if plug.plugType == 'single':
                     self.executionDict[executionOrder].single.append(plug)
                 elif plug.plugType == 'multi':
-                    errorTuple = (PluginClass,)
-                    raise ValueError(
-                        "{} requested `multi` for execution type. `multi` is "
-                        "not supported by DiaObjectCalculationTask. Please "
-                        "use `single`.".format(*errorTuple))
+                    self.executionDict[executionOrder].multi.append(plug)
             else:
                 errorTuple = (PluginClass, PluginClass.getExecutionOrder(),
                               BasePlugin.DEFAULT_CATALOGCALCULATION)
@@ -308,20 +304,21 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
                 task (`pandas.DataFrame`).
         """
         if diaObjectCat.index.name is None:
-            diaObjectCat.set_index("diaObjectId", inplace=True)
+            diaObjectCat.set_index("diaObjectId", inplace=True, drop=False)
         elif diaObjectCat.index.name != "diaObjectId":
             self.log.warn(
                 "Input diaObjectCat is indexed on column(s) incompatible with "
                 "this task. Should be indexed on 'diaObjectId'. Trying to set "
                 "index regardless")
-            diaObjectCat.set_index("diaObjectId", inplace=True)
+            diaObjectCat.set_index("diaObjectId", inplace=True, drop=False)
 
         # ``names`` by default is FrozenList([None]) hence we access the first
         # element and test for None.
         if diaSourceCat.index.names[0] is None:
             diaSourceCat.set_index(
                 ["diaObjectId", "filterName", "diaSourceId"],
-                inplace=True)
+                inplace=True,
+                drop=False)
         elif (diaSourceCat.index.names !=
               ["diaObjectId", "filterName", "diaSourceId"]):
             self.log.warn(
@@ -331,13 +328,15 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
                 "index regardless.")
             diaSourceCat.set_index(
                 ["diaObjectId", "filterName", "diaSourceId"],
-                inplace=True)
+                inplace=True,
+                drop=False)
 
         return self.callCompute(diaObjectCat,
                                 diaSourceCat,
                                 updatedDiaObjectIds,
                                 filterName)
 
+    @lsst.pipe.base.timeMethod
     def callCompute(self,
                     diaObjectCat,
                     diaSourceCat,
@@ -379,51 +378,44 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
         KeyError
             Raises if `pandas.DataFrame` indexing is not properly set.
         """
+        diaObjectsToUpdate = diaObjectCat.loc[updatedDiaObjectIds, :]
 
-        diaObjectUsed = pd.DataFrame(
-            False,
-            index=diaObjectCat.index,
-            columns=["used"])
+        updatingDiaSources = diaSourceCat.loc[updatedDiaObjectIds, :]
+        updatingDiaSources.replace(to_replace=[None], value=np.nan)
+        updatingFilterDiaSources = updatingDiaSources.loc[
+            (slice(None), filterName), :
+        ]
 
-        updatedDiaObjects = []
+        diaSourcesGB = updatingDiaSources.groupby(level=0)
+        filterDiaSourcesGB = updatingFilterDiaSources.groupby(level=0)
 
-        for objId in updatedDiaObjectIds:
-            try:
-                updatedDiaObjDF = diaObjectCat.loc[objId]
-                updatedDiaObject = updatedDiaObjDF.to_dict()
-                updatedDiaObject["diaObjectId"] = objId
-                diaObjectUsed.loc[objId] = True
-            except KeyError:
-                updatedDiaObject = self._initialize_dia_object(objId)
+        for runlevel in sorted(self.executionDict):
+            for plug in self.executionDict[runlevel].single:
+                for updatedDiaObjectId in updatedDiaObjectIds:
 
-            # Sub-select diaSources associated with this diaObject.
-            objDiaSources = diaSourceCat.loc[objId]
-            # Currently needed as dataFrames loaded from sql do not currently
-            # map Null to NaN for custom queries. This can either stay here
-            # or move to dax_apdb or ap_association.
-            objDiaSources.replace(to_replace=[None],
-                                  value=np.nan)
+                    # Sub-select diaSources associated with this diaObject.
+                    objDiaSources = updatingDiaSources.loc[updatedDiaObjectId]
 
-            # Sub-select on diaSources observed in the current filter.
-            filterObjDiaSources = objDiaSources.loc[filterName]
-
-            for runlevel in sorted(self.executionDict):
-                for plug in self.executionDict[runlevel].single:
-                    with CCContext(plug, updatedDiaObject, self.log):
-                        plug.calculate(diaObject=updatedDiaObject,
+                    # Sub-select on diaSources observed in the current filter.
+                    filterObjDiaSources = objDiaSources.loc[filterName]
+                    with CCContext(plug, updatedDiaObjectId, self.log):
+                        plug.calculate(diaObjects=diaObjectsToUpdate,
+                                       diaObjectId=updatedDiaObjectId,
                                        diaSources=objDiaSources,
                                        filterDiaSources=filterObjDiaSources,
                                        filterName=filterName)
+            for plug in self.executionDict[runlevel].multi:
+                with CCContext(plug, diaObjectsToUpdate, self.log):
+                    plug.calculate(diaObjects=diaObjectsToUpdate,
+                                   diaSources=diaSourcesGB,
+                                   filterDiaSources=filterDiaSourcesGB,
+                                   filterName=filterName)
 
-            updatedDiaObjects.append(updatedDiaObject)
-
-        updatedDiaObjects = pd.DataFrame(data=updatedDiaObjects)
+        diaObjectCat.loc[updatedDiaObjectIds, :] = diaObjectsToUpdate.loc[updatedDiaObjectIds, :]
 
         return lsst.pipe.base.Struct(
-            diaObjectCat=diaObjectCat[~diaObjectUsed["used"]].append(
-                updatedDiaObjects.set_index("diaObjectId"),
-                sort=False),
-            updatedDiaObjects=updatedDiaObjects)
+            diaObjectCat=diaObjectCat,
+            updatedDiaObjects=diaObjectsToUpdate)
 
     def _initialize_dia_object(self, objId):
         """Create a new DiaObject with values required to be initialized by the

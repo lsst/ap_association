@@ -46,65 +46,137 @@ from lsst.ap.association import (
 import lsst.utils.tests
 
 
+def run_single_plugin(diaObjects, diaSources, plugin):
+    pass
+
+
+def run_multi_plugin(diaObjectCat, diaSourceCat, filterName, plugin):
+    """Wrapper for running multi plugins.
+
+    Reproduces some of the behavior of `lsst.ap.association.DiaCalcuation.run`
+
+    Parameters
+    ----------
+    diaObjectCat : `pandas.DataFrame`
+        Input object catalog to store data into and read from.
+    diaSourcesCat : `pandas.DataFrame`
+        DiaSource catalog to read data from and groupby on.
+    fitlerName : `str`
+        String name of the filter to process.
+    plugin : `lsst.ap.association.DiaCalculationPlugin`
+        Plugin to run.
+    """
+    if isinstance(diaObjectCat.index, pd.RangeIndex):
+        diaObjectCat.set_index("diaObjectId", inplace=True, drop=False)
+    elif diaObjectCat.index.name != "diaObjectId":
+        print(
+            "Input diaObjectCat is indexed on column(s) incompatible with "
+            "this task. Should be indexed on 'diaObjectId'.")
+
+    if isinstance(diaSourceCat.index, pd.RangeIndex):
+        diaSourceCat.set_index(
+            ["diaObjectId", "filterName", "diaSourceId"],
+            inplace=True,
+            drop=False)
+    elif (diaSourceCat.index.names !=
+          ["diaObjectId", "filterName", "diaSourceId"]):
+        print(
+            "Input diaSourceCat is indexed on column(s) incompatible with "
+            "this task. Should be indexed on 'multi-index, "
+            "['diaObjectId', 'filterName', 'diaSourceId'].")
+
+    updatingFilterDiaSources = diaSourceCat.loc[
+        (slice(None), filterName), :
+    ]
+
+    diaSourcesGB = diaSourceCat.groupby(level=0)
+    filterDiaSourcesGB = updatingFilterDiaSources.groupby(level=0)
+
+    plugin.calculate(diaObjects=diaObjectCat,
+                     diaSources=diaSourcesGB,
+                     filterDiaSources=filterDiaSourcesGB,
+                     filterName=filterName)
+
+
 class TestMeanPosition(unittest.TestCase):
 
     def testCalculate(self):
         """Test mean position calculation.
         """
         n_sources = 10
+        objId = 0
 
-        # Test expected means.
-        diaObject = dict()
+        plug = MeanDiaPosition(MeanDiaPositionConfig(),
+                               "ap_meanPosition",
+                               None)
+
+        # Test expected means in RA.
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
         diaSources = pd.DataFrame(data={"ra": np.linspace(-1, 1, n_sources),
                                         "decl": np.zeros(n_sources),
                                         "midPointTai": np.linspace(0,
                                                                    n_sources,
-                                                                   n_sources)})
-        plug = MeanDiaPosition(MeanDiaPositionConfig(),
-                               "ap_meanPosition",
-                               None)
-        plug.calculate(diaObject, diaSources)
+                                                                   n_sources),
+                                        "diaObjectId": n_sources * [objId],
+                                        "filterName": n_sources * ["g"],
+                                        "diaSourceId": np.arange(n_sources,
+                                                                 dtype=int)})
+        run_multi_plugin(diaObjects, diaSources, "g", plug)
 
-        self.assertAlmostEqual(diaObject["ra"], 0.0)
-        self.assertAlmostEqual(diaObject["decl"], 0.0)
-        self.assertEqual(diaObject["radecTai"], 10)
+        self.assertAlmostEqual(diaObjects.loc[objId, "ra"], 0.0)
+        self.assertAlmostEqual(diaObjects.loc[objId, "decl"], 0.0)
+        self.assertEqual(diaObjects.loc[objId, "radecTai"], 10)
 
-        diaObject = dict()
+        # Test expected means in DEC.
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
         diaSources = pd.DataFrame(data={"ra": np.zeros(n_sources),
                                         "decl": np.linspace(-1, 1, n_sources),
                                         "midPointTai": np.linspace(0,
                                                                    n_sources,
-                                                                   n_sources)})
-        plug.calculate(diaObject, diaSources)
+                                                                   n_sources),
+                                        "diaObjectId": n_sources * [objId],
+                                        "filterName": n_sources * ["g"],
+                                        "diaSourceId": np.arange(n_sources,
+                                                                 dtype=int)})
+        run_multi_plugin(diaObjects, diaSources, "g", plug)
 
-        self.assertAlmostEqual(diaObject["ra"], 0.0)
-        self.assertAlmostEqual(diaObject["decl"], 0.0)
-        self.assertEqual(diaObject["radecTai"], 10)
+        self.assertAlmostEqual(diaObjects.loc[objId, "ra"], 0.0)
+        self.assertAlmostEqual(diaObjects.loc[objId, "decl"], 0.0)
+        self.assertEqual(diaObjects.loc[objId, "radecTai"], 10)
 
-        # Test failure modes.
-        diaObject = dict()
+        # Test failure mode RA is nan.
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
         diaSources = pd.DataFrame(data={"ra": np.full(n_sources, np.nan),
                                         "decl": np.zeros(n_sources),
                                         "midPointTai": np.linspace(0,
                                                                    n_sources,
-                                                                   n_sources)})
-        plug.calculate(diaObject, diaSources)
+                                                                   n_sources),
+                                        "diaObjectId": n_sources * [objId],
+                                        "filterName": n_sources * ["g"],
+                                        "diaSourceId": np.arange(n_sources,
+                                                                 dtype=int)})
+        run_multi_plugin(diaObjects, diaSources, "g", plug)
 
-        self.assertTrue(np.isnan(diaObject["ra"]))
-        self.assertTrue(np.isnan(diaObject["decl"]))
-        self.assertTrue(np.isnan(diaObject["radecTai"]))
+        self.assertTrue(np.isnan(diaObjects.loc[objId, "ra"]))
+        self.assertTrue(np.isnan(diaObjects.loc[objId, "decl"]))
+        self.assertTrue(np.isnan(diaObjects.loc[objId, "radecTai"]))
 
-        diaObject = dict()
+        # Test failure mode DEC is nan.
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
         diaSources = pd.DataFrame(data={"ra": np.zeros(n_sources),
                                         "decl": np.full(n_sources, np.nan),
                                         "midPointTai": np.linspace(0,
                                                                    n_sources,
-                                                                   n_sources)})
-        plug.calculate(diaObject, diaSources)
+                                                                   n_sources),
+                                        "diaObjectId": n_sources * [objId],
+                                        "filterName": n_sources * ["g"],
+                                        "diaSourceId": np.arange(n_sources,
+                                                                 dtype=int)})
+        run_multi_plugin(diaObjects, diaSources, "g", plug)
 
-        self.assertTrue(np.isnan(diaObject["ra"]))
-        self.assertTrue(np.isnan(diaObject["decl"]))
-        self.assertTrue(np.isnan(diaObject["radecTai"]))
+        self.assertTrue(np.isnan(diaObjects.loc[objId, "ra"]))
+        self.assertTrue(np.isnan(diaObjects.loc[objId, "decl"]))
+        self.assertTrue(np.isnan(diaObjects.loc[objId, "radecTai"]))
 
 
 class TestHTMIndexPosition(unittest.TestCase):
@@ -112,21 +184,32 @@ class TestHTMIndexPosition(unittest.TestCase):
     def testCalculate(self):
         """Test HTMPixel assignment calculation.
         """
-        # Test expected pixelIds.
-        diaObject = dict()
-        diaObject["ra"] = 0.
-        diaObject["decl"] = 0.
+        # Test expected pixelId at RA, DEC = 0
+        objId = 0
+        n_sources = 10
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaObjects.loc[objId, "ra"] = 0.
+        diaObjects.loc[objId, "decl"] = 0.
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["g"],
+                  "diaSourceId": np.arange(n_sources, dtype=int)})
         plug = HTMIndexDiaPosition(HTMIndexDiaPositionConfig(),
                                    "ap_HTMIndex",
                                    None)
-        plug.calculate(diaObject)
-        self.assertAlmostEqual(diaObject["pixelId"], 131072)
+        run_multi_plugin(diaObjects, diaSources, "g", plug)
+        self.assertEqual(diaObjects.at[objId, "pixelId"], 131072)
 
-        diaObject = dict()
-        diaObject["ra"] = 45.37
-        diaObject["decl"] = 13.67
-        plug.calculate(diaObject)
-        self.assertAlmostEqual(diaObject["pixelId"], 260033)
+        # Test expected pixelId at some value of RA and DEC.
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaObjects.loc[objId, "ra"] = 45.37
+        diaObjects.loc[objId, "decl"] = 13.67
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["g"],
+                  "diaSourceId": np.arange(n_sources, dtype=int)})
+        run_multi_plugin(diaObjects, diaSources, "g", plug)
+        self.assertEqual(diaObjects.at[objId, "pixelId"], 260033)
 
 
 class TestNDiaSourcesDiaPlugin(unittest.TestCase):
@@ -135,15 +218,20 @@ class TestNDiaSourcesDiaPlugin(unittest.TestCase):
         """Test that the number of DiaSources is correct.
         """
 
-        for n_sources in [0, 8, 10]:
-            # Test expected means.
-            diaObject = dict()
-            diaSources = pd.DataFrame(data={"ra": np.linspace(-1, 1, n_sources),
-                                            "decl": np.zeros(n_sources)})
+        for n_sources in [1, 8, 10]:
+            # Test expected number of sources per object.
+            objId = 0
+            diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+            diaSources = pd.DataFrame(
+                data={"diaObjectId": n_sources * [objId],
+                      "filterName": n_sources * ["g"],
+                      "diaSourceId": np.arange(n_sources, dtype=int)})
             plug = NumDiaSourcesDiaPlugin(NumDiaSourcesDiaPluginConfig(),
                                           "ap_nDiaSources",
                                           None)
-            plug.calculate(diaObject, diaSources)
+            run_multi_plugin(diaObjects, diaSources, "g", plug)
+
+            self.assertEqual(n_sources, diaObjects.at[objId, "nDiaSources"])
 
 
 class TestSimpleSourceFlagDiaPlugin(unittest.TestCase):
@@ -151,37 +239,53 @@ class TestSimpleSourceFlagDiaPlugin(unittest.TestCase):
     def testCalculate(self):
         """Test that DiaObject flags are set.
         """
+        objId = 0
         n_sources = 10
 
-        # Test expected means.
-        diaObject = dict()
+        # Test expected flags, no flags set.
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
         diaSources = pd.DataFrame(
-            data={"flags": np.zeros(n_sources, dtype=np.uint64)})
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["g"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "flags": np.zeros(n_sources, dtype=np.uint64)})
         plug = SimpleSourceFlagDiaPlugin(SimpleSourceFlagDiaPluginConfig(),
                                          "ap_diaObjectFlag",
                                          None)
-        plug.calculate(diaObject, diaSources)
-        self.assertEqual(diaObject["flags"], 0)
+        run_multi_plugin(diaObjects, diaSources, "g", plug)
+        self.assertEqual(diaObjects.at[objId, "flags"], 0)
 
-        diaObject = dict()
-        diaSources = diaSources = pd.DataFrame(
-            data={"flags": np.ones(n_sources, dtype=np.uint64)})
-        plug.calculate(diaObject, diaSources)
-        self.assertEqual(diaObject["flags"], 1)
+        # Test expected flags, all flags set.
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["g"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "flags": np.ones(n_sources, dtype=np.uint64)})
+        run_multi_plugin(diaObjects, diaSources, "g", plug)
+        self.assertEqual(diaObjects.at[objId, "flags"], 1)
 
-        diaObject = dict()
-        diaSources = diaSources = pd.DataFrame(
-            data={"flags": np.random.randint(0, 2 ** 16, size=n_sources)})
-        plug.calculate(diaObject, diaSources)
-        self.assertEqual(diaObject["flags"], 1)
+        # Test expected flags, random flags.
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["g"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "flags": np.random.randint(0, 2 ** 16, size=n_sources)})
+        run_multi_plugin(diaObjects, diaSources, "g", plug)
+        self.assertEqual(diaObjects.at[objId, "flags"], 1)
 
-        diaObject = dict()
+        # Test expected flags, one flag set.
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
         flag_array = np.zeros(n_sources, dtype=np.uint64)
         flag_array[4] = 256
-        diaSources = diaSources = pd.DataFrame(
-            data={"flags": flag_array})
-        plug.calculate(diaObject, diaSources)
-        self.assertEqual(diaObject["flags"], 1)
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["g"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "flags": flag_array})
+        run_multi_plugin(diaObjects, diaSources, "g", plug)
+        self.assertEqual(diaObjects.at[objId, "flags"], 1)
 
 
 class TestWeightedMeanDiaPsFlux(unittest.TestCase):
@@ -190,33 +294,42 @@ class TestWeightedMeanDiaPsFlux(unittest.TestCase):
         """Test mean value calculation.
         """
         n_sources = 10
-        diaObject = dict()
-        diaSources = pd.DataFrame(data={"psFlux": np.linspace(-1, 1, n_sources),
-                                        "psFluxErr": np.ones(n_sources)})
+        objId = 0
+
+        # Test expected mean.
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["u"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": np.linspace(-1, 1, n_sources),
+                  "psFluxErr": np.ones(n_sources)})
 
         plug = WeightedMeanDiaPsFlux(WeightedMeanDiaPsFluxConfig(),
                                      "ap_meanFlux",
                                      None)
-        plug.calculate(diaObject, diaSources, diaSources, "u")
+        run_multi_plugin(diaObjects, diaSources, "u", plug)
 
-        self.assertAlmostEqual(diaObject["uPSFluxMean"], 0.0)
-        self.assertAlmostEqual(diaObject["uPSFluxMeanErr"], np.sqrt(1 / n_sources))
-        self.assertEqual(diaObject["uPSFluxNdata"], n_sources)
+        self.assertAlmostEqual(diaObjects.loc[objId, "uPSFluxMean"], 0.0)
+        self.assertAlmostEqual(diaObjects.loc[objId, "uPSFluxMeanErr"],
+                               np.sqrt(1 / n_sources))
+        self.assertEqual(diaObjects.loc[objId, "uPSFluxNdata"], n_sources)
 
-        diaObject = dict()
-        plug.calculate(diaObject, [], [], "g")
+        # Test expected mean with a nan value.
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        fluxes = np.linspace(-1, 1, n_sources)
+        fluxes[4] = np.nan
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["r"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": np.ones(n_sources)})
+        run_multi_plugin(diaObjects, diaSources, "r", plug)
 
-        self.assertTrue(np.isnan(diaObject["gPSFluxMean"]))
-        self.assertTrue(np.isnan(diaObject["gPSFluxMeanErr"]))
-        self.assertEqual(diaObject["gPSFluxNdata"], 0)
-
-        diaObject = dict()
-        diaSources.loc[4, "psFlux"] = np.nan
-        plug.calculate(diaObject, diaSources, diaSources, "r")
-
-        self.assertTrue(~np.isnan(diaObject["rPSFluxMean"]))
-        self.assertTrue(~np.isnan(diaObject["rPSFluxMeanErr"]))
-        self.assertEqual(diaObject["rPSFluxNdata"], n_sources - 1)
+        self.assertTrue(~np.isnan(diaObjects.loc[objId, "rPSFluxMean"]))
+        self.assertTrue(~np.isnan(diaObjects.loc[objId, "rPSFluxMeanErr"]))
+        self.assertEqual(diaObjects.loc[objId, "rPSFluxNdata"], n_sources - 1)
 
 
 class TestPercentileDiaPsFlux(unittest.TestCase):
@@ -225,39 +338,46 @@ class TestPercentileDiaPsFlux(unittest.TestCase):
         """Test flux percentile calculation.
         """
         n_sources = 10
-        diaObject = dict()
+        objId = 0
+
+        # Test expected percentile values.
         fluxes = np.linspace(-1, 1, n_sources)
-        diaSources = pd.DataFrame(data={"psFlux": fluxes,
-                                        "psFluxErr": np.ones(n_sources)})
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["u"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": np.ones(n_sources)})
 
         plug = PercentileDiaPsFlux(PercentileDiaPsFluxConfig(),
                                    "ap_percentileFlux",
                                    None)
-        plug.calculate(diaObject, diaSources, diaSources, "u")
+        run_multi_plugin(diaObjects, diaSources, "u", plug)
         for pTile, testVal in zip(plug.config.percentiles,
                                   np.nanpercentile(
                                       fluxes,
                                       plug.config.percentiles)):
             self.assertAlmostEqual(
-                diaObject["uPSFluxPercentile{:02d}".format(pTile)],
+                diaObjects.at[objId, "uPSFluxPercentile{:02d}".format(pTile)],
                 testVal)
 
-        diaObject = dict()
-        plug.calculate(diaObject, [], [], "g")
-        for pTile in plug.config.percentiles:
-            self.assertTrue(np.isnan(
-                diaObject["gPSFluxPercentile{:02d}".format(pTile)]))
-
-        diaObject = dict()
-        diaSources.loc[4, "psFlux"] = np.nan
+        # Test expected percentile values with a nan value.
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
         fluxes[4] = np.nan
-        plug.calculate(diaObject, diaSources, diaSources, "r")
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["r"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": np.ones(n_sources)})
+        run_multi_plugin(diaObjects, diaSources, "r", plug)
         for pTile, testVal in zip(plug.config.percentiles,
                                   np.nanpercentile(
                                       fluxes,
                                       plug.config.percentiles)):
             self.assertAlmostEqual(
-                diaObject["rPSFluxPercentile{:02d}".format(pTile)],
+                diaObjects.at[objId, "rPSFluxPercentile{:02d}".format(pTile)],
                 testVal)
 
 
@@ -267,36 +387,47 @@ class TestSigmaDiaPsFlux(unittest.TestCase):
         """Test flux scatter calculation.
         """
         n_sources = 10
-        diaObject = dict()
+        objId = 0
+
+        # Test expected sigma scatter of fluxes.
         fluxes = np.linspace(-1, 1, n_sources)
-        diaSources = pd.DataFrame(data={"psFlux": fluxes,
-                                        "psFluxErr": np.ones(n_sources)})
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["u"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": np.ones(n_sources)})
 
         plug = SigmaDiaPsFlux(SigmaDiaPsFluxConfig(),
                               "ap_sigmaFlux",
                               None)
-        plug.calculate(diaObject, diaSources, diaSources, "u")
-        self.assertAlmostEqual(diaObject["uPSFluxSigma"],
+        run_multi_plugin(diaObjects, diaSources, "u", plug)
+        self.assertAlmostEqual(diaObjects.at[objId, "uPSFluxSigma"],
                                np.nanstd(fluxes, ddof=1))
 
-        # test no inputs
-        diaObject = dict()
-        plug.calculate(diaObject, [], [], "g")
-        self.assertTrue(np.isnan(diaObject["gPSFluxSigma"]))
+        # test one input, returns nan.
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": 1 * [objId],
+                  "filterName": 1 * ["g"],
+                  "diaSourceId": [0],
+                  "psFlux": [fluxes[0]],
+                  "psFluxErr": [1.]})
+        run_multi_plugin(diaObjects, diaSources, "g", plug)
+        self.assertTrue(np.isnan(diaObjects.at[objId, "gPSFluxSigma"]))
 
-        # test one input
-        diaObject = dict()
-        diaSources = pd.DataFrame(data={"psFlux": [fluxes[0]],
-                                        "psFluxErr": [np.ones(n_sources)[0]]})
-        plug.calculate(diaObject, diaSources, diaSources, "g")
-        self.assertTrue(np.isnan(diaObject["gPSFluxSigma"]))
-
-        diaObject = dict()
+        # Test expected sigma scatter of fluxes with a nan value.
         fluxes[4] = np.nan
-        diaSources = pd.DataFrame(data={"psFlux": fluxes,
-                                        "psFluxErr": np.ones(n_sources)})
-        plug.calculate(diaObject, diaSources, diaSources, "r")
-        self.assertAlmostEqual(diaObject["rPSFluxSigma"],
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["r"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": np.ones(n_sources)})
+        run_multi_plugin(diaObjects, diaSources, "r", plug)
+        self.assertAlmostEqual(diaObjects.at[objId, "rPSFluxSigma"],
                                np.nanstd(fluxes, ddof=1))
 
 
@@ -306,34 +437,42 @@ class TestChi2DiaPsFlux(unittest.TestCase):
         """Test flux chi2 calculation.
         """
         n_sources = 10
-        diaObject = dict()
-        diaObject["uPSFluxMean"] = 0.0
+        objId = 0
+
+        # Test expected chi^2 value.
         fluxes = np.linspace(-1, 1, n_sources)
-        diaSources = pd.DataFrame(data={"psFlux": fluxes,
-                                        "psFluxErr": np.ones(n_sources)})
+        diaObjects = pd.DataFrame({"diaObjectId": [objId],
+                                   "uPSFluxMean": [0.0]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["u"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": np.ones(n_sources)})
 
         plug = Chi2DiaPsFlux(Chi2DiaPsFluxConfig(),
                              "ap_chi2Flux",
                              None)
-        plug.calculate(diaObject, diaSources, diaSources, "u")
+        run_multi_plugin(diaObjects, diaSources, "u", plug)
         self.assertAlmostEqual(
-            diaObject["uPSFluxChi2"],
+            diaObjects.loc[objId, "uPSFluxChi2"],
             np.nansum(((diaSources["psFlux"] -
                         np.nanmean(diaSources["psFlux"])) /
                        diaSources["psFluxErr"]) ** 2))
 
-        # test no inputs
-        diaObject = dict()
-        plug.calculate(diaObject, [], [], "g")
-        self.assertTrue(np.isnan(diaObject["gPSFluxChi2"]))
-
-        diaObject = dict()
-        diaSources.loc[4, "psFlux"] = np.nan
+        # Test expected chi^2 value with a nan value set.
         fluxes[4] = np.nan
-        diaObject["rPSFluxMean"] = np.nanmean(fluxes)
-        plug.calculate(diaObject, diaSources, diaSources, "r")
+        diaObjects = pd.DataFrame({"diaObjectId": [objId],
+                                   "rPSFluxMean": [np.nanmean(fluxes)]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["r"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": np.ones(n_sources)})
+        run_multi_plugin(diaObjects, diaSources, "r", plug)
         self.assertAlmostEqual(
-            diaObject["rPSFluxChi2"],
+            diaObjects.loc[objId, "rPSFluxChi2"],
             np.nansum(((diaSources["psFlux"] -
                         np.nanmean(diaSources["psFlux"])) /
                        diaSources["psFluxErr"]) ** 2))
@@ -345,30 +484,37 @@ class TestMadDiaPsFlux(unittest.TestCase):
         """Test flux median absolute deviation calculation.
         """
         n_sources = 10
-        diaObject = dict()
+        objId = 0
+
+        # Test expected MAD value.
         fluxes = np.linspace(-1, 1, n_sources)
-        diaSources = pd.DataFrame(data={"psFlux": fluxes,
-                                        "psFluxErr": np.ones(n_sources)})
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["u"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": np.ones(n_sources)})
 
         plug = MadDiaPsFlux(MadDiaPsFluxConfig(),
                             "ap_madFlux",
                             None)
-        plug.calculate(diaObject, diaSources, diaSources, "u")
-        self.assertAlmostEqual(diaObject["uPSFluxMAD"],
+        run_multi_plugin(diaObjects, diaSources, "u", plug)
+        self.assertAlmostEqual(diaObjects.at[objId, "uPSFluxMAD"],
                                median_absolute_deviation(fluxes,
                                                          ignore_nan=True))
 
-        # test no inputs
-        diaObject = dict()
-        plug.calculate(diaObject, [], [], "g")
-        self.assertTrue(np.isnan(diaObject["gPSFluxMAD"]))
-
-        diaObject = dict()
+        # Test expected MAD value with a nan set.
         fluxes[4] = np.nan
-        diaSources = pd.DataFrame(data={"psFlux": fluxes,
-                                        "psFluxErr": np.ones(n_sources)})
-        plug.calculate(diaObject, diaSources, diaSources, "r")
-        self.assertAlmostEqual(diaObject["rPSFluxMAD"],
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["r"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": np.ones(n_sources)})
+        run_multi_plugin(diaObjects, diaSources, "r", plug)
+        self.assertAlmostEqual(diaObjects.at[objId, "rPSFluxMAD"],
                                median_absolute_deviation(fluxes,
                                                          ignore_nan=True))
 
@@ -379,29 +525,36 @@ class TestSkewDiaPsFlux(unittest.TestCase):
         """Test flux skew calculation.
         """
         n_sources = 10
-        diaObject = dict()
+        objId = 0
+
+        # Test expected skew value.
         fluxes = np.linspace(-1, 1, n_sources)
-        diaSources = pd.DataFrame(data={"psFlux": fluxes,
-                                        "psFluxErr": np.ones(n_sources)})
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["u"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": np.ones(n_sources)})
 
         plug = SkewDiaPsFlux(SkewDiaPsFluxConfig(),
                              "ap_skewFlux",
                              None)
-        plug.calculate(diaObject, diaSources, diaSources, "u")
-        self.assertAlmostEqual(diaObject["uPSFluxSkew"], skew(fluxes))
+        run_multi_plugin(diaObjects, diaSources, "u", plug)
+        self.assertAlmostEqual(diaObjects.loc[objId, "uPSFluxSkew"], skew(fluxes))
 
-        # test no inputs
-        diaObject = dict()
-        plug.calculate(diaObject, [], [], "g")
-        self.assertTrue(np.isnan(diaObject["gPSFluxSkew"]))
-
-        diaObject = dict()
+        # Test expected skew value with a nan set.
         fluxes[4] = np.nan
-        diaSources = pd.DataFrame(data={"psFlux": fluxes,
-                                        "psFluxErr": np.ones(n_sources)})
-        plug.calculate(diaObject, diaSources, diaSources, "r")
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["r"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": np.ones(n_sources)})
+        run_multi_plugin(diaObjects, diaSources, "r", plug)
         cutFluxes = fluxes[~np.isnan(fluxes)]
-        self.assertAlmostEqual(diaObject["rPSFluxSkew"], skew(cutFluxes))
+        self.assertAlmostEqual(diaObjects.at[objId, "rPSFluxSkew"], skew(cutFluxes))
 
 
 class TestMinMaxDiaPsFlux(unittest.TestCase):
@@ -410,31 +563,38 @@ class TestMinMaxDiaPsFlux(unittest.TestCase):
         """Test flux min/max calculation.
         """
         n_sources = 10
-        diaObject = dict()
+        objId = 0
+
+        # Test expected MinMax fluxes.
         fluxes = np.linspace(-1, 1, n_sources)
-        diaSources = pd.DataFrame(data={"psFlux": fluxes,
-                                        "psFluxErr": np.ones(n_sources)})
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["u"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": np.ones(n_sources)})
 
         plug = MinMaxDiaPsFlux(MinMaxDiaPsFluxConfig(),
                                "ap_minMaxFlux",
                                None)
-        plug.calculate(diaObject, diaSources, diaSources, "u")
-        self.assertEqual(diaObject["uPSFluxMin"], -1)
-        self.assertEqual(diaObject["uPSFluxMax"], 1)
+        run_multi_plugin(diaObjects, diaSources, "u", plug)
+        self.assertEqual(diaObjects.loc[objId, "uPSFluxMin"], -1)
+        self.assertEqual(diaObjects.loc[objId, "uPSFluxMax"], 1)
 
-        # test no inputs
-        diaObject = dict()
-        plug.calculate(diaObject, [], [], "g")
-        self.assertTrue(np.isnan(diaObject["gPSFluxMin"]))
-        self.assertTrue(np.isnan(diaObject["gPSFluxMax"]))
-
-        diaObject = dict()
+        # Test expected MinMax fluxes with a nan set.
         fluxes[4] = np.nan
-        diaSources = pd.DataFrame(data={"psFlux": fluxes,
-                                        "psFluxErr": np.ones(n_sources)})
-        plug.calculate(diaObject, diaSources, diaSources, "r")
-        self.assertEqual(diaObject["rPSFluxMin"], -1)
-        self.assertEqual(diaObject["rPSFluxMax"], 1)
+        fluxes = np.linspace(-1, 1, n_sources)
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["r"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": np.ones(n_sources)})
+        run_multi_plugin(diaObjects, diaSources, "r", plug)
+        self.assertEqual(diaObjects.loc[objId, "rPSFluxMin"], -1)
+        self.assertEqual(diaObjects.loc[objId, "rPSFluxMax"], 1)
 
 
 class TestMaxSlopeDiaPsFlux(unittest.TestCase):
@@ -443,39 +603,51 @@ class TestMaxSlopeDiaPsFlux(unittest.TestCase):
         """Test flux maximum slope.
         """
         n_sources = 10
-        diaObject = dict()
+        objId = 0
+
+        # Test max slope value.
         fluxes = np.linspace(-1, 1, n_sources)
         times = np.linspace(0, 1, n_sources)
-        diaSources = pd.DataFrame(data={"psFlux": fluxes,
-                                        "psFluxErr": np.ones(n_sources),
-                                        "midPointTai": times})
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["u"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": np.ones(n_sources),
+                  "midPointTai": times})
 
         plug = MaxSlopeDiaPsFlux(MaxSlopeDiaPsFluxConfig(),
                                  "ap_maxSlopeFlux",
                                  None)
-        plug.calculate(diaObject, diaSources, diaSources, "u")
-        self.assertEqual(diaObject["uPSFluxMaxSlope"], 2.)
+        run_multi_plugin(diaObjects, diaSources, "u", plug)
+        self.assertEqual(diaObjects.at[objId, "uPSFluxMaxSlope"], 2.)
 
-        # test no inputs
-        diaObject = dict()
-        plug.calculate(diaObject, [], [], "g")
-        self.assertTrue(np.isnan(diaObject["gPSFluxMaxSlope"]))
+        # Test max slope value returns nan on 1 input.
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": 1 * [objId],
+                  "filterName": 1 * ["g"],
+                  "diaSourceId": np.arange(1, dtype=int),
+                  "psFlux": fluxes[0],
+                  "psFluxErr": np.ones(1),
+                  "midPointTai": times[0]})
+        run_multi_plugin(diaObjects, diaSources, "g", plug)
+        self.assertTrue(np.isnan(diaObjects.at[objId, "gPSFluxMaxSlope"]))
 
-        # test one input
-        diaObject = dict()
-        diaSources = pd.DataFrame(data={"psFlux": [fluxes[0]],
-                                        "psFluxErr": [np.ones(n_sources)[0]],
-                                        "midPointTai": [times[0]]})
-        plug.calculate(diaObject, diaSources, diaSources, "g")
-        self.assertTrue(np.isnan(diaObject["gPSFluxMaxSlope"]))
-
-        diaObject = dict()
+        # Test max slope value inputing nan values.
         fluxes[4] = np.nan
-        diaSources = pd.DataFrame(data={"psFlux": fluxes,
-                                        "psFluxErr": np.ones(n_sources),
-                                        "midPointTai": times})
-        plug.calculate(diaObject, diaSources, diaSources, "r")
-        self.assertEqual(diaObject["rPSFluxMaxSlope"], 2.)
+        times[7] = np.nan
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["r"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": np.ones(n_sources),
+                  "midPointTai": times})
+        run_multi_plugin(diaObjects, diaSources, "r", plug)
+        self.assertEqual(diaObjects.at[objId, "rPSFluxMaxSlope"], 2.)
 
 
 class TestErrMeanDiaPsFlux(unittest.TestCase):
@@ -484,29 +656,38 @@ class TestErrMeanDiaPsFlux(unittest.TestCase):
         """Test error mean calculation.
         """
         n_sources = 10
-        diaObject = dict()
+        objId = 0
+
+        # Test mean of the errors.
         fluxes = np.linspace(-1, 1, n_sources)
         errors = np.linspace(1, 2, n_sources)
-        diaSources = pd.DataFrame(data={"psFlux": fluxes,
-                                        "psFluxErr": errors})
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["u"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": errors})
 
         plug = ErrMeanDiaPsFlux(ErrMeanDiaPsFluxConfig(),
                                 "ap_errMeanFlux",
                                 None)
-        plug.calculate(diaObject, diaSources, diaSources, "u")
-        self.assertEqual(diaObject["uPSFluxErrMean"], np.nanmean(errors))
+        run_multi_plugin(diaObjects, diaSources, "u", plug)
+        self.assertEqual(diaObjects.at[objId, "uPSFluxErrMean"],
+                         np.nanmean(errors))
 
-        # test no inputs
-        diaObject = dict()
-        plug.calculate(diaObject, [], [], "g")
-        self.assertTrue(np.isnan(diaObject["gPSFluxErrMean"]))
-
-        diaObject = dict()
+        # Test mean of the errors with input nan value.
         errors[4] = np.nan
-        diaSources = pd.DataFrame(data={"psFlux": fluxes,
-                                        "psFluxErr": errors})
-        plug.calculate(diaObject, diaSources, diaSources, "r")
-        self.assertEqual(diaObject["rPSFluxErrMean"], np.nanmean(errors))
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["r"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": errors})
+        run_multi_plugin(diaObjects, diaSources, "r", plug)
+        self.assertEqual(diaObjects.at[objId, "rPSFluxErrMean"],
+                         np.nanmean(errors))
 
 
 class TestLinearFitDiaPsFlux(unittest.TestCase):
@@ -515,45 +696,46 @@ class TestLinearFitDiaPsFlux(unittest.TestCase):
         """Test a linear fit to flux vs time.
         """
         n_sources = 10
-        diaObject = dict()
+        objId = 0
+
+        # Test best fit linear model.
         fluxes = np.linspace(-1, 1, n_sources)
         errors = np.linspace(1, 2, n_sources)
         times = np.linspace(0, 1, n_sources)
-        diaSources = pd.DataFrame(data={"psFlux": fluxes,
-                                        "psFluxErr": errors,
-                                        "midPointTai": times})
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["u"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": errors,
+                  "midPointTai": times})
 
         plug = LinearFitDiaPsFlux(LinearFitDiaPsFluxConfig(),
                                   "ap_LinearFit",
                                   None)
-        plug.calculate(diaObject, diaSources, diaSources, "u")
-        self.assertAlmostEqual(diaObject["uPSFluxLinearSlope"], 2.)
-        self.assertAlmostEqual(diaObject["uPSFluxLinearIntercept"], -1.)
+        run_multi_plugin(diaObjects, diaSources, "u", plug)
+        self.assertAlmostEqual(diaObjects.loc[objId, "uPSFluxLinearSlope"],
+                               2.)
+        self.assertAlmostEqual(diaObjects.loc[objId, "uPSFluxLinearIntercept"],
+                               -1.)
 
-        # test no inputs
-        diaObject = dict()
-        plug.calculate(diaObject, [], [], "g")
-        self.assertTrue(np.isnan(diaObject["gPSFluxLinearSlope"]))
-        self.assertTrue(np.isnan(diaObject["gPSFluxLinearIntercept"]))
-
-        # test no inputs
-        diaObject = dict()
-        diaSources = pd.DataFrame(data={"psFlux": [fluxes[0]],
-                                        "psFluxErr": [errors[0]],
-                                        "midPointTai": [times[0]]})
-        plug.calculate(diaObject, diaSources, diaSources, "g")
-        self.assertTrue(np.isnan(diaObject["gPSFluxLinearSlope"]))
-        self.assertTrue(np.isnan(diaObject["gPSFluxLinearIntercept"]))
-
-        diaObject = dict()
+        # Test best fit linear model with input nans.
         fluxes[7] = np.nan
         errors[4] = np.nan
-        diaSources = pd.DataFrame(data={"psFlux": fluxes,
-                                        "psFluxErr": errors,
-                                        "midPointTai": times})
-        plug.calculate(diaObject, diaSources, diaSources, "r")
-        self.assertAlmostEqual(diaObject["rPSFluxLinearSlope"], 2.)
-        self.assertAlmostEqual(diaObject["rPSFluxLinearIntercept"], -1.)
+        times[2] = np.nan
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["r"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": errors,
+                  "midPointTai": times})
+        run_multi_plugin(diaObjects, diaSources, "r", plug)
+        self.assertAlmostEqual(diaObjects.loc[objId, "rPSFluxLinearSlope"], 2.)
+        self.assertAlmostEqual(diaObjects.loc[objId, "rPSFluxLinearIntercept"],
+                               -1.)
 
 
 class TestStetsonJDiaPsFlux(unittest.TestCase):
@@ -562,47 +744,58 @@ class TestStetsonJDiaPsFlux(unittest.TestCase):
         """Test the stetsonJ statistic.
         """
         n_sources = 10
-        diaObject = dict(uPSFluxMean=0)
+        objId = 0
+
+        # Test stetsonJ calculation.
         fluxes = np.linspace(-1, 1, n_sources)
         errors = np.ones(n_sources)
-        times = np.linspace(0, 1, n_sources)
-        diaSources = pd.DataFrame(data={"psFlux": fluxes,
-                                        "psFluxErr": errors,
-                                        "midPointTai": times})
+        diaObjects = pd.DataFrame({"diaObjectId": [objId],
+                                   "uPSFluxMean": [np.nanmean(fluxes)]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["u"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": errors})
 
         plug = StetsonJDiaPsFlux(StetsonJDiaPsFluxConfig(),
-                                 "ap_LinearFit",
+                                 "ap_StetsonJ",
                                  None)
-        plug.calculate(diaObject, diaSources, diaSources, "u")
+        run_multi_plugin(diaObjects, diaSources, "u", plug)
         # Expected StetsonJ for the values created. Confirmed using Cesimum's
         # implementation. http://github.com/cesium-ml/cesium
-        self.assertAlmostEqual(diaObject["uPSFluxStetsonJ"],
+        self.assertAlmostEqual(diaObjects.loc[objId, "uPSFluxStetsonJ"],
                                -0.5958393936080928)
 
-        # test no inputs
-        diaObject = dict(gPSFluxMean=0)
-        plug.calculate(diaObject, [], [], "g")
-        self.assertTrue(np.isnan(diaObject["gPSFluxStetsonJ"]))
+        # Test stetsonJ calculation returns nan on single input.
+        diaObjects = pd.DataFrame({"diaObjectId": [objId],
+                                   "gPSFluxMean": [np.nanmean(fluxes)]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": 1 * [objId],
+                  "filterName": 1 * ["g"],
+                  "diaSourceId": np.arange(1, dtype=int),
+                  "psFlux": fluxes[0],
+                  "psFluxErr": errors[0]})
+        run_multi_plugin(diaObjects, diaSources, "g", plug)
+        self.assertTrue(np.isnan(diaObjects.at[objId, "gPSFluxStetsonJ"]))
 
-        # test no inputs
-        diaObject = dict(gPSFluxMean=0)
-        diaSources = pd.DataFrame(data={"psFlux": [fluxes[0]],
-                                        "psFluxErr": [errors[0]],
-                                        "midPointTai": [times[0]]})
-        plug.calculate(diaObject, diaSources, diaSources, "g")
-        self.assertTrue(np.isnan(diaObject["gPSFluxStetsonJ"]))
-
+        # Test stetsonJ calculation returns when nans are input.
         fluxes[7] = np.nan
         errors[4] = np.nan
         nonNanMask = np.logical_and(~np.isnan(fluxes),
                                     ~np.isnan(errors))
-        diaObject = dict(rPSFluxMean=np.average(fluxes[nonNanMask],
-                                                weights=errors[nonNanMask]))
-        diaSources = pd.DataFrame(data={"psFlux": fluxes,
-                                        "psFluxErr": errors,
-                                        "midPointTai": times})
-        plug.calculate(diaObject, diaSources, diaSources, "r")
-        self.assertAlmostEqual(diaObject["rPSFluxStetsonJ"],
+        diaObjects = pd.DataFrame(
+            {"diaObjectId": [objId],
+             "rPSFluxMean": [np.average(fluxes[nonNanMask],
+                                        weights=errors[nonNanMask])]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["r"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "psFlux": fluxes,
+                  "psFluxErr": errors})
+        run_multi_plugin(diaObjects, diaSources, "r", plug)
+        self.assertAlmostEqual(diaObjects.at[objId, "rPSFluxStetsonJ"],
                                -0.5412797916187173)
 
 
@@ -612,30 +805,40 @@ class TestWeightedMeanDiaTotFlux(unittest.TestCase):
         """Test mean value calculation.
         """
         n_sources = 10
-        diaObject = dict()
-        diaSources = pd.DataFrame(data={"totFlux": np.linspace(-1, 1, n_sources),
-                                        "totFluxErr": np.ones(n_sources)})
+        objId = 0
+
+        # Test test mean on totFlux.
+        fluxes = np.linspace(-1, 1, n_sources)
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["u"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "totFlux": fluxes,
+                  "totFluxErr": np.ones(n_sources)})
 
         plug = WeightedMeanDiaTotFlux(WeightedMeanDiaTotFluxConfig(),
                                       "ap_meanTotFlux",
                                       None)
-        plug.calculate(diaObject, diaSources, diaSources, "u")
+        run_multi_plugin(diaObjects, diaSources, "u", plug)
 
-        self.assertAlmostEqual(diaObject["uTOTFluxMean"], 0.0)
-        self.assertAlmostEqual(diaObject["uTOTFluxMeanErr"], np.sqrt(1 / n_sources))
+        self.assertAlmostEqual(diaObjects.at[objId, "uTOTFluxMean"], 0.0)
+        self.assertAlmostEqual(diaObjects.at[objId, "uTOTFluxMeanErr"],
+                               np.sqrt(1 / n_sources))
 
-        diaObject = dict()
-        plug.calculate(diaObject, [], [], "g")
+        # Test test mean on totFlux with input nans
+        fluxes[4] = np.nan
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["r"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "totFlux": fluxes,
+                  "totFluxErr": np.ones(n_sources)})
+        run_multi_plugin(diaObjects, diaSources, "r", plug)
 
-        self.assertTrue(np.isnan(diaObject["gTOTFluxMean"]))
-        self.assertTrue(np.isnan(diaObject["gTOTFluxMeanErr"]))
-
-        diaObject = dict()
-        diaSources.loc[4, "totFlux"] = np.nan
-        plug.calculate(diaObject, diaSources, diaSources, "r")
-
-        self.assertTrue(~np.isnan(diaObject["rTOTFluxMean"]))
-        self.assertTrue(~np.isnan(diaObject["rTOTFluxMeanErr"]))
+        self.assertTrue(~np.isnan(diaObjects.at[objId, "rTOTFluxMean"]))
+        self.assertTrue(~np.isnan(diaObjects.at[objId, "rTOTFluxMeanErr"]))
 
 
 class TestSigmaDiaTotFlux(unittest.TestCase):
@@ -644,36 +847,47 @@ class TestSigmaDiaTotFlux(unittest.TestCase):
         """Test flux scatter calculation.
         """
         n_sources = 10
-        diaObject = dict()
+        objId = 0
+
+        # Test test scatter on totFlux.
         fluxes = np.linspace(-1, 1, n_sources)
-        diaSources = pd.DataFrame(data={"totFlux": fluxes,
-                                        "totFluxErr": np.ones(n_sources)})
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["u"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "totFlux": fluxes,
+                  "totFluxErr": np.ones(n_sources)})
 
         plug = SigmaDiaTotFlux(SigmaDiaTotFluxConfig(),
                                "ap_sigmaTotFlux",
                                None)
-        plug.calculate(diaObject, diaSources, diaSources, "u")
-        self.assertAlmostEqual(diaObject["uTOTFluxSigma"],
+        run_multi_plugin(diaObjects, diaSources, "u", plug)
+        self.assertAlmostEqual(diaObjects.at[objId, "uTOTFluxSigma"],
                                np.nanstd(fluxes, ddof=1))
 
-        # test no inputs
-        diaObject = dict()
-        plug.calculate(diaObject, [], [], "g")
-        self.assertTrue(np.isnan(diaObject["gTOTFluxSigma"]))
+        # Test test scatter on totFlux returns nan on 1 input.
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": 1 * [objId],
+                  "filterName": 1 * ["g"],
+                  "diaSourceId": np.arange(1, dtype=int),
+                  "totFlux": fluxes[0],
+                  "totFluxErr": np.ones(1)})
+        run_multi_plugin(diaObjects, diaSources, "g", plug)
+        self.assertTrue(np.isnan(diaObjects.at[objId, "gTOTFluxSigma"]))
 
-        # test one input
-        diaObject = dict()
-        diaSources = pd.DataFrame(data={"totFlux": [fluxes[0]],
-                                        "totFluxErr": [np.ones(n_sources)[0]]})
-        plug.calculate(diaObject, diaSources, diaSources, "g")
-        self.assertTrue(np.isnan(diaObject["gTOTFluxSigma"]))
-
-        diaObject = dict()
+        # Test test scatter on totFlux takes input nans.
         fluxes[4] = np.nan
-        diaSources = pd.DataFrame(data={"totFlux": fluxes,
-                                        "totFluxErr": np.ones(n_sources)})
-        plug.calculate(diaObject, diaSources, diaSources, "r")
-        self.assertAlmostEqual(diaObject["rTOTFluxSigma"],
+        diaObjects = pd.DataFrame({"diaObjectId": [objId]})
+        diaSources = pd.DataFrame(
+            data={"diaObjectId": n_sources * [objId],
+                  "filterName": n_sources * ["r"],
+                  "diaSourceId": np.arange(n_sources, dtype=int),
+                  "totFlux": fluxes,
+                  "totFluxErr": np.ones(n_sources)})
+        run_multi_plugin(diaObjects, diaSources, "r", plug)
+        self.assertAlmostEqual(diaObjects.at[objId, "rTOTFluxSigma"],
                                np.nanstd(fluxes, ddof=1))
 
 
