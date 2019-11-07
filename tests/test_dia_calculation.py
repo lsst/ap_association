@@ -31,6 +31,27 @@ from lsst.meas.base.pluginRegistry import register
 import lsst.utils.tests
 
 
+@register("testCount")
+class CountDiaPlugin(DiaObjectCalculationPlugin):
+    """Simple mean function.
+    """
+    outputCols = ["count"]
+
+    @classmethod
+    def getExecutionOrder(cls):
+        return cls.DEFAULT_CATALOGCALCULATION
+
+    def calculate(self,
+                  diaObject,
+                  diaSources,
+                  filterDiaSources,
+                  filterName,
+                  **kwargs):
+        """
+        """
+        diaObject["count"] = len(diaSources["psFlux"])
+
+
 @register("testDiaPlugin")
 class DiaPlugin(DiaObjectCalculationPlugin):
     """Simple mean function.
@@ -97,7 +118,7 @@ class CollidingDiaPlugin(DiaObjectCalculationPlugin):
         diaObject["%sMeanFlux" % filterName] = 0.0
 
 
-class TestMeanPosition(unittest.TestCase):
+class TestDiaCalculation(unittest.TestCase):
 
     def setUp(self):
         # Create diaObjects
@@ -174,6 +195,34 @@ class TestMeanPosition(unittest.TestCase):
                 self.assertAlmostEqual(diaObject["gStdFlux"],
                                        0.7071067811865476)
                 self.assertAlmostEqual(diaObject["gChiFlux"], 0.5)
+
+    def testRunUnindexed(self):
+        """Test inputing un-indexed catalogs.
+        """
+        unindexedDiaSources = pd.DataFrame(data=[
+            {"diaSourceId": objId, "diaObjectId": 0,
+             "psFlux": 0., "psFluxErr": 1.,
+             "totFlux": 0., "totFluxErr": 1.,
+             "midPointTai": 0, "filterName": "g"}
+            for objId in range(1000)])
+        unindexedDiaSources = unindexedDiaSources.append(
+            pd.DataFrame(data=[{"diaSourceId": objId, "diaObjectId": 0,
+                                "psFlux": 0., "psFluxErr": 1.,
+                                "totFlux": 0., "totFluxErr": 1.,
+                                "midPointTai": 0, "filterName": "g"}
+                               for objId in range(10)]))
+
+        conf = DiaObjectCalculationConfig()
+        conf.plugins = ["testCount"]
+        diaObjectCalTask = DiaObjectCalculationTask(config=conf)
+        self.diaObjects.reset_index()
+        results = diaObjectCalTask.run(self.diaObjects,
+                                       unindexedDiaSources,
+                                       np.array([0], dtype=np.int),
+                                       "g")
+        updatedDiaObjects = results.updatedDiaObjects
+        self.assertEqual(updatedDiaObjects.loc[0, "count"],
+                         len(unindexedDiaSources))
 
     def testConflictingPlugins(self):
         """Test that code properly exits upon plugin collision.
