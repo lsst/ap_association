@@ -22,7 +22,7 @@
 """Plugins for use in DiaSource summary statistics.
 
 Output columns must be
-as defined in the schema of the Ppdb both in name and units.
+as defined in the schema of the Apdb both in name and units.
 """
 
 from astropy.stats import median_absolute_deviation

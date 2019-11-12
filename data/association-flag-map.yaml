@@ -1,11 +1,11 @@
-# This file lists columns for bit-packing using columns for use in the Ppdb
+# This file lists columns for bit-packing using columns for use in the Apdb
 # 
 tableName: DiaSource
 doc: "Flag packing definitions for the DiaSource table."
 columns:
   - columnName: flags
     doc: Bit pack of all relavant flags for the columns currently stored in
-      the Ppdb.
+      the Apdb.
     bitList:
     - name: base_PixelFlags_flag
       bit: 0

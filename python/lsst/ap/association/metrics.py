@@ -31,7 +31,7 @@ import astropy.units as u
 
 from lsst.verify import Measurement
 from lsst.verify.gen2tasks import register
-from lsst.verify.tasks import MetadataMetricTask, PpdbMetricTask, MetricComputationError
+from lsst.verify.tasks import MetadataMetricTask, ApdbMetricTask, MetricComputationError
 
 
 @register("numNewDiaObjects")
@@ -191,7 +191,7 @@ class FractionUpdatedDiaObjectsMetricTask(MetadataMetricTask):
 
 
 @register("totalUnassociatedDiaObjects")
-class TotalUnassociatedDiaObjectsMetricTask(PpdbMetricTask):
+class TotalUnassociatedDiaObjectsMetricTask(ApdbMetricTask):
     """Task that computes the number of DIAObjects with only one
     associated DIASource.
     """
@@ -202,7 +202,7 @@ class TotalUnassociatedDiaObjectsMetricTask(PpdbMetricTask):
 
         Parameters
         ----------
-        dbHandle : `lsst.dax.ppdb.Ppdb`
+        dbHandle : `lsst.dax.apdb.Apdb`
             A database instance.
         outputDataId : any data ID type
             The subset of the database to which this measurement applies.

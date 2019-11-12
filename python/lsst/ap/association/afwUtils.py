@@ -21,7 +21,7 @@
 
 """Defines afw schemas and conversions for use in ap_association tasks.
 
-Until a more finalized interface between the prompt products database (PPD) can
+Until a more finalized interface between the alert production database (APDB) can
 be established, we put many utility functions for converting `lsst.afw.table` and
 `lsst.afw.image` objects to a PPD. This includes both mapping schemas between
 different catalogs and the DB.
@@ -60,7 +60,7 @@ def make_dia_object_schema(filter_names=None):
     # This functionality is not defined currently in the stack, so we will hold
     # off until it is implemented. This is to be addressed in DM-7101.
 
-    # Generated automatically from ppdb-schema.yaml in dax_ppdb/data.
+    # Generated automatically from apdb-schema.yaml in dax_apdb/data.
     schema.addField('validityStart', type='L',
                     doc='Time when validity of this diaObject starts.')
     schema.addField('validityEnd', type='L',
@@ -193,7 +193,7 @@ def make_dia_object_schema(filter_names=None):
                     doc='Standard error of yFPFluxMean.')
     schema.addField('yFPFluxSigma', type='F',
                     doc='Standard deviation of the distribution of yFPFlux.')
-    # Mapping of arrays and BLOBs is not currently supported by the PPDB so we
+    # Mapping of arrays and BLOBs is not currently supported by the APDB so we
     # these columns out.
     # schema.addField('uLcPeriodic', type='ArrayF',
     #                 doc='Periodic features extracted from light-curves using generalized Lomb-Scargle '
@@ -477,7 +477,7 @@ def make_dia_source_schema():
         Minimal schema for DiaSources.
     """
 
-    # Generated automatically from ppdb-schema.yaml in dax_ppdb/data.
+    # Generated automatically from apdb-schema.yaml in dax_apdb/data.
     schema = afwTable.SourceTable.makeMinimalSchema()
     schema.addField('ccdVisitId', type='L',
                     doc='Id of the ccdVisit where this diaSource was measured. Note that we are allowing a '
@@ -728,7 +728,7 @@ def make_dia_forced_source_schema():
         Minimal schema for DiaForcedSources.
     """
 
-    # Generated automatically from ppdb-schema.yaml in dax_ppdb/data.
+    # Generated automatically from apdb-schema.yaml in dax_apdb/data.
     schema = afwTable.SourceTable.makeMinimalSchema()
     schema.addField('ccdVisitId', type='L',
                     doc='Id of the ccdVisit where this diaSource was measured. Note that we are allowing a '

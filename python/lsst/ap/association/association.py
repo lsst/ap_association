@@ -96,7 +96,7 @@ class AssociationTask(pipeBase.Task):
         self.makeSubtask("diaCalculation")
 
     @pipeBase.timeMethod
-    def run(self, dia_sources, exposure, ppdb):
+    def run(self, dia_sources, exposure, apdb):
         """Load DIAObjects from the database, associate the sources, and
         persist the results into the L1 database.
 
@@ -108,8 +108,8 @@ class AssociationTask(pipeBase.Task):
             Input exposure representing the region of the sky the dia_sources
             were detected on. Should contain both the solved WCS and a bounding
             box of the ccd.
-        ppdb : `lsst.dax.ppdb.Ppdb`
-            Ppdb connection object to retrieve DIASources/Objects from and
+        apdb : `lsst.dax.apdb.Apdb`
+            Apdb connection object to retrieve DIASources/Objects from and
             write to.
 
         Returns
@@ -122,28 +122,28 @@ class AssociationTask(pipeBase.Task):
               diaObjects. (`pandas.DataFrame`)
         """
         # Assure we have a Box2D and can use the getCenter method.
-        dia_objects = self.retrieve_dia_objects(exposure, ppdb)
+        dia_objects = self.retrieve_dia_objects(exposure, apdb)
 
         dia_sources = self.check_dia_souce_radec(dia_sources)
 
         updated_obj_ids = self.associate_sources(dia_objects, dia_sources)
 
         # Store newly associated DIASources.
-        ppdb.storeDiaSources(dia_sources)
+        apdb.storeDiaSources(dia_sources)
         # Update previously existing DIAObjects with the information from their
         # newly association DIASources and create new DIAObjects from
         # unassociated sources.
         dia_objects = self.update_dia_objects(dia_objects,
                                               updated_obj_ids,
                                               exposure,
-                                              ppdb)
+                                              apdb)
 
         return pipeBase.Struct(
             dia_objects=dia_objects,
         )
 
     @pipeBase.timeMethod
-    def retrieve_dia_objects(self, exposure, ppdb):
+    def retrieve_dia_objects(self, exposure, apdb):
         """Convert the exposure object into HTM pixels and retrieve DIAObjects
         contained within the exposure.
 
@@ -154,8 +154,8 @@ class AssociationTask(pipeBase.Task):
         exposure : `lsst.afw.image.Exposure`
             An exposure specifying a bounding region with a WCS to load
             DIAOjbects within.
-        ppdb : `lsst.dax.ppdb.Ppdb`
-            Ppdb connection object to retrieve DIAObjects from.
+        apdb : `lsst.dax.apdb.Apdb`
+            Apdb connection object to retrieve DIAObjects from.
 
         Returns
         -------
@@ -172,10 +172,10 @@ class AssociationTask(pipeBase.Task):
 
         indexer_indices, on_boundry = self.indexer.getShardIds(
             ctr_coord, max_radius)
-        # Index types must be cast to int to work with dax_ppdb.
+        # Index types must be cast to int to work with dax_apdb.
         index_ranges = [[int(indexer_idx), int(indexer_idx) + 1]
                         for indexer_idx in indexer_indices]
-        covering_dia_objects = ppdb.getDiaObjects(index_ranges,
+        covering_dia_objects = apdb.getDiaObjects(index_ranges,
                                                   return_pandas=True)
         ccd_mask = pandas.Series(False, index=covering_dia_objects.index)
 
@@ -273,7 +273,7 @@ class AssociationTask(pipeBase.Task):
         return match_result.associated_dia_object_ids
 
     @pipeBase.timeMethod
-    def update_dia_objects(self, dia_objects, updated_obj_ids, exposure, ppdb):
+    def update_dia_objects(self, dia_objects, updated_obj_ids, exposure, apdb):
         """Update select dia_objects currently stored within the database or
         create new ones.
 
@@ -291,8 +291,8 @@ class AssociationTask(pipeBase.Task):
             Input exposure representing the region of the sky the dia_sources
             were detected on. Should contain both the solved WCS and a bounding
             box of the ccd.
-        ppdb : `lsst.dax.ppdb.Ppdb`
-            Ppdb connection object to retrieve DIASources from and
+        apdb : `lsst.dax.apdb.Apdb`
+            Apdb connection object to retrieve DIASources from and
             write DIAObjects to.
 
         Returns
@@ -305,7 +305,7 @@ class AssociationTask(pipeBase.Task):
 
         dateTime = exposure.getInfo().getVisitInfo().getDate().toPython()
 
-        dia_sources = ppdb.getDiaSources(updated_obj_ids,
+        dia_sources = apdb.getDiaSources(updated_obj_ids,
                                          dateTime,
                                          return_pandas=True)
 
@@ -314,7 +314,7 @@ class AssociationTask(pipeBase.Task):
                                           updated_obj_ids,
                                           filter_name)
 
-        ppdb.storeDiaObjects(results.updatedDiaObjects, dateTime)
+        apdb.storeDiaObjects(results.updatedDiaObjects, dateTime)
 
         return results.diaObjectCat
 

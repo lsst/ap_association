@@ -20,12 +20,12 @@
 #
 
 """Classes for taking science pipeline outputs and creating data products for
-use in ap_association and the prompt-products database (PPDB).
+use in ap_association and the alert production database (APDB).
 """
 
 __all__ = ["MapApDataConfig", "MapApDataTask",
            "MapDiaSourceConfig", "MapDiaSourceTask",
-           "UnpackPpdbFlags"]
+           "UnpackApdbFlags"]
 
 import numpy as np
 import os
@@ -57,7 +57,7 @@ class MapApDataConfig(pexConfig.Config):
 
 class MapApDataTask(pipeBase.Task):
     """Generic mapper class for copying values from a science pipelines catalog
-    into a product for use in ap_association or the PPDB.
+    into a product for use in ap_association or the APDB.
     """
     ConfigClass = MapApDataConfig
     _DefaultName = "mapApDataTask"
@@ -161,7 +161,7 @@ class MapDiaSourceConfig(pexConfig.Config):
 
 class MapDiaSourceTask(MapApDataTask):
     """Task specific for copying columns from science pipelines catalogs,
-    calibrating them, for use in ap_association and the PPDB.
+    calibrating them, for use in ap_association and the APDB.
 
     This task also copies information from the exposure such as the ExpsoureId
     and the exposure date as specified in the DPDD.
@@ -346,7 +346,7 @@ class MapDiaSourceTask(MapApDataTask):
         """Convert input afw table to pandas.
 
         Using afwTable.toAstropy().to_pandas() alone is not sufficient to
-        properly store data in the Ppdb. We must also convert the RA/DEC values
+        properly store data in the Apdb. We must also convert the RA/DEC values
         from radians to degrees and rename several columns.
 
         Parameters
@@ -370,8 +370,8 @@ class MapDiaSourceTask(MapApDataTask):
         return catalog
 
 
-class UnpackPpdbFlags:
-    """Class for unpacking bits from integer flag fields stored in the Ppdb.
+class UnpackApdbFlags:
+    """Class for unpacking bits from integer flag fields stored in the Apdb.
 
     Attributes
     ----------
@@ -379,7 +379,7 @@ class UnpackPpdbFlags:
         Absolute or relative path to a yaml file specifiying mappings of flags
         to integer bits.
     table_name : `str`
-        Name of the Ppdb table the integer bit data are coming from.
+        Name of the Apdb table the integer bit data are coming from.
     """
 
     def __init__(self, flag_map_file, table_name):
@@ -408,7 +408,7 @@ class UnpackPpdbFlags:
         input_flag_values : array-like of type uint
             Input integer flags to unpack.
         flag_name : `str`
-            Ppdb column name of integer flags to unpack. Names of packed int
+            Apdb column name of integer flags to unpack. Names of packed int
             flags are given by the flag_map_file.
 
         Returns
