@@ -225,7 +225,6 @@ class TestTotalUnassociatedObjects(ApdbMetricTestCase):
 
     def setUp(self):
         super().setUp()
-        # Do the patch here to avoid passing extra arguments to superclass tests
 
     def testValid(self):
         result = self.task.run([{"test_value": 42}])
