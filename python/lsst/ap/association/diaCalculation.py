@@ -307,14 +307,18 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
                 Catalog of DiaObjects  that were updated or created by this
                 task (`pandas.DataFrame`).
         """
-        if isinstance(diaObjectCat.index, pd.RangeIndex):
+        if diaObjectCat.index.name is None:
             diaObjectCat.set_index("diaObjectId", inplace=True)
         elif diaObjectCat.index.name != "diaObjectId":
             self.log.warn(
                 "Input diaObjectCat is indexed on column(s) incompatible with "
-                "this task. Should be indexed on 'diaObjectId'.")
+                "this task. Should be indexed on 'diaObjectId'. Trying to set "
+                "index regardless")
+            diaObjectCat.set_index("diaObjectId", inplace=True)
 
-        if isinstance(diaSourceCat.index, pd.RangeIndex):
+        # ``names`` by default is FrozenList([None]) hence we access the first
+        # element and test for None.
+        if diaSourceCat.index.names[0] is None:
             diaSourceCat.set_index(
                 ["diaObjectId", "filterName", "diaSourceId"],
                 inplace=True)
@@ -323,7 +327,11 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
             self.log.warn(
                 "Input diaSourceCat is indexed on column(s) incompatible with "
                 "this task. Should be indexed on 'multi-index, "
-                "['diaObjectId', 'filterName', 'diaSourceId'].")
+                "['diaObjectId', 'filterName', 'diaSourceId']. Trying to set "
+                "index regardless.")
+            diaSourceCat.set_index(
+                ["diaObjectId", "filterName", "diaSourceId"],
+                inplace=True)
 
         return self.callCompute(diaObjectCat,
                                 diaSourceCat,
