@@ -370,7 +370,7 @@ class MapDiaSourceTask(MapApDataTask):
         return catalog
 
 
-class UnpackPpdbFlags(object):
+class UnpackPpdbFlags:
     """Class for unpacking bits from integer flag fields stored in the Ppdb.
 
     Attributes
