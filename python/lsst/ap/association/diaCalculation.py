@@ -85,14 +85,14 @@ class DiaObjectCalculationPlugin(CatalogCalculationPlugin):
     """DiaObject column names required by the plugin in order to run and
     complete its calculation. DiaCalculationTask should raise an error is a
     plugin is instantiated without the needed column available. Input columns
-    should be defined in the DPDD/cat/Ppdb schema. Filter dependent columns
+    should be defined in the DPDD/cat/Apdb schema. Filter dependent columns
     should be specified without the filter name perpended to them. eg
     ``PSFluxMean`` instead of ``uPSFluxMean``.
     """
     outputCols = []
     """DiaObject column names output by the plugin. DiaCalculationTask should
     raise an error if another pluging is run output to the same column.
-    Output columns should be defined in the DPDD/cat/Ppdb schema. Filter
+    Output columns should be defined in the DPDD/cat/Apdb schema. Filter
     dependent columns should be specified without the filter name perpended to
     them. eg ``PSFluxMean`` instead of ``uPSFluxMean``.
     """
@@ -176,7 +176,7 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
      in single mode.
 
     -Input and output catalog types are assumed to be `pandas.DataFrames` with
-     columns following those used in the Ppdb.
+     columns following those used in the Apdb.
 
     -No schema argument is passed to the plugins. Each plugin specifies
      output columns and required inputs.
@@ -400,7 +400,7 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
             objDiaSources = diaSourceCat.loc[objId]
             # Currently needed as dataFrames loaded from sql do not currently
             # map Null to NaN for custom queries. This can either stay here
-            # or move to dax_ppdb or ap_association.
+            # or move to dax_apdb or ap_association.
             objDiaSources.replace(to_replace=[None],
                                   value=np.nan)
 
@@ -427,7 +427,7 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
 
     def _initialize_dia_object(self, objId):
         """Create a new DiaObject with values required to be initialized by the
-        Ppdb.
+        Apdb.
 
         Parameters
         ----------

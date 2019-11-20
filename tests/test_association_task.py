@@ -30,7 +30,7 @@ import lsst.afw.image as afwImage
 import lsst.afw.image.utils as afwImageUtils
 import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
-from lsst.dax.ppdb import Ppdb, PpdbConfig
+from lsst.dax.apdb import Apdb, ApdbConfig
 import lsst.geom as geom
 from lsst.ap.association import \
     AssociationTask, \
@@ -195,17 +195,17 @@ class TestAssociationTask(unittest.TestCase):
 
         self.dia_object_schema = make_dia_object_schema()
 
-        self.ppdbConfig = PpdbConfig()
-        self.ppdbConfig.db_url = "sqlite:///" + self.db_file
-        self.ppdbConfig.isolation_level = "READ_UNCOMMITTED"
-        self.ppdbConfig.dia_object_index = "baseline"
-        self.ppdbConfig.dia_object_columns = []
-        self.ppdbConfig.schema_file = _data_file_name(
-            "ppdb-schema.yaml", "dax_ppdb")
-        self.ppdbConfig.column_map = _data_file_name(
-            "ppdb-ap-pipe-afw-map.yaml", "ap_association")
-        self.ppdbConfig.extra_schema_file = _data_file_name(
-            "ppdb-ap-pipe-schema-extra.yaml", "ap_association")
+        self.apdbConfig = ApdbConfig()
+        self.apdbConfig.db_url = "sqlite:///" + self.db_file
+        self.apdbConfig.isolation_level = "READ_UNCOMMITTED"
+        self.apdbConfig.dia_object_index = "baseline"
+        self.apdbConfig.dia_object_columns = []
+        self.apdbConfig.schema_file = _data_file_name(
+            "apdb-schema.yaml", "dax_apdb")
+        self.apdbConfig.column_map = _data_file_name(
+            "apdb-ap-pipe-afw-map.yaml", "ap_association")
+        self.apdbConfig.extra_schema_file = _data_file_name(
+            "apdb-ap-pipe-schema-extra.yaml", "ap_association")
 
         # metadata taken from CFHT data
         # v695856-e0/v695856-e0-c000-a00.sci_img.fits
@@ -261,7 +261,7 @@ class TestAssociationTask(unittest.TestCase):
 
         indexer_indices, on_boundry = assoc_task.indexer.getShardIds(
             ctr_coord, max_radius)
-        # Index types must be cast to int to work with dax_ppdb.
+        # Index types must be cast to int to work with dax_apdb.
         self.index_ranges = [[int(indexer_idx), int(indexer_idx) + 1]
                              for indexer_idx in indexer_indices]
 
@@ -320,20 +320,20 @@ class TestAssociationTask(unittest.TestCase):
             self.assertEqual(output_dia_object['gPSFluxNdata'], 1)
             self.assertEqual(df_idx, obj_idx + 10)
 
-    def _make_ppdb(self):
-        """Create an empty ppdb database.
+    def _make_apdb(self):
+        """Create an empty apdb database.
 
         Returns
         -------
-        ppdb : `lsst.dax.ppdb.Ppdb`
-            Initialized and empty ppdb.
+        apdb : `lsst.dax.apdb.Apdb`
+            Initialized and empty apdb.
         """
-        ppdb = Ppdb(config=self.ppdbConfig,
+        apdb = Apdb(config=self.apdbConfig,
                     afw_schemas=dict(DiaObject=make_dia_object_schema(),
                                      DiaSource=make_dia_source_schema()))
-        ppdb.makeSchema()
+        apdb.makeSchema()
 
-        return ppdb
+        return apdb
 
     def _run_association_and_retrieve_objects(self, create_objects=False):
         """Convenience method for testing the Association run method.
@@ -372,7 +372,7 @@ class TestAssociationTask(unittest.TestCase):
 
         assoc_task = AssociationTask()
 
-        ppdb = self._make_ppdb()
+        apdb = self._make_apdb()
         dia_sources = dia_sources.asAstropy().to_pandas()
         dia_sources.rename(columns={"coord_ra": "ra",
                                     "coord_dec": "decl",
@@ -382,9 +382,9 @@ class TestAssociationTask(unittest.TestCase):
         dia_sources["ra"] = np.degrees(dia_sources["ra"])
         dia_sources["decl"] = np.degrees(dia_sources["decl"])
 
-        assoc_task.run(dia_sources, self.exposure, ppdb)
+        assoc_task.run(dia_sources, self.exposure, apdb)
 
-        dia_objects = assoc_task.retrieve_dia_objects(self.exposure, ppdb)
+        dia_objects = assoc_task.retrieve_dia_objects(self.exposure, apdb)
         return dia_objects
 
     def _set_source_values(self, dia_source, flux, fluxErr, filterName,
@@ -436,7 +436,7 @@ class TestAssociationTask(unittest.TestCase):
         # to them. The DIASources are "observed" in g and r.
 
         # Create an empty database
-        ppdb = self._make_ppdb()
+        apdb = self._make_apdb()
 
         # Create DIObjects, give them fluxes, and store them
         n_objects = 5
@@ -461,8 +461,8 @@ class TestAssociationTask(unittest.TestCase):
 
         dateTime = dafBase.DateTime("2014-05-13T16:00:00.000000000",
                                     dafBase.DateTime.Timescale.TAI)
-        ppdb.storeDiaObjects(dia_objects, dateTime.toPython())
-        loaded_dia_objects = ppdb.getDiaObjects(self.index_ranges)
+        apdb.storeDiaObjects(dia_objects, dateTime.toPython())
+        loaded_dia_objects = apdb.getDiaObjects(self.index_ranges)
 
         self.assertTrue(loaded_dia_objects.schema == dia_objects.schema)
 
@@ -494,7 +494,7 @@ class TestAssociationTask(unittest.TestCase):
                     filterId=2,
                     ccdVisitId=1233,
                     midPointTai=dateTime.get(system=dafBase.DateTime.MJD))
-        ppdb.storeDiaSources(dia_sources)
+        apdb.storeDiaSources(dia_sources)
 
     def test_update_dia_objects(self):
         """Test the update_dia_objects method.
@@ -531,23 +531,23 @@ class TestAssociationTask(unittest.TestCase):
         dia_sources["decl"] = np.degrees(dia_sources["decl"])
 
         # Store them in the DB containing pre-existing objects.
-        ppdb = self._make_ppdb()
+        apdb = self._make_apdb()
         # Load the Existing DIAObjects for use in the update method.
-        loaded_dia_objects = ppdb.getDiaObjects(self.index_ranges,
+        loaded_dia_objects = apdb.getDiaObjects(self.index_ranges,
                                                 return_pandas=True)
 
         # Store the new DIASources with associations and an exposure.
-        ppdb.storeDiaSources(dia_sources)
+        apdb.storeDiaSources(dia_sources)
 
         # Create our task and update the stored DIAObjects.
         assoc_task = AssociationTask()
         assoc_task.update_dia_objects(loaded_dia_objects,
                                       [1, 2, 3, 4, 14],
                                       self.exposure,
-                                      ppdb)
+                                      apdb)
 
         # Retrieve the DIAObjects from the DB.
-        output_dia_objects = ppdb.getDiaObjects(self.index_ranges)
+        output_dia_objects = apdb.getDiaObjects(self.index_ranges)
 
         # Data and column names to test.
         test_dia_object_values = [

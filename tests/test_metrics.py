@@ -27,12 +27,12 @@ import astropy.units as u
 import lsst.utils.tests
 from lsst.pex.config import Config
 from lsst.daf.base import PropertySet
-from lsst.dax.ppdb import Ppdb
+from lsst.dax.apdb import Apdb
 from lsst.pipe.base import Task, Struct
 from lsst.verify import Name
 from lsst.verify.gen2tasks.testUtils import MetricTaskTestCase
 from lsst.verify.tasks import MetricComputationError
-from lsst.verify.tasks.testUtils import MetadataMetricTestCase, PpdbMetricTestCase
+from lsst.verify.tasks.testUtils import MetadataMetricTestCase, ApdbMetricTestCase
 
 from lsst.ap.association.metrics import \
     NumberNewDiaObjectsMetricTask, \
@@ -187,22 +187,22 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
             self.task.run(metadata)
 
 
-class TestTotalUnassociatedObjects(PpdbMetricTestCase):
+class TestTotalUnassociatedObjects(ApdbMetricTestCase):
 
     @staticmethod
-    def _makePpdb(dummy_dbInfo):
-        """Create a dummy ppdb.
+    def _makeApdb(dummy_dbInfo):
+        """Create a dummy apdb.
 
-        We don't have access to the ppdb in the task directly so mocking
+        We don't have access to the apdb in the task directly so mocking
         return values is difficult. We thus make use of the dummy dbInfo
-        that is passed to the init task to pass values to the ppdb object
+        that is passed to the init task to pass values to the apdb object
         instantiated.
         """
-        ppdb = unittest.mock.Mock(Ppdb)
+        apdb = unittest.mock.Mock(Apdb)
         test_value = dummy_dbInfo["test_value"]
-        ppdb.countUnassociatedObjects = unittest.mock.MagicMock(
+        apdb.countUnassociatedObjects = unittest.mock.MagicMock(
             return_value=test_value)
-        return ppdb
+        return apdb
 
     @classmethod
     def makeTask(cls):
@@ -211,9 +211,9 @@ class TestTotalUnassociatedObjects(PpdbMetricTestCase):
 
             def run(self, dummy):
                 if dummy is not None:
-                    return Struct(ppdb=cls._makePpdb(dummy))
+                    return Struct(apdb=cls._makeApdb(dummy))
                 else:
-                    return Struct(ppdb=None)
+                    return Struct(apdb=None)
 
         config = TotalUnassociatedDiaObjectsMetricTask.ConfigClass()
         config.dbLoader.retarget(SimpleDbLoader)
@@ -254,7 +254,7 @@ class TestTotalUnassociatedObjects(PpdbMetricTestCase):
 # Hack around unittest's hacky test setup system
 del MetricTaskTestCase
 del MetadataMetricTestCase
-del PpdbMetricTestCase
+del ApdbMetricTestCase
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
