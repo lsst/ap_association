@@ -225,17 +225,16 @@ class TestTotalUnassociatedObjects(ApdbMetricTestCase):
 
     def setUp(self):
         super().setUp()
-        # Do the patch here to avoid passing extra arguments to superclass tests
 
     def testValid(self):
-        result = self.task.run({"test_value": 42})
+        result = self.task.run([{"test_value": 42}])
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.totalUnassociatedDiaObjects"))
         self.assertEqual(meas.quantity, 42 * u.count)
 
     def testAllAssociated(self):
-        result = self.task.run({"test_value": 0})
+        result = self.task.run([{"test_value": 0}])
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.totalUnassociatedDiaObjects"))
@@ -248,7 +247,7 @@ class TestTotalUnassociatedObjects(ApdbMetricTestCase):
 
     def testFineGrainedMetric(self):
         with self.assertRaises(ValueError):
-            self.task.run(self.makeDbInfo(), outputDataId={"visit": 42})
+            self.task.run([self.makeDbInfo()], outputDataId={"visit": 42})
 
 
 # Hack around unittest's hacky test setup system
