@@ -327,8 +327,10 @@ class TestWeightedMeanDiaPsFlux(unittest.TestCase):
                   "psFluxErr": np.ones(n_sources)})
         run_multi_plugin(diaObjects, diaSources, "r", plug)
 
-        self.assertTrue(~np.isnan(diaObjects.loc[objId, "rPSFluxMean"]))
-        self.assertTrue(~np.isnan(diaObjects.loc[objId, "rPSFluxMeanErr"]))
+        self.assertAlmostEqual(diaObjects.at[objId, "rPSFluxMean"],
+                               np.nanmean(fluxes))
+        self.assertAlmostEqual(diaObjects.at[objId, "rPSFluxMeanErr"],
+                               np.sqrt(1 / (n_sources - 1)))
         self.assertEqual(diaObjects.loc[objId, "rPSFluxNdata"], n_sources - 1)
 
 
@@ -553,8 +555,8 @@ class TestSkewDiaPsFlux(unittest.TestCase):
                   "psFlux": fluxes,
                   "psFluxErr": np.ones(n_sources)})
         run_multi_plugin(diaObjects, diaSources, "r", plug)
-        cutFluxes = fluxes[~np.isnan(fluxes)]
-        self.assertAlmostEqual(diaObjects.at[objId, "rPSFluxSkew"], skew(cutFluxes))
+        self.assertAlmostEqual(diaObjects.at[objId, "rPSFluxSkew"],
+                               skew(fluxes, nan_policy="omit"))
 
 
 class TestMinMaxDiaPsFlux(unittest.TestCase):
@@ -584,7 +586,6 @@ class TestMinMaxDiaPsFlux(unittest.TestCase):
 
         # Test expected MinMax fluxes with a nan set.
         fluxes[4] = np.nan
-        fluxes = np.linspace(-1, 1, n_sources)
         diaObjects = pd.DataFrame({"diaObjectId": [objId]})
         diaSources = pd.DataFrame(
             data={"diaObjectId": n_sources * [objId],
@@ -607,7 +608,7 @@ class TestMaxSlopeDiaPsFlux(unittest.TestCase):
 
         # Test max slope value.
         fluxes = np.linspace(-1, 1, n_sources)
-        times = np.linspace(0, 1, n_sources)
+        times = np.concatenate([np.linspace(0, 1, n_sources)[:-1], [1 - 1/90]])
         diaObjects = pd.DataFrame({"diaObjectId": [objId]})
         diaSources = pd.DataFrame(
             data={"diaObjectId": n_sources * [objId],
@@ -621,7 +622,7 @@ class TestMaxSlopeDiaPsFlux(unittest.TestCase):
                                  "ap_maxSlopeFlux",
                                  None)
         run_multi_plugin(diaObjects, diaSources, "u", plug)
-        self.assertEqual(diaObjects.at[objId, "uPSFluxMaxSlope"], 2.)
+        self.assertAlmostEqual(diaObjects.at[objId, "uPSFluxMaxSlope"], 2 + 2/9)
 
         # Test max slope value returns nan on 1 input.
         diaObjects = pd.DataFrame({"diaObjectId": [objId]})
@@ -647,7 +648,7 @@ class TestMaxSlopeDiaPsFlux(unittest.TestCase):
                   "psFluxErr": np.ones(n_sources),
                   "midPointTai": times})
         run_multi_plugin(diaObjects, diaSources, "r", plug)
-        self.assertEqual(diaObjects.at[objId, "rPSFluxMaxSlope"], 2.)
+        self.assertAlmostEqual(diaObjects.at[objId, "rPSFluxMaxSlope"], 2 + 2 / 9)
 
 
 class TestErrMeanDiaPsFlux(unittest.TestCase):
@@ -837,8 +838,10 @@ class TestWeightedMeanDiaTotFlux(unittest.TestCase):
                   "totFluxErr": np.ones(n_sources)})
         run_multi_plugin(diaObjects, diaSources, "r", plug)
 
-        self.assertTrue(~np.isnan(diaObjects.at[objId, "rTOTFluxMean"]))
-        self.assertTrue(~np.isnan(diaObjects.at[objId, "rTOTFluxMeanErr"]))
+        self.assertAlmostEqual(diaObjects.at[objId, "rTOTFluxMean"],
+                               np.nanmean(fluxes))
+        self.assertAlmostEqual(diaObjects.at[objId, "rTOTFluxMeanErr"],
+                               np.sqrt(1 / (n_sources - 1)))
 
 
 class TestSigmaDiaTotFlux(unittest.TestCase):

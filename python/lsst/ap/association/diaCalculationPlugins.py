@@ -277,12 +277,14 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
             diaObjects[nDataName] = np.nan
 
         def _weightedMean(df):
-            tot_weight = np.nansum(1 / df["psFluxErr"] ** 2)
-            fluxMean = np.nansum(df["psFlux"] /
-                                 df["psFluxErr"] ** 2)
+            tmpDf = df[~np.logical_or(np.isnan(df["psFlux"]),
+                                      np.isnan(df["psFluxErr"]))]
+            tot_weight = np.nansum(1 / tmpDf["psFluxErr"] ** 2)
+            fluxMean = np.nansum(tmpDf["psFlux"] /
+                                 tmpDf["psFluxErr"] ** 2)
             fluxMean /= tot_weight
             fluxMeanErr = np.sqrt(1 / tot_weight)
-            nFluxData = np.sum(np.isfinite(df["psFlux"]))
+            nFluxData = len(tmpDf)
 
             return pd.Series({meanName: fluxMean,
                               errName: fluxMeanErr,
@@ -455,7 +457,8 @@ class Chi2DiaPsFlux(DiaObjectCalculationPlugin):
         meanName = "{}PSFluxMean".format(filterName)
 
         def _chi2(df):
-            delta = (df["psFlux"] - diaObjects.at[df.index[0][0], meanName])
+            delta = (df["psFlux"] -
+                     diaObjects.at[df.diaObjectId.iat[0], meanName])
             return np.nansum((delta / df["psFluxErr"]) ** 2)
 
         diaObjects.loc[:, "{}PSFluxChi2".format(filterName)] = \
@@ -552,13 +555,8 @@ class SkewDiaPsFlux(DiaObjectCalculationPlugin):
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-
-        def _skew(df):
-            fluxes = df["psFlux"]
-            return skew(fluxes[~np.isnan(fluxes)])
-
         diaObjects.loc[:, "{}PSFluxSkew".format(filterName)] = \
-            filterDiaSources.apply(_skew)
+            filterDiaSources.psFlux.apply(skew, nan_policy='omit')
 
 
 class MinMaxDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -661,14 +659,13 @@ class MaxSlopeDiaPsFlux(DiaObjectCalculationPlugin):
         def _maxSlope(df):
             tmpDf = df[~np.logical_or(np.isnan(df["psFlux"]),
                                       np.isnan(df["midPointTai"]))]
-            if len(tmpDf) <= 1:
+            if len(tmpDf) < 2:
                 return np.nan
             times = tmpDf["midPointTai"].to_numpy()
             timeArgs = times.argsort()
             times = times[timeArgs]
             fluxes = tmpDf["psFlux"].to_numpy()[timeArgs]
-            return ((fluxes[1:] - fluxes[:-1]) /
-                    (times[1:] - times[:-1])).max()
+            return (np.diff(fluxes) / np.diff(times)).max()
 
         diaObjects.loc[:, "{}PSFluxMaxSlope".format(filterName)] = \
             filterDiaSources.apply(_maxSlope)
@@ -840,10 +837,10 @@ class StetsonJDiaPsFlux(DiaObjectCalculationPlugin):
             fluxes = tmpDf["psFlux"].to_numpy()
             errors = tmpDf["psFluxErr"].to_numpy()
 
-            return self._stetson_J(fluxes,
-                                   errors,
-                                   diaObjects.at[tmpDf.index[0][0],
-                                                 meanName])
+            return self._stetson_J(
+                fluxes,
+                errors,
+                diaObjects.at[tmpDf.diaObjectId.iat[0], meanName])
 
         diaObjects.loc[:, "{}PSFluxStetsonJ".format(filterName)] = \
             filterDiaSources.apply(_stetsonJ)
@@ -990,9 +987,11 @@ class WeightedMeanDiaTotFlux(DiaObjectCalculationPlugin):
             diaObjects[totErrName] = np.nan
 
         def _meanFlux(df):
-            tot_weight = np.nansum(1 / df["totFluxErr"] ** 2)
-            fluxMean = np.nansum(df["totFlux"] /
-                                 df["totFluxErr"] ** 2)
+            tmpDf = df[~np.logical_or(np.isnan(df["totFlux"]),
+                                      np.isnan(df["totFluxErr"]))]
+            tot_weight = np.nansum(1 / tmpDf["totFluxErr"] ** 2)
+            fluxMean = np.nansum(tmpDf["totFlux"] /
+                                 tmpDf["totFluxErr"] ** 2)
             fluxMean /= tot_weight
             fluxMeanErr = np.sqrt(1 / tot_weight)
 

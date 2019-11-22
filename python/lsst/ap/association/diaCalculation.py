@@ -378,14 +378,19 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
         KeyError
             Raises if `pandas.DataFrame` indexing is not properly set.
         """
+        # DiaObjects will be updated in place.
         diaObjectsToUpdate = diaObjectCat.loc[updatedDiaObjectIds, :]
 
         updatingDiaSources = diaSourceCat.loc[updatedDiaObjectIds, :]
+        # Pandas does not convert NULL to `nan` values in custom select
+        # statements, instead using None. We thus must replace to None with
+        # `nan` manually.
         updatingDiaSources.replace(to_replace=[None], value=np.nan)
         updatingFilterDiaSources = updatingDiaSources.loc[
             (slice(None), filterName), :
         ]
 
+        # Level=0 here groups by diaObjectId.
         diaSourcesGB = updatingDiaSources.groupby(level=0)
         filterDiaSourcesGB = updatingFilterDiaSources.groupby(level=0)
 
@@ -399,6 +404,9 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
                     # Sub-select on diaSources observed in the current filter.
                     filterObjDiaSources = objDiaSources.loc[filterName]
                     with CCContext(plug, updatedDiaObjectId, self.log):
+                        # We feed the catalog we need to update and the id
+                        # so as to get a few into the catalog and not a copy.
+                        # This updates the values in the catalog.
                         plug.calculate(diaObjects=diaObjectsToUpdate,
                                        diaObjectId=updatedDiaObjectId,
                                        diaSources=objDiaSources,
@@ -410,8 +418,6 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
                                    diaSources=diaSourcesGB,
                                    filterDiaSources=filterDiaSourcesGB,
                                    filterName=filterName)
-
-        diaObjectCat.loc[updatedDiaObjectIds, :] = diaObjectsToUpdate.loc[updatedDiaObjectIds, :]
 
         return lsst.pipe.base.Struct(
             diaObjectCat=diaObjectCat,

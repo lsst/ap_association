@@ -155,13 +155,15 @@ class TestDiaCalcluation(unittest.TestCase):
                             "psFlux": np.nan, "psFluxErr": 1.,
                             "totFlux": 0., "totFluxErr": 0.,
                             "midPointTai": 0, "filterName": "g"},
-                           {"diaSourceId": 13, "diaObjectId": 13,
+                           {"diaSourceId": self.newDiaObjectId,
+                            "diaObjectId": self.newDiaObjectId,
                             "psFlux": 1., "psFluxErr": 1.,
                             "totFlux": 0., "totFluxErr": 0.,
                             "midPointTai": 0, "filterName": "g"}])
         self.diaSources = pd.DataFrame(data=diaSources)
 
-        self.updatedDiaObjectIds = np.array([0, 1, 2, 13], dtype=np.int)
+        self.updatedDiaObjectIds = np.array([0, 1, 2, self.newDiaObjectId],
+                                            dtype=np.int)
 
         conf = DiaObjectCalculationConfig()
         conf.plugins = ["testDiaPlugin",
