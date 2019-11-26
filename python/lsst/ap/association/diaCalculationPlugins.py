@@ -184,7 +184,7 @@ class NumDiaSourcesDiaPlugin(DiaObjectCalculationPlugin):
         diaObject : `dict`
             Summary object to store values in and read ra/decl from.
         """
-        diaObjects.loc[:, "nDiaSources"] = diaSources.apply(len)
+        diaObjects.loc[:, "nDiaSources"] = diaSources.diaObjectId.count()
 
 
 class SimpleSourceFlagDiaPluginConfig(DiaObjectCalculationPluginConfig):
@@ -216,13 +216,7 @@ class SimpleSourceFlagDiaPlugin(DiaObjectCalculationPlugin):
         diaObject : `dict`
             Summary object to store values in and read ra/decl from.
         """
-
-        def _flagDiaObject(df):
-            if np.any(df["flags"] > 0):
-                return 1
-            return 0
-
-        diaObjects.loc[:, "flags"] = diaSources.apply(_flagDiaObject)
+        diaObjects.loc[:, "flags"] = diaSources.flags.any()
 
 
 class WeightedMeanDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -404,12 +398,8 @@ class SigmaDiaPsFlux(DiaObjectCalculationPlugin):
         """
         # Set "delta degrees of freedom (ddf)" to 1 to calculate the unbiased
         # estimator of scatter (i.e. 'N - 1' instead of 'N').
-
-        def _sigma(df):
-            return np.nanstd(df["psFlux"], ddof=1)
-
         diaObjects.loc[:, "{}PSFluxSigma".format(filterName)] = \
-            filterDiaSources.apply(_sigma)
+            filterDiaSources.psFlux.agg(np.nanstd)
 
 
 class Chi2DiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -506,12 +496,9 @@ class MadDiaPsFlux(DiaObjectCalculationPlugin):
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-
-        def _mad(df):
-            return median_absolute_deviation(df["psFlux"], ignore_nan=True)
-
         diaObjects.loc[:, "{}PSFluxMAD".format(filterName)] = \
-            filterDiaSources.apply(_mad)
+            filterDiaSources.psFlux.apply(median_absolute_deviation,
+                                          ignore_nan=True)
 
 
 class SkewDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -607,11 +594,8 @@ class MinMaxDiaPsFlux(DiaObjectCalculationPlugin):
         if maxName not in diaObjects.columns:
             diaObjects[maxName] = np.nan
 
-        def _minMax(df):
-            return pd.Series({minName: df["psFlux"].min(),
-                              maxName: df["psFlux"].max()})
-
-        diaObjects.loc[:, [minName, maxName]] = filterDiaSources.apply(_minMax)
+        diaObjects.loc[:, minName] = filterDiaSources.psFlux.min()
+        diaObjects.loc[:, maxName] = filterDiaSources.psFlux.max()
 
 
 class MaxSlopeDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -712,11 +696,8 @@ class ErrMeanDiaPsFlux(DiaObjectCalculationPlugin):
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        def _meanErr(df):
-            return np.nanmean(df["psFluxErr"])
-
         diaObjects.loc[:, "{}PSFluxErrMean".format(filterName)] = \
-            filterDiaSources.apply(_meanErr)
+            filterDiaSources.psFluxErr.agg(np.nanmean)
 
 
 class LinearFitDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -1044,8 +1025,5 @@ class SigmaDiaTotFlux(DiaObjectCalculationPlugin):
         """
         # Set "delta degrees of freedom (ddf)" to 1 to calculate the unbiased
         # estimator of scatter (i.e. 'N - 1' instead of 'N').
-        def _sigma(df):
-            return np.nanstd(df["totFlux"], ddof=1)
-
         diaObjects.loc[:, "{}TOTFluxSigma".format(filterName)] = \
-            filterDiaSources.apply(_sigma)
+            filterDiaSources.totFlux.agg(np.nanstd)

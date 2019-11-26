@@ -674,8 +674,8 @@ class TestErrMeanDiaPsFlux(unittest.TestCase):
                                 "ap_errMeanFlux",
                                 None)
         run_multi_plugin(diaObjects, diaSources, "u", plug)
-        self.assertEqual(diaObjects.at[objId, "uPSFluxErrMean"],
-                         np.nanmean(errors))
+        self.assertAlmostEqual(diaObjects.at[objId, "uPSFluxErrMean"],
+                               np.nanmean(errors))
 
         # Test mean of the errors with input nan value.
         errors[4] = np.nan
@@ -687,8 +687,8 @@ class TestErrMeanDiaPsFlux(unittest.TestCase):
                   "psFlux": fluxes,
                   "psFluxErr": errors})
         run_multi_plugin(diaObjects, diaSources, "r", plug)
-        self.assertEqual(diaObjects.at[objId, "rPSFluxErrMean"],
-                         np.nanmean(errors))
+        self.assertAlmostEqual(diaObjects.at[objId, "rPSFluxErrMean"],
+                               np.nanmean(errors))
 
 
 class TestLinearFitDiaPsFlux(unittest.TestCase):
