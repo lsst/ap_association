@@ -27,6 +27,7 @@ as defined in the schema of the Apdb both in name and units.
 
 from astropy.stats import median_absolute_deviation
 import numpy as np
+import pandas as pd
 from scipy.optimize import lsq_linear
 from scipy.stats import skew
 
@@ -68,33 +69,47 @@ class MeanDiaPosition(DiaObjectCalculationPlugin):
     """
 
     ConfigClass = MeanDiaPositionConfig
+
+    plugType = 'multi'
+
     outputCols = ["ra", "decl", "radecTai"]
 
     @classmethod
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
-    def calculate(self, diaObject, diaSources, **kwargs):
+    def calculate(self, diaObjects, diaSources, **kwargs):
         """Compute the mean ra/dec position of the diaObject given the
         diaSource locations.
 
         Parameters
         ----------
-        diaObject : `dict`
-            Summary object to store values in.
-        diaSources : `pandas.DataFrame`
+        diaObjects : `pandas.DataFrame`
+            Summary objects to store values in.
+        diaSources : `pandas.DataFrame` or `pandas.DataFrameGroupBy`
             Catalog of DiaSources summarized by this DiaObject.
         """
-        aveCoord = geom.averageSpherePoint(
-            list(geom.SpherePoint(src["ra"], src["decl"], geom.degrees)
-                 for idx, src in diaSources.iterrows()))
-        if not (np.isfinite(aveCoord.getRa().asDegrees()) and
-                np.isfinite(aveCoord.getDec().asDegrees())):
-            self.fail(diaObject, self.outputCols)
-        else:
-            diaObject["ra"] = aveCoord.getRa().asDegrees()
-            diaObject["decl"] = aveCoord.getDec().asDegrees()
-            diaObject["radecTai"] = np.max(diaSources["midPointTai"])
+        for outCol in self.outputCols:
+            if outCol not in diaObjects.columns:
+                diaObjects[outCol] = np.nan
+
+        def _computeMeanPos(df):
+            aveCoord = geom.averageSpherePoint(
+                list(geom.SpherePoint(src["ra"], src["decl"], geom.degrees)
+                     for idx, src in df.iterrows()))
+            ra = aveCoord.getRa().asDegrees()
+            decl = aveCoord.getDec().asDegrees()
+            if np.isnan(ra) or np.isnan(decl):
+                radecTai = np.nan
+            else:
+                radecTai = df["midPointTai"].max()
+
+            return pd.Series({"ra": aveCoord.getRa().asDegrees(),
+                              "decl": aveCoord.getDec().asDegrees(),
+                              "radecTai": radecTai})
+
+        ans = diaSources.apply(_computeMeanPos)
+        diaObjects.loc[:, ["ra", "decl", "radecTai"]] = ans
 
 
 class HTMIndexDiaPositionConfig(DiaObjectCalculationPluginConfig):
@@ -114,8 +129,10 @@ class HTMIndexDiaPositionConfig(DiaObjectCalculationPluginConfig):
 class HTMIndexDiaPosition(DiaObjectCalculationPlugin):
     """Compute the mean position of a DiaObject given a set of DiaSources.
     """
-
     ConfigClass = HTMIndexDiaPositionConfig
+
+    plugType = 'multi'
+
     inputCols = ["ra", "decl"]
     outputCols = ["pixelId"]
 
@@ -128,16 +145,18 @@ class HTMIndexDiaPosition(DiaObjectCalculationPlugin):
     def getExecutionOrder(cls):
         return cls.FLUX_MOMENTS_CALCULATED
 
-    def calculate(self, diaObject, **kwargs):
+    def calculate(self, diaObjects, **kwargs):
         """Compute the mean position of a DiaObject given a set of DiaSources
 
         Parameters
         ----------
-        diaObject : `dict`
-            Summary object to store values in and read ra/decl from.
+        diaObjects : `pandas.dataFrame`
+            Summary objects to store values in and read ra/decl from.
         """
-        diaObject["pixelId"] = self.indexer.indexPoints([diaObject["ra"]],
-                                                        [diaObject["decl"]])[0]
+        pixelId = np.array(self.indexer.indexPoints(
+            diaObjects.loc[:, "ra"],
+            diaObjects.loc[:, "decl"])).flatten()
+        diaObjects.loc[:, "pixelId"] = pixelId
 
 
 class NumDiaSourcesDiaPluginConfig(DiaObjectCalculationPluginConfig):
@@ -151,12 +170,13 @@ class NumDiaSourcesDiaPlugin(DiaObjectCalculationPlugin):
 
     ConfigClass = NumDiaSourcesDiaPluginConfig
     outputCols = ["nDiaSources"]
+    plugType = "multi"
 
     @classmethod
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
-    def calculate(self, diaObject, diaSources, **kwargs):
+    def calculate(self, diaObjects, diaSources, **kwargs):
         """Compute the total number of DiaSources associated with this DiaObject.
 
         Parameters
@@ -164,7 +184,7 @@ class NumDiaSourcesDiaPlugin(DiaObjectCalculationPlugin):
         diaObject : `dict`
             Summary object to store values in and read ra/decl from.
         """
-        diaObject["nDiaSources"] = len(diaSources)
+        diaObjects.loc[:, "nDiaSources"] = diaSources.apply(len)
 
 
 class SimpleSourceFlagDiaPluginConfig(DiaObjectCalculationPluginConfig):
@@ -180,12 +200,13 @@ class SimpleSourceFlagDiaPlugin(DiaObjectCalculationPlugin):
 
     ConfigClass = NumDiaSourcesDiaPluginConfig
     outputCols = ["flags"]
+    plugType = "multi"
 
     @classmethod
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
-    def calculate(self, diaObject, diaSources, **kwargs):
+    def calculate(self, diaObjects, diaSources, **kwargs):
         """Find if any DiaSource is flagged.
 
         Set the DiaObject flag if any DiaSource is flagged.
@@ -195,10 +216,13 @@ class SimpleSourceFlagDiaPlugin(DiaObjectCalculationPlugin):
         diaObject : `dict`
             Summary object to store values in and read ra/decl from.
         """
-        if np.any(diaSources["flags"] > 0):
-            diaObject["flags"] = 1
-        else:
-            diaObject["flags"] = 0
+
+        def _flagDiaObject(df):
+            if np.any(df["flags"] > 0):
+                return 1
+            return 0
+
+        diaObjects.loc[:, "flags"] = diaSources.apply(_flagDiaObject)
 
 
 class WeightedMeanDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -215,13 +239,14 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
 
     ConfigClass = WeightedMeanDiaPsFluxConfig
     outputCols = ["PSFluxMean", "PSFluxMeanErr", "PSFluxNdata"]
+    plugType = "multi"
 
     @classmethod
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
                   diaSources,
                   filterDiaSources,
                   filterName,
@@ -241,37 +266,32 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaSources) > 0:
-            tot_weight = np.nansum(1 / filterDiaSources["psFluxErr"] ** 2)
-            fluxMean = np.nansum(filterDiaSources["psFlux"] /
-                                 filterDiaSources["psFluxErr"] ** 2)
+        meanName = "{}PSFluxMean".format(filterName)
+        errName = "{}PSFluxMeanErr".format(filterName)
+        nDataName = "{}PSFluxNdata".format(filterName)
+        if meanName not in diaObjects.columns:
+            diaObjects[meanName] = np.nan
+        if errName not in diaObjects.columns:
+            diaObjects[errName] = np.nan
+        if nDataName not in diaObjects.columns:
+            diaObjects[nDataName] = np.nan
+
+        def _weightedMean(df):
+            tmpDf = df[~np.logical_or(np.isnan(df["psFlux"]),
+                                      np.isnan(df["psFluxErr"]))]
+            tot_weight = np.nansum(1 / tmpDf["psFluxErr"] ** 2)
+            fluxMean = np.nansum(tmpDf["psFlux"] /
+                                 tmpDf["psFluxErr"] ** 2)
             fluxMean /= tot_weight
             fluxMeanErr = np.sqrt(1 / tot_weight)
-            nFluxData = np.sum(np.isfinite(filterDiaSources["psFlux"]))
-        else:
-            fluxMean = np.nan
-            fluxMeanErr = np.nan
-            nFluxData = 0
-        if np.isfinite(fluxMean) and np.isfinite(fluxMeanErr):
-            diaObject["{}PSFluxMean".format(filterName)] = fluxMean
-            diaObject["{}PSFluxMeanErr".format(filterName)] = fluxMeanErr
-            diaObject["{}PSFluxNdata".format(filterName)] = nFluxData
-        else:
-            self.fail(diaObject,
-                      ["{}{}".format(filterName, colName)
-                       for colName in self.outputCols])
+            nFluxData = len(tmpDf)
 
-    def fail(self, diaObject, columns, error=None):
-        """Set diaObject position values to nan.
+            return pd.Series({meanName: fluxMean,
+                              errName: fluxMeanErr,
+                              nDataName: nFluxData})
 
-        Since we set an explicit value instead of nan for all, we override
-        the fail method.
-        """
-        for colName in columns:
-            if colName.endswith("Ndata"):
-                diaObject[colName] = 0
-            else:
-                diaObject[colName] = np.nan
+        diaObjects.loc[:, [meanName, errName, nDataName]] = \
+            filterDiaSources.apply(_weightedMean)
 
 
 class PercentileDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -291,6 +311,7 @@ class PercentileDiaPsFlux(DiaObjectCalculationPlugin):
     ConfigClass = PercentileDiaPsFluxConfig
     # Output columns are created upon instantiation of the class.
     outputCols = []
+    plugType = "multi"
 
     def __init__(self, config, name, metadata, **kwargs):
         DiaObjectCalculationPlugin.__init__(self,
@@ -306,7 +327,7 @@ class PercentileDiaPsFlux(DiaObjectCalculationPlugin):
         return cls.DEFAULT_CATALOGCALCULATION
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
                   diaSources,
                   filterDiaSources,
                   filterName,
@@ -326,17 +347,20 @@ class PercentileDiaPsFlux(DiaObjectCalculationPlugin):
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaSources) > 0:
-            pTiles = np.nanpercentile(filterDiaSources["psFlux"],
-                                      self.config.percentiles)
-            for pTile, tilePercent in zip(pTiles, self.config.percentiles):
-                diaObject[
-                    "{}PSFluxPercentile{:02d}".format(filterName,
-                                                      tilePercent)] = pTile
-        else:
-            self.fail(diaObject,
-                      ["{}{}".format(filterName, colName)
-                       for colName in self.outputCols])
+        pTileNames = []
+        for tilePercent in self.config.percentiles:
+            pTileName = "{}PSFluxPercentile{:02d}".format(filterName,
+                                                          tilePercent)
+            pTileNames.append(pTileName)
+            if pTileName not in diaObjects.columns:
+                diaObjects[pTileName] = np.nan
+
+        def _fluxPercentiles(df):
+            pTiles = np.nanpercentile(df["psFlux"], self.config.percentiles)
+            return pd.Series(dict((tileName, pTile)
+                                  for tileName, pTile in zip(pTileNames, pTiles)))
+
+        diaObjects.loc[:, pTileNames] = filterDiaSources.apply(_fluxPercentiles)
 
 
 class SigmaDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -351,13 +375,14 @@ class SigmaDiaPsFlux(DiaObjectCalculationPlugin):
     ConfigClass = SigmaDiaPsFluxConfig
     # Output columns are created upon instantiation of the class.
     outputCols = ["PSFluxSigma"]
+    plugType = "multi"
 
     @classmethod
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
                   diaSources,
                   filterDiaSources,
                   filterName,
@@ -379,14 +404,12 @@ class SigmaDiaPsFlux(DiaObjectCalculationPlugin):
         """
         # Set "delta degrees of freedom (ddf)" to 1 to calculate the unbiased
         # estimator of scatter (i.e. 'N - 1' instead of 'N').
-        if len(filterDiaSources) > 1:
-            diaObject["{}PSFluxSigma".format(filterName)] = np.nanstd(
-                filterDiaSources["psFlux"],
-                ddof=1)
-        else:
-            self.fail(diaObject,
-                      ["{}{}".format(filterName, colName)
-                       for colName in self.outputCols])
+
+        def _sigma(df):
+            return np.nanstd(df["psFlux"], ddof=1)
+
+        diaObjects.loc[:, "{}PSFluxSigma".format(filterName)] = \
+            filterDiaSources.apply(_sigma)
 
 
 class Chi2DiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -404,13 +427,14 @@ class Chi2DiaPsFlux(DiaObjectCalculationPlugin):
     inputCols = ["PSFluxMean"]
     # Output columns are created upon instantiation of the class.
     outputCols = ["PSFluxChi2"]
+    plugType = "multi"
 
     @classmethod
     def getExecutionOrder(cls):
         return cls.FLUX_MOMENTS_CALCULATED
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
                   diaSources,
                   filterDiaSources,
                   filterName,
@@ -430,15 +454,15 @@ class Chi2DiaPsFlux(DiaObjectCalculationPlugin):
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaSources) > 0:
-            delta = (filterDiaSources["psFlux"] -
-                     diaObject["{}PSFluxMean".format(filterName)])
-            diaObject["{}PSFluxChi2".format(filterName)] = np.nansum(
-                (delta / filterDiaSources["psFluxErr"]) ** 2)
-        else:
-            self.fail(diaObject,
-                      ["{}{}".format(filterName, colName)
-                       for colName in self.outputCols])
+        meanName = "{}PSFluxMean".format(filterName)
+
+        def _chi2(df):
+            delta = (df["psFlux"] -
+                     diaObjects.at[df.diaObjectId.iat[0], meanName])
+            return np.nansum((delta / df["psFluxErr"]) ** 2)
+
+        diaObjects.loc[:, "{}PSFluxChi2".format(filterName)] = \
+            filterDiaSources.apply(_chi2)
 
 
 class MadDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -455,13 +479,14 @@ class MadDiaPsFlux(DiaObjectCalculationPlugin):
     # Required input Cols
     # Output columns are created upon instantiation of the class.
     outputCols = ["PSFluxMAD"]
+    plugType = "multi"
 
     @classmethod
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
                   diaSources,
                   filterDiaSources,
                   filterName,
@@ -481,15 +506,12 @@ class MadDiaPsFlux(DiaObjectCalculationPlugin):
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaSources) > 0:
-            diaObject["{}PSFluxMAD".format(filterName)] = (
-                median_absolute_deviation(filterDiaSources["psFlux"],
-                                          ignore_nan=True)
-            )
-        else:
-            self.fail(diaObject,
-                      ["{}{}".format(filterName, colName)
-                       for colName in self.outputCols])
+
+        def _mad(df):
+            return median_absolute_deviation(df["psFlux"], ignore_nan=True)
+
+        diaObjects.loc[:, "{}PSFluxMAD".format(filterName)] = \
+            filterDiaSources.apply(_mad)
 
 
 class SkewDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -506,13 +528,14 @@ class SkewDiaPsFlux(DiaObjectCalculationPlugin):
     # Required input Cols
     # Output columns are created upon instantiation of the class.
     outputCols = ["PSFluxSkew"]
+    plugType = "multi"
 
     @classmethod
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
                   diaSources,
                   filterDiaSources,
                   filterName,
@@ -532,15 +555,8 @@ class SkewDiaPsFlux(DiaObjectCalculationPlugin):
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaSources) > 0:
-            fluxes = filterDiaSources["psFlux"]
-            diaObject["{}PSFluxSkew".format(filterName)] = (
-                skew(fluxes[~np.isnan(fluxes)])
-            )
-        else:
-            self.fail(diaObject,
-                      ["{}{}".format(filterName, colName)
-                       for colName in self.outputCols])
+        diaObjects.loc[:, "{}PSFluxSkew".format(filterName)] = \
+            filterDiaSources.psFlux.apply(skew, nan_policy='omit')
 
 
 class MinMaxDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -557,13 +573,14 @@ class MinMaxDiaPsFlux(DiaObjectCalculationPlugin):
     # Required input Cols
     # Output columns are created upon instantiation of the class.
     outputCols = ["PSFluxMin", "PSFluxMax"]
+    plugType = "multi"
 
     @classmethod
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
                   diaSources,
                   filterDiaSources,
                   filterName,
@@ -583,14 +600,18 @@ class MinMaxDiaPsFlux(DiaObjectCalculationPlugin):
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaSources) > 0:
-            fluxes = filterDiaSources["psFlux"]
-            diaObject["{}PSFluxMin".format(filterName)] = np.min(fluxes)
-            diaObject["{}PSFluxMax".format(filterName)] = np.max(fluxes)
-        else:
-            self.fail(diaObject,
-                      ["{}{}".format(filterName, colName)
-                       for colName in self.outputCols])
+        minName = "{}PSFluxMin".format(filterName)
+        if minName not in diaObjects.columns:
+            diaObjects[minName] = np.nan
+        maxName = "{}PSFluxMax".format(filterName)
+        if maxName not in diaObjects.columns:
+            diaObjects[maxName] = np.nan
+
+        def _minMax(df):
+            return pd.Series({minName: df["psFlux"].min(),
+                              maxName: df["psFlux"].max()})
+
+        diaObjects.loc[:, [minName, maxName]] = filterDiaSources.apply(_minMax)
 
 
 class MaxSlopeDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -607,13 +628,14 @@ class MaxSlopeDiaPsFlux(DiaObjectCalculationPlugin):
     # Required input Cols
     # Output columns are created upon instantiation of the class.
     outputCols = ["PSFluxMaxSlope"]
+    plugType = "multi"
 
     @classmethod
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
                   diaSources,
                   filterDiaSources,
                   filterName,
@@ -633,16 +655,20 @@ class MaxSlopeDiaPsFlux(DiaObjectCalculationPlugin):
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaSources) > 1:
-            tmpDiaSources = filterDiaSources[~np.isnan(filterDiaSources["psFlux"])]
-            fluxes = tmpDiaSources["psFlux"].to_numpy()
-            times = tmpDiaSources["midPointTai"].to_numpy()
-            diaObject["{}PSFluxMaxSlope".format(filterName)] = np.max(
-                (fluxes[1:] - fluxes[:-1]) / (times[1:] - times[:-1]))
-        else:
-            self.fail(diaObject,
-                      ["{}{}".format(filterName, colName)
-                       for colName in self.outputCols])
+
+        def _maxSlope(df):
+            tmpDf = df[~np.logical_or(np.isnan(df["psFlux"]),
+                                      np.isnan(df["midPointTai"]))]
+            if len(tmpDf) < 2:
+                return np.nan
+            times = tmpDf["midPointTai"].to_numpy()
+            timeArgs = times.argsort()
+            times = times[timeArgs]
+            fluxes = tmpDf["psFlux"].to_numpy()[timeArgs]
+            return (np.diff(fluxes) / np.diff(times)).max()
+
+        diaObjects.loc[:, "{}PSFluxMaxSlope".format(filterName)] = \
+            filterDiaSources.apply(_maxSlope)
 
 
 class ErrMeanDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -659,13 +685,14 @@ class ErrMeanDiaPsFlux(DiaObjectCalculationPlugin):
     # Required input Cols
     # Output columns are created upon instantiation of the class.
     outputCols = ["PSFluxErrMean"]
+    plugType = "multi"
 
     @classmethod
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
                   diaSources,
                   filterDiaSources,
                   filterName,
@@ -685,13 +712,11 @@ class ErrMeanDiaPsFlux(DiaObjectCalculationPlugin):
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaSources) > 0:
-            diaObject["{}PSFluxErrMean".format(filterName)] = np.nanmean(
-                filterDiaSources["psFluxErr"])
-        else:
-            self.fail(diaObject,
-                      ["{}{}".format(filterName, colName)
-                       for colName in self.outputCols])
+        def _meanErr(df):
+            return np.nanmean(df["psFluxErr"])
+
+        diaObjects.loc[:, "{}PSFluxErrMean".format(filterName)] = \
+            filterDiaSources.apply(_meanErr)
 
 
 class LinearFitDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -708,13 +733,14 @@ class LinearFitDiaPsFlux(DiaObjectCalculationPlugin):
     # Required input Cols
     # Output columns are created upon instantiation of the class.
     outputCols = ["PSFluxLinearSlope", "PSFluxLinearIntercept"]
+    plugType = "multi"
 
     @classmethod
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
                   diaSources,
                   filterDiaSources,
                   filterName,
@@ -734,21 +760,29 @@ class LinearFitDiaPsFlux(DiaObjectCalculationPlugin):
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaSources) > 1:
-            tmpDiaSources = filterDiaSources[
-                ~np.logical_or(np.isnan(filterDiaSources["psFlux"]),
-                               np.isnan(filterDiaSources["psFluxErr"]))]
-            fluxes = tmpDiaSources["psFlux"].to_numpy()
-            errors = tmpDiaSources["psFluxErr"].to_numpy()
-            times = tmpDiaSources["midPointTai"].to_numpy()
+
+        mName = "{}PSFluxLinearSlope".format(filterName)
+        if mName not in diaObjects.columns:
+            diaObjects[mName] = np.nan
+        bName = "{}PSFluxLinearIntercept".format(filterName)
+        if bName not in diaObjects.columns:
+            diaObjects[bName] = np.nan
+
+        def _linearFit(df):
+            tmpDf = df[~np.logical_or(
+                np.isnan(df["psFlux"]),
+                np.logical_or(np.isnan(df["psFluxErr"]),
+                              np.isnan(df["midPointTai"])))]
+            if len(tmpDf) < 2:
+                return pd.Series({mName: np.nan, bName: np.nan})
+            fluxes = tmpDf["psFlux"].to_numpy()
+            errors = tmpDf["psFluxErr"].to_numpy()
+            times = tmpDf["midPointTai"].to_numpy()
             A = np.array([times / errors, 1 / errors]).transpose()
             m, b = lsq_linear(A, fluxes / errors).x
-            diaObject["{}PSFluxLinearSlope".format(filterName)] = m
-            diaObject["{}PSFluxLinearIntercept".format(filterName)] = b
-        else:
-            self.fail(diaObject,
-                      ["{}{}".format(filterName, colName)
-                       for colName in self.outputCols])
+            return pd.Series({mName: m, bName: b})
+
+        diaObjects.loc[:, [mName, bName]] = filterDiaSources.apply(_linearFit)
 
 
 class StetsonJDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -766,13 +800,14 @@ class StetsonJDiaPsFlux(DiaObjectCalculationPlugin):
     inputCols = ["PSFluxMean"]
     # Output columns are created upon instantiation of the class.
     outputCols = ["PSFluxStetsonJ"]
+    plugType = "multi"
 
     @classmethod
     def getExecutionOrder(cls):
         return cls.FLUX_MOMENTS_CALCULATED
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
                   diaSources,
                   filterDiaSources,
                   filterName,
@@ -792,21 +827,23 @@ class StetsonJDiaPsFlux(DiaObjectCalculationPlugin):
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaSources) > 1:
-            tmpDiaSources = filterDiaSources[
-                ~np.logical_or(np.isnan(filterDiaSources["psFlux"]),
-                               np.isnan(filterDiaSources["psFluxErr"]))]
-            fluxes = tmpDiaSources["psFlux"].to_numpy()
-            errors = tmpDiaSources["psFluxErr"].to_numpy()
+        meanName = "{}PSFluxMean".format(filterName)
 
-            diaObject["{}PSFluxStetsonJ".format(filterName)] = self._stetson_J(
+        def _stetsonJ(df):
+            tmpDf = df[~np.logical_or(np.isnan(df["psFlux"]),
+                                      np.isnan(df["psFluxErr"]))]
+            if len(tmpDf) < 2:
+                return np.nan
+            fluxes = tmpDf["psFlux"].to_numpy()
+            errors = tmpDf["psFluxErr"].to_numpy()
+
+            return self._stetson_J(
                 fluxes,
                 errors,
-                diaObject["{}PSFluxMean".format(filterName)])
-        else:
-            self.fail(diaObject,
-                      ["{}{}".format(filterName, colName)
-                       for colName in self.outputCols])
+                diaObjects.at[tmpDf.diaObjectId.iat[0], meanName])
+
+        diaObjects.loc[:, "{}PSFluxStetsonJ".format(filterName)] = \
+            filterDiaSources.apply(_stetsonJ)
 
     def _stetson_J(self, fluxes, errors, mean=None):
         """Compute the single band stetsonJ statistic.
@@ -915,13 +952,14 @@ class WeightedMeanDiaTotFlux(DiaObjectCalculationPlugin):
 
     ConfigClass = WeightedMeanDiaPsFluxConfig
     outputCols = ["TOTFluxMean", "TOTFluxMeanErr"]
+    plugType = "multi"
 
     @classmethod
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
                   diaSources,
                   filterDiaSources,
                   filterName,
@@ -941,22 +979,27 @@ class WeightedMeanDiaTotFlux(DiaObjectCalculationPlugin):
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
         """
-        if len(filterDiaSources) > 0:
-            tot_weight = np.nansum(1 / filterDiaSources["totFluxErr"] ** 2)
-            fluxMean = np.nansum(filterDiaSources["totFlux"] /
-                                 filterDiaSources["totFluxErr"] ** 2)
+        totMeanName = "{}TOTFluxMean".format(filterName)
+        if totMeanName not in diaObjects.columns:
+            diaObjects[totMeanName] = np.nan
+        totErrName = "{}TOTFluxMeanErr".format(filterName)
+        if totErrName not in diaObjects.columns:
+            diaObjects[totErrName] = np.nan
+
+        def _meanFlux(df):
+            tmpDf = df[~np.logical_or(np.isnan(df["totFlux"]),
+                                      np.isnan(df["totFluxErr"]))]
+            tot_weight = np.nansum(1 / tmpDf["totFluxErr"] ** 2)
+            fluxMean = np.nansum(tmpDf["totFlux"] /
+                                 tmpDf["totFluxErr"] ** 2)
             fluxMean /= tot_weight
             fluxMeanErr = np.sqrt(1 / tot_weight)
-        else:
-            fluxMean = np.nan
-            fluxMeanErr = np.nan
-        if np.isfinite(fluxMean) and np.isfinite(fluxMeanErr):
-            diaObject["{}TOTFluxMean".format(filterName)] = fluxMean
-            diaObject["{}TOTFluxMeanErr".format(filterName)] = fluxMeanErr
-        else:
-            self.fail(diaObject,
-                      ["{}{}".format(filterName, colName)
-                       for colName in self.outputCols])
+
+            return pd.Series({totMeanName: fluxMean,
+                              totErrName: fluxMeanErr})
+
+        diaObjects.loc[:, [totMeanName, totErrName]] = filterDiaSources.apply(
+            _meanFlux)
 
 
 class SigmaDiaTotFluxConfig(DiaObjectCalculationPluginConfig):
@@ -971,13 +1014,14 @@ class SigmaDiaTotFlux(DiaObjectCalculationPlugin):
     ConfigClass = SigmaDiaPsFluxConfig
     # Output columns are created upon instantiation of the class.
     outputCols = ["TOTFluxSigma"]
+    plugType = "multi"
 
     @classmethod
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
                   diaSources,
                   filterDiaSources,
                   filterName,
@@ -1000,11 +1044,8 @@ class SigmaDiaTotFlux(DiaObjectCalculationPlugin):
         """
         # Set "delta degrees of freedom (ddf)" to 1 to calculate the unbiased
         # estimator of scatter (i.e. 'N - 1' instead of 'N').
-        if len(filterDiaSources) > 1:
-            diaObject["{}TOTFluxSigma".format(filterName)] = np.nanstd(
-                filterDiaSources["totFlux"],
-                ddof=1)
-        else:
-            self.fail(diaObject,
-                      ["{}{}".format(filterName, colName)
-                       for colName in self.outputCols])
+        def _sigma(df):
+            return np.nanstd(df["totFlux"], ddof=1)
+
+        diaObjects.loc[:, "{}TOTFluxSigma".format(filterName)] = \
+            filterDiaSources.apply(_sigma)

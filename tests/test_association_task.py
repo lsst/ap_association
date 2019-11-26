@@ -21,6 +21,7 @@
 
 import numpy as np
 import os
+import pandas as pd
 import tempfile
 import unittest
 
@@ -541,6 +542,15 @@ class TestAssociationTask(unittest.TestCase):
 
         # Create our task and update the stored DIAObjects.
         assoc_task = AssociationTask()
+        new_dia_objects = [assoc_task._initialize_dia_object(14)]
+        new_dia_objects = pd.DataFrame(data=new_dia_objects,
+                                       columns=loaded_dia_objects.columns)
+        new_dia_objects.set_index("diaObjectId", inplace=True, drop=False)
+        loaded_dia_objects = loaded_dia_objects.append(new_dia_objects,
+                                                       sort=True)
+        loaded_dia_objects.set_index("diaObjectId",
+                                     inplace=True,
+                                     drop=False)
         assoc_task.update_dia_objects(loaded_dia_objects,
                                       [1, 2, 3, 4, 14],
                                       self.exposure,
@@ -618,7 +628,9 @@ class TestAssociationTask(unittest.TestCase):
         assoc_result = assoc_task.associate_sources(
             dia_objects, dia_sources)
 
-        for test_obj_id, expected_obj_id in zip(assoc_result, [1, 2, 3, 4, 9]):
+        for test_obj_id, expected_obj_id in zip(
+                assoc_result.associated_dia_object_ids,
+                [1, 2, 3, 4, 9]):
             self.assertEqual(test_obj_id, expected_obj_id)
 
     def test_score_and_match(self):

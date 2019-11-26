@@ -42,14 +42,15 @@ class CountDiaPlugin(DiaObjectCalculationPlugin):
         return cls.DEFAULT_CATALOGCALCULATION
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
+                  diaObjectId,
                   diaSources,
                   filterDiaSources,
                   filterName,
                   **kwargs):
         """
         """
-        diaObject["count"] = len(diaSources["psFlux"])
+        diaObjects.at[diaObjectId, "count"] = len(diaSources["psFlux"])
 
 
 @register("testDiaPlugin")
@@ -58,22 +59,24 @@ class DiaPlugin(DiaObjectCalculationPlugin):
     """
     outputCols = ["MeanFlux", "StdFlux"]
 
+    plugType = "multi"
+
     @classmethod
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
                   diaSources,
                   filterDiaSources,
                   filterName,
                   **kwargs):
         """
         """
-        diaObject["%sMeanFlux" % filterName] = np.mean(
-            filterDiaSources["psFlux"])
-        diaObject["%sStdFlux" % filterName] = np.std(
-            filterDiaSources["psFlux"], ddof=1)
+        diaObjects.loc[:, "%sMeanFlux" % filterName] = \
+            filterDiaSources.psFlux.agg(np.nanmean)
+        diaObjects.loc[:, "%sStdFlux" % filterName] = \
+            filterDiaSources.psFlux.agg(np.nanstd)
 
 
 @register("testDependentDiaPlugin")
@@ -88,14 +91,15 @@ class DependentDiaPlugin(DiaObjectCalculationPlugin):
         return cls.FLUX_MOMENTS_CALCULATED
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
+                  diaObjectId,
                   diaSources,
                   filterDiaSources,
                   filterName,
                   **kwargs):
-        diaObject["%sChiFlux" % filterName] = np.sum(
+        diaObjects.at[diaObjectId, "%sChiFlux" % filterName] = np.sum(
             ((filterDiaSources["psFlux"] -
-              diaObject["%sMeanFlux" % filterName]) /
+              diaObjects.at[diaObjectId, "%sMeanFlux" % filterName]) /
              filterDiaSources["psFluxErr"]) ** 2)
 
 
@@ -110,21 +114,23 @@ class CollidingDiaPlugin(DiaObjectCalculationPlugin):
         return cls.FLUX_MOMENTS_CALCULATED
 
     def calculate(self,
-                  diaObject,
+                  diaObjects,
+                  diaObjectId,
                   diaSources,
                   filterDiaSources,
                   filterName,
                   **kwargs):
-        diaObject["%sMeanFlux" % filterName] = 0.0
+        diaObjects.at[diaObjectId, "%sMeanFlux" % filterName] = 0.0
 
 
-class TestDiaCalculation(unittest.TestCase):
+class TestDiaCalcluation(unittest.TestCase):
 
     def setUp(self):
         # Create diaObjects
+        self.newDiaObjectId = 13
         self.diaObjects = pd.DataFrame(
-            data=[{"diaObjectId": objId} for objId in range(5)])
-        self.diaObjects.set_index("diaObjectId", inplace=True)
+            data=[{"diaObjectId": objId}
+                  for objId in [0, 1, 2, 3, 4, 5, self.newDiaObjectId]])
 
         # Create diaSources from "previous runs" and newly created ones.
         diaSources = [{"diaSourceId": objId, "diaObjectId": objId,
@@ -149,16 +155,15 @@ class TestDiaCalculation(unittest.TestCase):
                             "psFlux": np.nan, "psFluxErr": 1.,
                             "totFlux": 0., "totFluxErr": 0.,
                             "midPointTai": 0, "filterName": "g"},
-                           {"diaSourceId": 13, "diaObjectId": 13,
+                           {"diaSourceId": self.newDiaObjectId,
+                            "diaObjectId": self.newDiaObjectId,
                             "psFlux": 1., "psFluxErr": 1.,
                             "totFlux": 0., "totFluxErr": 0.,
                             "midPointTai": 0, "filterName": "g"}])
         self.diaSources = pd.DataFrame(data=diaSources)
-        self.diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
-                                  inplace=True)
 
-        self.newDiaObjectId = 13
-        self.updatedDiaObjectIds = np.array([0, 1, 2, 13], dtype=np.int)
+        self.updatedDiaObjectIds = np.array([0, 1, 2, self.newDiaObjectId],
+                                            dtype=np.int)
 
         conf = DiaObjectCalculationConfig()
         conf.plugins = ["testDiaPlugin",
@@ -176,7 +181,7 @@ class TestDiaCalculation(unittest.TestCase):
         updatedDiaObjects = results.updatedDiaObjects
         updatedDiaObjects.set_index("diaObjectId", inplace=True)
         # Test the lengths of the output dataframes.
-        self.assertEqual(len(diaObjectCat), len(self.diaObjects) + 1)
+        self.assertEqual(len(diaObjectCat), len(self.diaObjects))
         self.assertEqual(len(updatedDiaObjects),
                          len(self.updatedDiaObjectIds))
 
@@ -206,7 +211,8 @@ class TestDiaCalculation(unittest.TestCase):
              "midPointTai": 0, "filterName": "g"}
             for objId in range(1000)])
         unindexedDiaSources = unindexedDiaSources.append(
-            pd.DataFrame(data=[{"diaSourceId": objId, "diaObjectId": 0,
+            pd.DataFrame(data=[{"diaSourceId": objId + 1000,
+                                "diaObjectId": 0,
                                 "psFlux": 0., "psFluxErr": 1.,
                                 "totFlux": 0., "totFluxErr": 1.,
                                 "midPointTai": 0, "filterName": "g"}
@@ -221,7 +227,7 @@ class TestDiaCalculation(unittest.TestCase):
                                        np.array([0], dtype=np.int),
                                        "g")
         updatedDiaObjects = results.updatedDiaObjects
-        self.assertEqual(updatedDiaObjects.loc[0, "count"],
+        self.assertEqual(updatedDiaObjects.at[0, "count"],
                          len(unindexedDiaSources))
 
     def testConflictingPlugins(self):
