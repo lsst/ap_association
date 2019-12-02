@@ -29,7 +29,6 @@ from astropy.stats import median_absolute_deviation
 import numpy as np
 import pandas as pd
 from scipy.optimize import lsq_linear
-from scipy.stats import skew
 
 import lsst.geom as geom
 from lsst.meas.algorithms.indexerRegistry import IndexerRegistry
@@ -543,7 +542,7 @@ class SkewDiaPsFlux(DiaObjectCalculationPlugin):
             Simple, string name of the filter for the flux being calculated.
         """
         diaObjects.loc[:, "{}PSFluxSkew".format(filterName)] = \
-            filterDiaSources.psFlux.apply(skew, nan_policy='omit')
+            filterDiaSources.psFlux.skew()
 
 
 class MinMaxDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
