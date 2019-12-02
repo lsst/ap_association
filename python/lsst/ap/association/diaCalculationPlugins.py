@@ -398,7 +398,7 @@ class SigmaDiaPsFlux(DiaObjectCalculationPlugin):
         # Set "delta degrees of freedom (ddf)" to 1 to calculate the unbiased
         # estimator of scatter (i.e. 'N - 1' instead of 'N').
         diaObjects.loc[:, "{}PSFluxSigma".format(filterName)] = \
-            filterDiaSources.psFlux.agg(np.nanstd)
+            filterDiaSources.psFlux.std()
 
 
 class Chi2DiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -696,7 +696,7 @@ class ErrMeanDiaPsFlux(DiaObjectCalculationPlugin):
             Simple, string name of the filter for the flux being calculated.
         """
         diaObjects.loc[:, "{}PSFluxErrMean".format(filterName)] = \
-            filterDiaSources.psFluxErr.agg(np.nanmean)
+            filterDiaSources.psFluxErr.mean()
 
 
 class LinearFitDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -1025,4 +1025,4 @@ class SigmaDiaTotFlux(DiaObjectCalculationPlugin):
         # Set "delta degrees of freedom (ddf)" to 1 to calculate the unbiased
         # estimator of scatter (i.e. 'N - 1' instead of 'N').
         diaObjects.loc[:, "{}TOTFluxSigma".format(filterName)] = \
-            filterDiaSources.totFlux.agg(np.nanstd)
+            filterDiaSources.totFlux.std()
