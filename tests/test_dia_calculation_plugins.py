@@ -543,7 +543,9 @@ class TestSkewDiaPsFlux(unittest.TestCase):
                              "ap_skewFlux",
                              None)
         run_multi_plugin(diaObjects, diaSources, "u", plug)
-        self.assertAlmostEqual(diaObjects.loc[objId, "uPSFluxSkew"], skew(fluxes))
+        self.assertAlmostEqual(
+            diaObjects.loc[objId, "uPSFluxSkew"],
+            skew(fluxes, bias=False, nan_policy="omit"))
 
         # Test expected skew value with a nan set.
         fluxes[4] = np.nan
@@ -555,8 +557,11 @@ class TestSkewDiaPsFlux(unittest.TestCase):
                   "psFlux": fluxes,
                   "psFluxErr": np.ones(n_sources)})
         run_multi_plugin(diaObjects, diaSources, "r", plug)
-        self.assertAlmostEqual(diaObjects.at[objId, "rPSFluxSkew"],
-                               skew(fluxes, nan_policy="omit"))
+        # Skew returns a named tuple when called on an array
+        # with nan values.
+        self.assertAlmostEqual(
+            diaObjects.at[objId, "rPSFluxSkew"],
+            skew(fluxes, bias=False, nan_policy="omit").data)
 
 
 class TestMinMaxDiaPsFlux(unittest.TestCase):
@@ -674,8 +679,8 @@ class TestErrMeanDiaPsFlux(unittest.TestCase):
                                 "ap_errMeanFlux",
                                 None)
         run_multi_plugin(diaObjects, diaSources, "u", plug)
-        self.assertEqual(diaObjects.at[objId, "uPSFluxErrMean"],
-                         np.nanmean(errors))
+        self.assertAlmostEqual(diaObjects.at[objId, "uPSFluxErrMean"],
+                               np.nanmean(errors))
 
         # Test mean of the errors with input nan value.
         errors[4] = np.nan
@@ -687,8 +692,8 @@ class TestErrMeanDiaPsFlux(unittest.TestCase):
                   "psFlux": fluxes,
                   "psFluxErr": errors})
         run_multi_plugin(diaObjects, diaSources, "r", plug)
-        self.assertEqual(diaObjects.at[objId, "rPSFluxErrMean"],
-                         np.nanmean(errors))
+        self.assertAlmostEqual(diaObjects.at[objId, "rPSFluxErrMean"],
+                               np.nanmean(errors))
 
 
 class TestLinearFitDiaPsFlux(unittest.TestCase):
