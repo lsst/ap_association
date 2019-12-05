@@ -33,12 +33,14 @@ import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
 from lsst.dax.apdb import Apdb, ApdbConfig
 import lsst.geom as geom
+import lsst.sphgeom as sphgeom
+from lsst.utils import getPackageDir
+import lsst.utils.tests
+
 from lsst.ap.association import \
     AssociationTask, \
     make_dia_source_schema, \
     make_dia_object_schema
-from lsst.utils import getPackageDir
-import lsst.utils.tests
 
 
 def create_test_points(point_locs_deg,
@@ -248,23 +250,19 @@ class TestAssociationTask(unittest.TestCase):
         self.exposure.setFilter(afwImage.Filter('g'))
         self.flux0 = 10000
         self.flux0_err = 100
-        self.exposure.setPhotoCalib(afwImage.PhotoCalib(self.flux0, self.flux0_err))
+        self.exposure.setPhotoCalib(
+            afwImage.PhotoCalib(self.flux0, self.flux0_err))
 
         bbox = geom.Box2D(self.exposure.getBBox())
         wcs = self.exposure.getWcs()
 
-        ctr_coord = wcs.pixelToSky(bbox.getCenter())
-        max_radius = max(
-            ctr_coord.separation(wcs.pixelToSky(pp))
-            for pp in bbox.getCorners())
+        self.pixelator = sphgeom.HtmPixelization(20)
+        region = sphgeom.ConvexPolygon([wcs.pixelToSky(pp).getVector()
+                                        for pp in bbox.getCorners()])
 
-        assoc_task = AssociationTask()
-
-        indexer_indices, on_boundry = assoc_task.indexer.getShardIds(
-            ctr_coord, max_radius)
+        indices = self.pixelator.envelope(region, 64)
         # Index types must be cast to int to work with dax_apdb.
-        self.index_ranges = [[int(indexer_idx), int(indexer_idx) + 1]
-                             for indexer_idx in indexer_indices]
+        self.index_ranges = indices.ranges()
 
     def tearDown(self):
         """Delete the database after we are done with it.
@@ -290,14 +288,14 @@ class TestAssociationTask(unittest.TestCase):
         # Test to make sure the number of DIAObjects have been properly
         # associated within the db.
         for obj_idx, (df_idx, dia_object) in enumerate(dia_objects.iterrows()):
-            if obj_idx == not_updated_idx:
+            if df_idx == not_updated_idx:
                 # Test the DIAObject we expect to not be associated with any
                 # new DIASources.
                 self.assertEqual(dia_object['gPSFluxNdata'], 1)
                 self.assertEqual(dia_object['rPSFluxNdata'], 1)
                 self.assertEqual(dia_object['nDiaSources'], 2)
                 self.assertEqual(df_idx, obj_idx)
-            elif updated_idx_start <= obj_idx < new_idx_start:
+            elif updated_idx_start <= df_idx < new_idx_start:
                 # Test that associating to the existing DIAObjects went
                 # as planned and test that the IDs of the newly associated
                 # DIASources is correct.
@@ -383,10 +381,31 @@ class TestAssociationTask(unittest.TestCase):
         dia_sources["ra"] = np.degrees(dia_sources["ra"])
         dia_sources["decl"] = np.degrees(dia_sources["decl"])
 
-        assoc_task.run(dia_sources, self.exposure, apdb)
+        dia_objects = apdb.getDiaObjects(self.index_ranges,
+                                         return_pandas=True)
+        dia_objects.set_index("diaObjectId",
+                              drop=False,
+                              inplace=True)
+        if len(dia_objects) == 0:
+            diaSourceHistory = pd.DataFrame(columns=["diaObjectId",
+                                                     "filterName",
+                                                     "diaSourceId"])
+        else:
+            diaSourceHistory = apdb.getDiaSources(
+                dia_objects.loc[:, "diaObjectId"],
+                self.exposure.getInfo().getVisitInfo().getDate().toPython(),
+                return_pandas=True)
+        diaSourceHistory.set_index(
+            ["diaObjectId", "filterName", "diaSourceId"],
+            drop=False,
+            inplace=True)
 
-        dia_objects = assoc_task.retrieve_dia_objects(self.exposure, apdb)
-        return dia_objects
+        results = assoc_task.run(dia_sources,
+                                 dia_objects,
+                                 diaSourceHistory,
+                                 self.exposure,
+                                 apdb)
+        return results.dia_objects.sort_index()
 
     def _set_source_values(self, dia_source, flux, fluxErr, filterName,
                            filterId, ccdVisitId, midPointTai):
@@ -454,7 +473,9 @@ class TestAssociationTask(unittest.TestCase):
         for dia_object in dia_objects:
             dia_object["nDiaSources"] = 2
             for filter_name in self.filter_names:
-                dia_object["pixelId"] = 225823
+                sphPoint = geom.SpherePoint(dia_object.getCoord())
+                htmIndex = self.pixelator.index(sphPoint.getVector())
+                dia_object["pixelId"] = htmIndex
                 dia_object['%sPSFluxMean' % filter_name] = 1
                 dia_object['%sPSFluxMeanErr' % filter_name] = 1
                 dia_object['%sPSFluxSigma' % filter_name] = 1
@@ -551,13 +572,23 @@ class TestAssociationTask(unittest.TestCase):
         loaded_dia_objects.set_index("diaObjectId",
                                      inplace=True,
                                      drop=False)
+        loaded_dia_sources = apdb.getDiaSources(
+            loaded_dia_objects.loc[:, "diaObjectId"],
+            self.exposure.getInfo().getVisitInfo().getDate().toPython(),
+            return_pandas=True)
+        loaded_dia_sources.set_index(["diaObjectId",
+                                      "filterName",
+                                      "diaSourceId"],
+                                     inplace=True,
+                                     drop=False)
         assoc_task.update_dia_objects(loaded_dia_objects,
+                                      loaded_dia_sources,
                                       [1, 2, 3, 4, 14],
                                       self.exposure,
                                       apdb)
-
         # Retrieve the DIAObjects from the DB.
         output_dia_objects = apdb.getDiaObjects(self.index_ranges)
+        output_dia_objects.sort()
 
         # Data and column names to test.
         test_dia_object_values = [
@@ -709,7 +740,7 @@ class TestAssociationTask(unittest.TestCase):
         dia_sources.loc[4, "ra"] = np.nan
         dia_sources.loc[4, "decl"] = np.nan
         assoc_task = AssociationTask()
-        out_dia_sources = assoc_task.check_dia_souce_radec(dia_sources)
+        out_dia_sources = assoc_task.check_dia_source_radec(dia_sources)
         self.assertEqual(len(out_dia_sources), n_sources - 3)
 
 

@@ -29,7 +29,6 @@ import pandas as pd
 from scipy.spatial import cKDTree
 
 import lsst.geom as geom
-from lsst.meas.algorithms.indexerRegistry import IndexerRegistry
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 
@@ -47,10 +46,6 @@ class AssociationConfig(pexConfig.Config):
         doc='Maximum distance in arcseconds to test for a DIASource to be a '
         'match to a DIAObject.',
         default=1.0,
-    )
-    indexer = IndexerRegistry.makeField(
-        doc='Select the spatial indexer to use within the database.',
-        default='HTM'
     )
     diaCalculation = pexConfig.ConfigurableField(
         target=DiaObjectCalculationTask,
@@ -76,6 +71,11 @@ class AssociationConfig(pexConfig.Config):
                                        "ap_meanTotFlux",
                                        "ap_sigmaTotFlux"]
 
+    def validate(self):
+        if "ap_HTMIndex" not in self.diaCalculation.plugins:
+            raise ValueError("AssociationTask requires the ap_HTMIndex plugin "
+                             "be enabled for proper insertion into the Apdb.")
+
 
 class AssociationTask(pipeBase.Task):
     """Associate DIAOSources into existing DIAObjects.
@@ -91,26 +91,32 @@ class AssociationTask(pipeBase.Task):
 
     def __init__(self, **kwargs):
         pipeBase.Task.__init__(self, **kwargs)
-        self.indexer = IndexerRegistry[self.config.indexer.name](
-            self.config.indexer.active)
         self.makeSubtask("diaCalculation")
 
     @pipeBase.timeMethod
-    def run(self, dia_sources, exposure, apdb):
-        """Load DIAObjects from the database, associate the sources, and
-        persist the results into the L1 database.
+    def run(self,
+            diaSources,
+            diaObjects,
+            diaSourceHistory,
+            exposure,
+            apdb):
+        """Associate the new DiaSources with existing or new DiaObjects
+        and persist the results into the AP database.
 
         Parameters
         ----------
-        dia_sources : `pandas.DataFrame`
-            DIASources to be associated with existing DIAObjects.
+        diaSources : `pandas.DataFrame`
+            New DIASources to be associated with existing DIAObjects.
+        diaObjects : `pandas.DataFrame`
+            Existing diaObjects from the Apdb.
+        diaSourceHistory : `pandas.DataFrame`
+            12 month DiaSource history of the loaded ``diaObjects``.
         exposure : `lsst.afw.image`
             Input exposure representing the region of the sky the dia_sources
             were detected on. Should contain both the solved WCS and a bounding
             box of the ccd.
         apdb : `lsst.dax.apdb.Apdb`
-            Apdb connection object to retrieve DIASources/Objects from and
-            write to.
+            Apdb connection object to write DIASources/Objects to.
 
         Returns
         -------
@@ -121,24 +127,30 @@ class AssociationTask(pipeBase.Task):
               exposure. Catalog contains newly created, updated, and untouched
               diaObjects. (`pandas.DataFrame`)
         """
-        # Assure we have a Box2D and can use the getCenter method.
-        dia_objects = self.retrieve_dia_objects(exposure, apdb)
+        diaSources = self.check_dia_source_radec(diaSources)
 
-        dia_sources = self.check_dia_souce_radec(dia_sources)
-
-        match_result = self.associate_sources(dia_objects, dia_sources)
-
-        dia_objects = dia_objects.append(match_result.new_dia_objects,
-                                         sort=True)
+        matchResult = self.associate_sources(diaObjects, diaSources)
 
         # Store newly associated DIASources.
-        apdb.storeDiaSources(dia_sources)
+        apdb.storeDiaSources(diaSources)
+
+        diaObjects = diaObjects.append(matchResult.new_dia_objects,
+                                       sort=True)
+        # Now that we know the DiaObjects our new DiaSources are associated
+        # with, we index the new DiaSources the same way as the full history
+        # and merge the tables.
+        diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
+                             drop=False,
+                             inplace=True)
+        diaSourceHistory = diaSourceHistory.append(diaSources, sort=True)
+
         # Update previously existing DIAObjects with the information from their
         # newly association DIASources and create new DIAObjects from
         # unassociated sources.
         dia_objects = self.update_dia_objects(
-            dia_objects,
-            match_result.associated_dia_object_ids,
+            diaObjects,
+            diaSourceHistory,
+            matchResult.associated_dia_object_ids,
             exposure,
             apdb)
 
@@ -146,77 +158,7 @@ class AssociationTask(pipeBase.Task):
             dia_objects=dia_objects,
         )
 
-    @pipeBase.timeMethod
-    def retrieve_dia_objects(self, exposure, apdb):
-        """Convert the exposure object into HTM pixels and retrieve DIAObjects
-        contained within the exposure.
-
-        DiaObject DataFrame will be indexed on ``diaObjectId``.
-
-        Parameters
-        ----------
-        exposure : `lsst.afw.image.Exposure`
-            An exposure specifying a bounding region with a WCS to load
-            DIAOjbects within.
-        apdb : `lsst.dax.apdb.Apdb`
-            Apdb connection object to retrieve DIAObjects from.
-
-        Returns
-        -------
-        diaObjects : `pandas.DataFrame`
-            DiaObjects within the exposure boundary.
-        """
-        bbox = geom.Box2D(exposure.getBBox())
-        wcs = exposure.getWcs()
-
-        ctr_coord = wcs.pixelToSky(bbox.getCenter())
-        max_radius = max(
-            ctr_coord.separation(wcs.pixelToSky(pp))
-            for pp in bbox.getCorners())
-
-        indexer_indices, on_boundry = self.indexer.getShardIds(
-            ctr_coord, max_radius)
-        # Index types must be cast to int to work with dax_apdb.
-        index_ranges = [[int(indexer_idx), int(indexer_idx) + 1]
-                        for indexer_idx in indexer_indices]
-        covering_dia_objects = apdb.getDiaObjects(index_ranges,
-                                                  return_pandas=True)
-        ccd_mask = pd.Series(False, index=covering_dia_objects.index)
-
-        for df_idx, cov_dia_object in covering_dia_objects.iterrows():
-            if self._check_dia_object_position(cov_dia_object, bbox, wcs):
-                ccd_mask.loc[df_idx] = True
-
-        diaObjects = covering_dia_objects[ccd_mask]
-        diaObjects.set_index("diaObjectId", inplace=True, drop=False)
-
-        return diaObjects
-
-    def _check_dia_object_position(self, dia_object_record, bbox, wcs):
-        """Check the RA, DEC position of the current dia_object_record against
-        the bounding box of the exposure.
-
-        Parameters
-        ----------
-        dia_object_record : `pandas.Series`
-            A SourceRecord object containing the DIAObject we would like to
-            test against our bounding box.
-        bbox : `lsst.geom.Box2D`
-            Bounding box of exposure.
-        wcs : `lsst.afw.geom.SkyWcs`
-            WCS of exposure.
-
-        Return
-        ------
-        is_contained : `bool`
-            Object position is contained within the bounding box.
-        """
-        point = wcs.skyToPixel(geom.SpherePoint(dia_object_record["ra"],
-                                                dia_object_record["decl"],
-                                                geom.degrees))
-        return bbox.contains(point)
-
-    def check_dia_souce_radec(self, dia_sources):
+    def check_dia_source_radec(self, dia_sources):
         """Check that all DiaSources have non-NaN values for RA/DEC.
 
         If one or more DiaSources are found to have NaN values, throw a
@@ -287,7 +229,13 @@ class AssociationTask(pipeBase.Task):
         return match_result
 
     @pipeBase.timeMethod
-    def update_dia_objects(self, dia_objects, updated_obj_ids, exposure, apdb):
+    def update_dia_objects(self,
+                           dia_objects,
+                           diaSourceHistory,
+                           updated_obj_ids,
+                           exposure,
+                           apdb,
+                           ):
         """Update select dia_objects currently stored within the database or
         create new ones.
 
@@ -299,6 +247,8 @@ class AssociationTask(pipeBase.Task):
         dia_objects : `pandas.DataFrame`
             Pre-existing/loaded DIAObjects to copy values that are not updated
             from.
+        diaSourceHistory : `pandas.DataFrame`
+            Full history of all DiaSources associated with ``dia_objects``.
         updated_obj_ids : array-like of `int`
             Ids of the dia_objects that should be updated.
         exposure : `lsst.afw.image.Exposure`
@@ -319,12 +269,8 @@ class AssociationTask(pipeBase.Task):
 
         dateTime = exposure.getInfo().getVisitInfo().getDate().toPython()
 
-        dia_sources = apdb.getDiaSources(updated_obj_ids,
-                                         dateTime,
-                                         return_pandas=True)
-
         results = self.diaCalculation.run(dia_objects,
-                                          dia_sources,
+                                          diaSourceHistory,
                                           updated_obj_ids,
                                           filter_name)
         apdb.storeDiaObjects(results.updatedDiaObjects, dateTime)
