@@ -46,8 +46,42 @@ from lsst.ap.association import (
 import lsst.utils.tests
 
 
-def run_single_plugin(diaObjects, diaSources, plugin):
-    pass
+def run_single_plugin(diaObjectCat,
+                      diaObjectId,
+                      diaSourceCat,
+                      filterName,
+                      plugin):
+    """Wrapper for running single plugins.
+
+    Reproduces some of the behavior of `lsst.ap.association.DiaCalcuation.run`
+
+    Parameters
+    ----------
+    diaObjectCat : `pandas.DataFrame`
+        Input object catalog to store data into and read from.
+    diaSourcesCat : `pandas.DataFrame`
+        DiaSource catalog to read data from and groupby on.
+    fitlerName : `str`
+        String name of the filter to process.
+    plugin : `lsst.ap.association.DiaCalculationPlugin`
+        Plugin to run.
+    """
+    diaObjectCat.set_index("diaObjectId", inplace=True, drop=False)
+    diaSourceCat.set_index(
+        ["diaObjectId", "filterName", "diaSourceId"],
+        inplace=True,
+        drop=False)
+
+    objDiaSources = diaSourceCat.loc[diaObjectId]
+    updatingFilterDiaSources = diaSourceCat.loc[
+        (diaObjectId, filterName), :
+    ]
+
+    plugin.calculate(diaObjects=diaObjectCat,
+                     diaObjectId=diaObjectId,
+                     diaSources=objDiaSources,
+                     filterDiaSources=updatingFilterDiaSources,
+                     filterName=filterName)
 
 
 def run_multi_plugin(diaObjectCat, diaSourceCat, filterName, plugin):
@@ -66,24 +100,11 @@ def run_multi_plugin(diaObjectCat, diaSourceCat, filterName, plugin):
     plugin : `lsst.ap.association.DiaCalculationPlugin`
         Plugin to run.
     """
-    if isinstance(diaObjectCat.index, pd.RangeIndex):
-        diaObjectCat.set_index("diaObjectId", inplace=True, drop=False)
-    elif diaObjectCat.index.name != "diaObjectId":
-        print(
-            "Input diaObjectCat is indexed on column(s) incompatible with "
-            "this task. Should be indexed on 'diaObjectId'.")
-
-    if isinstance(diaSourceCat.index, pd.RangeIndex):
-        diaSourceCat.set_index(
-            ["diaObjectId", "filterName", "diaSourceId"],
-            inplace=True,
-            drop=False)
-    elif (diaSourceCat.index.names !=
-          ["diaObjectId", "filterName", "diaSourceId"]):
-        print(
-            "Input diaSourceCat is indexed on column(s) incompatible with "
-            "this task. Should be indexed on 'multi-index, "
-            "['diaObjectId', 'filterName', 'diaSourceId'].")
+    diaObjectCat.set_index("diaObjectId", inplace=True, drop=False)
+    diaSourceCat.set_index(
+        ["diaObjectId", "filterName", "diaSourceId"],
+        inplace=True,
+        drop=False)
 
     updatingFilterDiaSources = diaSourceCat.loc[
         (slice(None), filterName), :
@@ -197,8 +218,14 @@ class TestHTMIndexPosition(unittest.TestCase):
         plug = HTMIndexDiaPosition(HTMIndexDiaPositionConfig(),
                                    "ap_HTMIndex",
                                    None)
-        run_multi_plugin(diaObjects, diaSources, "g", plug)
-        self.assertEqual(diaObjects.at[objId, "pixelId"], 131072)
+
+        run_single_plugin(diaObjectCat=diaObjects,
+                          diaObjectId=objId,
+                          diaSourceCat=diaSources,
+                          filterName="g",
+                          plugin=plug)
+        self.assertEqual(diaObjects.at[objId, "pixelId"],
+                         17042430230528)
 
         # Test expected pixelId at some value of RA and DEC.
         diaObjects = pd.DataFrame({"diaObjectId": [objId]})
@@ -208,8 +235,13 @@ class TestHTMIndexPosition(unittest.TestCase):
             data={"diaObjectId": n_sources * [objId],
                   "filterName": n_sources * ["g"],
                   "diaSourceId": np.arange(n_sources, dtype=int)})
-        run_multi_plugin(diaObjects, diaSources, "g", plug)
-        self.assertEqual(diaObjects.at[objId, "pixelId"], 260033)
+        run_single_plugin(diaObjectCat=diaObjects,
+                          diaObjectId=objId,
+                          diaSourceCat=diaSources,
+                          filterName="g",
+                          plugin=plug)
+        self.assertEqual(diaObjects.at[objId, "pixelId"],
+                         17450571968473)
 
 
 class TestNDiaSourcesDiaPlugin(unittest.TestCase):

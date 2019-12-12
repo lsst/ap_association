@@ -418,7 +418,10 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
                                    diaSources=diaSourcesGB,
                                    filterDiaSources=filterDiaSourcesGB,
                                    filterName=filterName)
-
+        # Need to store the newly updated diaObjects directly as the editing
+        # a view into diaObjectsToUpdate does not update the values of
+        # diaObjectCat.
+        diaObjectCat.loc[updatedDiaObjectIds, :] = diaObjectsToUpdate
         return lsst.pipe.base.Struct(
             diaObjectCat=diaObjectCat,
             updatedDiaObjects=diaObjectsToUpdate)

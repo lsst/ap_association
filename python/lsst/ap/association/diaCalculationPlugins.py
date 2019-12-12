@@ -31,8 +31,8 @@ import pandas as pd
 from scipy.optimize import lsq_linear
 
 import lsst.geom as geom
-from lsst.meas.algorithms.indexerRegistry import IndexerRegistry
 import lsst.pex.config as pexConfig
+import lsst.sphgeom as sphgeom
 
 from .diaCalculation import (
     DiaObjectCalculationPluginConfig,
@@ -87,6 +87,8 @@ class MeanDiaPosition(DiaObjectCalculationPlugin):
             Summary objects to store values in.
         diaSources : `pandas.DataFrame` or `pandas.DataFrameGroupBy`
             Catalog of DiaSources summarized by this DiaObject.
+        **kwargs
+            Any additional keyword arguments that may be passed to the plugin.
         """
         for outCol in self.outputCols:
             if outCol not in diaObjects.columns:
@@ -113,15 +115,11 @@ class MeanDiaPosition(DiaObjectCalculationPlugin):
 
 class HTMIndexDiaPositionConfig(DiaObjectCalculationPluginConfig):
 
-    indexer = IndexerRegistry.makeField(
-        doc='Select the spatial indexer to use within the database. For this '
-            'plugin we enforce HTM pixelization. The configuration as is '
-            'allows for different resolutions to be used.',
-        default="HTM",
+    htmLevel = pexConfig.Field(
+        dtype=int,
+        doc="Level of the HTM pixelization.",
+        default=20,
     )
-
-    def validate(self):
-        self.indexer == "HTM"
 
 
 @register("ap_HTMIndex")
@@ -130,32 +128,36 @@ class HTMIndexDiaPosition(DiaObjectCalculationPlugin):
     """
     ConfigClass = HTMIndexDiaPositionConfig
 
-    plugType = 'multi'
+    plugType = 'single'
 
     inputCols = ["ra", "decl"]
     outputCols = ["pixelId"]
 
     def __init__(self, config, name, metadata):
         DiaObjectCalculationPlugin.__init__(self, config, name, metadata)
-        self.indexer = IndexerRegistry[self.config.indexer.name](
-            self.config.indexer.active)
+        self.pixelator = sphgeom.HtmPixelization(self.config.htmLevel)
 
     @classmethod
     def getExecutionOrder(cls):
         return cls.FLUX_MOMENTS_CALCULATED
 
-    def calculate(self, diaObjects, **kwargs):
+    def calculate(self, diaObjects, diaObjectId, **kwargs):
         """Compute the mean position of a DiaObject given a set of DiaSources
 
         Parameters
         ----------
         diaObjects : `pandas.dataFrame`
             Summary objects to store values in and read ra/decl from.
+        diaObjectId : `int`
+            Id of the diaObject to update.
+        **kwargs
+            Any additional keyword arguments that may be passed to the plugin.
         """
-        pixelId = np.array(self.indexer.indexPoints(
-            diaObjects.loc[:, "ra"],
-            diaObjects.loc[:, "decl"])).flatten()
-        diaObjects.loc[:, "pixelId"] = pixelId
+        sphPoint = geom.SpherePoint(
+            diaObjects.at[diaObjectId, "ra"] * geom.degrees,
+            diaObjects.at[diaObjectId, "decl"] * geom.degrees)
+        diaObjects.at[diaObjectId, "pixelId"] = self.pixelator.index(
+            sphPoint.getVector())
 
 
 class NumDiaSourcesDiaPluginConfig(DiaObjectCalculationPluginConfig):
@@ -182,6 +184,8 @@ class NumDiaSourcesDiaPlugin(DiaObjectCalculationPlugin):
         ----------
         diaObject : `dict`
             Summary object to store values in and read ra/decl from.
+        **kwargs
+            Any additional keyword arguments that may be passed to the plugin.
         """
         diaObjects.loc[:, "nDiaSources"] = diaSources.diaObjectId.count()
 
@@ -214,6 +218,8 @@ class SimpleSourceFlagDiaPlugin(DiaObjectCalculationPlugin):
         ----------
         diaObject : `dict`
             Summary object to store values in and read ra/decl from.
+        **kwargs
+            Any additional keyword arguments that may be passed to the plugin.
         """
         diaObjects.loc[:, "flags"] = diaSources.flags.any()
 
@@ -258,6 +264,8 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
+        **kwargs
+            Any additional keyword arguments that may be passed to the plugin.
         """
         meanName = "{}PSFluxMean".format(filterName)
         errName = "{}PSFluxMeanErr".format(filterName)
@@ -339,6 +347,8 @@ class PercentileDiaPsFlux(DiaObjectCalculationPlugin):
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
+        **kwargs
+            Any additional keyword arguments that may be passed to the plugin.
         """
         pTileNames = []
         for tilePercent in self.config.percentiles:
@@ -394,6 +404,8 @@ class SigmaDiaPsFlux(DiaObjectCalculationPlugin):
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
+        **kwargs
+            Any additional keyword arguments that may be passed to the plugin.
         """
         # Set "delta degrees of freedom (ddf)" to 1 to calculate the unbiased
         # estimator of scatter (i.e. 'N - 1' instead of 'N').
@@ -442,6 +454,8 @@ class Chi2DiaPsFlux(DiaObjectCalculationPlugin):
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
+        **kwargs
+            Any additional keyword arguments that may be passed to the plugin.
         """
         meanName = "{}PSFluxMean".format(filterName)
 
@@ -494,6 +508,8 @@ class MadDiaPsFlux(DiaObjectCalculationPlugin):
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
+        **kwargs
+            Any additional keyword arguments that may be passed to the plugin.
         """
         diaObjects.loc[:, "{}PSFluxMAD".format(filterName)] = \
             filterDiaSources.psFlux.apply(median_absolute_deviation,
@@ -540,6 +556,8 @@ class SkewDiaPsFlux(DiaObjectCalculationPlugin):
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
+        **kwargs
+            Any additional keyword arguments that may be passed to the plugin.
         """
         diaObjects.loc[:, "{}PSFluxSkew".format(filterName)] = \
             filterDiaSources.psFlux.skew()
@@ -585,6 +603,8 @@ class MinMaxDiaPsFlux(DiaObjectCalculationPlugin):
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
+        **kwargs
+            Any additional keyword arguments that may be passed to the plugin.
         """
         minName = "{}PSFluxMin".format(filterName)
         if minName not in diaObjects.columns:
@@ -637,6 +657,8 @@ class MaxSlopeDiaPsFlux(DiaObjectCalculationPlugin):
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
+        **kwargs
+            Any additional keyword arguments that may be passed to the plugin.
         """
 
         def _maxSlope(df):
@@ -694,6 +716,8 @@ class ErrMeanDiaPsFlux(DiaObjectCalculationPlugin):
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
+        **kwargs
+            Any additional keyword arguments that may be passed to the plugin.
         """
         diaObjects.loc[:, "{}PSFluxErrMean".format(filterName)] = \
             filterDiaSources.psFluxErr.mean()
@@ -739,6 +763,8 @@ class LinearFitDiaPsFlux(DiaObjectCalculationPlugin):
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
+        **kwargs
+            Any additional keyword arguments that may be passed to the plugin.
         """
 
         mName = "{}PSFluxLinearSlope".format(filterName)
@@ -806,6 +832,8 @@ class StetsonJDiaPsFlux(DiaObjectCalculationPlugin):
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
+        **kwargs
+            Any additional keyword arguments that may be passed to the plugin.
         """
         meanName = "{}PSFluxMean".format(filterName)
 
@@ -958,6 +986,8 @@ class WeightedMeanDiaTotFlux(DiaObjectCalculationPlugin):
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
+        **kwargs
+            Any additional keyword arguments that may be passed to the plugin.
         """
         totMeanName = "{}TOTFluxMean".format(filterName)
         if totMeanName not in diaObjects.columns:
@@ -1021,6 +1051,8 @@ class SigmaDiaTotFlux(DiaObjectCalculationPlugin):
             diaObject that are observed in the band pass ``filterName``.
         filterName : `str`
             Simple, string name of the filter for the flux being calculated.
+        **kwargs
+            Any additional keyword arguments that may be passed to the plugin.
         """
         # Set "delta degrees of freedom (ddf)" to 1 to calculate the unbiased
         # estimator of scatter (i.e. 'N - 1' instead of 'N').
