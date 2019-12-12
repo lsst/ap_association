@@ -31,7 +31,14 @@ import astropy.units as u
 
 from lsst.verify import Measurement
 from lsst.verify.gen2tasks import register
-from lsst.verify.tasks import MetadataMetricTask, ApdbMetricTask, MetricComputationError
+from lsst.verify.tasks import MetadataMetricTask, MetadataMetricConfig, \
+    ApdbMetricTask, ApdbMetricConfig, MetricComputationError
+
+
+class NumberNewDiaObjectsMetricConfig(MetadataMetricConfig):
+    def setDefaults(self):
+        self.connections.package = "ap_association"
+        self.connections.metric = "numNewDiaObjects"
 
 
 @register("numNewDiaObjects")
@@ -40,6 +47,7 @@ class NumberNewDiaObjectsMetricTask(MetadataMetricTask):
     in an image, visit, etc..
     """
     _DefaultName = "numNewDiaObjects"
+    ConfigClass = NumberNewDiaObjectsMetricConfig
 
     def makeMeasurement(self, values):
         """Compute the number of new DIAObjects.
@@ -66,8 +74,7 @@ class NumberNewDiaObjectsMetricTask(MetadataMetricTask):
             except (ValueError, TypeError) as e:
                 raise MetricComputationError("Corrupted value of numNewDiaObjects") from e
             else:
-                return Measurement(self.getOutputMetricName(self.config),
-                                   nNew * u.count)
+                return Measurement(self.config.metricName, nNew * u.count)
         else:
             self.log.info("Nothing to do: no association results found.")
             return None
@@ -76,9 +83,11 @@ class NumberNewDiaObjectsMetricTask(MetadataMetricTask):
     def getInputMetadataKeys(cls, config):
         return {"newObjects": ".numNewDiaObjects"}
 
-    @classmethod
-    def getOutputMetricName(cls, config):
-        return "ap_association.numNewDiaObjects"
+
+class NumberUnassociatedDiaObjectsMetricConfig(MetadataMetricConfig):
+    def setDefaults(self):
+        self.connections.package = "ap_association"
+        self.connections.metric = "numUnassociatedDiaObjects"
 
 
 @register("numUnassociatedDiaObjects")
@@ -87,6 +96,7 @@ class NumberUnassociatedDiaObjectsMetricTask(MetadataMetricTask):
     not have detected DIASources in an image, visit, etc..
     """
     _DefaultName = "numUnassociatedDiaObjects"
+    ConfigClass = NumberUnassociatedDiaObjectsMetricConfig
 
     def makeMeasurement(self, values):
         """Compute the number of non-updated DIAObjects.
@@ -113,8 +123,7 @@ class NumberUnassociatedDiaObjectsMetricTask(MetadataMetricTask):
             except (ValueError, TypeError) as e:
                 raise MetricComputationError("Corrupted value of numUnassociatedDiaObjects") from e
             else:
-                return Measurement(self.getOutputMetricName(self.config),
-                                   nNew * u.count)
+                return Measurement(self.config.metricName, nNew * u.count)
         else:
             self.log.info("Nothing to do: no association results found.")
             return None
@@ -123,9 +132,11 @@ class NumberUnassociatedDiaObjectsMetricTask(MetadataMetricTask):
     def getInputMetadataKeys(cls, config):
         return {"unassociatedObjects": ".numUnassociatedDiaObjects"}
 
-    @classmethod
-    def getOutputMetricName(cls, config):
-        return "ap_association.numUnassociatedDiaObjects"
+
+class FractionUpdatedDiaObjectsMetricConfig(MetadataMetricConfig):
+    def setDefaults(self):
+        self.connections.package = "ap_association"
+        self.connections.metric = "fracUpdatedDiaObjects"
 
 
 @register("fracUpdatedDiaObjects")
@@ -134,6 +145,7 @@ class FractionUpdatedDiaObjectsMetricTask(MetadataMetricTask):
     have a new association in this image, visit, etc..
     """
     _DefaultName = "fracUpdatedDiaObjects"
+    ConfigClass = FractionUpdatedDiaObjectsMetricConfig
 
     def makeMeasurement(self, values):
         """Compute the number of non-updated DIAObjects.
@@ -174,8 +186,7 @@ class FractionUpdatedDiaObjectsMetricTask(MetadataMetricTask):
                     return None  # No pre-existing DIAObjects; no fraction to compute
                 else:
                     fraction = nUpdated / (nUpdated + nUnassociated)
-                    return Measurement(self.getOutputMetricName(self.config),
-                                       fraction * u.dimensionless_unscaled)
+                    return Measurement(self.config.metricName, fraction * u.dimensionless_unscaled)
         else:
             self.log.info("Nothing to do: no association results found.")
             return None
@@ -185,9 +196,11 @@ class FractionUpdatedDiaObjectsMetricTask(MetadataMetricTask):
         return {"updatedObjects": ".numUpdatedDiaObjects",
                 "unassociatedObjects": ".numUnassociatedDiaObjects"}
 
-    @classmethod
-    def getOutputMetricName(cls, config):
-        return "ap_association.fracUpdatedDiaObjects"
+
+class TotalUnassociatedDiaObjectsMetricConfig(ApdbMetricConfig):
+    def setDefaults(self):
+        self.connections.package = "ap_association"
+        self.connections.metric = "totalUnassociatedDiaObjects"
 
 
 @register("totalUnassociatedDiaObjects")
@@ -196,6 +209,7 @@ class TotalUnassociatedDiaObjectsMetricTask(ApdbMetricTask):
     associated DIASource.
     """
     _DefaultName = "totalUnassociatedDiaObjects"
+    ConfigClass = TotalUnassociatedDiaObjectsMetricConfig
 
     def makeMeasurement(self, dbHandle, outputDataId):
         """Compute the number of unassociated DIAObjects.
@@ -224,16 +238,12 @@ class TotalUnassociatedDiaObjectsMetricTask(ApdbMetricTask):
         # All data ID types define keys()
         if outputDataId.keys():
             raise ValueError("%s must not be associated with specific data IDs."
-                             % self.getOutputMetricName(self.config))
+                             % self.config.metricName)
 
         try:
             nUnassociatedDiaObjects = dbHandle.countUnassociatedObjects()
         except Exception as e:
             raise MetricComputationError("Could not get unassociated objects from database") from e
 
-        meas = Measurement(self.getOutputMetricName(self.config), nUnassociatedDiaObjects * u.count)
+        meas = Measurement(self.config.metricName, nUnassociatedDiaObjects * u.count)
         return meas
-
-    @classmethod
-    def getOutputMetricName(cls, config):
-        return "ap_association.totalUnassociatedDiaObjects"
