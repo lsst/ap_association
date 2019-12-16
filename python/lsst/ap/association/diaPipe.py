@@ -44,13 +44,6 @@ class DiaPipelineConnections(pipeBase.PipelineTaskConnections,
         storageClass="SourceCatalog",
         multiple=True
     )
-    apdbSchema = connTypes.InitInput(
-        doc="Schema produced by characterize image task, used to initialize "
-            "this task",
-        name="deepDiff_diaSrc_schema",
-        storageClass="SourceCatalog",
-        multiple=True
-    )
     diaSourceCat = connTypes.Input(
         doc="",
         name="deepDiff_diaSrc",
@@ -138,33 +131,37 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         butlerQC.put(outputs, outputRefs)
 
+    @pipeBase.timedMethod
     def run(self, diaSourceCat, diffIm, exposure, ccdExposureIdBits):
         self.log.info("Running Association...")
-
-        # Load the DiaObjects and DiaSource history.
-        loaderResult = self.diaCatalogLoader.run(diffIm, self.apdb)
-
         # Put the SciencePipelines through a SDMification step and return
         # calibrated columns with the expect output database names.
         diaSources = self.diaSourceDpddifier.run(diaSourceCat,
                                                  diffIm,
                                                  return_pandas=True)
 
+        # Load the DiaObjects and DiaSource history.
+        loaderResult = self.diaCatalogLoader.run(diffIm, self.apdb)
+
         # Associate new DiaSources with existing DiaObjects and update
         # DiaObject summary statistics using the full DiaSource history.
-        results = self.associator.run(diaSources,
-                                      loaderResult.diaObjects,
-                                      loaderResult.diaSources,
-                                      diffIm,
-                                      self.apdb)
+        assocResults = self.associator.run(diaSources,
+                                           loaderResult.diaObjects,
+                                           loaderResult.diaSources,
+                                           diffIm)
 
         # Force photometer on the Difference and Calibrated exposures using
         # the new and updated DiaObject locations.
-        self.diaForcedSource.run(
-            results.dia_objects,
-            ccdExposureIdBits,
-            exposure,
-            diffIm,
-            self.apdb)
+        diaForcedSources = self.diaForcedSource.run(assocResults.diaObjects,
+                                                    ccdExposureIdBits,
+                                                    exposure,
+                                                    diffIm)
 
-        return self.config.apdb.value
+        # Store DiaSources and updated DiaObjects in the Apdb.
+        self.apdb.storeDiaSources(assocResults.diaSources)
+        self.apdb.storeDiaObjects(
+            assocResults.UpdatedDiaObjects,
+            exposure.getInfo().getVisitInfo().getDate().toPython())
+        self.apdb.storeDiaForcedSources(diaForcedSources)
+
+        return pipeBase.Struct(apdb_maker=self.config.apdb.value)

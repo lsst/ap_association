@@ -20,9 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import numpy as np
-import os
 import pandas as pd
-import tempfile
 import unittest
 
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
@@ -31,10 +29,8 @@ import lsst.afw.image as afwImage
 import lsst.afw.image.utils as afwImageUtils
 import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
-from lsst.dax.apdb import Apdb, ApdbConfig
 import lsst.geom as geom
 import lsst.sphgeom as sphgeom
-from lsst.utils import getPackageDir
 import lsst.utils.tests
 
 from lsst.ap.association import \
@@ -161,25 +157,6 @@ def create_test_points_pandas(point_locs_deg,
     return sources
 
 
-def _data_file_name(basename, module_name):
-    """Return path name of a data file.
-
-    Parameters
-    ----------
-    basename : `str`
-        Name of the file to add to the path string.
-    module_name : `str`
-        Name of lsst stack package environment variable.
-
-    Returns
-    -------
-    data_file_path : `str`
-       Full path of the file to load from the "data" directory in a given
-       repository.
-    """
-    return os.path.join(getPackageDir(module_name), "data", basename)
-
-
 class TestAssociationTask(unittest.TestCase):
 
     def setUp(self):
@@ -194,21 +171,7 @@ class TestAssociationTask(unittest.TestCase):
         afwImageUtils.defineFilter('i', lambdaEff=778, alias="i.MP9701")
         afwImageUtils.defineFilter('z', lambdaEff=1170, alias="z.MP9801")
 
-        self.tmp_file, self.db_file = tempfile.mkstemp(dir=os.path.dirname(__file__))
-
         self.dia_object_schema = make_dia_object_schema()
-
-        self.apdbConfig = ApdbConfig()
-        self.apdbConfig.db_url = "sqlite:///" + self.db_file
-        self.apdbConfig.isolation_level = "READ_UNCOMMITTED"
-        self.apdbConfig.dia_object_index = "baseline"
-        self.apdbConfig.dia_object_columns = []
-        self.apdbConfig.schema_file = _data_file_name(
-            "apdb-schema.yaml", "dax_apdb")
-        self.apdbConfig.column_map = _data_file_name(
-            "apdb-ap-pipe-afw-map.yaml", "ap_association")
-        self.apdbConfig.extra_schema_file = _data_file_name(
-            "apdb-ap-pipe-schema-extra.yaml", "ap_association")
 
         # metadata taken from CFHT data
         # v695856-e0/v695856-e0-c000-a00.sci_img.fits
@@ -267,9 +230,6 @@ class TestAssociationTask(unittest.TestCase):
     def tearDown(self):
         """Delete the database after we are done with it.
         """
-        del self.tmp_file
-        os.remove(self.db_file)
-        del self.db_file
         del self.metadata
         del self.wcs
         del self.exposure
@@ -319,21 +279,6 @@ class TestAssociationTask(unittest.TestCase):
             self.assertEqual(output_dia_object['gPSFluxNdata'], 1)
             self.assertEqual(df_idx, obj_idx + 10)
 
-    def _make_apdb(self):
-        """Create an empty apdb database.
-
-        Returns
-        -------
-        apdb : `lsst.dax.apdb.Apdb`
-            Initialized and empty apdb.
-        """
-        apdb = Apdb(config=self.apdbConfig,
-                    afw_schemas=dict(DiaObject=make_dia_object_schema(),
-                                     DiaSource=make_dia_source_schema()))
-        apdb.makeSchema()
-
-        return apdb
-
     def _run_association_and_retrieve_objects(self, create_objects=False):
         """Convenience method for testing the Association run method.
 
@@ -349,7 +294,21 @@ class TestAssociationTask(unittest.TestCase):
             Final set of DIAObjects to be tested.
         """
         if create_objects:
-            self._store_dia_objects_and_sources()
+            diaObjects, diaSourceHistory = \
+                self._create_dia_objects_and_sources()
+        else:
+            diaObjects = pd.DataFrame(columns=["diaObjectId"])
+            diaSourceHistory = pd.DataFrame(columns=["diaObjectId",
+                                                     "filterName",
+                                                     "diaSourceId"])
+        diaObjects.set_index("diaObjectId",
+                             inplace=True,
+                             drop=False)
+        diaSourceHistory.set_index(["diaObjectId",
+                                    "filterName",
+                                    "diaSourceId"],
+                                   inplace=True,
+                                   drop=False)
 
         source_centers = [
             [self.wcs.pixelToSky(idx, idx).getRa().asDegrees(),
@@ -371,41 +330,28 @@ class TestAssociationTask(unittest.TestCase):
 
         assoc_task = AssociationTask()
 
-        apdb = self._make_apdb()
-        dia_sources = dia_sources.asAstropy().to_pandas()
-        dia_sources.rename(columns={"coord_ra": "ra",
-                                    "coord_dec": "decl",
-                                    "id": "diaSourceId",
-                                    "parent": "parentDiaSourceId"},
-                           inplace=True)
-        dia_sources["ra"] = np.degrees(dia_sources["ra"])
-        dia_sources["decl"] = np.degrees(dia_sources["decl"])
+        diaSources = dia_sources.asAstropy().to_pandas()
+        diaSources.rename(columns={"coord_ra": "ra",
+                                   "coord_dec": "decl",
+                                   "id": "diaSourceId",
+                                   "parent": "parentDiaSourceId"},
+                          inplace=True)
+        diaSources["ra"] = np.degrees(diaSources["ra"])
+        diaSources["decl"] = np.degrees(diaSources["decl"])
 
-        dia_objects = apdb.getDiaObjects(self.index_ranges,
-                                         return_pandas=True)
-        dia_objects.set_index("diaObjectId",
-                              drop=False,
-                              inplace=True)
-        if len(dia_objects) == 0:
+        if len(diaObjects) == 0:
             diaSourceHistory = pd.DataFrame(columns=["diaObjectId",
                                                      "filterName",
                                                      "diaSourceId"])
-        else:
-            diaSourceHistory = apdb.getDiaSources(
-                dia_objects.loc[:, "diaObjectId"],
-                self.exposure.getInfo().getVisitInfo().getDate().toPython(),
-                return_pandas=True)
         diaSourceHistory.set_index(
             ["diaObjectId", "filterName", "diaSourceId"],
             drop=False,
             inplace=True)
 
-        results = assoc_task.run(dia_sources,
-                                 dia_objects,
-                                 diaSourceHistory,
-                                 self.exposure,
-                                 apdb)
-        return results.dia_objects.sort_index()
+        results = assoc_task.run(diaSources,
+                                 diaObjects,
+                                 diaSourceHistory)
+        return results.diaObjects
 
     def _set_source_values(self, dia_source, flux, fluxErr, filterName,
                            filterId, ccdVisitId, midPointTai):
@@ -447,16 +393,13 @@ class TestAssociationTask(unittest.TestCase):
         dia_source["x"] = 0.
         dia_source["y"] = 0.
 
-    def _store_dia_objects_and_sources(self):
+    def _create_dia_objects_and_sources(self):
         """Method for storing a set of test DIAObjects and sources into
         the L1 database.
         """
 
         # This should create a DB of 5 DIAObjects with 2 DIASources associated
         # to them. The DIASources are "observed" in g and r.
-
-        # Create an empty database
-        apdb = self._make_apdb()
 
         # Create DIObjects, give them fluxes, and store them
         n_objects = 5
@@ -480,13 +423,16 @@ class TestAssociationTask(unittest.TestCase):
                 dia_object['%sPSFluxMeanErr' % filter_name] = 1
                 dia_object['%sPSFluxSigma' % filter_name] = 1
                 dia_object['%sPSFluxNdata' % filter_name] = 1
+        dia_objects = dia_objects.asAstropy().to_pandas()
+        dia_objects.rename(columns={"coord_ra": "ra",
+                                    "coord_dec": "decl",
+                                    "id": "diaObjectId"},
+                           inplace=True)
+        dia_objects["ra"] = np.degrees(dia_objects["ra"])
+        dia_objects["decl"] = np.degrees(dia_objects["decl"])
 
         dateTime = dafBase.DateTime("2014-05-13T16:00:00.000000000",
                                     dafBase.DateTime.Timescale.TAI)
-        apdb.storeDiaObjects(dia_objects, dateTime.toPython())
-        loaded_dia_objects = apdb.getDiaObjects(self.index_ranges)
-
-        self.assertTrue(loaded_dia_objects.schema == dia_objects.schema)
 
         # Create DIASources, update their ccdVisitId and fluxes, and store
         # them.
@@ -516,33 +462,6 @@ class TestAssociationTask(unittest.TestCase):
                     filterId=2,
                     ccdVisitId=1233,
                     midPointTai=dateTime.get(system=dafBase.DateTime.MJD))
-        apdb.storeDiaSources(dia_sources)
-
-    def test_update_dia_objects(self):
-        """Test the update_dia_objects method.
-        """
-        self._store_dia_objects_and_sources()
-        # Create new DIAObjects
-        n_sources = 5
-        object_centers = np.array([
-            [self.wcs.pixelToSky(idx, idx).getRa().asDegrees(),
-             self.wcs.pixelToSky(idx, idx).getDec().asDegrees()]
-            for idx in np.linspace(1, 1000, 10)])
-        dia_sources = create_test_points(
-            point_locs_deg=object_centers[:n_sources],
-            start_id=10,
-            scatter_arcsec=-1,
-            associated_ids=[1, 2, 3, 4, 14])
-
-        for dia_source in dia_sources:
-            self._set_source_values(
-                dia_source=dia_source,
-                flux=20000,
-                fluxErr=100,
-                filterName='g',
-                filterId=1,
-                ccdVisitId=self.exposure.getInfo().getVisitInfo().getExposureId(),
-                midPointTai=self.exposure.getInfo().getVisitInfo().getDate().get(system=dafBase.DateTime.MJD))
         dia_sources = dia_sources.asAstropy().to_pandas()
         dia_sources.rename(columns={"coord_ra": "ra",
                                     "coord_dec": "decl",
@@ -551,80 +470,7 @@ class TestAssociationTask(unittest.TestCase):
                            inplace=True)
         dia_sources["ra"] = np.degrees(dia_sources["ra"])
         dia_sources["decl"] = np.degrees(dia_sources["decl"])
-
-        # Store them in the DB containing pre-existing objects.
-        apdb = self._make_apdb()
-        # Load the Existing DIAObjects for use in the update method.
-        loaded_dia_objects = apdb.getDiaObjects(self.index_ranges,
-                                                return_pandas=True)
-
-        # Store the new DIASources with associations and an exposure.
-        apdb.storeDiaSources(dia_sources)
-
-        # Create our task and update the stored DIAObjects.
-        assoc_task = AssociationTask()
-        new_dia_objects = [assoc_task._initialize_dia_object(14)]
-        new_dia_objects = pd.DataFrame(data=new_dia_objects,
-                                       columns=loaded_dia_objects.columns)
-        new_dia_objects.set_index("diaObjectId", inplace=True, drop=False)
-        loaded_dia_objects = loaded_dia_objects.append(new_dia_objects,
-                                                       sort=True)
-        loaded_dia_objects.set_index("diaObjectId",
-                                     inplace=True,
-                                     drop=False)
-        loaded_dia_sources = apdb.getDiaSources(
-            loaded_dia_objects.loc[:, "diaObjectId"],
-            self.exposure.getInfo().getVisitInfo().getDate().toPython(),
-            return_pandas=True)
-        loaded_dia_sources.set_index(["diaObjectId",
-                                      "filterName",
-                                      "diaSourceId"],
-                                     inplace=True,
-                                     drop=False)
-        assoc_task.update_dia_objects(loaded_dia_objects,
-                                      loaded_dia_sources,
-                                      [1, 2, 3, 4, 14],
-                                      self.exposure,
-                                      apdb)
-        # Retrieve the DIAObjects from the DB.
-        output_dia_objects = apdb.getDiaObjects(self.index_ranges)
-        output_dia_objects.sort()
-
-        # Data and column names to test.
-        test_dia_object_values = [
-            {'id': 0,
-             'gPSFluxMean': 1., 'gPSFluxMeanErr': 1., 'gPSFluxSigma': 1.,
-             'rPSFluxMean': 1., 'rPSFluxMeanErr': 1., 'rPSFluxSigma': 1.},
-            {'id': 1,
-             'gPSFluxMean': 1.28571426, 'gPSFluxMeanErr': 0.01195228, 'gPSFluxSigma': 0.70710678,
-             'rPSFluxMean': 1., 'rPSFluxMeanErr': 1., 'rPSFluxSigma': 1.},
-            {'id': 2,
-             'gPSFluxMean': 1.28571426, 'gPSFluxMeanErr': 0.01195228, 'gPSFluxSigma': 0.70710678,
-             'rPSFluxMean': 1., 'rPSFluxMeanErr': 1., 'rPSFluxSigma': 1.},
-            {'id': 3,
-             'gPSFluxMean': 1.28571426, 'gPSFluxMeanErr': 0.01195228, 'gPSFluxSigma': 0.70710678,
-             'rPSFluxMean': 1., 'rPSFluxMeanErr': 1., 'rPSFluxSigma': 1.},
-            {'id': 4,
-             'gPSFluxMean': 1.28571426, 'gPSFluxMeanErr': 0.01195228, 'gPSFluxSigma': 0.70710678,
-             'rPSFluxMean': 1., 'rPSFluxMeanErr': 1., 'rPSFluxSigma': 1.},
-            {'id': 14,
-             'gPSFluxMean': 2., 'gPSFluxMeanErr': 0.022360680624842644, 'gPSFluxSigma': np.nan,
-             'rPSFluxMean': np.nan, 'rPSFluxMeanErr': np.nan, 'rPSFluxSigma': np.nan}
-        ]
-
-        # Test that the stored values are as expected.
-        self.assertEqual(len(output_dia_objects), 6)
-        for dia_object, values in zip(output_dia_objects,
-                                      test_dia_object_values):
-            for test_name in values.keys():
-                if np.isnan(values[test_name]):
-                    self.assertTrue(np.isnan(dia_object[test_name]))
-                elif test_name == 'id' or test_name == 'nDiaSources':
-                    self.assertEqual(dia_object[test_name],
-                                     values[test_name])
-                else:
-                    self.assertAlmostEqual(dia_object[test_name],
-                                           values[test_name])
+        return dia_objects, dia_sources
 
     def test_associate_sources(self):
         """Test the performance of the associate_sources method in

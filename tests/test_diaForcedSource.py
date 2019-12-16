@@ -29,7 +29,6 @@ import lsst.afw.image as afwImage
 import lsst.afw.image.utils as afwImageUtils
 import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
-from lsst.dax.apdb import Apdb
 import lsst.meas.algorithms as measAlg
 from lsst.ap.association import \
     DiaForcedSourceTask, \
@@ -164,13 +163,11 @@ class TestDiaForcedSource(unittest.TestCase):
         """Test that forced source catalogs are successfully created and have
         sensible values.
         """
-
         test_objects = self._convert_to_pandas(self.testDiaObjects)
-        apdb = unittest.mock.Mock(Apdb)
 
         dfs = DiaForcedSourceTask()
         dia_forced_sources = dfs.run(
-            test_objects, self.expIdBits, self.exposure, self.diffim, apdb)
+            test_objects, self.expIdBits, self.exposure, self.diffim)
 
         direct_values = [199854.48417094944, 160097.40719241602,
                          82299.17897267535, 27148.604434624354,
