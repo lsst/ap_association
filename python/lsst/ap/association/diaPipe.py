@@ -32,6 +32,9 @@ from lsst.ap.association import (
     make_dia_object_schema,
     make_dia_source_schema)
 
+__all__ = ("DiaPipelineConfig",
+           "DiaPipelineTask")
+
 
 class DiaPipelineConnections(pipeBase.PipelineTaskConnections,
                              dimensions=("instrument", "visit", "detector"),
@@ -131,8 +134,37 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         butlerQC.put(outputs, outputRefs)
 
-    @pipeBase.timedMethod
+    @pipeBase.timeMethod
     def run(self, diaSourceCat, diffIm, exposure, ccdExposureIdBits):
+        """Process DiaSources and DiaObjects.
+
+        Load previous DiaObjects and their DiaSource history. Calibrate the
+        values in the diaSourceCat. Associate new DiaSources with previous
+        DiaObjects. Run forced photometry at the updated DiaObject locations.
+        Store the results in the Apdb.
+
+        Parameters
+        ----------
+        diaSourceCat : `lsst.afw.table.SourceCatalog`
+            Newly detected DiaSources.
+        diffIm : `lsst.afw.image.Exposure`
+            Difference image exposure in which the sources in ``diaSourceCat``
+            were detected.
+        exposure : `lsst.afw.image.Exposure`
+            Calibrated exposure differenced with a template to create
+            ``diffIm``.
+        ccdExposureIdBits : `int`
+            Number of bits used for a unique ``ccdVisitId``.
+
+        Returns
+        -------
+        results : `lsst.pipe.base.Struct`
+            Results struct with components.
+
+            - ``apdb_maker`` : Marker dataset to store in the Butler indicating
+              that this ccdVisit has completed successfully.
+              (`lsst.dax.apdb.ApdbConfig`)
+        """
         self.log.info("Running Association...")
         # Put the SciencePipelines through a SDMification step and return
         # calibrated columns with the expect output database names.
@@ -147,20 +179,20 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # DiaObject summary statistics using the full DiaSource history.
         assocResults = self.associator.run(diaSources,
                                            loaderResult.diaObjects,
-                                           loaderResult.diaSources,
-                                           diffIm)
+                                           loaderResult.diaSources)
 
         # Force photometer on the Difference and Calibrated exposures using
         # the new and updated DiaObject locations.
-        diaForcedSources = self.diaForcedSource.run(assocResults.diaObjects,
-                                                    ccdExposureIdBits,
-                                                    exposure,
-                                                    diffIm)
+        diaForcedSources = self.diaForcedSource.run(
+            assocResults.diaObjects,
+            ccdExposureIdBits,
+            exposure,
+            diffIm)
 
         # Store DiaSources and updated DiaObjects in the Apdb.
         self.apdb.storeDiaSources(assocResults.diaSources)
         self.apdb.storeDiaObjects(
-            assocResults.UpdatedDiaObjects,
+            assocResults.updatedDiaObjects,
             exposure.getInfo().getVisitInfo().getDate().toPython())
         self.apdb.storeDiaForcedSources(diaForcedSources)
 

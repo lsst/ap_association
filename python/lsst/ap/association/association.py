@@ -115,9 +115,13 @@ class AssociationTask(pipeBase.Task):
         result : `lsst.pipe.base.Struct`
             Results struct with components.
 
-            - ``dia_objects`` : Complete set of dia_objects covering the input
+            - ``diaObjects`` : Complete set of dia_objects covering the input
               exposure. Catalog contains newly created, updated, and untouched
               diaObjects. (`pandas.DataFrame`)
+            - ``updatedDiaObjects`` : Subset of DiaObjects that were updated
+              or created during processing. (`pandas.DataFrame`)
+            - ``diaSources`` : DiaSources detected in this ccdVisit with
+              associated diaObjectIds. (`pandas.DataFrame`)
         """
         diaSources = self.check_dia_source_radec(diaSources)
 
