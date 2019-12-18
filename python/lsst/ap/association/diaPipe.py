@@ -20,10 +20,22 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
+"""PipelineTask for associating DiaSources with previous DiaObjects.
+
+Additionally performs forced photometry on the calibrated and difference
+images at the updated locations of DiaObjects.
+
+Currently loads directly from the Apdb rather than pre-loading.
+"""
+
+import os
+
 import lsst.dax.apdb as daxApdb
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
+from lsst.utils import getPackageDir
+
 from lsst.ap.association import (
     AssociationTask,
     DiaForcedSourceTask,
@@ -33,40 +45,44 @@ from lsst.ap.association import (
     make_dia_source_schema)
 
 __all__ = ("DiaPipelineConfig",
-           "DiaPipelineTask")
+           "DiaPipelineTask",
+           "DiaPipelineConnections")
 
 
 class DiaPipelineConnections(pipeBase.PipelineTaskConnections,
                              dimensions=("instrument", "visit", "detector"),
                              defaultTemplates={}):
-    """
+    """Butler connections for DiaPipelineTask.
     """
     diaSourceSchema = connTypes.InitInput(
-        doc="",
+        doc="Schema of the DiaSource catalog produced during image "
+            "differencing",
         name="deepDiff_diaSrc_schema",
         storageClass="SourceCatalog",
         multiple=True
     )
     diaSourceCat = connTypes.Input(
-        doc="",
+        doc="Catalog of DiaSources produced during image differencing.",
         name="deepDiff_diaSrc",
         storageClass="SourceCatalog",
         dimensions=("instrument", "visit", "detector"),
     )
     diffIm = connTypes.Input(
-        doc="",
+        doc="Difference image on which the DiaSources were detected.",
         name="deepDiff_differenceExp",
         storageClass="ExposureF",
         dimensions=("instrument", "visit", "detector"),
     )
     exposure = connTypes.Input(
-        doc="",
+        doc="Calibrated exposure differenced with a template image during "
+            "image differencing.",
         name="calexp",
         storageClass="ExposureF",
         dimensions=("instrument", "visit", "detector"),
     )
     apdbMarker = connTypes.Output(
-        doc="",
+        doc="Marker dataset storing the configuration of the Apdb for each "
+            "visit/detector. Used to signal the completion of the pipeline.",
         name="apdb_marker",
         storageClass="",
         dimensions=("instrument", "visit", "detector"),
@@ -75,7 +91,7 @@ class DiaPipelineConnections(pipeBase.PipelineTaskConnections,
 
 class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
                         pipelineConnections=DiaPipelineConnections):
-    """
+    """Config for DiaPipelineTask.
     """
     apdb = pexConfig.ConfigurableField(
         target=daxApdb.Apdb,
@@ -102,12 +118,26 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
             "difference images.",
     )
 
+    def setDefaults(self):
+        self.apdb.dia_object_index = "baseline"
+        self.apdb.dia_object_columns = []
+        self.apdb.extra_schema_file = os.path.join(
+            getPackageDir("ap_association"),
+            "data",
+            "apdb-ap-pipe-schema-extra.yaml")
+
     def validate(self):
-        pass
+        pexConfig.Config.validate(self)
+        if self.diaCatalogLoader.htmLevel != \
+           self.associator.diaCalculation.plugins["ap_HTMIndex"].htmLevel:
+            raise ValueError("HTM index level in LoadDiaCatalogsTask must be "
+                             "equal to HTMIndexDiaCalculationPlugin index "
+                             "level.")
 
 
 class DiaPipelineTask(pipeBase.PipelineTask):
-    """
+    """Task for loading, associating and storing Difference Image Analysis
+    (DIA) Objects and Sources.
     """
     ConfigClass = DiaPipelineConfig
     _DefaultName = "diaPipe"
@@ -141,7 +171,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         Load previous DiaObjects and their DiaSource history. Calibrate the
         values in the diaSourceCat. Associate new DiaSources with previous
         DiaObjects. Run forced photometry at the updated DiaObject locations.
-        Store the results in the Apdb.
+        Store the results in the Alert Production Database (Apdb).
 
         Parameters
         ----------
@@ -165,7 +195,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
               that this ccdVisit has completed successfully.
               (`lsst.dax.apdb.ApdbConfig`)
         """
-        self.log.info("Running Association...")
+        self.log.info("Running DiaPipeline...")
         # Put the SciencePipelines through a SDMification step and return
         # calibrated columns with the expect output database names.
         diaSources = self.diaSourceDpddifier.run(diaSourceCat,

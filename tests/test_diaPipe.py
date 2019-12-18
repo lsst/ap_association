@@ -28,7 +28,7 @@ import lsst.afw.table as afwTable
 import lsst.pipe.base as pipeBase
 from lsst.utils import getPackageDir
 import lsst.utils.tests
-from unittest.mock import patch, Mock, ANY
+from unittest.mock import patch, Mock
 
 from lsst.ap.association import DiaPipelineTask
 

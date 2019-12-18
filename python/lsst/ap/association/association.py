@@ -206,10 +206,10 @@ class AssociationTask(pipeBase.Task):
 
             - ``updated_and_new_dia_object_ids`` : ids of new and updated
               dia_objects as the result of association. (`list` of `int`).
-            - ``new_dia_oresultsbjects`` : Newly created DiaObjects from unassociated
-              diaSources. (`pandas.DataFrame`)
-            - ``n_updated_dia_objects`` : Number of previously known dia_objects
-              with newly associated DIASources. (`int`).
+            - ``new_dia_objects`` : Newly created DiaObjects from
+              unassociated diaSources. (`pandas.DataFrame`)
+            - ``n_updated_dia_objects`` : Number of previously known
+              dia_objects with newly associated DIASources. (`int`).
             - ``n_new_dia_objects`` : Number of newly created DIAObjects from
               unassociated DIASources (`int`).
             - ``n_unupdated_dia_objects`` : Number of previous DIAObjects that

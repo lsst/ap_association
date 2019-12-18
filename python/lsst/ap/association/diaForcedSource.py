@@ -130,8 +130,7 @@ class DiaForcedSourceTask(pipeBase.Task):
                          refSchema=afwTable.SourceTable.makeMinimalSchema())
 
     def run(self, dia_objects, expIdBits, exposure, diffim):
-        """Measure forced sources on the direct and different images,
-        calibrate, and store them in the Apdb.
+        """Measure forced sources on the direct and difference images.
 
         Parameters
         ----------
