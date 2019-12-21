@@ -129,9 +129,8 @@ class DiaForcedSourceTask(pipeBase.Task):
         self.makeSubtask("forcedMeasurement",
                          refSchema=afwTable.SourceTable.makeMinimalSchema())
 
-    def run(self, dia_objects, expIdBits, exposure, diffim, apdb):
-        """Measure forced sources on the direct and different images,
-        calibrate, and store them in the Apdb.
+    def run(self, dia_objects, expIdBits, exposure, diffim):
+        """Measure forced sources on the direct and difference images.
 
         Parameters
         ----------
@@ -144,8 +143,6 @@ class DiaForcedSourceTask(pipeBase.Task):
             Direct image exposure.
         diffim : `lsst.afw.image.Exposure`
             Difference image.
-        apdb : `lsst.dax.apdb.Apdb`
-            Connection to the association database.
 
         Returns
         -------
@@ -179,7 +176,6 @@ class DiaForcedSourceTask(pipeBase.Task):
                                                           directForcedSources,
                                                           diffim,
                                                           exposure)
-        apdb.storeDiaForcedSources(output_forced_sources)
 
         return output_forced_sources
 

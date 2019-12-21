@@ -97,11 +97,9 @@ class AssociationTask(pipeBase.Task):
     def run(self,
             diaSources,
             diaObjects,
-            diaSourceHistory,
-            exposure,
-            apdb):
-        """Associate the new DiaSources with existing or new DiaObjects
-        and persist the results into the AP database.
+            diaSourceHistory):
+        """Associate the new DiaSources with existing or new DiaObjects,
+        updating the DiaObjects.
 
         Parameters
         ----------
@@ -111,28 +109,23 @@ class AssociationTask(pipeBase.Task):
             Existing diaObjects from the Apdb.
         diaSourceHistory : `pandas.DataFrame`
             12 month DiaSource history of the loaded ``diaObjects``.
-        exposure : `lsst.afw.image`
-            Input exposure representing the region of the sky the dia_sources
-            were detected on. Should contain both the solved WCS and a bounding
-            box of the ccd.
-        apdb : `lsst.dax.apdb.Apdb`
-            Apdb connection object to write DIASources/Objects to.
 
         Returns
         -------
         result : `lsst.pipe.base.Struct`
             Results struct with components.
 
-            - ``dia_objects`` : Complete set of dia_objects covering the input
+            - ``diaObjects`` : Complete set of dia_objects covering the input
               exposure. Catalog contains newly created, updated, and untouched
               diaObjects. (`pandas.DataFrame`)
+            - ``updatedDiaObjects`` : Subset of DiaObjects that were updated
+              or created during processing. (`pandas.DataFrame`)
+            - ``diaSources`` : DiaSources detected in this ccdVisit with
+              associated diaObjectIds. (`pandas.DataFrame`)
         """
         diaSources = self.check_dia_source_radec(diaSources)
 
         matchResult = self.associate_sources(diaObjects, diaSources)
-
-        # Store newly associated DIASources.
-        apdb.storeDiaSources(diaSources)
 
         diaObjects = diaObjects.append(matchResult.new_dia_objects,
                                        sort=True)
@@ -144,18 +137,22 @@ class AssociationTask(pipeBase.Task):
                              inplace=True)
         diaSourceHistory = diaSourceHistory.append(diaSources, sort=True)
 
+        # Get the current filter being processed.
+        filterName = diaSources["filterName"][0]
+
         # Update previously existing DIAObjects with the information from their
         # newly association DIASources and create new DIAObjects from
         # unassociated sources.
-        dia_objects = self.update_dia_objects(
+        updatedResults = self.diaCalculation.run(
             diaObjects,
             diaSourceHistory,
             matchResult.associated_dia_object_ids,
-            exposure,
-            apdb)
+            filterName)
 
         return pipeBase.Struct(
-            dia_objects=dia_objects,
+            diaObjects=updatedResults.diaObjectCat,
+            updatedDiaObjects=updatedResults.updatedDiaObjects,
+            diaSources=diaSources,
         )
 
     def check_dia_source_radec(self, dia_sources):
@@ -209,10 +206,10 @@ class AssociationTask(pipeBase.Task):
 
             - ``updated_and_new_dia_object_ids`` : ids of new and updated
               dia_objects as the result of association. (`list` of `int`).
-            - ``new_dia_objects`` : Newly created DiaObjects from unassociated
-              diaSources. (`pandas.DataFrame`)
-            - ``n_updated_dia_objects`` : Number of previously known dia_objects
-              with newly associated DIASources. (`int`).
+            - ``new_dia_objects`` : Newly created DiaObjects from
+              unassociated diaSources. (`pandas.DataFrame`)
+            - ``n_updated_dia_objects`` : Number of previously known
+              dia_objects with newly associated DIASources. (`int`).
             - ``n_new_dia_objects`` : Number of newly created DIAObjects from
               unassociated DIASources (`int`).
             - ``n_unupdated_dia_objects`` : Number of previous DIAObjects that
@@ -227,55 +224,6 @@ class AssociationTask(pipeBase.Task):
         self._add_association_meta_data(match_result)
 
         return match_result
-
-    @pipeBase.timeMethod
-    def update_dia_objects(self,
-                           dia_objects,
-                           diaSourceHistory,
-                           updated_obj_ids,
-                           exposure,
-                           apdb,
-                           ):
-        """Update select dia_objects currently stored within the database or
-        create new ones.
-
-        Modify the dia_object catalog in place to post-pend newly created
-        DiaObjects.
-
-        Parameters
-        ----------
-        dia_objects : `pandas.DataFrame`
-            Pre-existing/loaded DIAObjects to copy values that are not updated
-            from.
-        diaSourceHistory : `pandas.DataFrame`
-            Full history of all DiaSources associated with ``dia_objects``.
-        updated_obj_ids : array-like of `int`
-            Ids of the dia_objects that should be updated.
-        exposure : `lsst.afw.image.Exposure`
-            Input exposure representing the region of the sky the dia_sources
-            were detected on. Should contain both the solved WCS and a bounding
-            box of the ccd.
-        apdb : `lsst.dax.apdb.Apdb`
-            Apdb connection object to retrieve DIASources from and
-            write DIAObjects to.
-
-        Returns
-        -------
-        outputDiaObjects : `pandas.DataFrame`
-            Union of updated and un-touched DiaObjects indexed on
-            ``diaObjectId``.
-        """
-        filter_name = exposure.getFilter().getName()
-
-        dateTime = exposure.getInfo().getVisitInfo().getDate().toPython()
-
-        results = self.diaCalculation.run(dia_objects,
-                                          diaSourceHistory,
-                                          updated_obj_ids,
-                                          filter_name)
-        apdb.storeDiaObjects(results.updatedDiaObjects, dateTime)
-
-        return results.diaObjectCat
 
     @pipeBase.timeMethod
     def score(self, dia_objects, dia_sources, max_dist):
@@ -464,8 +412,7 @@ class AssociationTask(pipeBase.Task):
             dia_sources.loc[src_idx, "diaObjectId"] = src_id
             n_new_dia_objects += 1
 
-        new_dia_objects = pd.DataFrame(data=new_dia_objects,
-                                       columns=dia_objects.columns)
+        new_dia_objects = pd.DataFrame(data=new_dia_objects)
         new_dia_objects.set_index("diaObjectId", inplace=True, drop=False)
 
         # Return the ids of the DIAObjects in this DIAObjectCollection that
