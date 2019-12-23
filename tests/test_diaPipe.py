@@ -115,8 +115,8 @@ class TestDiaPipelineTask(unittest.TestCase):
             subtasks.dpddifier.run.assert_called_once()
             subtasks.associator.run.assert_called_once()
             subtasks.diaForcedSource.run.assert_called_once()
-            self.assertEqual(result.apdb_maker.db_url, "sqlite://")
-            self.assertEqual(result.apdb_maker.isolation_level,
+            self.assertEqual(result.apdb_marker.db_url, "sqlite://")
+            self.assertEqual(result.apdb_marker.isolation_level,
                              "READ_UNCOMMITTED")
 
 
