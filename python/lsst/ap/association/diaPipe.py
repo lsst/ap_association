@@ -226,4 +226,4 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             exposure.getInfo().getVisitInfo().getDate().toPython())
         self.apdb.storeDiaForcedSources(diaForcedSources)
 
-        return pipeBase.Struct(apdb_maker=self.config.apdb.value)
+        return pipeBase.Struct(apdb_marker=self.config.apdb.value)
