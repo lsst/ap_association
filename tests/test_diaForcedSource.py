@@ -59,6 +59,24 @@ def create_test_dia_objects(n_points, wcs, startPos=100):
         src['id'] = src_idx
         src.setCoord(wcs.pixelToSky(startPos + src_idx,
                                     startPos + src_idx))
+
+    # Add points outside of the CCD.
+    # Fully outside.
+    src = objects.addNew()
+    src['id'] = 10000000
+    src.setCoord(wcs.pixelToSky(-100000,
+                                -100000))
+    # y outside
+    src = objects.addNew()
+    src['id'] = 10000001
+    src.setCoord(wcs.pixelToSky(100,
+                                -100000))
+    # x outside
+    src = objects.addNew()
+    src['id'] = 10000001
+    src.setCoord(wcs.pixelToSky(-100000,
+                                100))
+
     return objects
 
 
@@ -182,7 +200,9 @@ class TestDiaForcedSource(unittest.TestCase):
                     106381.94840437356, 106370.59980584883,
                     106369.27608815048]
 
-        self.assertEqual(len(dia_forced_sources), len(self.testDiaObjects))
+        # Should be number of test objects minus one as one object is purposely
+        # outside of the ccd area.
+        self.assertEqual(len(dia_forced_sources), len(self.testDiaObjects) - 3)
         self.assertEqual(len(dia_forced_sources.columns),
                          self.expected_n_columns)
 

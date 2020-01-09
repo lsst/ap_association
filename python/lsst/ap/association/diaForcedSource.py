@@ -177,7 +177,7 @@ class DiaForcedSourceTask(pipeBase.Task):
                                                           diffim,
                                                           exposure)
 
-        return output_forced_sources
+        return self._trim_to_exposure(output_forced_sources, exposure)
 
     def _convert_from_pandas(self, input_objects):
         """Create minimal schema SourceCatalog from a pandas DataFrame.
@@ -264,3 +264,26 @@ class DiaForcedSourceTask(pipeBase.Task):
         output_catalog.drop(columns=self.config.dropColumns, inplace=True)
 
         return output_catalog
+
+    def _trim_to_exposure(self, catalog, exposure):
+        """Remove DiaForcedSources that are outside of the bounding box region.
+
+        Paramters
+        ---------
+        catalog : `pandas.DataFrame`
+            DiaForcedSources to check against the exposure bounding box.
+        exposure : `lsst.afw.image.Exposure`
+            Exposure to check against.
+
+        Returns
+        -------
+        output : `pandas.DataFrame`
+            DataFrame trimmed to only the objects within the exposure bounding
+            box.
+        """
+        bbox = geom.Box2D(exposure.getBBox())
+
+        xS = catalog.loc[:, "x"]
+        yS = catalog.loc[:, "y"]
+
+        return catalog[bbox.contains(xS, yS)]
