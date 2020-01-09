@@ -25,6 +25,9 @@ Output columns must be
 as defined in the schema of the Apdb both in name and units.
 """
 
+import functools
+import warnings
+
 from astropy.stats import median_absolute_deviation
 import numpy as np
 import pandas as pd
@@ -56,6 +59,24 @@ __all__ = ("MeanDiaPositionConfig", "MeanDiaPosition",
            "StetsonJDiaPsFlux", "StetsonJDiaPsFluxConfig",
            "WeightedMeanDiaTotFlux", "WeightedMeanDiaTotFluxConfig",
            "SigmaDiaTotFlux", "SigmaDiaTotFluxConfig")
+
+
+def catchWarnings(_func=None, *, warns=[]):
+    """Decorator for generically catching numpy warnings.
+    """
+    def decoratorCatchWarnings(func):
+        @functools.wraps(func)
+        def wrapperCatchWarnings(*args, **kwargs):
+            with warnings.catch_warnings():
+                for val in warns:
+                    warnings.filterwarnings("ignore", val)
+                return func(*args, **kwargs)
+        return wrapperCatchWarnings
+
+    if _func is None:
+        return decoratorCatchWarnings
+    else:
+        return decoratorCatchWarnings(_func)
 
 
 class MeanDiaPositionConfig(DiaObjectCalculationPluginConfig):
@@ -244,6 +265,8 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
+    @catchWarnings(warns=["invalid value encountered",
+                          "divide by zero"])
     def calculate(self,
                   diaObjects,
                   diaSources,
@@ -327,6 +350,7 @@ class PercentileDiaPsFlux(DiaObjectCalculationPlugin):
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
+    @catchWarnings(warns=["All-NaN slice encountered"])
     def calculate(self,
                   diaObjects,
                   diaSources,
@@ -360,8 +384,9 @@ class PercentileDiaPsFlux(DiaObjectCalculationPlugin):
 
         def _fluxPercentiles(df):
             pTiles = np.nanpercentile(df["psFlux"], self.config.percentiles)
-            return pd.Series(dict((tileName, pTile)
-                                  for tileName, pTile in zip(pTileNames, pTiles)))
+            return pd.Series(
+                dict((tileName, pTile)
+                     for tileName, pTile in zip(pTileNames, pTiles)))
 
         diaObjects.loc[:, pTileNames] = filterDiaSources.apply(_fluxPercentiles)
 
@@ -434,6 +459,7 @@ class Chi2DiaPsFlux(DiaObjectCalculationPlugin):
     def getExecutionOrder(cls):
         return cls.FLUX_MOMENTS_CALCULATED
 
+    @catchWarnings(warns=["All-NaN slice encountered"])
     def calculate(self,
                   diaObjects,
                   diaSources,
@@ -488,6 +514,7 @@ class MadDiaPsFlux(DiaObjectCalculationPlugin):
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
+    @catchWarnings(warns=["All-NaN slice encountered"])
     def calculate(self,
                   diaObjects,
                   diaSources,
@@ -966,6 +993,8 @@ class WeightedMeanDiaTotFlux(DiaObjectCalculationPlugin):
     def getExecutionOrder(cls):
         return cls.DEFAULT_CATALOGCALCULATION
 
+    @catchWarnings(warns=["invalid value encountered",
+                          "divide by zero"])
     def calculate(self,
                   diaObjects,
                   diaSources,
@@ -1008,8 +1037,8 @@ class WeightedMeanDiaTotFlux(DiaObjectCalculationPlugin):
             return pd.Series({totMeanName: fluxMean,
                               totErrName: fluxMeanErr})
 
-        diaObjects.loc[:, [totMeanName, totErrName]] = filterDiaSources.apply(
-            _meanFlux)
+        diaObjects.loc[:, [totMeanName, totErrName]] = \
+            filterDiaSources.apply(_meanFlux)
 
 
 class SigmaDiaTotFluxConfig(DiaObjectCalculationPluginConfig):
