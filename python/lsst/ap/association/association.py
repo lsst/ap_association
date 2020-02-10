@@ -176,7 +176,7 @@ class AssociationTask(pipeBase.Task):
         nan_mask = (dia_sources.loc[:, "ra"].isnull() |
                     dia_sources.loc[:, "decl"].isnull())
         if np.any(nan_mask):
-            nan_idxs = np.argwhere(nan_mask).flatten()
+            nan_idxs = np.argwhere(nan_mask.to_numpy()).flatten()
             for nan_idx in nan_idxs:
                 self.log.warning(
                     "DiaSource %i has NaN value for RA/DEC, "
