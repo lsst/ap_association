@@ -33,7 +33,7 @@ You can find Jira issues for this module under the `ap_association <https://jira
 Task reference
 ==============
 
-.. _lsst.ap.association-pipelinetasks:
+.. _lsst.ap.association-pipeline-tasks:
 
 Pipeline Tasks
 --------------
