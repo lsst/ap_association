@@ -33,6 +33,15 @@ You can find Jira issues for this module under the `ap_association <https://jira
 Task reference
 ==============
 
+.. _lsst.ap.association-pipeline-tasks:
+
+Pipeline Tasks
+--------------
+
+.. lsst-pipelinetasks::
+   :root: lsst.ap.association
+   :toctree: tasks
+
 .. _lsst.ap.association-tasks:
 
 Tasks
@@ -40,7 +49,6 @@ Tasks
 
 .. lsst-tasks::
    :root: lsst.ap.association
-   :toctree: tasks
 
 .. _lsst.ap.association-pyapi:
 
