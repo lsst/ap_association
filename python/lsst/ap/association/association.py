@@ -280,7 +280,7 @@ class AssociationTask(pipeBase.Task):
             vectors,
             distance_upper_bound=max_dist_rad)
         matched_src_idxs = np.argwhere(np.isfinite(scores))
-        obj_ids[matched_src_idxs] = dia_objects.index[
+        obj_ids[matched_src_idxs] = dia_objects.index.to_numpy()[
             obj_idxs[matched_src_idxs]]
 
         return pipeBase.Struct(
@@ -412,7 +412,13 @@ class AssociationTask(pipeBase.Task):
             dia_sources.loc[src_idx, "diaObjectId"] = src_id
             n_new_dia_objects += 1
 
-        new_dia_objects = pd.DataFrame(data=new_dia_objects)
+        if len(new_dia_objects) > 0:
+            new_dia_objects = pd.DataFrame(data=new_dia_objects)
+        else:
+            # Create a junk DiaObject to get the columns.
+            tmpObj = self._initialize_dia_object(0)
+            new_dia_objects = pd.DataFrame(data=new_dia_objects,
+                                           columns=tmpObj.keys())
         new_dia_objects.set_index("diaObjectId", inplace=True, drop=False)
 
         # Return the ids of the DIAObjects in this DIAObjectCollection that
