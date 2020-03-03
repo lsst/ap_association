@@ -567,6 +567,39 @@ class TestAssociationTask(unittest.TestCase):
         self.assertEqual(match_result.n_new_dia_objects, 1)
         self.assertEqual(match_result.n_unassociated_dia_objects, 1)
 
+        # Test updating all DiaObjects
+        n_objects = 4
+        dia_objects = create_test_points_pandas(
+            point_locs_deg=[[0.04 * obj_idx, 0.04 * obj_idx]
+                            for obj_idx in range(n_objects)],
+            start_id=0,
+            schema=self.dia_object_schema,
+            scatter_arcsec=-1,)
+        dia_objects.rename(columns={"coord_ra": "ra",
+                                    "coord_dec": "decl",
+                                    "id": "diaObjectId"},
+                           inplace=True)
+
+        n_sources = 4
+        dia_sources = create_test_points_pandas(
+            point_locs_deg=[
+                [0.04 * src_idx,
+                 0.04 * src_idx]
+                for src_idx in range(n_sources)],
+            start_id=n_objects,
+            scatter_arcsec=-1)
+
+        dia_sources.rename(columns={"coord_ra": "ra",
+                                    "coord_dec": "decl",
+                                    "id": "diaSourceId"},
+                           inplace=True)
+        score_struct = assoc_task.score(dia_objects[1:],
+                                        dia_sources[:-1],
+                                        1.0 * geom.arcseconds)
+        match_result = assoc_task.match(dia_objects, dia_sources, score_struct)
+        updated_ids = match_result.associated_dia_object_ids
+        self.assertEqual(len(updated_ids), 4)
+
     def test_remove_nan_dia_sources(self):
         n_sources = 6
         dia_sources = create_test_points_pandas(
