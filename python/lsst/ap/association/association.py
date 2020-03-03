@@ -280,7 +280,7 @@ class AssociationTask(pipeBase.Task):
             vectors,
             distance_upper_bound=max_dist_rad)
         matched_src_idxs = np.argwhere(np.isfinite(scores))
-        obj_ids[matched_src_idxs] = dia_objects.index[
+        obj_ids[matched_src_idxs] = dia_objects.index.to_numpy()[
             obj_idxs[matched_src_idxs]]
 
         return pipeBase.Struct(
