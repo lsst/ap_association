@@ -29,6 +29,7 @@ from lsst.pex.config import Config
 from lsst.daf.base import PropertySet
 from lsst.dax.apdb import Apdb
 from lsst.pipe.base import Task, Struct
+import lsst.pipe.base.testUtils
 from lsst.verify import Name
 from lsst.verify.gen2tasks.testUtils import MetricTaskTestCase
 from lsst.verify.tasks import MetricComputationError
@@ -58,6 +59,7 @@ class TestNewDiaObjects(MetadataMetricTestCase):
     def testValid(self):
         metadata = _makeAssociationMetadata()
         result = self.task.run(metadata)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.numNewDiaObjects"))
@@ -66,6 +68,7 @@ class TestNewDiaObjects(MetadataMetricTestCase):
     def testNoNew(self):
         metadata = _makeAssociationMetadata(numNew=0)
         result = self.task.run(metadata)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.numNewDiaObjects"))
@@ -73,11 +76,13 @@ class TestNewDiaObjects(MetadataMetricTestCase):
 
     def testMissingData(self):
         result = self.task.run(None)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
         meas = result.measurement
         self.assertIsNone(meas)
 
     def testAssociationFailed(self):
         result = self.task.run(PropertySet())
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
         meas = result.measurement
         self.assertIsNone(meas)
 
@@ -98,6 +103,7 @@ class TestUnassociatedDiaObjects(MetadataMetricTestCase):
     def testValid(self):
         metadata = _makeAssociationMetadata()
         result = self.task.run(metadata)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.numUnassociatedDiaObjects"))
@@ -107,6 +113,7 @@ class TestUnassociatedDiaObjects(MetadataMetricTestCase):
     def testAllUpdated(self):
         metadata = _makeAssociationMetadata(numUnassociated=0)
         result = self.task.run(metadata)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.numUnassociatedDiaObjects"))
@@ -114,11 +121,13 @@ class TestUnassociatedDiaObjects(MetadataMetricTestCase):
 
     def testMissingData(self):
         result = self.task.run(None)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
         meas = result.measurement
         self.assertIsNone(meas)
 
     def testAssociationFailed(self):
         result = self.task.run(PropertySet())
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
         meas = result.measurement
         self.assertIsNone(meas)
 
@@ -139,6 +148,7 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
     def testValid(self):
         metadata = _makeAssociationMetadata()
         result = self.task.run(metadata)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.fracUpdatedDiaObjects"))
@@ -149,6 +159,7 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
     def testNoUpdated(self):
         metadata = _makeAssociationMetadata(numUpdated=0)
         result = self.task.run(metadata)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.fracUpdatedDiaObjects"))
@@ -157,6 +168,7 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
     def testAllUpdated(self):
         metadata = _makeAssociationMetadata(numUnassociated=0)
         result = self.task.run(metadata)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.fracUpdatedDiaObjects"))
@@ -165,17 +177,20 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
     def testNoObjects(self):
         metadata = _makeAssociationMetadata(numUpdated=0, numUnassociated=0)
         result = self.task.run(metadata)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
         meas = result.measurement
 
         self.assertIsNone(meas)
 
     def testMissingData(self):
         result = self.task.run(None)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
         meas = result.measurement
         self.assertIsNone(meas)
 
     def testAssociationFailed(self):
         result = self.task.run(PropertySet())
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
         meas = result.measurement
         self.assertIsNone(meas)
 
@@ -228,6 +243,7 @@ class TestTotalUnassociatedObjects(ApdbMetricTestCase):
 
     def testValid(self):
         result = self.task.run([{"test_value": 42}])
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.totalUnassociatedDiaObjects"))
@@ -235,6 +251,7 @@ class TestTotalUnassociatedObjects(ApdbMetricTestCase):
 
     def testAllAssociated(self):
         result = self.task.run([{"test_value": 0}])
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
         meas = result.measurement
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.totalUnassociatedDiaObjects"))
@@ -242,6 +259,7 @@ class TestTotalUnassociatedObjects(ApdbMetricTestCase):
 
     def testMissingData(self):
         result = self.task.run(None)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
         meas = result.measurement
         self.assertIsNone(meas)
 
