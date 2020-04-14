@@ -182,7 +182,7 @@ class MapDiaSourceTask(MapApDataTask):
         """
         self.bit_pack_columns = []
         with open(self.config.flagMap) as yaml_stream:
-            table_list = list(yaml.load_all(yaml_stream))
+            table_list = list(yaml.safe_load_all(yaml_stream))
             for table in table_list:
                 if table['tableName'] == 'DiaSource':
                     self.bit_pack_columns = table['columns']
@@ -385,7 +385,7 @@ class UnpackApdbFlags:
     def __init__(self, flag_map_file, table_name):
         self.bit_pack_columns = []
         with open(flag_map_file) as yaml_stream:
-            table_list = list(yaml.load_all(yaml_stream))
+            table_list = list(yaml.safe_load_all(yaml_stream))
             for table in table_list:
                 if table['tableName'] == table_name:
                     self.bit_pack_columns = table['columns']
