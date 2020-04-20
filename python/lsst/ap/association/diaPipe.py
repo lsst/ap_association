@@ -42,7 +42,8 @@ from lsst.ap.association import (
     LoadDiaCatalogsTask,
     MapDiaSourceTask,
     make_dia_object_schema,
-    make_dia_source_schema)
+    make_dia_source_schema,
+    PackageAlertsTask)
 
 __all__ = ("DiaPipelineConfig",
            "DiaPipelineTask",
@@ -117,6 +118,10 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         doc="Task used for force photometer DiaObject locations in direct and "
             "difference images.",
     )
+    alertPackager = pexConfig.ConfigurableField(
+        target=PackageAlertsTask,
+        doc="Subtask for packaging Ap data into alerts.",
+    )
 
     def setDefaults(self):
         self.apdb.dia_object_index = "baseline"
@@ -153,6 +158,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         self.makeSubtask("diaCatalogLoader")
         self.makeSubtask("associator")
         self.makeSubtask("diaForcedSource")
+        self.makeSubtask("alertWriteLocation")
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)

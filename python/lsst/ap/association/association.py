@@ -135,7 +135,7 @@ class AssociationTask(pipeBase.Task):
         diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
                              drop=False,
                              inplace=True)
-        diaSourceHistory = diaSourceHistory.append(diaSources, sort=True)
+        mergedDiaSourceHistory = diaSourceHistory.append(diaSources, sort=True)
 
         # Get the current filter being processed.
         filterName = diaSources["filterName"][0]
@@ -145,7 +145,7 @@ class AssociationTask(pipeBase.Task):
         # unassociated sources.
         updatedResults = self.diaCalculation.run(
             diaObjects,
-            diaSourceHistory,
+            mergedDiaSourceHistory,
             matchResult.associated_dia_object_ids,
             filterName)
 
