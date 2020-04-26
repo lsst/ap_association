@@ -173,8 +173,8 @@ class AssociationTask(pipeBase.Task):
             DataFrame of DiaSources trimmed of all entries with NaN values for
             RA/DEC.
         """
-        nan_mask = (dia_sources.loc[:, "ra"].isnull() |
-                    dia_sources.loc[:, "decl"].isnull())
+        nan_mask = (dia_sources.loc[:, "ra"].isnull()
+                    | dia_sources.loc[:, "decl"].isnull())
         if np.any(nan_mask):
             nan_idxs = np.argwhere(nan_mask.to_numpy()).flatten()
             for nan_idx in nan_idxs:

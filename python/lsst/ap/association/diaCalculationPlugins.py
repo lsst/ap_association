@@ -304,8 +304,8 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
             tmpDf = df[~np.logical_or(np.isnan(df["psFlux"]),
                                       np.isnan(df["psFluxErr"]))]
             tot_weight = np.nansum(1 / tmpDf["psFluxErr"] ** 2)
-            fluxMean = np.nansum(tmpDf["psFlux"] /
-                                 tmpDf["psFluxErr"] ** 2)
+            fluxMean = np.nansum(tmpDf["psFlux"]
+                                 / tmpDf["psFluxErr"] ** 2)
             fluxMean /= tot_weight
             fluxMeanErr = np.sqrt(1 / tot_weight)
             nFluxData = len(tmpDf)
@@ -486,8 +486,8 @@ class Chi2DiaPsFlux(DiaObjectCalculationPlugin):
         meanName = "{}PSFluxMean".format(filterName)
 
         def _chi2(df):
-            delta = (df["psFlux"] -
-                     diaObjects.at[df.diaObjectId.iat[0], meanName])
+            delta = (df["psFlux"]
+                     - diaObjects.at[df.diaObjectId.iat[0], meanName])
             return np.nansum((delta / df["psFluxErr"]) ** 2)
 
         diaObjects.loc[:, "{}PSFluxChi2".format(filterName)] = \
@@ -1029,8 +1029,8 @@ class WeightedMeanDiaTotFlux(DiaObjectCalculationPlugin):
             tmpDf = df[~np.logical_or(np.isnan(df["totFlux"]),
                                       np.isnan(df["totFluxErr"]))]
             tot_weight = np.nansum(1 / tmpDf["totFluxErr"] ** 2)
-            fluxMean = np.nansum(tmpDf["totFlux"] /
-                                 tmpDf["totFluxErr"] ** 2)
+            fluxMean = np.nansum(tmpDf["totFlux"]
+                                 / tmpDf["totFluxErr"] ** 2)
             fluxMean /= tot_weight
             fluxMeanErr = np.sqrt(1 / tot_weight)
 
