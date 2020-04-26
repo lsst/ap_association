@@ -378,16 +378,16 @@ class TestAssociationTask(unittest.TestCase):
         dia_source["midPointTai"] = midPointTai
         dia_source["psFlux"] = flux / self.flux0
         dia_source["psFluxErr"] = np.sqrt(
-            (fluxErr / self.flux0) ** 2 +
-            (flux * self.flux0_err / self.flux0 ** 2) ** 2)
+            (fluxErr / self.flux0) ** 2
+            + (flux * self.flux0_err / self.flux0 ** 2) ** 2)
         dia_source["apFlux"] = flux / self.flux0
         dia_source["apFluxErr"] = np.sqrt(
-            (fluxErr / self.flux0) ** 2 +
-            (flux * self.flux0_err / self.flux0 ** 2) ** 2)
+            (fluxErr / self.flux0) ** 2
+            + (flux * self.flux0_err / self.flux0 ** 2) ** 2)
         dia_source["totFlux"] = flux / self.flux0
         dia_source["totFluxErr"] = np.sqrt(
-            (fluxErr / self.flux0) ** 2 +
-            (flux * self.flux0_err / self.flux0 ** 2) ** 2)
+            (fluxErr / self.flux0) ** 2
+            + (flux * self.flux0_err / self.flux0 ** 2) ** 2)
         dia_source["filterName"] = filterName
         dia_source["filterId"] = filterId
         dia_source["x"] = 0.

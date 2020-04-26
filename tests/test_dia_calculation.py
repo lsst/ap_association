@@ -98,9 +98,9 @@ class DependentDiaPlugin(DiaObjectCalculationPlugin):
                   filterName,
                   **kwargs):
         diaObjects.at[diaObjectId, "%sChiFlux" % filterName] = np.sum(
-            ((filterDiaSources["psFlux"] -
-              diaObjects.at[diaObjectId, "%sMeanFlux" % filterName]) /
-             filterDiaSources["psFluxErr"]) ** 2)
+            ((filterDiaSources["psFlux"]
+              - diaObjects.at[diaObjectId, "%sMeanFlux" % filterName])
+             / filterDiaSources["psFluxErr"]) ** 2)
 
 
 @register("testCollidingDiaPlugin")

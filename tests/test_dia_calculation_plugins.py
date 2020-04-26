@@ -490,9 +490,9 @@ class TestChi2DiaPsFlux(unittest.TestCase):
         run_multi_plugin(diaObjects, diaSources, "u", plug)
         self.assertAlmostEqual(
             diaObjects.loc[objId, "uPSFluxChi2"],
-            np.nansum(((diaSources["psFlux"] -
-                        np.nanmean(diaSources["psFlux"])) /
-                       diaSources["psFluxErr"]) ** 2))
+            np.nansum(((diaSources["psFlux"]
+                        - np.nanmean(diaSources["psFlux"]))
+                       / diaSources["psFluxErr"]) ** 2))
 
         # Test expected chi^2 value with a nan value set.
         fluxes[4] = np.nan
@@ -507,9 +507,9 @@ class TestChi2DiaPsFlux(unittest.TestCase):
         run_multi_plugin(diaObjects, diaSources, "r", plug)
         self.assertAlmostEqual(
             diaObjects.loc[objId, "rPSFluxChi2"],
-            np.nansum(((diaSources["psFlux"] -
-                        np.nanmean(diaSources["psFlux"])) /
-                       diaSources["psFluxErr"]) ** 2))
+            np.nansum(((diaSources["psFlux"]
+                        - np.nanmean(diaSources["psFlux"]))
+                       / diaSources["psFluxErr"]) ** 2))
 
 
 class TestMadDiaPsFlux(unittest.TestCase):

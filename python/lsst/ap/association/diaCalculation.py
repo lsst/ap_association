@@ -319,8 +319,8 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
                 ["diaObjectId", "filterName", "diaSourceId"],
                 inplace=True,
                 drop=False)
-        elif (diaSourceCat.index.names !=
-              ["diaObjectId", "filterName", "diaSourceId"]):
+        elif (diaSourceCat.index.names
+              != ["diaObjectId", "filterName", "diaSourceId"]):
             self.log.warn(
                 "Input diaSourceCat is indexed on column(s) incompatible with "
                 "this task. Should be indexed on 'multi-index, "
