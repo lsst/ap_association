@@ -12,9 +12,6 @@ setupRequired(pipe_base)
 setupRequired(dax_apdb)
 setupRequired(verify)
 
-setupRequired(numpy)
-setupRequired(scipy)
-
 # The following is boilerplate for all packages.
 # See Tech Note DMTN-001 for details on LSST_LIBRARY_PATH
 # Pure-Python packages only need the last line.
