@@ -80,12 +80,14 @@ class TestDiaPipelineTask(unittest.TestCase):
                 patch.object(task, "diaSourceDpddifier") as mockDpddifier, \
                 patch.object(task, "associator") as mockAssociator, \
                 patch.object(task, "diaForcedSource") as mockForcedSource, \
-                patch.object(task, "apdb") as mockApdb:
+                patch.object(task, "apdb") as mockApdb, \
+                patch.object(task, "alertPackager") as mockAlertPackager:
             yield pipeBase.Struct(diaCatalogLoader=mockDiaCatLoader,
                                   dpddifier=mockDpddifier,
                                   associator=mockAssociator,
                                   diaForcedSource=mockForcedSource,
-                                  apdb=mockApdb)
+                                  apdb=mockApdb,
+                                  alertPackager=mockAlertPackager)
 
     def setUp(self):
         self.config = self._makeDefaultConfig()
@@ -115,6 +117,7 @@ class TestDiaPipelineTask(unittest.TestCase):
             subtasks.dpddifier.run.assert_called_once()
             subtasks.associator.run.assert_called_once()
             subtasks.diaForcedSource.run.assert_called_once()
+            subtasks.alertPackager.run.assert_called_once()
             self.assertEqual(result.apdb_marker.db_url, "sqlite://")
             self.assertEqual(result.apdb_marker.isolation_level,
                              "READ_UNCOMMITTED")

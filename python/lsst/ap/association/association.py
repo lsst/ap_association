@@ -464,7 +464,8 @@ class AssociationTask(pipeBase.Task):
                           "pmParallaxNdata": 0,
                           "nearbyObj1": 0,
                           "nearbyObj2": 0,
-                          "nearbyObj3": 0}
+                          "nearbyObj3": 0,
+                          "flags": 0}
         for f in ["u", "g", "r", "i", "z", "y"]:
             new_dia_object["%sPSFluxNdata" % f] = 0
         return new_dia_object

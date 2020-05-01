@@ -28,6 +28,7 @@ import lsst.alert.packet as alertPack
 import lsst.geom as geom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
+from lsst.utils import getPackageDir
 
 
 class PackageAlertsConfig(pexConfig.Config):
@@ -36,7 +37,8 @@ class PackageAlertsConfig(pexConfig.Config):
     schemaFile = pexConfig.Field(
         dtype=str,
         doc="Location to write alerts to.",
-        default="/project/ebellm/sample-avro-alert/schema/2/1/lsst.alert.avsc",
+        default=os.path.join(getPackageDir("sample_avro_alert"),
+                             "schema/2/1/lsst.alert.avsc"),
     )
     cutoutSize = pexConfig.RangeField(
         dtype=int,
@@ -68,6 +70,7 @@ class PackageAlertsTask(pipeBase.Task):
         self.alertSchema = alertPack.Schema.from_file(self.config.schemaFile)
         self.cutoutBBox = geom.Extent2I(self.config.cutoutSize,
                                         self.config.cutoutSize)
+        os.makedirs(self.config.alertWriteLocation, exist_ok=True)
 
     def run(self,
             diaSourceCat,
@@ -79,10 +82,17 @@ class PackageAlertsTask(pipeBase.Task):
         """
         """
         alerts = []
+        self._patchDiaSources(diaSourceCat)
+        self._patchDiaSources(diaSrcHistory)
+        self._patchDiaObjects(diaObjectCat)
         ccdVisitId = diffIm.getInfo().getVisitInfo().getExposureId()
         for srcIndex, diaSource in diaSourceCat.iterrows():
             # Get all diaSources for the associated diaObject.
-            objSourceHistory = diaSrcHistory.loc[srcIndex[0]]
+            diaObject = diaObjectCat.loc[srcIndex[0]]
+            if  diaObject["nDiaSources"] > 1:
+                objSourceHistory = diaSrcHistory.loc[srcIndex[0]]
+            else:
+                objSourceHistory = None
             sphPoint = geom.SpherePoint(diaSource["ra"],
                                         diaSource["decl"],
                                         geom.degrees)
@@ -92,15 +102,47 @@ class PackageAlertsTask(pipeBase.Task):
             alerts.append(
                 self.makeJsonAlert(alertId,
                                    diaSource,
-                                   diaObjectCat.loc[srcIndex[0]],
+                                   diaObject,
                                    objSourceHistory,
                                    diffImCutout,
                                    templateCutout))
+        try:
+            with open(os.path.join(self.config.alertWriteLocation,
+                                   f"{ccdVisitId}.avro"),
+                      "ab+") as f:
+                self.alertSchema.store_alerts(f, alerts)
+        except:
+            print("EXCEPTION THROWN")
+            import pdb; pdb.set_trace()
 
-        with open(os.path.join(self.config.alertWriteLocation,
-                               f"{ccdVisitId}.avro"),
-                  "wb") as f:
-            self.alertSchema.store_alerts(f, alerts)
+    def _patchDiaSources(self, diaSources):
+        """
+        """
+        diaSources["programId"] = 0
+        diaSources["ra_decl_Cov"] = None
+        diaSources["x_y_Cov"] = None
+        diaSources["ps_Cov"] = None
+        diaSources["trail_Cov"] = None
+        diaSources["dip_Cov"] = None
+        diaSources["i_cov"] = None
+        
+    def _patchDiaObjects(self, diaObjects):
+        """
+        """
+        diaObjects["ra_decl_Cov"] = None
+        diaObjects["pm_parallax_Cov"] = None
+        diaObjects["uLcPeriodic"] = None
+        diaObjects["gLcPeriodic"] = None
+        diaObjects["rLcPeriodic"] = None
+        diaObjects["iLcPeriodic"] = None
+        diaObjects["zLcPeriodic"] = None
+        diaObjects["yLcPeriodic"] = None
+        diaObjects["uLcNonPeriodic"] = None
+        diaObjects["gLcNonPeriodic"] = None
+        diaObjects["rLcNonPeriodic"] = None
+        diaObjects["iLcNonPeriodic"] = None
+        diaObjects["zLcNonPeriodic"] = None
+        diaObjects["yLcNonPeriodic"] = None
 
     def makeJsonAlert(self,
                       alertId,
@@ -115,7 +157,10 @@ class PackageAlertsTask(pipeBase.Task):
         alert['alertId'] = alertId
         alert['diaSource'] = diaSource.to_dict()
 
-        alert['prvDiaSources'] = objDiaSrcHistory.to_dict("records")
+        if objDiaSrcHistory is None:
+            alert['prvDiaSources'] = objDiaSrcHistory
+        else:
+            alert['prvDiaSources'] = objDiaSrcHistory.to_dict("records")
 
         alert['prvDiaForcedSources'] = None
         alert['prvDiaNondetectionLimits'] = None

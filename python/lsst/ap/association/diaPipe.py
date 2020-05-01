@@ -158,7 +158,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         self.makeSubtask("diaCatalogLoader")
         self.makeSubtask("associator")
         self.makeSubtask("diaForcedSource")
-        self.makeSubtask("alertWriteLocation")
+        self.makeSubtask("alertPackager")
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
@@ -231,5 +231,11 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             assocResults.updatedDiaObjects,
             exposure.getInfo().getVisitInfo().getDate().toPython())
         self.apdb.storeDiaForcedSources(diaForcedSources)
+        self.alertPackager.run(assocResults.diaSources,
+                               assocResults.diaObjects,
+                               loaderResult.diaSources,
+                               diffIm,
+                               None,
+                               ccdExposureIdBits)
 
         return pipeBase.Struct(apdb_marker=self.config.apdb.value)

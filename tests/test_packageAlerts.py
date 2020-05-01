@@ -327,6 +327,7 @@ class TestPackageAlerts(unittest.TestCase):
         packConfig.alertWriteLocation = tempdir
         packageAlerts = PackageAlertsTask(config=packConfig)
 
+        import pdb; pdb.set_trace()
         packageAlerts.run(self.diaSources,
                           self.diaObjects,
                           self.diaSourceHistory,
