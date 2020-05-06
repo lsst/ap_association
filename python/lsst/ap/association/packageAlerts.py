@@ -31,6 +31,10 @@ import lsst.pipe.base as pipeBase
 from lsst.utils import getPackageDir
 
 
+"""Methods for packaging Apdb and Pipelines data into Avro alerts.
+"""
+
+
 class PackageAlertsConfig(pexConfig.Config):
     """Config class for AssociationTask.
     """
@@ -55,12 +59,7 @@ class PackageAlertsConfig(pexConfig.Config):
 
 
 class PackageAlertsTask(pipeBase.Task):
-    """Associate DIAOSources into existing DIAObjects.
-
-    This task performs the association of detected DIASources in a visit
-    with the previous DIAObjects detected over time. It also creates new
-    DIAObjects out of DIASources that cannot be associated with previously
-    detected DIAObjects.
+    """Tasks for packaging Dia and Pipelines data into Avro alert packages.
     """
     ConfigClass = PackageAlertsConfig
     _DefaultName = "packageAlerts"
@@ -79,7 +78,29 @@ class PackageAlertsTask(pipeBase.Task):
             diffIm,
             template,
             ccdExposureIdBits):
-        """
+        """Package DiaSources/Object and exposure data into Avro alerts.
+
+        Writes Avro alerts to a location determined by the
+        ``alertWriteLocation`` configurable.
+
+        Parameters
+        ----------
+        diaSourceCat : `pandas.DataFrame`
+            New DiaSources to package. DataFrame should be indexed on
+            ``["diaObjectid", "filterName", "diaSourceId"]``
+        diaObjectCat : `pandas.DataFrame`
+            New and updated DiaObjects matched to the new DiaSources. DataFrame
+            is indexed on ``["diaObjectId"]``
+        diaSrcHistory : `pandas.DataFrame`
+            12 month history of DiaSources matched to the DiaObjects. Excludes
+            the newest DiaSource and is indexed on
+            ``["diaObjectid", "filterName", "diaSourceId"]``
+        diffIm : `lsst.afw.image.ExposureF`
+            Difference image ``diaSourceCat`` were detect in.
+        template : `lsst.afw.image.ExposureF` or `None`
+            Template image used to create the ``diffIm``.
+        ccdExposureIdBits : `int`
+            Number of bits used in the ccdVisitId.
         """
         alerts = []
         self._patchDiaSources(diaSourceCat)
@@ -89,7 +110,7 @@ class PackageAlertsTask(pipeBase.Task):
         for srcIndex, diaSource in diaSourceCat.iterrows():
             # Get all diaSources for the associated diaObject.
             diaObject = diaObjectCat.loc[srcIndex[0]]
-            if  diaObject["nDiaSources"] > 1:
+            if diaObject["nDiaSources"] > 1:
                 objSourceHistory = diaSrcHistory.loc[srcIndex[0]]
             else:
                 objSourceHistory = None
@@ -106,17 +127,22 @@ class PackageAlertsTask(pipeBase.Task):
                                    objSourceHistory,
                                    diffImCutout,
                                    templateCutout))
-        try:
-            with open(os.path.join(self.config.alertWriteLocation,
-                                   f"{ccdVisitId}.avro"),
-                      "ab+") as f:
-                self.alertSchema.store_alerts(f, alerts)
-        except:
-            print("EXCEPTION THROWN")
-            import pdb; pdb.set_trace()
+        with open(os.path.join(self.config.alertWriteLocation,
+                               f"{ccdVisitId}.avro"),
+                  "ab+") as f:
+            self.alertSchema.store_alerts(f, alerts)
 
     def _patchDiaSources(self, diaSources):
-        """
+        """Add the ``programId`` column to the data and change currently
+        grouped alert data to ``None``.
+
+        TODO: The need to change these column values to ``None`` can be removed
+        after DM-24696 is merged.
+
+        Parameters
+        ----------
+        diaSources : `pandas.DataFrame`
+            DataFrame of DiaSources to patch.
         """
         diaSources["programId"] = 0
         diaSources["ra_decl_Cov"] = None
@@ -125,9 +151,17 @@ class PackageAlertsTask(pipeBase.Task):
         diaSources["trail_Cov"] = None
         diaSources["dip_Cov"] = None
         diaSources["i_cov"] = None
-        
+
     def _patchDiaObjects(self, diaObjects):
-        """
+        """Change currently grouped alert data to ``None``.
+
+        TODO: The need to change these column values to ``None`` can be removed
+        after DM-24696 is merged.
+
+        Parameters
+        ----------
+        diaObjects : `pandas.DataFrame`
+            DataFrame of DiaObjects to patch.
         """
         diaObjects["ra_decl_Cov"] = None
         diaObjects["pm_parallax_Cov"] = None
@@ -151,7 +185,22 @@ class PackageAlertsTask(pipeBase.Task):
                       objDiaSrcHistory,
                       diffImCutout,
                       templateCutout):
-        """
+        """Convert data and package into a dictionary alert.
+
+        Parameters
+        ----------
+        diaSource : `pandas.DataFrame`
+            New single DiaSource to package.
+        diaObject : `pandas.DataFrame`
+            DiaObject that ``diaSource`` is matched to.
+        objDiaSrcHistory : `pandas.DataFrame`
+            12 month history of ``diaObject`` excluding the latest DiaSource.
+        diffImCutout : `lsst.afw.image.ExposureF`
+            Cutout of the difference image around the location of ``diaSource``
+            with a size set by the ``cutoutSize`` configurable.
+        templateCutout : `lsst.afw.image.ExposureF`
+            Cutout of the template image around the location of ``diaSource``
+            with a size set by the ``cutoutSize`` configurable.
         """
         alert = dict()
         alert['alertId'] = alertId
@@ -178,11 +227,21 @@ class PackageAlertsTask(pipeBase.Task):
         return alert
 
     def makeCutoutBytes(self, cutout):
-        """
+        """Serialize a cutout into bytes.
+
+        Parameters
+        ----------
+        cutout : `lsst.afw.image.ExposureF`
+            Cutout to serialize.
+
+        Returns
+        -------
+        coutputBytes : `bytes`
+            Input cutout serialized into byte data.
         """
         # writeFits seems to want filenames, not file pointers
         temp = tempfile.NamedTemporaryFile()
         cutout.writeFits(temp.name)
         with open(temp.name, 'rb') as f:
-            cutout_bytes = f.read()
-        return cutout_bytes
+            cutoutBytes = f.read()
+        return cutoutBytes

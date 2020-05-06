@@ -164,7 +164,24 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
 
 
 def _roundTripThroughApdb(objects, sources, dateTime):
-    """
+    """Run object and source catalogs through the Apdb to get the correct
+    table schemas.
+
+    Parameters
+    ----------
+    objects : `pandas.DataFrame`
+        Set of test DiaObjects to round trip.
+    sources : `pandas.DataFrame`
+        Set of test DiaSources to round trip.
+    dateTime : `datetime.datetime`
+        Time for the Apdb.
+
+    Returns
+    -------
+    objects : `pandas.DataFrame`
+        Round tripped objects.
+    sources : `pandas.DataFrame`
+        Round tripped sources.
     """
     tmpFile = tempfile.NamedTemporaryFile()
 
@@ -327,7 +344,6 @@ class TestPackageAlerts(unittest.TestCase):
         packConfig.alertWriteLocation = tempdir
         packageAlerts = PackageAlertsTask(config=packConfig)
 
-        import pdb; pdb.set_trace()
         packageAlerts.run(self.diaSources,
                           self.diaObjects,
                           self.diaSourceHistory,
