@@ -22,8 +22,8 @@
 __all__ = ("PackageAlertsConfig", "PackageAlertsTask")
 
 import os
-import tempfile
 
+import lsst.afw.fits as afwFits
 import lsst.alert.packet as alertPack
 import lsst.geom as geom
 import lsst.pex.config as pexConfig
@@ -40,10 +40,12 @@ class PackageAlertsConfig(pexConfig.Config):
     """
     schemaFile = pexConfig.Field(
         dtype=str,
-        doc="Location to write alerts to.",
+        doc="Schema definition file for the avro alerts.",
         default=os.path.join(getPackageDir("sample_avro_alert"),
-                             "schema/2/1/lsst.alert.avsc"),
+                             "schema/latest/lsst.alert.avsc"),
     )
+    # TODO: DM-24926 Create dynamic cutout size based on footprint with max
+    # size 30x30
     cutoutSize = pexConfig.RangeField(
         dtype=int,
         min=0,
@@ -87,16 +89,16 @@ class PackageAlertsTask(pipeBase.Task):
         ----------
         diaSourceCat : `pandas.DataFrame`
             New DiaSources to package. DataFrame should be indexed on
-            ``["diaObjectid", "filterName", "diaSourceId"]``
+            ``["diaObjectId", "filterName", "diaSourceId"]``
         diaObjectCat : `pandas.DataFrame`
             New and updated DiaObjects matched to the new DiaSources. DataFrame
             is indexed on ``["diaObjectId"]``
         diaSrcHistory : `pandas.DataFrame`
             12 month history of DiaSources matched to the DiaObjects. Excludes
             the newest DiaSource and is indexed on
-            ``["diaObjectid", "filterName", "diaSourceId"]``
+            ``["diaObjectId", "filterName", "diaSourceId"]``
         diffIm : `lsst.afw.image.ExposureF`
-            Difference image ``diaSourceCat`` were detect in.
+            Difference image the sources in ``diaSourceCat`` were detected in.
         template : `lsst.afw.image.ExposureF` or `None`
             Template image used to create the ``diffIm``.
         ccdExposureIdBits : `int`
@@ -119,9 +121,10 @@ class PackageAlertsTask(pipeBase.Task):
                                         geom.degrees)
             diffImCutout = diffIm.getCutout(sphPoint, self.cutoutBBox)
             templateCutout = None
+            # TODO: Create alertIds DM-24858
             alertId = diaSource["diaSourceId"]
             alerts.append(
-                self.makeJsonAlert(alertId,
+                self.makeAlertDict(alertId,
                                    diaSource,
                                    diaObject,
                                    objSourceHistory,
@@ -129,7 +132,7 @@ class PackageAlertsTask(pipeBase.Task):
                                    templateCutout))
         with open(os.path.join(self.config.alertWriteLocation,
                                f"{ccdVisitId}.avro"),
-                  "ab+") as f:
+                  "wb") as f:
             self.alertSchema.store_alerts(f, alerts)
 
     def _patchDiaSources(self, diaSources):
@@ -178,7 +181,7 @@ class PackageAlertsTask(pipeBase.Task):
         diaObjects["zLcNonPeriodic"] = None
         diaObjects["yLcNonPeriodic"] = None
 
-    def makeJsonAlert(self,
+    def makeAlertDict(self,
                       alertId,
                       diaSource,
                       diaObject,
@@ -218,10 +221,12 @@ class PackageAlertsTask(pipeBase.Task):
 
         alert['ssObject'] = None
 
+        # TODO: fileName to be removed in future Avro schemas. DM-24696
         alert['cutoutDifference'] = {
             'fileName': '',
             'stampData': self.makeCutoutBytes(diffImCutout),
         }
+        # TODO: add template cutouts in DM-24327
         alert["cutoutTemplate"] = None
 
         return alert
@@ -239,9 +244,6 @@ class PackageAlertsTask(pipeBase.Task):
         coutputBytes : `bytes`
             Input cutout serialized into byte data.
         """
-        # writeFits seems to want filenames, not file pointers
-        temp = tempfile.NamedTemporaryFile()
-        cutout.writeFits(temp.name)
-        with open(temp.name, 'rb') as f:
-            cutoutBytes = f.read()
-        return cutoutBytes
+        mgr = afwFits.MemFileManager()
+        cutout.writeFits(mgr)
+        return mgr.getData()

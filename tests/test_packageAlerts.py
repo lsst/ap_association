@@ -22,6 +22,7 @@
 import os
 import numpy as np
 import pandas as pd
+import shutil
 import tempfile
 import unittest
 
@@ -303,9 +304,10 @@ class TestPackageAlerts(unittest.TestCase):
         tempMemFile = afwFits.MemFileManager(len(cutoutBytes))
         tempMemFile.setData(cutoutBytes, len(cutoutBytes))
         cutoutFromBytes = afwImage.ExposureF(tempMemFile)
-        self.assertTrue(cutout, cutoutFromBytes)
+        self.assertTrue(
+            np.all(cutout.getImage().array == cutoutFromBytes.getImage().array))
 
-    def testMakeJsonAlert(self):
+    def testMakeAlertDict(self):
         """Test stripping data from the various data products and into a
         dictionary "alert".
         """
@@ -320,7 +322,7 @@ class TestPackageAlerts(unittest.TestCase):
                                              packageAlerts.cutoutBBox)
             cutputBytes = packageAlerts.makeCutoutBytes(cutout)
             objSources = self.diaSourceHistory.loc[srcIdx[0]]
-            alert = packageAlerts.makeJsonAlert(
+            alert = packageAlerts.makeAlertDict(
                 alertId,
                 diaSource,
                 self.diaObjects.loc[srcIdx[0]],
@@ -374,6 +376,8 @@ class TestPackageAlerts(unittest.TestCase):
                                              packageAlerts.cutoutBBox)
             self.assertEqual(alert["cutoutDifference"]["stampData"],
                              packageAlerts.makeCutoutBytes(cutout))
+
+        shutil.rmtree(tempdir)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
