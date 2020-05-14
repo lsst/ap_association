@@ -41,7 +41,7 @@ class PackageAlertsConfig(pexConfig.Config):
     schemaFile = pexConfig.Field(
         dtype=str,
         doc="Schema definition file for the avro alerts.",
-        default=os.path.join(getPackageDir("sample_avro_alert"),
+        default=os.path.join(getPackageDir("alert_packet"),
                              "schema/latest/lsst.alert.avsc"),
     )
     # TODO: DM-24926 Create dynamic cutout size based on footprint with max
