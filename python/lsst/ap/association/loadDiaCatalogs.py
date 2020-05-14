@@ -21,6 +21,7 @@
 
 """Task for pre-loading DiaSources and DiaObjects within ap_pipe.
 """
+import numpy as np
 import pandas as pd
 
 import lsst.geom as geom
@@ -135,7 +136,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
         else:
             diaObjects = apdb.getDiaObjects(pixelRanges, return_pandas=True)
         diaObjects.set_index("diaObjectId", drop=False, inplace=True)
-        return diaObjects
+        return diaObjects.replace(to_replace=[None], value=np.nan)
 
     @pipeBase.timeMethod
     def loadDiaSources(self, diaObjects, pixelRanges, dateTime, apdb):
@@ -189,7 +190,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
         diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
                              drop=False,
                              inplace=True)
-        return diaSources
+        return diaSources.replace(to_replace=[None], value=np.nan)
 
     @pipeBase.timeMethod
     def _getPixelRanges(self, exposure):

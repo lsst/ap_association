@@ -385,7 +385,6 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
         # Pandas does not convert NULL to `nan` values in custom select
         # statements, instead using None. We thus must replace to None with
         # `nan` manually.
-        updatingDiaSources.replace(to_replace=[None], value=np.nan)
         updatingFilterDiaSources = updatingDiaSources.loc[
             (slice(None), filterName), :
         ]

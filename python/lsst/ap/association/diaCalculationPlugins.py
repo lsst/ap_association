@@ -242,7 +242,7 @@ class SimpleSourceFlagDiaPlugin(DiaObjectCalculationPlugin):
         **kwargs
             Any additional keyword arguments that may be passed to the plugin.
         """
-        diaObjects.loc[:, "flags"] = diaSources.flags.any()
+        diaObjects.loc[:, "flags"] = diaSources.flags.any().astype(np.uint64)
 
 
 class WeightedMeanDiaPsFluxConfig(DiaObjectCalculationPluginConfig):
@@ -298,7 +298,7 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
         if errName not in diaObjects.columns:
             diaObjects[errName] = np.nan
         if nDataName not in diaObjects.columns:
-            diaObjects[nDataName] = np.nan
+            diaObjects[nDataName] = 0
 
         def _weightedMean(df):
             tmpDf = df[~np.logical_or(np.isnan(df["psFlux"]),
@@ -307,12 +307,16 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
             fluxMean = np.nansum(tmpDf["psFlux"]
                                  / tmpDf["psFluxErr"] ** 2)
             fluxMean /= tot_weight
-            fluxMeanErr = np.sqrt(1 / tot_weight)
+            if tot_weight > 0:
+                fluxMeanErr = np.sqrt(1 / tot_weight)
+            else:
+                fluxMeanErr = np.nan
             nFluxData = len(tmpDf)
 
             return pd.Series({meanName: fluxMean,
                               errName: fluxMeanErr,
-                              nDataName: nFluxData})
+                              nDataName: nFluxData},
+                             dtype="object")
 
         diaObjects.loc[:, [meanName, errName, nDataName]] = \
             filterDiaSources.apply(_weightedMean)
