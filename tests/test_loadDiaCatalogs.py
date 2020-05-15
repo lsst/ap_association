@@ -221,7 +221,7 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         afwImageUtils.resetFilters()
         afwImageUtils.defineFilter('g', lambdaEff=487, alias="g.MP9401")
 
-        self.tmp_file, self.db_file = tempfile.mkstemp(
+        self.db_file_fd, self.db_file = tempfile.mkstemp(
             dir=os.path.dirname(__file__))
 
         self.apdbConfig = ApdbConfig()
@@ -264,9 +264,8 @@ class TestLoadDiaCatalogs(unittest.TestCase):
                                   self.dateTime)
 
     def tearDown(self):
-        del self.tmp_file
+        os.close(self.db_file_fd)
         os.remove(self.db_file)
-        del self.db_file
 
     def testRun(self):
         """Test the full run method for the loader.
