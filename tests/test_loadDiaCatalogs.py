@@ -264,6 +264,8 @@ class TestLoadDiaCatalogs(unittest.TestCase):
                                   self.dateTime)
 
     def tearDown(self):
+        self.tmp_file.close()
+        self.db_file.close()
         del self.tmp_file
         os.remove(self.db_file)
         del self.db_file
