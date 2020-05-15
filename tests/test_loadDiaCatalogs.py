@@ -266,7 +266,6 @@ class TestLoadDiaCatalogs(unittest.TestCase):
     def tearDown(self):
         os.close(self.db_file_fd)
         os.remove(self.db_file)
-        del self.db_file
 
     def testRun(self):
         """Test the full run method for the loader.
