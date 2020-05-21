@@ -52,25 +52,25 @@ __all__ = ("DiaPipelineConfig",
 
 class DiaPipelineConnections(pipeBase.PipelineTaskConnections,
                              dimensions=("instrument", "visit", "detector"),
-                             defaultTemplates={"coaddName": "deep"}):
+                             defaultTemplates={"coaddName": "deep", "fakesType": ""}):
     """Butler connections for DiaPipelineTask.
     """
     diaSourceSchema = connTypes.InitInput(
         doc="Schema of the DiaSource catalog produced during image "
             "differencing",
-        name="{coaddName}Diff_diaSrc_schema",
+        name="{fakesType}{coaddName}Diff_diaSrc_schema",
         storageClass="SourceCatalog",
         multiple=True
     )
     diaSourceCat = connTypes.Input(
         doc="Catalog of DiaSources produced during image differencing.",
-        name="{coaddName}Diff_diaSrc",
+        name="{fakesType}{coaddName}Diff_diaSrc",
         storageClass="SourceCatalog",
         dimensions=("instrument", "visit", "detector"),
     )
     diffIm = connTypes.Input(
         doc="Difference image on which the DiaSources were detected.",
-        name="{coaddName}Diff_differenceExp",
+        name="{fakesType}{coaddName}Diff_differenceExp",
         storageClass="ExposureF",
         dimensions=("instrument", "visit", "detector"),
     )
@@ -160,7 +160,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             afw_schemas=dict(DiaObject=make_dia_object_schema(),
                              DiaSource=make_dia_source_schema()))
         self.makeSubtask("diaSourceDpddifier",
-                         inputSchema=initInputs["diaSourceSchema"])
+                         inputSchema=initInputs["diaSourceSchema"].schema)
         self.makeSubtask("diaCatalogLoader")
         self.makeSubtask("associator")
         self.makeSubtask("diaForcedSource")

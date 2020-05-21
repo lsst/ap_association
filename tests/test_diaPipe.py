@@ -50,9 +50,11 @@ class TestDiaPipelineTask(unittest.TestCase):
         return config
 
     def setUp(self):
-        self.srcSchema = afwTable.SourceTable.makeMinimalSchema()
-        self.srcSchema.addField("base_PixelFlags_flag", type="Flag")
-        self.srcSchema.addField("base_PixelFlags_flag_offimage", type="Flag")
+        # schemas are persisted in both Gen 2 and Gen 3 butler as prototypical catalogs
+        srcSchema = afwTable.SourceTable.makeMinimalSchema()
+        srcSchema.addField("base_PixelFlags_flag", type="Flag")
+        srcSchema.addField("base_PixelFlags_flag_offimage", type="Flag")
+        self.srcSchema = afwTable.SourceCatalog(srcSchema)
 
     def tearDown(self):
         pass
