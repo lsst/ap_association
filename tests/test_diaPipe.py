@@ -24,6 +24,7 @@ import unittest
 
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
+import lsst.pipe.base as pipeBase
 from lsst.utils import getPackageDir
 import lsst.utils.tests
 from unittest.mock import patch, Mock, DEFAULT
@@ -106,8 +107,9 @@ class TestDiaPipelineTask(unittest.TestCase):
             result = task.run(diaSrc, diffIm, exposure, ccdExposureIdBits)
             for subtaskName in subtasksToMock:
                 getattr(task, subtaskName).run.assert_called_once()
-            self.assertEqual(result.apdb_marker.db_url, "sqlite://")
-            self.assertEqual(result.apdb_marker.isolation_level,
+            pipeBase.testUtils.assertValidOutput(task, result)
+            self.assertEqual(result.apdbMarker.db_url, "sqlite://")
+            self.assertEqual(result.apdbMarker.isolation_level,
                              "READ_UNCOMMITTED")
 
 

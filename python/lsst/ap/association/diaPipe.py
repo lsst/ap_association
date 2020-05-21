@@ -85,7 +85,7 @@ class DiaPipelineConnections(pipeBase.PipelineTaskConnections,
         doc="Marker dataset storing the configuration of the Apdb for each "
             "visit/detector. Used to signal the completion of the pipeline.",
         name="apdb_marker",
-        storageClass="",
+        storageClass="Config",
         dimensions=("instrument", "visit", "detector"),
     )
 
@@ -246,4 +246,4 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                    None,
                                    ccdExposureIdBits)
 
-        return pipeBase.Struct(apdb_marker=self.config.apdb.value)
+        return pipeBase.Struct(apdbMarker=self.config.apdb.value)
