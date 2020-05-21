@@ -36,7 +36,7 @@ from lsst.ap.association import DiaPipelineTask
 class TestDiaPipelineTask(unittest.TestCase):
 
     @classmethod
-    def _makeDefaultConfig(cls):
+    def _makeDefaultConfig(cls, doPackageAlerts=False):
         config = DiaPipelineTask.ConfigClass()
         config.apdb.db_url = "sqlite://"
         config.apdb.isolation_level = "READ_UNCOMMITTED"
@@ -48,10 +48,11 @@ class TestDiaPipelineTask(unittest.TestCase):
             getPackageDir("ap_association"),
             "tests",
             "test-flag-map.yaml")
+        config.doPackageAlerts = doPackageAlerts
         return config
 
     @contextlib.contextmanager
-    def mockPatchSubtasks(self, task):
+    def mockPatchSubtasks(self, task, doPackageAlerts=False):
         """Make mocks for all the ap_pipe subtasks.
 
         This is needed because the task itself cannot be a mock.
@@ -76,21 +77,32 @@ class TestDiaPipelineTask(unittest.TestCase):
                 particular value, but have mocked methods that can be queried
                 for calls by ApPipeTask
         """
-        with patch.object(task, "diaCatalogLoader") as mockDiaCatLoader, \
-                patch.object(task, "diaSourceDpddifier") as mockDpddifier, \
-                patch.object(task, "associator") as mockAssociator, \
-                patch.object(task, "diaForcedSource") as mockForcedSource, \
-                patch.object(task, "apdb") as mockApdb, \
-                patch.object(task, "alertPackager") as mockAlertPackager:
-            yield pipeBase.Struct(diaCatalogLoader=mockDiaCatLoader,
-                                  dpddifier=mockDpddifier,
-                                  associator=mockAssociator,
-                                  diaForcedSource=mockForcedSource,
-                                  apdb=mockApdb,
-                                  alertPackager=mockAlertPackager)
+        if doPackageAlerts:
+            with patch.object(task, "diaCatalogLoader") as mockDiaCatLoader, \
+                    patch.object(task, "diaSourceDpddifier") as mockDpddifier, \
+                    patch.object(task, "associator") as mockAssociator, \
+                    patch.object(task, "diaForcedSource") as mockForcedSource, \
+                    patch.object(task, "apdb") as mockApdb, \
+                    patch.object(task, "alertPackager") as mockAlertPackager:
+                yield pipeBase.Struct(diaCatalogLoader=mockDiaCatLoader,
+                                      dpddifier=mockDpddifier,
+                                      associator=mockAssociator,
+                                      diaForcedSource=mockForcedSource,
+                                      apdb=mockApdb,
+                                      alertPackager=mockAlertPackager)
+        else:
+            with patch.object(task, "diaCatalogLoader") as mockDiaCatLoader, \
+                    patch.object(task, "diaSourceDpddifier") as mockDpddifier, \
+                    patch.object(task, "associator") as mockAssociator, \
+                    patch.object(task, "diaForcedSource") as mockForcedSource, \
+                    patch.object(task, "apdb") as mockApdb:
+                yield pipeBase.Struct(diaCatalogLoader=mockDiaCatLoader,
+                                      dpddifier=mockDpddifier,
+                                      associator=mockAssociator,
+                                      diaForcedSource=mockForcedSource,
+                                      apdb=mockApdb)
 
     def setUp(self):
-        self.config = self._makeDefaultConfig()
         self.srcSchema = afwTable.SourceTable.makeMinimalSchema()
         self.srcSchema.addField("base_PixelFlags_flag", type="Flag")
         self.srcSchema.addField("base_PixelFlags_flag_offimage", type="Flag")
@@ -101,23 +113,37 @@ class TestDiaPipelineTask(unittest.TestCase):
     def testRunQuantum(self):
         pass
 
-    def testRun(self):
+    def testRunWithAlerts(self):
+        """Test running while creating and packaging alerts.
+        """
+        self._testRun(True)
+
+    def testRunWithoutAlerts(self):
+        """Test running without creating and packaging alerts.
+        """
+        self._testRun(False)
+
+    def _testRun(self, doPackageAlerts=False):
         """Test the normal workflow of each ap_pipe step.
         """
+        config = self._makeDefaultConfig(doPackageAlerts=doPackageAlerts)
         task = DiaPipelineTask(
-            config=self.config,
+            config=config,
             initInputs={"diaSourceSchema": self.srcSchema})
-        diffIm = Mock(spec=afwImage.Exposure)
+        diffIm = Mock(spec=afwImage.ExposureF)
         exposure = Mock(spec=afwImage.ExposureF)
         diaSrc = Mock(sepc=afwTable.SourceCatalog)
         ccdExposureIdBits = 32
-        with self.mockPatchSubtasks(task) as subtasks:
+        with self.mockPatchSubtasks(task, doPackageAlerts) as subtasks:
             result = task.run(diaSrc, diffIm, exposure, ccdExposureIdBits)
             subtasks.dpddifier.run.assert_called_once()
             subtasks.dpddifier.run.assert_called_once()
             subtasks.associator.run.assert_called_once()
             subtasks.diaForcedSource.run.assert_called_once()
-            subtasks.alertPackager.run.assert_called_once()
+            if doPackageAlerts:
+                subtasks.alertPackager.run.assert_called_once()
+            else:
+                self.assertFalse(hasattr(subtasks, 'alertPackager'))
             self.assertEqual(result.apdb_marker.db_url, "sqlite://")
             self.assertEqual(result.apdb_marker.isolation_level,
                              "READ_UNCOMMITTED")
