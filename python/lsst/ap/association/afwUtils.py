@@ -805,7 +805,7 @@ def get_ccd_visit_info_from_exposure(exposure):
     #  flux zero point error ``counts``]
     values = {'ccdVisitId': visit_info.getExposureId(),
               'ccdNum': exposure.getDetector().getId(),
-              'filterName': filter_obj.getName(),
+              'filterName': filter_obj.getCanonicalName(),  # use abstract filter
               'filterId': filter_obj.getId(),
               'ra': sphPoint.getRa().asDegrees(),
               'decl': sphPoint.getDec().asDegrees(),
