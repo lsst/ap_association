@@ -35,7 +35,6 @@ __all__ = ["make_dia_object_schema",
 from collections import OrderedDict as oDict
 
 import lsst.afw.table as afwTable
-from lsst.daf.base import DateTime
 
 
 def make_dia_object_schema(filter_names=None):
@@ -773,45 +772,3 @@ def getCcdVisitSchemaSql():
                   ("expMidptMJD", "REAL"),
                   ("calibrationMean", "REAL"),
                   ("calibrationErr", "REAL")])
-
-
-def get_ccd_visit_info_from_exposure(exposure):
-    """
-    Extract info on the ccd and visit from the exposure.
-
-    Parameters
-    ----------
-    exposure : `lsst.afw.image.Exposure`
-        Exposure to store information from.
-
-    Returns
-    -------
-    values : `dict` of ``values``
-        List values representing info taken from the exposure.
-    """
-    visit_info = exposure.getInfo().getVisitInfo()
-    date = visit_info.getDate()
-    sphPoint = exposure.getWcs().getSkyOrigin()
-    filter_obj = exposure.getFilter()
-    # Values list is:
-    # [CcdVisitId ``int``,
-    #  ccdNum ``int``,
-    #  filterName ``str``,
-    #  RA WCS center ``degrees``,
-    #  DEC WCS center ``degrees``,
-    #  exposure time ``seconds``,
-    #  dateTimeMJD ``days``,
-    #  flux zero point ``counts``,
-    #  flux zero point error ``counts``]
-    values = {'ccdVisitId': visit_info.getExposureId(),
-              'ccdNum': exposure.getDetector().getId(),
-              'filterName': filter_obj.getName(),
-              'filterId': filter_obj.getId(),
-              'ra': sphPoint.getRa().asDegrees(),
-              'decl': sphPoint.getDec().asDegrees(),
-              'expTime': visit_info.getExposureTime(),
-              'expMidptMJD': date.get(system=DateTime.MJD),
-              'calibrationMean': exposure.getPhotoCalib().getCalibrationMean(),
-              'calibrationErr': exposure.getPhotoCalib().getCalibrationErr(),
-              'photoCalib': exposure.getPhotoCalib()}
-    return values

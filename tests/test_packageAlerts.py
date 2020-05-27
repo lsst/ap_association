@@ -154,7 +154,7 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
                      "diaSourceId": idx,
                      "pixelId": htmIdx,
                      "midPointTai": midPointTaiMJD + 1.0 * idx,
-                     "filterName": exposure.getFilter().getName(),
+                     "filterName": exposure.getFilter().getCanonicalName(),
                      "filterId": 0,
                      "psNdata": 0,
                      "trailNdata": 0,

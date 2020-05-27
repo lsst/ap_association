@@ -231,7 +231,8 @@ class MapDiaSourceTask(MapApDataTask):
         ccdVisitId = visit_info.getExposureId()
         midPointTaiMJD = visit_info.getDate().get(system=DateTime.MJD)
         filterId = exposure.getFilter().getId()
-        filterName = exposure.getFilter().getName()
+        # canonical name should always be the abstract filter (in Gen 3 sense)
+        filterName = exposure.getFilter().getCanonicalName()
         wcs = exposure.getWcs()
 
         photoCalib = exposure.getPhotoCalib()

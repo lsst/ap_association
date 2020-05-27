@@ -323,7 +323,7 @@ class TestAssociationTask(unittest.TestCase):
                 dia_source=dia_source,
                 flux=10000,
                 fluxErr=100,
-                filterName=self.exposure.getFilter().getName(),
+                filterName=self.exposure.getFilter().getCanonicalName(),
                 filterId=self.exposure.getFilter().getId(),
                 ccdVisitId=self.exposure.getInfo().getVisitInfo().getExposureId(),
                 midPointTai=self.exposure.getInfo().getVisitInfo().getDate().get(system=dafBase.DateTime.MJD))

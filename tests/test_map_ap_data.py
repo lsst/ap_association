@@ -126,7 +126,7 @@ class TestAPDataMapperTask(unittest.TestCase):
             date=dafBase.DateTime(nsecs=1400000000 * 10**9))
         self.exposure.setDetector(detector)
         self.exposure.getInfo().setVisitInfo(visit)
-        self.exposure.setFilter(afwImage.Filter('g'))
+        self.exposure.setFilter(afwImage.Filter('g.MP9401'))
         scale = 2
         scaleErr = 1
         self.photoCalib = afwImage.PhotoCalib(scale, scaleErr)
@@ -192,6 +192,8 @@ class TestAPDataMapperTask(unittest.TestCase):
                 self.assertEqual(outObj["dipMeanFlux"], expectedMeanDip)
                 self.assertEqual(outObj["dipFluxDiff"], expectedDiffFlux)
                 self.assertAlmostEqual(outObj["dipLength"], expectedLength)
+        # Mapper should always emit standardized filters
+        self.assertEqual(outObj["filterName"], 'g')
 
     def _create_map_dia_source_config(self):
         """Create a test config for use in MapDiaSourceTask.
