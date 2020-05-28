@@ -247,6 +247,7 @@ class MapDiaSourceTask(MapApDataTask):
             self.computeDipoleFluxes(inputRecord, outputRecord, photoCalib)
             self.computeDipoleSep(inputRecord, outputRecord, wcs)
             self.bitPackFlags(inputRecord, outputRecord)
+            self.computeBBoxSize(inputRecord, outputRecord)
             outputRecord.set("ccdVisitId", ccdVisitId)
             outputRecord.set("midPointTai", midPointTaiMJD)
             outputRecord.set("filterId", filterId)
@@ -342,6 +343,27 @@ class MapDiaSourceTask(MapApDataTask):
             for bit in bitList:
                 value += inputRecord[bit['name']] * 2 ** bit['bit']
             outputRecord.set(outputFlag['columnName'], value)
+
+    def computeBBoxSize(self, inputRecord, outputRecord):
+        """Compute the size of a square bbox that fully contains the detection
+        footprint.
+
+        Parameters
+        ----------
+        inputRecord : `lsst.afw.table.SourceRecord`
+            Record to copy flux values from.
+        outputRecord : `lsst.afw.table.SourceRecord`
+            Record to copy and calibrate values into.
+        """
+        footprintBBox = inputRecord.getFootprint().getBBox()
+        recX = inputRecord.getCentroid().x
+        recY = inputRecord.getCentroid().y
+        bboxSize = int(
+            np.ciel(2 * np.max(np.fabs([footprintBBox.maxX - recX,
+                                        footprintBBox.minX - recX,
+                                        footprintBBox.maxY - recY,
+                                        footprintBBox.minY - recY]))))
+        outputRecord.set("bboxSize", bboxSize)
 
     def _convert_to_pandas(self, inputCatalog):
         """Convert input afw table to pandas.

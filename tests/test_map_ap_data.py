@@ -36,11 +36,12 @@ import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 import lsst.afw.image.utils as afwImageUtils
 import lsst.geom as geom
+import lsst.meas.base.tests as measTests
 from lsst.utils import getPackageDir
 import lsst.utils.tests
 
 
-def make_input_source_catalog(n_objects, add_flags=False):
+def make_input_source_catalog(dataset, add_flags=False):
     """Create tests objects to map into apData products.
 
     Parameters
@@ -48,7 +49,7 @@ def make_input_source_catalog(n_objects, add_flags=False):
     n_objects: `int`
         Number of objects to create.
     """
-    schema = afwTable.SourceTable.makeMinimalSchema()
+    schema = dataset.schema
     schema.addField("base_NaiveCentroid_x", type="D")
     schema.addField("base_NaiveCentroid_y", type="D")
     schema.addField("base_PsfFlux_instFlux", type="D")
@@ -65,26 +66,24 @@ def make_input_source_catalog(n_objects, add_flags=False):
         schema.addField("base_PixelFlags_flag", type="Flag")
         schema.addField("base_PixelFlags_flag_offimage", type="Flag")
 
-    objects = afwTable.SourceCatalog(schema)
-    objects.preallocate(n_objects)
-    objects.definePsfFlux("base_PsfFlux")
-    objects.defineCentroid("base_NaiveCentroid")
+    exposure, catalog = dataset.realize(10.0, schema, randomseed=1234)
+    catalog.definePsfFlux("base_PsfFlux")
+    catalog.defineCentroid("base_NaiveCentroid")
 
-    for obj_idx in range(n_objects):
-        obj = objects.addNew()
+    for src in range(catalog):
         for subSchema in schema:
-            if isinstance(obj.get(subSchema.getKey()), geom.Angle):
-                obj.set(subSchema.getKey(), 1. * geom.degrees)
-            elif subSchema.getField().getName() == "ip_diffim_DipoleFit_neg_instFlux":
-                obj.set(subSchema.getKey(), -1)
+            if subSchema.getField().getName() == "ip_diffim_DipoleFit_neg_instFlux":
+                src.set(subSchema.getKey(), -1)
             else:
-                obj.set(subSchema.getKey(), 1)
-    return objects
+                src.set(subSchema.getKey(), 1)
+    return catalog
 
 
 class TestAPDataMapperTask(unittest.TestCase):
 
     def setUp(self):
+
+        nSources = 10
         # CFHT Filters from the camera mapper.
         afwImageUtils.resetFilters()
         afwImageUtils.defineFilter('u', lambdaEff=374, alias="u.MP9301")
@@ -114,8 +113,8 @@ class TestAPDataMapperTask(unittest.TestCase):
         self.metadata.setDouble("CD1_2", 1.85579539217196E-07)
         self.metadata.setDouble("CD2_2", -5.10281493481982E-05)
         self.metadata.setDouble("CD2_1", -8.27440751733828E-07)
-
         self.wcs = afwGeom.makeSkyWcs(self.metadata)
+
         self.exposure = afwImage.makeExposure(
             afwImage.makeMaskedImageFromArrays(np.ones((1024, 1153))),
             self.wcs)
@@ -132,8 +131,14 @@ class TestAPDataMapperTask(unittest.TestCase):
         self.photoCalib = afwImage.PhotoCalib(scale, scaleErr)
         self.exposure.setPhotoCalib(self.photoCalib)
 
-        self.inputCatalogNoFlags = make_input_source_catalog(10, False)
-        self.inputCatalog = make_input_source_catalog(10, True)
+        self.bbox = lsst.geom.Box2I(lsst.geom.Point2I(0, 0),
+                                    lsst.geom.Extent2I(1024, 1153))
+        dataset = measTests.TestDataset(self.bbox, exposure=self.exposure)
+        for srcIdx in range(nSources):
+            dataset.addSource(100000.0, geom.Point2D(100, 100))
+
+        self.inputCatalogNoFlags = make_input_source_catalog(dataset, False)
+        self.inputCatalog = make_input_source_catalog(dataset, True)
 
     def test_run(self):
         """Test the generic data product mapper.
@@ -262,6 +267,20 @@ class TestAPDataMapperTask(unittest.TestCase):
                                                         inputRecord["slot_PsfFlux_instFluxErr"])
         self.assertAlmostEqual(outputRecord["psFlux"], expected.value)
         self.assertAlmostEqual(outputRecord["psFluxErr"], expected.error)
+
+    def test_computeBBoxSize(self):
+        """Test the values created for diaSourceBBox.
+        """
+        outSchema = afwTable.SourceTable.makeMinimalSchema()
+        outSchema.addField("bboxSize", type="I")
+        outputCatalog = afwTable.SourceCatalog(outSchema)
+        outRecord = outputCatalog.addNew()
+        mapApDConfig = self._create_map_dia_source_config()
+        mapApD = MapDiaSourceTask(inputSchema=self.inputCatalog.schema,
+                                  config=mapApDConfig)
+        mapApD.computeBBoxSize(self.inputCatalog[0], outRecord)
+
+        self.assertEqual(outRecord["bboxSize"], 8)
 
     def test_bit_unpacker(self):
         """Test that the integer bit packer is functioning correctly.
