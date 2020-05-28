@@ -715,7 +715,7 @@ def make_dia_source_schema():
                         'observed in.')
     schema.addField("isDipole", type='Flag',
                     doc='Object determined to be a dipole.')
-    schema.addField("bboxSize", type=int,
+    schema.addField("bboxSize", type='L',
                     doc='Length of the square bounding box for cutouts in the '
                         'alerts.')
     return schema

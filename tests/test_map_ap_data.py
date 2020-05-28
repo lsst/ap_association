@@ -19,7 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import numpy as np
 import os
 import unittest
 
@@ -32,7 +31,6 @@ from lsst.ap.association import (
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
-import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 import lsst.afw.image.utils as afwImageUtils
 import lsst.geom as geom
@@ -49,7 +47,7 @@ def make_input_source_catalog(dataset, add_flags=False):
     n_objects: `int`
         Number of objects to create.
     """
-    schema = dataset.schema
+    schema = dataset.makeMinimalSchema()
     schema.addField("base_NaiveCentroid_x", type="D")
     schema.addField("base_NaiveCentroid_y", type="D")
     schema.addField("base_PsfFlux_instFlux", type="D")
@@ -66,17 +64,21 @@ def make_input_source_catalog(dataset, add_flags=False):
         schema.addField("base_PixelFlags_flag", type="Flag")
         schema.addField("base_PixelFlags_flag_offimage", type="Flag")
 
-    exposure, catalog = dataset.realize(10.0, schema, randomseed=1234)
+    exposure, catalog = dataset.realize(10.0, schema, randomSeed=1234)
     catalog.definePsfFlux("base_PsfFlux")
     catalog.defineCentroid("base_NaiveCentroid")
 
-    for src in range(catalog):
+    for src in catalog:
         for subSchema in schema:
             if subSchema.getField().getName() == "ip_diffim_DipoleFit_neg_instFlux":
                 src.set(subSchema.getKey(), -1)
-            else:
+            elif (subSchema.getField().getName().startswith("ip")
+                  or subSchema.getField().getName().startswith("base")):
                 src.set(subSchema.getKey(), 1)
-    return catalog
+        src.set("base_NaiveCentroid_x", src["truth_x"])
+        src.set("base_NaiveCentroid_y", src["truth_y"])
+        src.setCoord(exposure.getWcs().pixelToSky(src.getCentroid()))
+    return catalog, exposure
 
 
 class TestAPDataMapperTask(unittest.TestCase):
@@ -92,32 +94,15 @@ class TestAPDataMapperTask(unittest.TestCase):
         afwImageUtils.defineFilter('i', lambdaEff=778, alias="i.MP9701")
         afwImageUtils.defineFilter('z', lambdaEff=1170, alias="z.MP9801")
 
-        self.metadata = dafBase.PropertySet()
+        self.bbox = geom.Box2I(geom.Point2I(0, 0),
+                               geom.Extent2I(1024, 1153))
+        dataset = measTests.TestDataset(self.bbox)
+        for srcIdx in range(nSources):
+            dataset.addSource(100000.0, geom.Point2D(100, 100))
+        self.inputCatalogNoFlags, _ = make_input_source_catalog(dataset, False)
+        self.inputCatalog, self.exposure = \
+            make_input_source_catalog(dataset, True)
 
-        self.metadata.set("SIMPLE", "T")
-        self.metadata.set("BITPIX", -32)
-        self.metadata.set("NAXIS", 2)
-        self.metadata.set("NAXIS1", 1024)
-        self.metadata.set("NAXIS2", 1153)
-        self.metadata.set("RADECSYS", 'FK5')
-        self.metadata.set("EQUINOX", 2000.)
-
-        self.metadata.setDouble("CRVAL1", 215.604025685476)
-        self.metadata.setDouble("CRVAL2", 53.1595451514076)
-        self.metadata.setDouble("CRPIX1", 1109.99981456774)
-        self.metadata.setDouble("CRPIX2", 560.018167811613)
-        self.metadata.set("CTYPE1", 'RA---SIN')
-        self.metadata.set("CTYPE2", 'DEC--SIN')
-
-        self.metadata.setDouble("CD1_1", 5.10808596133527E-05)
-        self.metadata.setDouble("CD1_2", 1.85579539217196E-07)
-        self.metadata.setDouble("CD2_2", -5.10281493481982E-05)
-        self.metadata.setDouble("CD2_1", -8.27440751733828E-07)
-        self.wcs = afwGeom.makeSkyWcs(self.metadata)
-
-        self.exposure = afwImage.makeExposure(
-            afwImage.makeMaskedImageFromArrays(np.ones((1024, 1153))),
-            self.wcs)
         detector = DetectorWrapper(id=23, bbox=self.exposure.getBBox()).detector
         visit = afwImage.VisitInfo(
             exposureId=4321,
@@ -130,15 +115,6 @@ class TestAPDataMapperTask(unittest.TestCase):
         scaleErr = 1
         self.photoCalib = afwImage.PhotoCalib(scale, scaleErr)
         self.exposure.setPhotoCalib(self.photoCalib)
-
-        self.bbox = lsst.geom.Box2I(lsst.geom.Point2I(0, 0),
-                                    lsst.geom.Extent2I(1024, 1153))
-        dataset = measTests.TestDataset(self.bbox, exposure=self.exposure)
-        for srcIdx in range(nSources):
-            dataset.addSource(100000.0, geom.Point2D(100, 100))
-
-        self.inputCatalogNoFlags = make_input_source_catalog(dataset, False)
-        self.inputCatalog = make_input_source_catalog(dataset, True)
 
     def test_run(self):
         """Test the generic data product mapper.
@@ -176,7 +152,8 @@ class TestAPDataMapperTask(unittest.TestCase):
 
         expectedMeanDip = 2.
         expectedDiffFlux = 0.
-        expectedLength = 0.18379083
+        expectedLength = 0.19999994425496748
+        expectedBBox = 18
 
         for inObj, outObj in zip(self.inputCatalog, outputCatalog):
             self.assertEqual(
@@ -194,9 +171,10 @@ class TestAPDataMapperTask(unittest.TestCase):
                     self._test_calibrated_flux(inObj, outObj)
                 else:
                     self.assertEqual(inObj[inputName], outObj[outputName])
-                self.assertEqual(outObj["dipMeanFlux"], expectedMeanDip)
-                self.assertEqual(outObj["dipFluxDiff"], expectedDiffFlux)
-                self.assertAlmostEqual(outObj["dipLength"], expectedLength)
+            self.assertEqual(outObj["dipMeanFlux"], expectedMeanDip)
+            self.assertEqual(outObj["dipFluxDiff"], expectedDiffFlux)
+            self.assertAlmostEqual(outObj["dipLength"], expectedLength)
+            self.assertEqual(outObj["bboxSize"], expectedBBox)
         # Mapper should always emit standardized filters
         self.assertEqual(outObj["filterName"], 'g')
 
@@ -280,7 +258,7 @@ class TestAPDataMapperTask(unittest.TestCase):
                                   config=mapApDConfig)
         mapApD.computeBBoxSize(self.inputCatalog[0], outRecord)
 
-        self.assertEqual(outRecord["bboxSize"], 8)
+        self.assertEqual(outRecord["bboxSize"], 18)
 
     def test_bit_unpacker(self):
         """Test that the integer bit packer is functioning correctly.

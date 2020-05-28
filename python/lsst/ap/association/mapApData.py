@@ -359,7 +359,7 @@ class MapDiaSourceTask(MapApDataTask):
         recX = inputRecord.getCentroid().x
         recY = inputRecord.getCentroid().y
         bboxSize = int(
-            np.ciel(2 * np.max(np.fabs([footprintBBox.maxX - recX,
+            np.ceil(2 * np.max(np.fabs([footprintBBox.maxX - recX,
                                         footprintBBox.minX - recX,
                                         footprintBBox.maxY - recY,
                                         footprintBBox.minY - recY]))))
