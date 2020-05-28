@@ -115,10 +115,7 @@ class PackageAlertsTask(pipeBase.Task):
             sphPoint = geom.SpherePoint(diaSource["ra"],
                                         diaSource["decl"],
                                         geom.degrees)
-            cutoutSize = diaSource["bboxSize"]
-            if cutoutSize < self.config.minCutoutSize:
-                cutoutSize = self.config.minCutoutSize
-            cutoutBBox = geom.Extent2I(cutoutSize, cutoutSize)
+            cutoutBBox = self.createDiaSourceBBox(diaSource["bboxSize"])
             diffImCutout = diffIm.getCutout(sphPoint, cutoutBBox)
             templateCutout = None
             # TODO: Create alertIds DM-24858
@@ -180,6 +177,26 @@ class PackageAlertsTask(pipeBase.Task):
         diaObjects["iLcNonPeriodic"] = None
         diaObjects["zLcNonPeriodic"] = None
         diaObjects["yLcNonPeriodic"] = None
+
+    def createDiaSourceBBox(self, bboxSize):
+        """Compute the size of the bounding box for this diaSource.
+
+        Parameters
+        ----------
+        bboxSize : `int`
+            Size of a side of the square bounding box in pixels.
+
+        Returns
+        -------
+        bbox : `lsst.geom.Extent2I`
+            Geom object representing the size of the bounding box.
+        """
+        if bboxSize < self.config.minCutoutSize:
+            bbox = geom.Extent2I(self.config.minCutoutSize,
+                                 self.config.minCutoutSize)
+        else:
+            bbox = geom.Extent2I(bboxSize, bboxSize)
+        return bbox
 
     def makeAlertDict(self,
                       alertId,

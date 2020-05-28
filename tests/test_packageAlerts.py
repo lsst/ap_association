@@ -294,6 +294,21 @@ class TestPackageAlerts(unittest.TestCase):
         self.diaSourceHistory = diaSourceHistory.drop(labels=[(0, "g", 8),
                                                               (1, "g", 9)])
 
+    def testCreateBBox(self):
+        """Test the bbox creation
+        """
+        packConfig = PackageAlertsConfig()
+        # Just create a minimum less than the default cutout.
+        packConfig.minCutoutSize = self.cutoutSize - 5
+        packageAlerts = PackageAlertsTask(config=packConfig)
+        bbox = packageAlerts.createDiaSourceBBox(packConfig.minCutoutSize - 5)
+        self.assertTrue(bbox == geom.Extent2I(packConfig.minCutoutSize,
+                                              packConfig.minCutoutSize))
+        # Test that the cutout size is correct.
+        bbox = packageAlerts.createDiaSourceBBox(self.cutoutSize)
+        self.assertTrue(bbox == geom.Extent2I(self.cutoutSize,
+                                              self.cutoutSize))
+
     def testMakeCutoutBytes(self):
         """Test round tripping an exposure/cutout to bytes and back.
         """

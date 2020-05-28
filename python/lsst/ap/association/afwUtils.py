@@ -468,7 +468,8 @@ def make_dia_object_schema(filter_names=None):
 
 
 def make_dia_source_schema():
-    """ Define and create the minimal schema required for a DIASource.
+    """ Define and create the schema required for a DIASource with additional
+    needed columns for later calculation in `DiaPipeTask`.
 
     Returns
     -------

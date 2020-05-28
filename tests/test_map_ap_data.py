@@ -44,8 +44,9 @@ def make_input_source_catalog(dataset, add_flags=False):
 
     Parameters
     ----------
-    n_objects: `int`
-        Number of objects to create.
+    dataset : `lsst.meas.base.tests.TestDataset`
+        Test dataset to create random exposure realizations with inserted
+        sources and detected sources in a catalog.
     """
     schema = dataset.makeMinimalSchema()
     schema.addField("base_NaiveCentroid_x", type="D")
