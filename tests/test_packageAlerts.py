@@ -229,6 +229,7 @@ class TestPackageAlerts(unittest.TestCase):
 
     def setUp(self):
         np.random.seed(1234)
+        self.cutoutSize = 35
         self.center = lsst.geom.Point2D(50.1, 49.8)
         self.bbox = lsst.geom.Box2I(lsst.geom.Point2I(-20, -30),
                                     lsst.geom.Extent2I(140, 160))
@@ -289,6 +290,7 @@ class TestPackageAlerts(unittest.TestCase):
 
         self.diaSources = diaSourceHistory.loc[
             [(0, "g", 8), (1, "g", 9)], :]
+        self.diaSources["bboxSize"] = self.cutoutSize
         self.diaSourceHistory = diaSourceHistory.drop(labels=[(0, "g", 8),
                                                               (1, "g", 9)])
 
@@ -298,7 +300,9 @@ class TestPackageAlerts(unittest.TestCase):
         packageAlerts = PackageAlertsTask()
 
         sphPoint = self.exposure.getWcs().pixelToSky(self.center)
-        cutout = self.exposure.getCutout(sphPoint, packageAlerts.cutoutBBox)
+        cutout = self.exposure.getCutout(sphPoint,
+                                         geom.Extent2I(self.cutoutSize,
+                                                       self.cutoutSize))
 
         cutoutBytes = packageAlerts.makeCutoutBytes(cutout)
         tempMemFile = afwFits.MemFileManager(len(cutoutBytes))
@@ -319,7 +323,8 @@ class TestPackageAlerts(unittest.TestCase):
                                         diaSource["decl"],
                                         geom.degrees)
             cutout = self.exposure.getCutout(sphPoint,
-                                             packageAlerts.cutoutBBox)
+                                             geom.Extent2I(self.cutoutSize,
+                                                           self.cutoutSize))
             cutputBytes = packageAlerts.makeCutoutBytes(cutout)
             objSources = self.diaSourceHistory.loc[srcIdx[0]]
             alert = packageAlerts.makeAlertDict(
@@ -373,7 +378,8 @@ class TestPackageAlerts(unittest.TestCase):
                                         alert["diaSource"]["decl"],
                                         geom.degrees)
             cutout = self.exposure.getCutout(sphPoint,
-                                             packageAlerts.cutoutBBox)
+                                             geom.Extent2I(self.cutoutSize,
+                                                           self.cutoutSize))
             self.assertEqual(alert["cutoutDifference"]["stampData"],
                              packageAlerts.makeCutoutBytes(cutout))
 

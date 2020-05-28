@@ -44,9 +44,7 @@ class PackageAlertsConfig(pexConfig.Config):
         default=os.path.join(getPackageDir("alert_packet"),
                              "schema/latest/lsst.alert.avsc"),
     )
-    # TODO: DM-24926 Create dynamic cutout size based on footprint with max
-    # size 30x30
-    cutoutSize = pexConfig.RangeField(
+    minCutoutSize = pexConfig.RangeField(
         dtype=int,
         min=0,
         max=1000,
@@ -69,8 +67,6 @@ class PackageAlertsTask(pipeBase.Task):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.alertSchema = alertPack.Schema.from_file(self.config.schemaFile)
-        self.cutoutBBox = geom.Extent2I(self.config.cutoutSize,
-                                        self.config.cutoutSize)
         os.makedirs(self.config.alertWriteLocation, exist_ok=True)
 
     def run(self,
@@ -119,7 +115,11 @@ class PackageAlertsTask(pipeBase.Task):
             sphPoint = geom.SpherePoint(diaSource["ra"],
                                         diaSource["decl"],
                                         geom.degrees)
-            diffImCutout = diffIm.getCutout(sphPoint, self.cutoutBBox)
+            cutoutSize = diaSource["bboxSize"]
+            if cutoutSize < self.config.minCutoutSize:
+                cutoutSize = self.config.minCutoutSize
+            cutoutBBox = geom.Extent2I(cutoutSize, cutoutSize)
+            diffImCutout = diffIm.getCutout(sphPoint, cutoutBBox)
             templateCutout = None
             # TODO: Create alertIds DM-24858
             alertId = diaSource["diaSourceId"]
