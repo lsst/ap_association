@@ -69,6 +69,9 @@ def make_input_source_catalog(dataset, add_flags=False):
     catalog.definePsfFlux("base_PsfFlux")
     catalog.defineCentroid("base_NaiveCentroid")
 
+    # Fill in simple values for the test DiaSources. Create specific values
+    # where required such as negative values for the negative lobe of the
+    # dipole flux.
     for src in catalog:
         for subSchema in schema:
             if subSchema.getField().getName() == "ip_diffim_DipoleFit_neg_instFlux":

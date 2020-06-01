@@ -179,7 +179,8 @@ class PackageAlertsTask(pipeBase.Task):
         diaObjects["yLcNonPeriodic"] = None
 
     def createDiaSourceBBox(self, bboxSize):
-        """Compute the size of the bounding box for this diaSource.
+        """Create a bounding box for the cutouts given the size of the square
+        BBox that covers the source footprint.
 
         Parameters
         ----------
