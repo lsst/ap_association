@@ -19,16 +19,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import contextlib
 import os
 import unittest
 
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
-import lsst.pipe.base as pipeBase
 from lsst.utils import getPackageDir
 import lsst.utils.tests
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, DEFAULT
 
 from lsst.ap.association import DiaPipelineTask
 
@@ -36,7 +34,7 @@ from lsst.ap.association import DiaPipelineTask
 class TestDiaPipelineTask(unittest.TestCase):
 
     @classmethod
-    def _makeDefaultConfig(cls):
+    def _makeDefaultConfig(cls, doPackageAlerts=False):
         config = DiaPipelineTask.ConfigClass()
         config.apdb.db_url = "sqlite://"
         config.apdb.isolation_level = "READ_UNCOMMITTED"
@@ -48,49 +46,10 @@ class TestDiaPipelineTask(unittest.TestCase):
             getPackageDir("ap_association"),
             "tests",
             "test-flag-map.yaml")
+        config.doPackageAlerts = doPackageAlerts
         return config
 
-    @contextlib.contextmanager
-    def mockPatchSubtasks(self, task):
-        """Make mocks for all the ap_pipe subtasks.
-
-        This is needed because the task itself cannot be a mock.
-        The task's subtasks do not exist until the task is created, so
-        this allows us to mock them instead.
-
-        Parameters
-        ----------
-        task : `lsst.ap.association.DiaPipelineTask`
-            The task whose subtasks will be mocked.
-
-        Yields
-        ------
-        subtasks : `lsst.pipe.base.Struct`
-            All mocks created by this context manager, including:
-
-            ``diaCatalogLoader``
-            ``dpddifier``
-            ``associator``
-            ``forcedSource``
-                a mock for the corresponding subtask. Mocks do not return any
-                particular value, but have mocked methods that can be queried
-                for calls by ApPipeTask
-        """
-        with patch.object(task, "diaCatalogLoader") as mockDiaCatLoader, \
-                patch.object(task, "diaSourceDpddifier") as mockDpddifier, \
-                patch.object(task, "associator") as mockAssociator, \
-                patch.object(task, "diaForcedSource") as mockForcedSource, \
-                patch.object(task, "apdb") as mockApdb, \
-                patch.object(task, "alertPackager") as mockAlertPackager:
-            yield pipeBase.Struct(diaCatalogLoader=mockDiaCatLoader,
-                                  dpddifier=mockDpddifier,
-                                  associator=mockAssociator,
-                                  diaForcedSource=mockForcedSource,
-                                  apdb=mockApdb,
-                                  alertPackager=mockAlertPackager)
-
     def setUp(self):
-        self.config = self._makeDefaultConfig()
         self.srcSchema = afwTable.SourceTable.makeMinimalSchema()
         self.srcSchema.addField("base_PixelFlags_flag", type="Flag")
         self.srcSchema.addField("base_PixelFlags_flag_offimage", type="Flag")
@@ -101,23 +60,50 @@ class TestDiaPipelineTask(unittest.TestCase):
     def testRunQuantum(self):
         pass
 
-    def testRun(self):
+    def testRunWithAlerts(self):
+        """Test running while creating and packaging alerts.
+        """
+        self._testRun(True)
+
+    def testRunWithoutAlerts(self):
+        """Test running without creating and packaging alerts.
+        """
+        self._testRun(False)
+
+    def _testRun(self, doPackageAlerts=False):
         """Test the normal workflow of each ap_pipe step.
         """
+        config = self._makeDefaultConfig(doPackageAlerts=doPackageAlerts)
         task = DiaPipelineTask(
-            config=self.config,
+            config=config,
             initInputs={"diaSourceSchema": self.srcSchema})
-        diffIm = Mock(spec=afwImage.Exposure)
+        diffIm = Mock(spec=afwImage.ExposureF)
         exposure = Mock(spec=afwImage.ExposureF)
         diaSrc = Mock(sepc=afwTable.SourceCatalog)
         ccdExposureIdBits = 32
-        with self.mockPatchSubtasks(task) as subtasks:
+
+        # Each of these subtasks should be called once during diaPipe
+        # execution. We use mocks here to check they are being executed
+        # appropriately.
+        subtasksToMock = [
+            "diaCatalogLoader",
+            "diaSourceDpddifier",
+            "associator",
+            "diaForcedSource",
+        ]
+        if doPackageAlerts:
+            subtasksToMock.append("alertPackager")
+        else:
+            self.assertFalse(hasattr(task, "alertPackager"))
+
+        # apdb isn't a subtask, but still needs to be mocked out for correct
+        # execution in the test environment.
+        with patch.multiple(
+            task, **{task: DEFAULT for task in subtasksToMock + ["apdb"]}
+        ):
             result = task.run(diaSrc, diffIm, exposure, ccdExposureIdBits)
-            subtasks.dpddifier.run.assert_called_once()
-            subtasks.dpddifier.run.assert_called_once()
-            subtasks.associator.run.assert_called_once()
-            subtasks.diaForcedSource.run.assert_called_once()
-            subtasks.alertPackager.run.assert_called_once()
+            for subtaskName in subtasksToMock:
+                getattr(task, subtaskName).run.assert_called_once()
             self.assertEqual(result.apdb_marker.db_url, "sqlite://")
             self.assertEqual(result.apdb_marker.isolation_level,
                              "READ_UNCOMMITTED")

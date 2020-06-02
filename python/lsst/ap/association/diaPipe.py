@@ -122,6 +122,12 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         target=PackageAlertsTask,
         doc="Subtask for packaging Ap data into alerts.",
     )
+    doPackageAlerts = pexConfig.Field(
+        dtype=bool,
+        default=False,
+        doc="Package Dia-data into serialized alerts for distribution and "
+            "write them to disk.",
+    )
 
     def setDefaults(self):
         self.apdb.dia_object_index = "baseline"
@@ -158,7 +164,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         self.makeSubtask("diaCatalogLoader")
         self.makeSubtask("associator")
         self.makeSubtask("diaForcedSource")
-        self.makeSubtask("alertPackager")
+        if self.config.doPackageAlerts:
+            self.makeSubtask("alertPackager")
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
@@ -231,11 +238,12 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             assocResults.updatedDiaObjects,
             exposure.getInfo().getVisitInfo().getDate().toPython())
         self.apdb.storeDiaForcedSources(diaForcedSources)
-        self.alertPackager.run(assocResults.diaSources,
-                               assocResults.diaObjects,
-                               loaderResult.diaSources,
-                               diffIm,
-                               None,
-                               ccdExposureIdBits)
+        if self.config.doPackageAlerts:
+            self.alertPackager.run(assocResults.diaSources,
+                                   assocResults.diaObjects,
+                                   loaderResult.diaSources,
+                                   diffIm,
+                                   None,
+                                   ccdExposureIdBits)
 
         return pipeBase.Struct(apdb_marker=self.config.apdb.value)
