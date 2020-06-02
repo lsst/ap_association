@@ -468,7 +468,8 @@ def make_dia_object_schema(filter_names=None):
 
 
 def make_dia_source_schema():
-    """ Define and create the minimal schema required for a DIASource.
+    """ Define and create the schema required for a DIASource with additional
+    needed columns for later calculation in `DiaPipeTask`.
 
     Returns
     -------
@@ -715,6 +716,9 @@ def make_dia_source_schema():
                         'observed in.')
     schema.addField("isDipole", type='Flag',
                     doc='Object determined to be a dipole.')
+    schema.addField("bboxSize", type='L',
+                    doc='Length of the square bounding box for cutouts in the '
+                        'alerts.')
     return schema
 
 

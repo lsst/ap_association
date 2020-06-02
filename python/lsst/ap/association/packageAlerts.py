@@ -44,9 +44,7 @@ class PackageAlertsConfig(pexConfig.Config):
         default=os.path.join(getPackageDir("alert_packet"),
                              "schema/latest/lsst.alert.avsc"),
     )
-    # TODO: DM-24926 Create dynamic cutout size based on footprint with max
-    # size 30x30
-    cutoutSize = pexConfig.RangeField(
+    minCutoutSize = pexConfig.RangeField(
         dtype=int,
         min=0,
         max=1000,
@@ -69,8 +67,6 @@ class PackageAlertsTask(pipeBase.Task):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.alertSchema = alertPack.Schema.from_file(self.config.schemaFile)
-        self.cutoutBBox = geom.Extent2I(self.config.cutoutSize,
-                                        self.config.cutoutSize)
         os.makedirs(self.config.alertWriteLocation, exist_ok=True)
 
     def run(self,
@@ -119,7 +115,8 @@ class PackageAlertsTask(pipeBase.Task):
             sphPoint = geom.SpherePoint(diaSource["ra"],
                                         diaSource["decl"],
                                         geom.degrees)
-            diffImCutout = diffIm.getCutout(sphPoint, self.cutoutBBox)
+            cutoutBBox = self.createDiaSourceBBox(diaSource["bboxSize"])
+            diffImCutout = diffIm.getCutout(sphPoint, cutoutBBox)
             templateCutout = None
             # TODO: Create alertIds DM-24858
             alertId = diaSource["diaSourceId"]
@@ -180,6 +177,27 @@ class PackageAlertsTask(pipeBase.Task):
         diaObjects["iLcNonPeriodic"] = None
         diaObjects["zLcNonPeriodic"] = None
         diaObjects["yLcNonPeriodic"] = None
+
+    def createDiaSourceBBox(self, bboxSize):
+        """Create a bounding box for the cutouts given the size of the square
+        BBox that covers the source footprint.
+
+        Parameters
+        ----------
+        bboxSize : `int`
+            Size of a side of the square bounding box in pixels.
+
+        Returns
+        -------
+        bbox : `lsst.geom.Extent2I`
+            Geom object representing the size of the bounding box.
+        """
+        if bboxSize < self.config.minCutoutSize:
+            bbox = geom.Extent2I(self.config.minCutoutSize,
+                                 self.config.minCutoutSize)
+        else:
+            bbox = geom.Extent2I(bboxSize, bboxSize)
+        return bbox
 
     def makeAlertDict(self,
                       alertId,
