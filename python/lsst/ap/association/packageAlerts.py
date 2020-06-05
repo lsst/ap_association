@@ -42,7 +42,9 @@ class PackageAlertsConfig(pexConfig.Config):
         dtype=str,
         doc="Schema definition file for the avro alerts.",
         default=os.path.join(getPackageDir("alert_packet"),
-                             "schema/latest/lsst.alert.avsc"),
+                             "schema",
+                             *[str(x) for x in alertPack.get_latest_schema_version()],
+                             "lsst.alert.avsc")
     )
     minCutoutSize = pexConfig.RangeField(
         dtype=int,
