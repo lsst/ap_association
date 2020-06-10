@@ -266,27 +266,6 @@ class TestPackageAlerts(unittest.TestCase):
         self.diaObjects.replace(to_replace=[None], value=np.nan, inplace=True)
         diaSourceHistory.replace(to_replace=[None], value=np.nan, inplace=True)
         diaSourceHistory["programId"] = 0
-        diaSourceHistory["ra_decl_Cov"] = None
-        diaSourceHistory["x_y_Cov"] = None
-        diaSourceHistory["ps_Cov"] = None
-        diaSourceHistory["trail_Cov"] = None
-        diaSourceHistory["dip_Cov"] = None
-        diaSourceHistory["i_cov"] = None
-
-        self.diaObjects["ra_decl_Cov"] = None
-        self.diaObjects["pm_parallax_Cov"] = None
-        self.diaObjects["uLcPeriodic"] = None
-        self.diaObjects["gLcPeriodic"] = None
-        self.diaObjects["rLcPeriodic"] = None
-        self.diaObjects["iLcPeriodic"] = None
-        self.diaObjects["zLcPeriodic"] = None
-        self.diaObjects["yLcPeriodic"] = None
-        self.diaObjects["uLcNonPeriodic"] = None
-        self.diaObjects["gLcNonPeriodic"] = None
-        self.diaObjects["rLcNonPeriodic"] = None
-        self.diaObjects["iLcNonPeriodic"] = None
-        self.diaObjects["zLcNonPeriodic"] = None
-        self.diaObjects["yLcNonPeriodic"] = None
 
         self.diaSources = diaSourceHistory.loc[
             [(0, "g", 8), (1, "g", 9)], :]
@@ -353,7 +332,7 @@ class TestPackageAlerts(unittest.TestCase):
 
             self.assertEqual(alert["alertId"], alertId)
             self.assertEqual(alert["diaSource"], diaSource.to_dict())
-            self.assertEqual(alert["cutoutDifference"]["stampData"],
+            self.assertEqual(alert["cutoutDifference"],
                              cutputBytes)
             self.assertEqual(alert["cutoutTemplate"],
                              None)
@@ -395,7 +374,7 @@ class TestPackageAlerts(unittest.TestCase):
             cutout = self.exposure.getCutout(sphPoint,
                                              geom.Extent2I(self.cutoutSize,
                                                            self.cutoutSize))
-            self.assertEqual(alert["cutoutDifference"]["stampData"],
+            self.assertEqual(alert["cutoutDifference"],
                              packageAlerts.makeCutoutBytes(cutout))
 
         shutil.rmtree(tempdir)
