@@ -105,7 +105,6 @@ class PackageAlertsTask(pipeBase.Task):
         alerts = []
         self._patchDiaSources(diaSourceCat)
         self._patchDiaSources(diaSrcHistory)
-        self._patchDiaObjects(diaObjectCat)
         ccdVisitId = diffIm.getInfo().getVisitInfo().getExposureId()
         for srcIndex, diaSource in diaSourceCat.iterrows():
             # Get all diaSources for the associated diaObject.
@@ -138,47 +137,12 @@ class PackageAlertsTask(pipeBase.Task):
         """Add the ``programId`` column to the data and change currently
         grouped alert data to ``None``.
 
-        TODO: The need to change these column values to ``None`` can be removed
-        after DM-24696 is merged.
-
         Parameters
         ----------
         diaSources : `pandas.DataFrame`
             DataFrame of DiaSources to patch.
         """
         diaSources["programId"] = 0
-        diaSources["ra_decl_Cov"] = None
-        diaSources["x_y_Cov"] = None
-        diaSources["ps_Cov"] = None
-        diaSources["trail_Cov"] = None
-        diaSources["dip_Cov"] = None
-        diaSources["i_cov"] = None
-
-    def _patchDiaObjects(self, diaObjects):
-        """Change currently grouped alert data to ``None``.
-
-        TODO: The need to change these column values to ``None`` can be removed
-        after DM-24696 is merged.
-
-        Parameters
-        ----------
-        diaObjects : `pandas.DataFrame`
-            DataFrame of DiaObjects to patch.
-        """
-        diaObjects["ra_decl_Cov"] = None
-        diaObjects["pm_parallax_Cov"] = None
-        diaObjects["uLcPeriodic"] = None
-        diaObjects["gLcPeriodic"] = None
-        diaObjects["rLcPeriodic"] = None
-        diaObjects["iLcPeriodic"] = None
-        diaObjects["zLcPeriodic"] = None
-        diaObjects["yLcPeriodic"] = None
-        diaObjects["uLcNonPeriodic"] = None
-        diaObjects["gLcNonPeriodic"] = None
-        diaObjects["rLcNonPeriodic"] = None
-        diaObjects["iLcNonPeriodic"] = None
-        diaObjects["zLcNonPeriodic"] = None
-        diaObjects["yLcNonPeriodic"] = None
 
     def createDiaSourceBBox(self, bboxSize):
         """Create a bounding box for the cutouts given the size of the square
@@ -218,10 +182,10 @@ class PackageAlertsTask(pipeBase.Task):
             DiaObject that ``diaSource`` is matched to.
         objDiaSrcHistory : `pandas.DataFrame`
             12 month history of ``diaObject`` excluding the latest DiaSource.
-        diffImCutout : `lsst.afw.image.ExposureF`
+        diffImCutout : `lsst.afw.image.ExposureF` or `None`
             Cutout of the difference image around the location of ``diaSource``
             with a size set by the ``cutoutSize`` configurable.
-        templateCutout : `lsst.afw.image.ExposureF`
+        templateCutout : `lsst.afw.image.ExposureF` or `None`
             Cutout of the template image around the location of ``diaSource``
             with a size set by the ``cutoutSize`` configurable.
         """
@@ -241,11 +205,7 @@ class PackageAlertsTask(pipeBase.Task):
 
         alert['ssObject'] = None
 
-        # TODO: fileName to be removed in future Avro schemas. DM-24696
-        alert['cutoutDifference'] = {
-            'fileName': '',
-            'stampData': self.makeCutoutBytes(diffImCutout),
-        }
+        alert['cutoutDifference'] = self.makeCutoutBytes(diffImCutout)
         # TODO: add template cutouts in DM-24327
         alert["cutoutTemplate"] = None
 
