@@ -129,7 +129,7 @@ class PackageAlertsTask(pipeBase.Task):
                 diffIm.getCutout(sphPoint, cutoutBBox),
                 sphPoint,
                 diffImPhotoCalib)
-            
+
             templateCutout = None
             # TODO: Create alertIds DM-24858
             alertId = diaSource["diaSourceId"]
@@ -178,7 +178,22 @@ class PackageAlertsTask(pipeBase.Task):
         return bbox
 
     def createCcdDataCutout(self, cutout, sphPoint, photoCalib):
-        """
+        """Convert a cutout into a calibrate CCDData image.
+
+        Parameters
+        ----------
+        cutout : `lsst.afw.image.ExposureF`
+            Cutout to convert.
+        sphPoint : `lsst.geom.SpherePoint`
+            Center point of DiaSource on the sky.
+        photoCalib : `lsst.afw.image.PhotoCalib`
+            Calibrate object of the image the cutout is cut from.
+
+        Returns
+        -------
+        ccdData : `astropy.nddata.CCDData`
+            CCDData object storing the calibrate information from the input
+            difference or template image.
         """
         cutOutMinX = cutout.getBBox().minX - 1
         cutOutMinY = cutout.getBBox().minY - 1
@@ -253,12 +268,12 @@ class PackageAlertsTask(pipeBase.Task):
             DiaObject that ``diaSource`` is matched to.
         objDiaSrcHistory : `pandas.DataFrame`
             12 month history of ``diaObject`` excluding the latest DiaSource.
-        diffImCutout : `lsst.afw.image.ExposureF` or `None`
+        diffImCutout : `astropy.nddata.CCDData` or `None`
             Cutout of the difference image around the location of ``diaSource``
-            with a size set by the ``cutoutSize`` configurable.
-        templateCutout : `lsst.afw.image.ExposureF` or `None`
+            with a min size set by the ``cutoutSize`` configurable.
+        templateCutout : `astropy.nddata.CCDData` or `None`
             Cutout of the template image around the location of ``diaSource``
-            with a size set by the ``cutoutSize`` configurable.
+            with a min size set by the ``cutoutSize`` configurable.
         """
         alert = dict()
         alert['alertId'] = alertId

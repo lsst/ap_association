@@ -300,7 +300,8 @@ class TestPackageAlerts(unittest.TestCase):
                                               self.cutoutSize))
 
     def testCreateCcdDataCutout(self):
-        """
+        """Test that the data is being extracted into the CCDData cutout
+        correctly.
         """
         packageAlerts = PackageAlertsTask()
 
@@ -311,13 +312,13 @@ class TestPackageAlerts(unittest.TestCase):
         calibExposure = self.exposure.getPhotoCalib().calibrateImage(
             self.exposure.getMaskedImage())
 
-        self.assertTrue(np.allclose(ccdData.wcs.wcs.cd, 
+        self.assertTrue(np.allclose(ccdData.wcs.wcs.cd,
                                     self.cutoutWcs.wcs.cd))
         self.assertTrue(np.allclose(ccdData.data,
                                     calibExposure.getImage().array))
 
     def testMakeLocalTransformMatrix(self):
-        """
+        """Test that the local WCS approximation is correct.
         """
         packageAlerts = PackageAlertsTask()
 
@@ -330,7 +331,7 @@ class TestPackageAlerts(unittest.TestCase):
         self.assertTrue(np.allclose(cd, cutout.getWcs().getCdMatrix()))
 
     def testStreamCcdDataToBytes(self):
-        """Test round tripping an exposure/cutout to bytes and back.
+        """Test round tripping an CCDData cutout to bytes and back.
         """
         packageAlerts = PackageAlertsTask()
 
