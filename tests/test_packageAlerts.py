@@ -35,7 +35,6 @@ from lsst.ap.association import (PackageAlertsConfig,
                                  make_dia_source_schema,
                                  make_dia_object_schema)
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
-import lsst.afw.fits as afwFits
 import lsst.afw.image as afwImage
 import lsst.afw.image.utils as afwImageUtils
 import lsst.daf.base as dafBase
@@ -303,7 +302,19 @@ class TestPackageAlerts(unittest.TestCase):
     def testCreateCcdDataCutout(self):
         """
         """
-        pass
+        packageAlerts = PackageAlertsTask()
+
+        ccdData = packageAlerts.createCcdDataCutout(
+            self.exposure,
+            self.exposure.getWcs().getSkyOrigin(),
+            self.exposure.getPhotoCalib())
+        calibExposure = self.exposure.getPhotoCalib().calibrateImage(
+            self.exposure.getMaskedImage())
+
+        self.assertTrue(np.allclose(ccdData.wcs.wcs.cd, 
+                                    self.cutoutWcs.wcs.cd))
+        self.assertTrue(np.allclose(ccdData.data,
+                                    calibExposure.getImage().array))
 
     def testMakeLocalTransformMatrix(self):
         """
