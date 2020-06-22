@@ -82,6 +82,7 @@ class PackageAlertsTask(pipeBase.Task):
             diaSourceCat,
             diaObjectCat,
             diaSrcHistory,
+            diaForcedSources,
             diffIm,
             template,
             ccdExposureIdBits):
@@ -102,6 +103,9 @@ class PackageAlertsTask(pipeBase.Task):
             12 month history of DiaSources matched to the DiaObjects. Excludes
             the newest DiaSource and is indexed on
             ``["diaObjectId", "filterName", "diaSourceId"]``
+        diaForcedSources : `pandas.DataFrame`
+            12 month history of DiaForcedSources matched to the DiaObjects.
+            ``["diaObjectId"]``
         diffIm : `lsst.afw.image.ExposureF`
             Difference image the sources in ``diaSourceCat`` were detected in.
         template : `lsst.afw.image.ExposureF` or `None`

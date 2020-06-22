@@ -565,6 +565,10 @@ columns:
   description: Effective mid-exposure time for this diaForcedSource
   ucd: time.epoch
   unit: d
+- name: filterName
+  type: CHAR
+  nullable: false
+  description: Name of stored filter.
 
 ---
 # DiaObjectLast uses the same columns as DiaObject but has different index
@@ -616,3 +620,4 @@ columns:
   type: BOOL
   nullable: true
   description: Object determined to be a dipole.
+

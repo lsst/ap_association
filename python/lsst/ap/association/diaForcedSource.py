@@ -259,6 +259,7 @@ class DiaForcedSourceTask(pipeBase.Task):
         midPointTaiMJD = visit_info.getDate().get(system=DateTime.MJD)
         output_catalog["ccdVisitId"] = ccdVisitId
         output_catalog["midPointTai"] = midPointTaiMJD
+        output_catalog["filterName"] = diff_exp.getFilter().getCanonicalName()
 
         # Drop superfluous columns from output DataFrame.
         output_catalog.drop(columns=self.config.dropColumns, inplace=True)
