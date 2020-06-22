@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import io
 import os
 import numpy as np
 import pandas as pd
@@ -26,12 +27,14 @@ import shutil
 import tempfile
 import unittest
 
+from astropy import wcs
+from astropy.nddata import CCDData
+
 from lsst.ap.association import (PackageAlertsConfig,
                                  PackageAlertsTask,
                                  make_dia_source_schema,
                                  make_dia_object_schema)
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
-import lsst.afw.fits as afwFits
 import lsst.afw.image as afwImage
 import lsst.afw.image.utils as afwImageUtils
 import lsst.daf.base as dafBase
@@ -225,7 +228,7 @@ def _roundTripThroughApdb(objects, sources, dateTime):
     return (diaObjects, diaSources)
 
 
-class TestPackageAlerts(unittest.TestCase):
+class TestPackageAlerts(lsst.utils.tests.TestCase):
 
     def setUp(self):
         np.random.seed(1234)
@@ -273,6 +276,14 @@ class TestPackageAlerts(unittest.TestCase):
         self.diaSourceHistory = diaSourceHistory.drop(labels=[(0, "g", 8),
                                                               (1, "g", 9)])
 
+        self.cutoutWcs = wcs.WCS(naxis=2)
+        self.cutoutWcs.wcs.crpix = [self.center[0], self.center[1]]
+        self.cutoutWcs.wcs.crval = [
+            self.exposure.getWcs().getSkyOrigin().getRa().asDegrees(),
+            self.exposure.getWcs().getSkyOrigin().getDec().asDegrees()]
+        self.cutoutWcs.wcs.cd = self.exposure.getWcs().getCdMatrix()
+        self.cutoutWcs.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+
     def testCreateBBox(self):
         """Test the bbox creation
         """
@@ -288,8 +299,26 @@ class TestPackageAlerts(unittest.TestCase):
         self.assertTrue(bbox == geom.Extent2I(self.cutoutSize,
                                               self.cutoutSize))
 
-    def testMakeCutoutBytes(self):
-        """Test round tripping an exposure/cutout to bytes and back.
+    def testCreateCcdDataCutout(self):
+        """Test that the data is being extracted into the CCDData cutout
+        correctly.
+        """
+        packageAlerts = PackageAlertsTask()
+
+        ccdData = packageAlerts.createCcdDataCutout(
+            self.exposure,
+            self.exposure.getWcs().getSkyOrigin(),
+            self.exposure.getPhotoCalib())
+        calibExposure = self.exposure.getPhotoCalib().calibrateImage(
+            self.exposure.getMaskedImage())
+
+        self.assertFloatsAlmostEqual(ccdData.wcs.wcs.cd,
+                                     self.cutoutWcs.wcs.cd)
+        self.assertFloatsAlmostEqual(ccdData.data,
+                                     calibExposure.getImage().array)
+
+    def testMakeLocalTransformMatrix(self):
+        """Test that the local WCS approximation is correct.
         """
         packageAlerts = PackageAlertsTask()
 
@@ -297,13 +326,32 @@ class TestPackageAlerts(unittest.TestCase):
         cutout = self.exposure.getCutout(sphPoint,
                                          geom.Extent2I(self.cutoutSize,
                                                        self.cutoutSize))
+        cd = packageAlerts.makeLocalTransformMatrix(
+            cutout.getWcs(), self.center, sphPoint)
+        self.assertFloatsAlmostEqual(
+            cd,
+            cutout.getWcs().getCdMatrix(),
+            rtol=1e-11,
+            atol=1e-11)
 
-        cutoutBytes = packageAlerts.makeCutoutBytes(cutout)
-        tempMemFile = afwFits.MemFileManager(len(cutoutBytes))
-        tempMemFile.setData(cutoutBytes, len(cutoutBytes))
-        cutoutFromBytes = afwImage.ExposureF(tempMemFile)
-        self.assertTrue(
-            np.all(cutout.getImage().array == cutoutFromBytes.getImage().array))
+    def testStreamCcdDataToBytes(self):
+        """Test round tripping an CCDData cutout to bytes and back.
+        """
+        packageAlerts = PackageAlertsTask()
+
+        sphPoint = self.exposure.getWcs().pixelToSky(self.center)
+        cutout = self.exposure.getCutout(sphPoint,
+                                         geom.Extent2I(self.cutoutSize,
+                                                       self.cutoutSize))
+        cutoutCcdData = CCDData(
+            data=cutout.getImage().array,
+            wcs=self.cutoutWcs,
+            unit="adu")
+
+        cutoutBytes = packageAlerts.streamCcdDataToBytes(cutoutCcdData)
+        with io.BytesIO(cutoutBytes) as bytesIO:
+            cutoutFromBytes = CCDData.read(bytesIO, format="fits")
+        self.assertFloatsAlmostEqual(cutoutCcdData.data, cutoutFromBytes.data)
 
     def testMakeAlertDict(self):
         """Test stripping data from the various data products and into a
@@ -319,21 +367,24 @@ class TestPackageAlerts(unittest.TestCase):
             cutout = self.exposure.getCutout(sphPoint,
                                              geom.Extent2I(self.cutoutSize,
                                                            self.cutoutSize))
-            cutputBytes = packageAlerts.makeCutoutBytes(cutout)
+            ccdCutout = packageAlerts.createCcdDataCutout(
+                cutout, sphPoint, cutout.getPhotoCalib())
+            cutoutBytes = packageAlerts.streamCcdDataToBytes(
+                ccdCutout)
             objSources = self.diaSourceHistory.loc[srcIdx[0]]
             alert = packageAlerts.makeAlertDict(
                 alertId,
                 diaSource,
                 self.diaObjects.loc[srcIdx[0]],
                 objSources,
-                cutout,
+                ccdCutout,
                 None)
             self.assertEqual(len(alert), 9)
 
             self.assertEqual(alert["alertId"], alertId)
             self.assertEqual(alert["diaSource"], diaSource.to_dict())
             self.assertEqual(alert["cutoutDifference"],
-                             cutputBytes)
+                             cutoutBytes)
             self.assertEqual(alert["cutoutTemplate"],
                              None)
 
@@ -374,8 +425,10 @@ class TestPackageAlerts(unittest.TestCase):
             cutout = self.exposure.getCutout(sphPoint,
                                              geom.Extent2I(self.cutoutSize,
                                                            self.cutoutSize))
+            ccdCutout = packageAlerts.createCcdDataCutout(
+                cutout, sphPoint, cutout.getPhotoCalib())
             self.assertEqual(alert["cutoutDifference"],
-                             packageAlerts.makeCutoutBytes(cutout))
+                             packageAlerts.streamCcdDataToBytes(ccdCutout))
 
         shutil.rmtree(tempdir)
 

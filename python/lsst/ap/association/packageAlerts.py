@@ -21,10 +21,15 @@
 
 __all__ = ("PackageAlertsConfig", "PackageAlertsTask")
 
+import io
 import os
 
-import lsst.afw.fits as afwFits
+from astropy import wcs
+import astropy.units as u
+from astropy.nddata import CCDData, VarianceUncertainty
+
 import lsst.alert.packet as alertPack
+import lsst.afw.geom as afwGeom
 import lsst.geom as geom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
@@ -66,6 +71,8 @@ class PackageAlertsTask(pipeBase.Task):
     ConfigClass = PackageAlertsConfig
     _DefaultName = "packageAlerts"
 
+    _scale = (1.0 * geom.arcseconds).asDegrees()
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.alertSchema = alertPack.Schema.from_file(self.config.schemaFile)
@@ -106,6 +113,7 @@ class PackageAlertsTask(pipeBase.Task):
         self._patchDiaSources(diaSourceCat)
         self._patchDiaSources(diaSrcHistory)
         ccdVisitId = diffIm.getInfo().getVisitInfo().getExposureId()
+        diffImPhotoCalib = diffIm.getPhotoCalib()
         for srcIndex, diaSource in diaSourceCat.iterrows():
             # Get all diaSources for the associated diaObject.
             diaObject = diaObjectCat.loc[srcIndex[0]]
@@ -117,7 +125,11 @@ class PackageAlertsTask(pipeBase.Task):
                                         diaSource["decl"],
                                         geom.degrees)
             cutoutBBox = self.createDiaSourceBBox(diaSource["bboxSize"])
-            diffImCutout = diffIm.getCutout(sphPoint, cutoutBBox)
+            diffImCutout = self.createCcdDataCutout(
+                diffIm.getCutout(sphPoint, cutoutBBox),
+                sphPoint,
+                diffImPhotoCalib)
+
             templateCutout = None
             # TODO: Create alertIds DM-24858
             alertId = diaSource["diaSourceId"]
@@ -134,8 +146,7 @@ class PackageAlertsTask(pipeBase.Task):
             self.alertSchema.store_alerts(f, alerts)
 
     def _patchDiaSources(self, diaSources):
-        """Add the ``programId`` column to the data and change currently
-        grouped alert data to ``None``.
+        """Add the ``programId`` column to the data.
 
         Parameters
         ----------
@@ -165,6 +176,84 @@ class PackageAlertsTask(pipeBase.Task):
             bbox = geom.Extent2I(bboxSize, bboxSize)
         return bbox
 
+    def createCcdDataCutout(self, cutout, skyCenter, photoCalib):
+        """Convert a cutout into a calibrate CCDData image.
+
+        Parameters
+        ----------
+        cutout : `lsst.afw.image.ExposureF`
+            Cutout to convert.
+        skyCenter : `lsst.geom.SpherePoint`
+            Center point of DiaSource on the sky.
+        photoCalib : `lsst.afw.image.PhotoCalib`
+            Calibrate object of the image the cutout is cut from.
+
+        Returns
+        -------
+        ccdData : `astropy.nddata.CCDData`
+            CCDData object storing the calibrate information from the input
+            difference or template image.
+        """
+        # Find the value of the bottom corner of our cutout's BBox and
+        # subtract 1 so that the CCDData cutout position value will be
+        # [1, 1].
+        cutOutMinX = cutout.getBBox().minX - 1
+        cutOutMinY = cutout.getBBox().minY - 1
+        center = cutout.getWcs().skyToPixel(skyCenter)
+        calibCutout = photoCalib.calibrateImage(cutout.getMaskedImage())
+
+        cutoutWcs = wcs.WCS(naxis=2)
+        cutoutWcs.array_shape = (cutout.getBBox().getWidth(),
+                                 cutout.getBBox().getWidth())
+        cutoutWcs.wcs.crpix = [center.x - cutOutMinX, center.y - cutOutMinY]
+        cutoutWcs.wcs.crval = [skyCenter.getRa().asDegrees(),
+                               skyCenter.getDec().asDegrees()]
+        cutoutWcs.wcs.cd = self.makeLocalTransformMatrix(cutout.getWcs(),
+                                                         center,
+                                                         skyCenter)
+
+        return CCDData(
+            data=calibCutout.getImage().array,
+            uncertainty=VarianceUncertainty(calibCutout.getVariance().array),
+            flags=calibCutout.getMask().array,
+            wcs=cutoutWcs,
+            meta={"cutMinX": cutOutMinX,
+                  "cutMinY": cutOutMinY},
+            unit=u.nJy)
+
+    def makeLocalTransformMatrix(self, wcs, center, skyCenter):
+        """Create a local, linear approximation of the wcs transformation
+        matrix.
+
+        The approximation is created as if the center is at RA=0, DEC=0. All
+        comparing x,y coordinate are relative to the position of center. Matrix
+        is initially calculated with units arcseconds and then converted to
+        degrees. This yields higher precision results due to quirks in AST.
+
+        Parameters
+        ----------
+        wcs : `lsst.afw.geom.SkyWcs`
+            Wcs to approximate
+        center : `lsst.geom.Point2D`
+            Point at which to evaluate the LocalWcs.
+        skyCenter : `lsst.geom.SpherePoint`
+            Point on sky to approximate the Wcs.
+
+        Returns
+        -------
+        localMatrix : `numpy.ndarray`
+            Matrix representation the local wcs approximation with units
+            degrees.
+        """
+        blankCDMatrix = [[self._scale, 0], [0, self._scale]]
+        localGnomonicWcs = afwGeom.makeSkyWcs(
+            center, skyCenter, blankCDMatrix)
+        measurementToLocalGnomonic = wcs.getTransform().then(
+            localGnomonicWcs.getTransform().inverted()
+        )
+        localMatrix = measurementToLocalGnomonic.getJacobian(center)
+        return localMatrix / 3600
+
     def makeAlertDict(self,
                       alertId,
                       diaSource,
@@ -182,12 +271,12 @@ class PackageAlertsTask(pipeBase.Task):
             DiaObject that ``diaSource`` is matched to.
         objDiaSrcHistory : `pandas.DataFrame`
             12 month history of ``diaObject`` excluding the latest DiaSource.
-        diffImCutout : `lsst.afw.image.ExposureF` or `None`
+        diffImCutout : `astropy.nddata.CCDData` or `None`
             Cutout of the difference image around the location of ``diaSource``
-            with a size set by the ``cutoutSize`` configurable.
-        templateCutout : `lsst.afw.image.ExposureF` or `None`
+            with a min size set by the ``cutoutSize`` configurable.
+        templateCutout : `astropy.nddata.CCDData` or `None`
             Cutout of the template image around the location of ``diaSource``
-            with a size set by the ``cutoutSize`` configurable.
+            with a min size set by the ``cutoutSize`` configurable.
         """
         alert = dict()
         alert['alertId'] = alertId
@@ -205,18 +294,18 @@ class PackageAlertsTask(pipeBase.Task):
 
         alert['ssObject'] = None
 
-        alert['cutoutDifference'] = self.makeCutoutBytes(diffImCutout)
+        alert['cutoutDifference'] = self.streamCcdDataToBytes(diffImCutout)
         # TODO: add template cutouts in DM-24327
         alert["cutoutTemplate"] = None
 
         return alert
 
-    def makeCutoutBytes(self, cutout):
+    def streamCcdDataToBytes(self, cutout):
         """Serialize a cutout into bytes.
 
         Parameters
         ----------
-        cutout : `lsst.afw.image.ExposureF`
+        cutout : `astropy.nddata.CCDData`
             Cutout to serialize.
 
         Returns
@@ -224,6 +313,7 @@ class PackageAlertsTask(pipeBase.Task):
         coutputBytes : `bytes`
             Input cutout serialized into byte data.
         """
-        mgr = afwFits.MemFileManager()
-        cutout.writeFits(mgr)
-        return mgr.getData()
+        with io.BytesIO() as streamer:
+            cutout.write(streamer, format="fits")
+            cutoutBytes = streamer.getvalue()
+        return cutoutBytes
