@@ -146,8 +146,7 @@ class PackageAlertsTask(pipeBase.Task):
             self.alertSchema.store_alerts(f, alerts)
 
     def _patchDiaSources(self, diaSources):
-        """Add the ``programId`` column to the data and change currently
-        grouped alert data to ``None``.
+        """Add the ``programId`` column to the data.
 
         Parameters
         ----------
@@ -177,14 +176,14 @@ class PackageAlertsTask(pipeBase.Task):
             bbox = geom.Extent2I(bboxSize, bboxSize)
         return bbox
 
-    def createCcdDataCutout(self, cutout, sphPoint, photoCalib):
+    def createCcdDataCutout(self, cutout, skyCenter, photoCalib):
         """Convert a cutout into a calibrate CCDData image.
 
         Parameters
         ----------
         cutout : `lsst.afw.image.ExposureF`
             Cutout to convert.
-        sphPoint : `lsst.geom.SpherePoint`
+        skyCenter : `lsst.geom.SpherePoint`
             Center point of DiaSource on the sky.
         photoCalib : `lsst.afw.image.PhotoCalib`
             Calibrate object of the image the cutout is cut from.
@@ -195,20 +194,23 @@ class PackageAlertsTask(pipeBase.Task):
             CCDData object storing the calibrate information from the input
             difference or template image.
         """
+        # Find the value of the bottom corner of our cutout's BBox and
+        # subtract 1 so that the CCDData cutout position value will be
+        # [1, 1].
         cutOutMinX = cutout.getBBox().minX - 1
         cutOutMinY = cutout.getBBox().minY - 1
-        center = cutout.getWcs().skyToPixel(sphPoint)
+        center = cutout.getWcs().skyToPixel(skyCenter)
         calibCutout = photoCalib.calibrateImage(cutout.getMaskedImage())
 
         cutoutWcs = wcs.WCS(naxis=2)
         cutoutWcs.array_shape = (cutout.getBBox().getWidth(),
                                  cutout.getBBox().getWidth())
         cutoutWcs.wcs.crpix = [center.x - cutOutMinX, center.y - cutOutMinY]
-        cutoutWcs.wcs.crval = [sphPoint.getRa().asDegrees(),
-                               sphPoint.getDec().asDegrees()]
+        cutoutWcs.wcs.crval = [skyCenter.getRa().asDegrees(),
+                               skyCenter.getDec().asDegrees()]
         cutoutWcs.wcs.cd = self.makeLocalTransformMatrix(cutout.getWcs(),
                                                          center,
-                                                         sphPoint)
+                                                         skyCenter)
 
         return CCDData(
             data=calibCutout.getImage().array,
@@ -226,7 +228,7 @@ class PackageAlertsTask(pipeBase.Task):
         The approximation is created as if the center is at RA=0, DEC=0. All
         comparing x,y coordinate are relative to the position of center. Matrix
         is initially calculated with units arcseconds and then converted to
-        radians. This yields higher precision results due to quirks in AST.
+        degrees. This yields higher precision results due to quirks in AST.
 
         Parameters
         ----------
@@ -243,8 +245,9 @@ class PackageAlertsTask(pipeBase.Task):
             Matrix representation the local wcs approximation with units
             degrees.
         """
+        blankCDMatrix = [[self._scale, 0], [0, self._scale]]
         localGnomonicWcs = afwGeom.makeSkyWcs(
-            center, skyCenter, [[self._scale, 0], [0, self._scale]])
+            center, skyCenter, blankCDMatrix)
         measurementToLocalGnomonic = wcs.getTransform().then(
             localGnomonicWcs.getTransform().inverted()
         )

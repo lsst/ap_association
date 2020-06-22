@@ -228,7 +228,7 @@ def _roundTripThroughApdb(objects, sources, dateTime):
     return (diaObjects, diaSources)
 
 
-class TestPackageAlerts(unittest.TestCase):
+class TestPackageAlerts(lsst.utils.tests.TestCase):
 
     def setUp(self):
         np.random.seed(1234)
@@ -312,10 +312,10 @@ class TestPackageAlerts(unittest.TestCase):
         calibExposure = self.exposure.getPhotoCalib().calibrateImage(
             self.exposure.getMaskedImage())
 
-        self.assertTrue(np.allclose(ccdData.wcs.wcs.cd,
-                                    self.cutoutWcs.wcs.cd))
-        self.assertTrue(np.allclose(ccdData.data,
-                                    calibExposure.getImage().array))
+        self.assertFloatsAlmostEqual(ccdData.wcs.wcs.cd,
+                                     self.cutoutWcs.wcs.cd)
+        self.assertFloatsAlmostEqual(ccdData.data,
+                                     calibExposure.getImage().array)
 
     def testMakeLocalTransformMatrix(self):
         """Test that the local WCS approximation is correct.
@@ -328,7 +328,11 @@ class TestPackageAlerts(unittest.TestCase):
                                                        self.cutoutSize))
         cd = packageAlerts.makeLocalTransformMatrix(
             cutout.getWcs(), self.center, sphPoint)
-        self.assertTrue(np.allclose(cd, cutout.getWcs().getCdMatrix()))
+        self.assertFloatsAlmostEqual(
+            cd,
+            cutout.getWcs().getCdMatrix(),
+            rtol=1e-11,
+            atol=1e-11)
 
     def testStreamCcdDataToBytes(self):
         """Test round tripping an CCDData cutout to bytes and back.
@@ -347,8 +351,7 @@ class TestPackageAlerts(unittest.TestCase):
         cutoutBytes = packageAlerts.streamCcdDataToBytes(cutoutCcdData)
         with io.BytesIO(cutoutBytes) as bytesIO:
             cutoutFromBytes = CCDData.read(bytesIO, format="fits")
-        self.assertTrue(
-            np.allclose(cutoutCcdData.data, cutoutFromBytes.data))
+        self.assertFloatsAlmostEqual(cutoutCcdData.data, cutoutFromBytes.data)
 
     def testMakeAlertDict(self):
         """Test stripping data from the various data products and into a
