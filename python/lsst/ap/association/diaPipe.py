@@ -52,25 +52,25 @@ __all__ = ("DiaPipelineConfig",
 
 class DiaPipelineConnections(pipeBase.PipelineTaskConnections,
                              dimensions=("instrument", "visit", "detector"),
-                             defaultTemplates={"coaddName": "deep"}):
+                             defaultTemplates={"coaddName": "deep", "fakesType": ""}):
     """Butler connections for DiaPipelineTask.
     """
     diaSourceSchema = connTypes.InitInput(
         doc="Schema of the DiaSource catalog produced during image "
             "differencing",
-        name="{coaddName}Diff_diaSrc_schema",
+        name="{fakesType}{coaddName}Diff_diaSrc_schema",
         storageClass="SourceCatalog",
         multiple=True
     )
     diaSourceCat = connTypes.Input(
         doc="Catalog of DiaSources produced during image differencing.",
-        name="{coaddName}Diff_diaSrc",
+        name="{fakesType}{coaddName}Diff_diaSrc",
         storageClass="SourceCatalog",
         dimensions=("instrument", "visit", "detector"),
     )
     diffIm = connTypes.Input(
         doc="Difference image on which the DiaSources were detected.",
-        name="{coaddName}Diff_differenceExp",
+        name="{fakesType}{coaddName}Diff_differenceExp",
         storageClass="ExposureF",
         dimensions=("instrument", "visit", "detector"),
     )
@@ -85,7 +85,7 @@ class DiaPipelineConnections(pipeBase.PipelineTaskConnections,
         doc="Marker dataset storing the configuration of the Apdb for each "
             "visit/detector. Used to signal the completion of the pipeline.",
         name="apdb_marker",
-        storageClass="",
+        storageClass="Config",
         dimensions=("instrument", "visit", "detector"),
     )
 
@@ -160,7 +160,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             afw_schemas=dict(DiaObject=make_dia_object_schema(),
                              DiaSource=make_dia_source_schema()))
         self.makeSubtask("diaSourceDpddifier",
-                         inputSchema=initInputs["diaSourceSchema"])
+                         inputSchema=initInputs["diaSourceSchema"].schema)
         self.makeSubtask("diaCatalogLoader")
         self.makeSubtask("associator")
         self.makeSubtask("diaForcedSource")
@@ -246,4 +246,4 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                    None,
                                    ccdExposureIdBits)
 
-        return pipeBase.Struct(apdb_marker=self.config.apdb.value)
+        return pipeBase.Struct(apdbMarker=self.config.apdb.value)
