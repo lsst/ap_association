@@ -167,7 +167,45 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
     return pd.DataFrame(data=data)
 
 
-def _roundTripThroughApdb(objects, sources, dateTime):
+def makeDiaForcedSources(nSources, diaObjectIds, exposure):
+    """Make a test set of DiaSources.
+
+    Parameters
+    ----------
+    nSources : `int`
+        Number of sources to create.
+    diaObjectIds : `numpy.ndarray`
+        Integer Ids of diaobjects to "associate" with the DiaSources.
+    exposure : `lsst.afw.image.Exposure`
+        Exposure to create sources over.
+    pixelator : `lsst.sphgeom.HtmPixelization`
+        Object to compute spatial indicies from.
+
+    Returns
+    -------
+    diaSources : `pandas.DataFrame`
+        DiaSources generated across the exposure.
+    """
+    midPointTaiMJD = exposure.getInfo().getVisitInfo().getDate().get(
+        system=dafBase.DateTime.MJD)
+
+    ccdVisitId = exposure.getInfo().getVisitInfo().getExposureId()
+
+    data = []
+    for idx in range(nSources):
+        objId = diaObjectIds[idx % len(diaObjectIds)]
+        # Put together the minimum values for the alert.
+        data.append({"diaForcedSourceId": idx,
+                     "ccdVisitId": ccdVisitId + idx,
+                     "diaObjectId": objId,
+                     "midPointTai": midPointTaiMJD + 1.0 * idx,
+                     "filterName": exposure.getFilter().getCanonicalName(),
+                     "flags": 0})
+
+    return pd.DataFrame(data=data)
+
+
+def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
     """Run object and source catalogs through the Apdb to get the correct
     table schemas.
 
@@ -177,6 +215,8 @@ def _roundTripThroughApdb(objects, sources, dateTime):
         Set of test DiaObjects to round trip.
     sources : `pandas.DataFrame`
         Set of test DiaSources to round trip.
+    forcedSources : `pandas.DataFrame`
+        Set of test DiaForcedSources to round trip.
     dateTime : `datetime.datetime`
         Time for the Apdb.
 
@@ -212,20 +252,31 @@ def _roundTripThroughApdb(objects, sources, dateTime):
     diaSources = apdb.getDiaSources(np.unique(objects["diaObjectId"]),
                                     dateTime,
                                     return_pandas=True).append(sources)
+    diaForcedSources = apdb.getDiaForcedSources(
+        np.unique(objects["diaObjectId"]),
+        dateTime,
+        return_pandas=True).append(forcedSources)
 
     apdb.storeDiaSources(diaSources)
+    apdb.storeDiaForcedSources(diaForcedSources)
     apdb.storeDiaObjects(diaObjects, dateTime)
 
     diaObjects = apdb.getDiaObjects([[minId, maxId + 1]], return_pandas=True)
     diaSources = apdb.getDiaSources(np.unique(diaObjects["diaObjectId"]),
                                     dateTime,
                                     return_pandas=True)
+    diaForcedSources = apdb.getDiaForcedSources(
+        np.unique(diaObjects["diaObjectId"]),
+        dateTime,
+        return_pandas=True)
+
     diaObjects.set_index("diaObjectId", drop=False, inplace=True)
     diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
                          drop=False,
                          inplace=True)
+    diaForcedSources.set_index(["diaObjectId"], drop=False, inplace=True)
 
-    return (diaObjects, diaSources)
+    return (diaObjects, diaSources, diaForcedSources)
 
 
 class TestPackageAlerts(lsst.utils.tests.TestCase):
@@ -262,12 +313,17 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         diaSourceHistory = makeDiaSources(10,
                                           diaObjects["diaObjectId"],
                                           self.exposure)
-        self.diaObjects, diaSourceHistory = _roundTripThroughApdb(
+        diaForcedSources = makeDiaForcedSources(10,
+                                                diaObjects["diaObjectId"],
+                                                self.exposure)
+        self.diaObjects, diaSourceHistory, self.diaForcedSources = _roundTripThroughApdb(
             diaObjects,
             diaSourceHistory,
+            diaForcedSources,
             self.exposure.getInfo().getVisitInfo().getDate().toPython())
         self.diaObjects.replace(to_replace=[None], value=np.nan, inplace=True)
         diaSourceHistory.replace(to_replace=[None], value=np.nan, inplace=True)
+        self.diaForcedSources.replace(to_replace=[None], value=np.nan, inplace=True)
         diaSourceHistory["programId"] = 0
 
         self.diaSources = diaSourceHistory.loc[
@@ -372,11 +428,13 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             cutoutBytes = packageAlerts.streamCcdDataToBytes(
                 ccdCutout)
             objSources = self.diaSourceHistory.loc[srcIdx[0]]
+            objForcedSources = self.diaForcedSources.loc[srcIdx[0]]
             alert = packageAlerts.makeAlertDict(
                 alertId,
                 diaSource,
                 self.diaObjects.loc[srcIdx[0]],
                 objSources,
+                objForcedSources,
                 ccdCutout,
                 None)
             self.assertEqual(len(alert), 9)
@@ -399,6 +457,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         packageAlerts.run(self.diaSources,
                           self.diaObjects,
                           self.diaSourceHistory,
+                          self.diaForcedSources,
                           self.exposure,
                           None,
                           None)

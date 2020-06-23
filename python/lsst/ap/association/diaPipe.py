@@ -30,6 +30,8 @@ Currently loads directly from the Apdb rather than pre-loading.
 
 import os
 
+import pandas as pd
+
 import lsst.dax.apdb as daxApdb
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
@@ -239,9 +241,14 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             exposure.getInfo().getVisitInfo().getDate().toPython())
         self.apdb.storeDiaForcedSources(diaForcedSources)
         if self.config.doPackageAlerts:
+            diaForcedSources.set_index("diaObjectId", drop=False, inplace=True)
+            if len(loaderResult.diaForcedSources) > 1:
+                diaForcedSources = pd.concat([diaForcedSources,
+                                              loaderResult.diaForcedSources])
             self.alertPackager.run(assocResults.diaSources,
                                    assocResults.diaObjects,
                                    loaderResult.diaSources,
+                                   diaForcedSources,
                                    diffIm,
                                    None,
                                    ccdExposureIdBits)
