@@ -239,9 +239,14 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             exposure.getInfo().getVisitInfo().getDate().toPython())
         self.apdb.storeDiaForcedSources(diaForcedSources)
         if self.config.doPackageAlerts:
+            if len(loaderResult.diaForcedSources) > 1:
+                diaForcedSources = diaForcedSources.append(
+                    loaderResult.diaForcedSources,
+                    sort=True)
             self.alertPackager.run(assocResults.diaSources,
                                    assocResults.diaObjects,
                                    loaderResult.diaSources,
+                                   diaForcedSources,
                                    diffIm,
                                    None,
                                    ccdExposureIdBits)

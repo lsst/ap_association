@@ -27,6 +27,7 @@ import os
 from astropy import wcs
 import astropy.units as u
 from astropy.nddata import CCDData, VarianceUncertainty
+import pandas as pd
 
 import lsst.alert.packet as alertPack
 import lsst.afw.geom as afwGeom
@@ -82,6 +83,7 @@ class PackageAlertsTask(pipeBase.Task):
             diaSourceCat,
             diaObjectCat,
             diaSrcHistory,
+            diaForcedSources,
             diffIm,
             template,
             ccdExposureIdBits):
@@ -102,6 +104,9 @@ class PackageAlertsTask(pipeBase.Task):
             12 month history of DiaSources matched to the DiaObjects. Excludes
             the newest DiaSource and is indexed on
             ``["diaObjectId", "filterName", "diaSourceId"]``
+        diaForcedSources : `pandas.DataFrame`
+            12 month history of DiaForcedSources matched to the DiaObjects.
+            ``["diaObjectId"]``
         diffIm : `lsst.afw.image.ExposureF`
             Difference image the sources in ``diaSourceCat`` were detected in.
         template : `lsst.afw.image.ExposureF` or `None`
@@ -121,6 +126,7 @@ class PackageAlertsTask(pipeBase.Task):
                 objSourceHistory = diaSrcHistory.loc[srcIndex[0]]
             else:
                 objSourceHistory = None
+            objDiaForcedSources = diaForcedSources.loc[srcIndex[0]]
             sphPoint = geom.SpherePoint(diaSource["ra"],
                                         diaSource["decl"],
                                         geom.degrees)
@@ -138,6 +144,7 @@ class PackageAlertsTask(pipeBase.Task):
                                    diaSource,
                                    diaObject,
                                    objSourceHistory,
+                                   objDiaForcedSources,
                                    diffImCutout,
                                    templateCutout))
         with open(os.path.join(self.config.alertWriteLocation,
@@ -259,6 +266,7 @@ class PackageAlertsTask(pipeBase.Task):
                       diaSource,
                       diaObject,
                       objDiaSrcHistory,
+                      objDiaForcedSources,
                       diffImCutout,
                       templateCutout):
         """Convert data and package into a dictionary alert.
@@ -271,6 +279,8 @@ class PackageAlertsTask(pipeBase.Task):
             DiaObject that ``diaSource`` is matched to.
         objDiaSrcHistory : `pandas.DataFrame`
             12 month history of ``diaObject`` excluding the latest DiaSource.
+        objDiaForcedSources : `pandas.DataFrame`
+            12 month history of ``diaObject`` forced measurements.
         diffImCutout : `astropy.nddata.CCDData` or `None`
             Cutout of the difference image around the location of ``diaSource``
             with a min size set by the ``cutoutSize`` configurable.
@@ -287,7 +297,10 @@ class PackageAlertsTask(pipeBase.Task):
         else:
             alert['prvDiaSources'] = objDiaSrcHistory.to_dict("records")
 
-        alert['prvDiaForcedSources'] = None
+        if isinstance(objDiaForcedSources, pd.Series):
+            alert['prvDiaForcedSources'] = [objDiaForcedSources.to_dict()]
+        else:
+            alert['prvDiaForcedSources'] = objDiaForcedSources.to_dict("records")
         alert['prvDiaNondetectionLimits'] = None
 
         alert['diaObject'] = diaObject.to_dict()

@@ -211,6 +211,39 @@ def makeDiaSources(nSources, diaObjectIds, exposure, pixelator):
     return pd.DataFrame(data=data)
 
 
+def makeDiaForcedSources(nForcedSources, diaObjectIds, exposure):
+    """Make a test set of DiaForcedSources.
+
+    Parameters
+    ----------
+    nForcedSources : `int`
+        Number of sources to create.
+    diaObjectIds : `numpy.ndarray`
+        Integer Ids of diaobjects to "associate" with the DiaSources.
+    exposure : `lsst.afw.image.Exposure`
+        Exposure to create sources over.
+
+    Returns
+    -------
+    diaForcedSources : `pandas.DataFrame`
+        DiaForcedSources generated across the exposure.
+    """
+    rand_ids = diaObjectIds[
+        np.random.randint(len(diaObjectIds), size=nForcedSources)]
+
+    midPointTaiMJD = exposure.getInfo().getVisitInfo().getDate().get(
+        system=dafBase.DateTime.MJD)
+
+    data = []
+    for idx, objId in enumerate(rand_ids):
+        data.append({"diaObjectId": objId,
+                     "diaForcedSourceId": idx,
+                     "ccdVisitId": idx,
+                     "midPointTai": midPointTaiMJD})
+
+    return pd.DataFrame(data=data)
+
+
 class TestLoadDiaCatalogs(unittest.TestCase):
 
     def setUp(self):
@@ -256,8 +289,13 @@ class TestLoadDiaCatalogs(unittest.TestCase):
             self.diaObjects["diaObjectId"].to_numpy(),
             self.exposure,
             self.pixelator)
+        self.diaForcedSources = makeDiaForcedSources(
+            200,
+            self.diaObjects["diaObjectId"].to_numpy(),
+            self.exposure)
 
         self.apdb.storeDiaSources(self.diaSources)
+        self.apdb.storeDiaForcedSources(self.diaForcedSources)
         self.dateTime = \
             self.exposure.getInfo().getVisitInfo().getDate().toPython()
         self.apdb.storeDiaObjects(self.diaObjects,
@@ -275,6 +313,8 @@ class TestLoadDiaCatalogs(unittest.TestCase):
 
         self.assertEqual(len(result.diaObjects), len(self.diaObjects))
         self.assertEqual(len(result.diaSources), len(self.diaSources))
+        self.assertEqual(len(result.diaForcedSources),
+                         len(self.diaForcedSources))
 
     def testLoadDiaObjects(self):
         """Test that the correct number of diaObjects are loaded.
@@ -284,6 +324,16 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         diaObjects = diaLoader.loadDiaObjects(normPixels,
                                               self.apdb)
         self.assertEqual(len(diaObjects), len(self.diaObjects))
+
+    def testLoadDiaForcedSources(self):
+        """Test that the correct number of diaForcedSources are loaded.
+        """
+        diaLoader = LoadDiaCatalogsTask()
+        diaForcedSources = diaLoader.loadDiaForcedSources(
+            self.diaObjects,
+            self.dateTime,
+            self.apdb)
+        self.assertEqual(len(diaForcedSources), len(self.diaForcedSources))
 
     def testLoadDiaSourcesByPixelId(self):
         """Test that the correct number of diaSources are loaded.

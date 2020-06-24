@@ -108,9 +108,14 @@ class LoadDiaCatalogsTask(pipeBase.Task):
                                          pixelRanges,
                                          apdb)
 
+        diaForcedSources = self.loadDiaForcedSources(diaObjects,
+                                                     dateTime,
+                                                     apdb)
+
         return pipeBase.Struct(
             diaObjects=diaObjects,
-            diaSources=diaSources)
+            diaSources=diaSources,
+            diaForcedSources=diaForcedSources)
 
     @pipeBase.timeMethod
     def loadDiaObjects(self, pixelRanges, apdb):
@@ -152,7 +157,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             by ``pixelRanges``.
         pixelRanges : `list` of `tuples`
             Ranges of pixelIds that cover region of interest.
-        dataTime : `datetime.datetime`
+        dateTime : `datetime.datetime`
             Time of the current visit
         apdb : `lsst.dax.apdb.Apdb`
             Database connection object to load from.
@@ -191,6 +196,40 @@ class LoadDiaCatalogsTask(pipeBase.Task):
                              drop=False,
                              inplace=True)
         return diaSources.replace(to_replace=[None], value=np.nan)
+
+    @pipeBase.timeMethod
+    def loadDiaForcedSources(self, diaObjects, dateTime, apdb):
+        """Load DiaObjects from the Apdb based on their HTM location.
+
+        Parameters
+        ----------
+        diaObjects : `pandas.DataFrame`
+            DiaObjects loaded from the Apdb.
+        dateTime : `datetime.datetime`
+            Time of the current visit
+        apdb : `lsst.dax.apdb.Apdb`
+            Database connection object to load from.
+
+        Returns
+        -------
+        diaObjects : `pandas.DataFrame`
+            DiaObjects loaded from the Apdb that are within the area defined
+            by ``pixelRanges``.
+        """
+        if len(diaObjects) == 0:
+            # If no diaObjects are available return an empty DataFrame with
+            # the the column used for indexing later in AssociationTask.
+            diaForcedSources = pd.DataFrame(columns=["diaObjectId",
+                                                     "diaForcedSourceId"])
+        else:
+            diaForcedSources = apdb.getDiaForcedSources(
+                diaObjects.loc[:, "diaObjectId"],
+                dateTime,
+                return_pandas=True)
+        diaForcedSources.set_index(["diaObjectId", "diaForcedSourceId"],
+                                   drop=False,
+                                   inplace=True)
+        return diaForcedSources.replace(to_replace=[None], value=np.nan)
 
     @pipeBase.timeMethod
     def _getPixelRanges(self, exposure):

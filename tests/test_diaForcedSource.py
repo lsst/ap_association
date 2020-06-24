@@ -175,7 +175,7 @@ class TestDiaForcedSource(unittest.TestCase):
         self.diffim.setPsf(psf)
 
         self.testDiaObjects = create_test_dia_objects(5, self.wcs)
-        self.expected_n_columns = 10
+        self.expected_n_columns = 11
 
     def testRun(self):
         """Test that forced source catalogs are successfully created and have

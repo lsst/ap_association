@@ -177,7 +177,11 @@ class DiaForcedSourceTask(pipeBase.Task):
                                                           diffim,
                                                           exposure)
 
-        return self._trim_to_exposure(output_forced_sources, exposure)
+        output_forced_sources = self._trim_to_exposure(output_forced_sources,
+                                                       exposure)
+        return output_forced_sources.set_index(
+            ["diaObjectId", "diaForcedSourceId"],
+            drop=False)
 
     def _convert_from_pandas(self, input_objects):
         """Create minimal schema SourceCatalog from a pandas DataFrame.
@@ -259,6 +263,7 @@ class DiaForcedSourceTask(pipeBase.Task):
         midPointTaiMJD = visit_info.getDate().get(system=DateTime.MJD)
         output_catalog["ccdVisitId"] = ccdVisitId
         output_catalog["midPointTai"] = midPointTaiMJD
+        output_catalog["filterName"] = diff_exp.getFilter().getCanonicalName()
 
         # Drop superfluous columns from output DataFrame.
         output_catalog.drop(columns=self.config.dropColumns, inplace=True)
