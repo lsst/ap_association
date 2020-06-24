@@ -157,7 +157,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             by ``pixelRanges``.
         pixelRanges : `list` of `tuples`
             Ranges of pixelIds that cover region of interest.
-        dataTime : `datetime.datetime`
+        dateTime : `datetime.datetime`
             Time of the current visit
         apdb : `lsst.dax.apdb.Apdb`
             Database connection object to load from.
@@ -203,8 +203,10 @@ class LoadDiaCatalogsTask(pipeBase.Task):
 
         Parameters
         ----------
-        pixelRanges : `tuple` [`int`]
-            Ranges of pixel values that cover region of interest.
+        diaObjects : `pandas.DataFrame`
+            DiaObjects loaded from the Apdb.
+        dateTime : `datetime.datetime`
+            Time of the current visit
         apdb : `lsst.dax.apdb.Apdb`
             Database connection object to load from.
 
@@ -217,13 +219,16 @@ class LoadDiaCatalogsTask(pipeBase.Task):
         if len(diaObjects) == 0:
             # If no diaObjects are available return an empty DataFrame with
             # the the column used for indexing later in AssociationTask.
-            diaForcedSources = pd.DataFrame(columns=["diaObjectId"])
+            diaForcedSources = pd.DataFrame(columns=["diaObjectId",
+                                                     "diaForcedSourceId"])
         else:
             diaForcedSources = apdb.getDiaForcedSources(
                 diaObjects.loc[:, "diaObjectId"],
                 dateTime,
                 return_pandas=True)
-        diaForcedSources.set_index("diaObjectId", drop=False, inplace=True)
+        diaForcedSources.set_index(["diaObjectId", "diaForcedSourceId"],
+                                   drop=False,
+                                   inplace=True)
         return diaForcedSources.replace(to_replace=[None], value=np.nan)
 
     @pipeBase.timeMethod

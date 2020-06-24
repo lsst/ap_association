@@ -178,8 +178,6 @@ def makeDiaForcedSources(nSources, diaObjectIds, exposure):
         Integer Ids of diaobjects to "associate" with the DiaSources.
     exposure : `lsst.afw.image.Exposure`
         Exposure to create sources over.
-    pixelator : `lsst.sphgeom.HtmPixelization`
-        Object to compute spatial indicies from.
 
     Returns
     -------

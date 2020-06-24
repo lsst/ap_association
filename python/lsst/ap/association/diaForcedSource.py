@@ -177,7 +177,11 @@ class DiaForcedSourceTask(pipeBase.Task):
                                                           diffim,
                                                           exposure)
 
-        return self._trim_to_exposure(output_forced_sources, exposure)
+        output_forced_sources = self._trim_to_exposure(output_forced_sources,
+                                                       exposure)
+        return output_forced_sources.set_index(
+            ["diaObjectId", "diaForcedSourceId"],
+            drop=False)
 
     def _convert_from_pandas(self, input_objects):
         """Create minimal schema SourceCatalog from a pandas DataFrame.
