@@ -81,6 +81,13 @@ class DiaPipelineConnections(pipeBase.PipelineTaskConnections,
         storageClass="ExposureF",
         dimensions=("instrument", "visit", "detector"),
     )
+    warpedExposure = connTypes.Input(
+        doc="Warped template used to create `subtractedExposure`. Not PSF "
+            "matched.",
+        dimensions=("instrument", "visit", "detector"),
+        storageClass="ExposureF",
+        name="{fakesType}{coaddName}Diff_warpedExp",
+    )
     apdbMarker = connTypes.Output(
         doc="Marker dataset storing the configuration of the Apdb for each "
             "visit/detector. Used to signal the completion of the pipeline.",
@@ -94,6 +101,11 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
                         pipelineConnections=DiaPipelineConnections):
     """Config for DiaPipelineTask.
     """
+    coaddName = pexConfig.Field(
+        doc="coadd name: typically one of deep, goodSeeing, or dcr",
+        dtype=str,
+        default="deep",
+    )
     apdb = pexConfig.ConfigurableField(
         target=daxApdb.Apdb,
         ConfigClass=daxApdb.ApdbConfig,
@@ -178,7 +190,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         butlerQC.put(outputs, outputRefs)
 
     @pipeBase.timeMethod
-    def run(self, diaSourceCat, diffIm, exposure, ccdExposureIdBits):
+    def run(self, diaSourceCat, diffIm, exposure, template, ccdExposureIdBits):
         """Process DiaSources and DiaObjects.
 
         Load previous DiaObjects and their DiaSource history. Calibrate the
@@ -190,12 +202,14 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         ----------
         diaSourceCat : `lsst.afw.table.SourceCatalog`
             Newly detected DiaSources.
-        diffIm : `lsst.afw.image.Exposure`
+        diffIm : `lsst.afw.image.ExposureF`
             Difference image exposure in which the sources in ``diaSourceCat``
             were detected.
-        exposure : `lsst.afw.image.Exposure`
+        exposure : `lsst.afw.image.ExposureF`
             Calibrated exposure differenced with a template to create
             ``diffIm``.
+        template : `lsst.afw.image.ExposureF`
+            Template exposure used to create diffIm.
         ccdExposureIdBits : `int`
             Number of bits used for a unique ``ccdVisitId``.
 
@@ -248,7 +262,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                    loaderResult.diaSources,
                                    diaForcedSources,
                                    diffIm,
-                                   None,
+                                   template,
                                    ccdExposureIdBits)
 
         return pipeBase.Struct(apdbMarker=self.config.apdb.value)

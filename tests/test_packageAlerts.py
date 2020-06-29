@@ -434,7 +434,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                 objSources,
                 objForcedSources,
                 ccdCutout,
-                None)
+                ccdCutout)
             self.assertEqual(len(alert), 9)
 
             self.assertEqual(alert["alertId"], alertId)
@@ -442,7 +442,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             self.assertEqual(alert["cutoutDifference"],
                              cutoutBytes)
             self.assertEqual(alert["cutoutTemplate"],
-                             None)
+                             cutoutBytes)
 
     def testRun(self):
         """Test the run method of package alerts.
@@ -457,7 +457,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                           self.diaSourceHistory,
                           self.diaForcedSources,
                           self.exposure,
-                          None,
+                          self.exposure,
                           None)
 
         ccdVisitId = self.exposure.getInfo().getVisitInfo().getExposureId()

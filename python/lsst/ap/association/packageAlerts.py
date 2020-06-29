@@ -119,6 +119,7 @@ class PackageAlertsTask(pipeBase.Task):
         self._patchDiaSources(diaSrcHistory)
         ccdVisitId = diffIm.getInfo().getVisitInfo().getExposureId()
         diffImPhotoCalib = diffIm.getPhotoCalib()
+        templatePhotoCalib = template.getPhotoCalib()
         for srcIndex, diaSource in diaSourceCat.iterrows():
             # Get all diaSources for the associated diaObject.
             diaObject = diaObjectCat.loc[srcIndex[0]]
@@ -136,7 +137,12 @@ class PackageAlertsTask(pipeBase.Task):
                 sphPoint,
                 diffImPhotoCalib)
 
-            templateCutout = None
+            templateBBox = self.createDiaSourceBBox(diaSource["bboxSize"])
+            templateCutout = self.createCcdDataCutout(
+                template.getCutout(sphPoint, templateBBox),
+                sphPoint,
+                templatePhotoCalib)
+
             # TODO: Create alertIds DM-24858
             alertId = diaSource["diaSourceId"]
             alerts.append(
@@ -308,8 +314,7 @@ class PackageAlertsTask(pipeBase.Task):
         alert['ssObject'] = None
 
         alert['cutoutDifference'] = self.streamCcdDataToBytes(diffImCutout)
-        # TODO: add template cutouts in DM-24327
-        alert["cutoutTemplate"] = None
+        alert["cutoutTemplate"] = self.streamCcdDataToBytes(templateCutout)
 
         return alert
 
