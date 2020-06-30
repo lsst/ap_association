@@ -157,7 +157,8 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
                      "diaSourceId": idx,
                      "pixelId": htmIdx,
                      "midPointTai": midPointTaiMJD + 1.0 * idx,
-                     "filterName": exposure.getFilter().getCanonicalName(),
+                     # TODO DM-21333: Remove [0] (first character only) workaround
+                     "filterName": exposure.getFilter().getCanonicalName()[0],
                      "filterId": 0,
                      "psNdata": 0,
                      "trailNdata": 0,
@@ -197,7 +198,8 @@ def makeDiaForcedSources(nSources, diaObjectIds, exposure):
                      "ccdVisitId": ccdVisitId + idx,
                      "diaObjectId": objId,
                      "midPointTai": midPointTaiMJD + 1.0 * idx,
-                     "filterName": exposure.getFilter().getCanonicalName(),
+                     # TODO DM-21333: Remove [0] (first character only) workaround
+                     "filterName": exposure.getFilter().getCanonicalName()[0],
                      "flags": 0})
 
     return pd.DataFrame(data=data)
