@@ -82,6 +82,7 @@ class TestDiaPipelineTask(unittest.TestCase):
             initInputs={"diaSourceSchema": self.srcSchema})
         diffIm = Mock(spec=afwImage.ExposureF)
         exposure = Mock(spec=afwImage.ExposureF)
+        template = Mock(spec=afwImage.ExposureF)
         diaSrc = Mock(sepc=afwTable.SourceCatalog)
         ccdExposureIdBits = 32
 
@@ -104,7 +105,11 @@ class TestDiaPipelineTask(unittest.TestCase):
         with patch.multiple(
             task, **{task: DEFAULT for task in subtasksToMock + ["apdb"]}
         ):
-            result = task.run(diaSrc, diffIm, exposure, ccdExposureIdBits)
+            result = task.run(diaSrc,
+                              diffIm,
+                              exposure,
+                              template,
+                              ccdExposureIdBits)
             for subtaskName in subtasksToMock:
                 getattr(task, subtaskName).run.assert_called_once()
             pipeBase.testUtils.assertValidOutput(task, result)
