@@ -34,7 +34,6 @@ import lsst.afw.geom as afwGeom
 import lsst.geom as geom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
-from lsst.utils import getPackageDir
 
 
 """Methods for packaging Apdb and Pipelines data into Avro alerts.
@@ -47,10 +46,7 @@ class PackageAlertsConfig(pexConfig.Config):
     schemaFile = pexConfig.Field(
         dtype=str,
         doc="Schema definition file for the avro alerts.",
-        default=os.path.join(getPackageDir("alert_packet"),
-                             "schema",
-                             *[str(x) for x in alertPack.get_latest_schema_version()],
-                             "lsst.alert.avsc")
+        default=alertPack.get_path_to_latest_schema()
     )
     minCutoutSize = pexConfig.RangeField(
         dtype=int,
