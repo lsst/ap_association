@@ -464,8 +464,9 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
 
         ccdVisitId = self.exposure.getInfo().getVisitInfo().getExposureId()
         with open(os.path.join(tempdir, f"{ccdVisitId}.avro"), 'rb') as f:
-            writer_schema, data = \
+            writer_schema, data_stream = \
                 packageAlerts.alertSchema.retrieve_alerts(f)
+            data = list(data_stream)
         self.assertEqual(len(data), len(self.diaSources))
         for idx, alert in enumerate(data):
             for key, value in alert["diaSource"].items():
