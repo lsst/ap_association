@@ -357,6 +357,12 @@ class MapDiaSourceTask(MapApDataTask):
             Record to copy and calibrate values into.
         """
         footprintBBox = inputRecord.getFootprint().getBBox()
+        # Compute twice the size of the largest dimension of the footprint
+        # bounding box. This is the largest footprint we should need to cover
+        # the complete DiaSource assuming the centroid is withing the bounding
+        # box.
+        maxSize = 2 * np.max([footprintBBox.getWidth(),
+                              footprintBBox.getHeight()])
         recX = inputRecord.getCentroid().x
         recY = inputRecord.getCentroid().y
         bboxSize = int(
@@ -364,6 +370,8 @@ class MapDiaSourceTask(MapApDataTask):
                                         footprintBBox.minX - recX,
                                         footprintBBox.maxY - recY,
                                         footprintBBox.minY - recY]))))
+        if bboxSize > maxSize:
+            bboxSize = maxSize
         outputRecord.set("bboxSize", bboxSize)
 
     def _convert_to_pandas(self, inputCatalog):
