@@ -138,7 +138,7 @@ class AssociationTask(pipeBase.Task):
         mergedDiaSourceHistory = diaSourceHistory.append(diaSources, sort=True)
 
         # Get the current filter being processed.
-        filterName = diaSources["filterName"][0]
+        filterName = diaSources["filterName"].iat[0]
 
         # Update previously existing DIAObjects with the information from their
         # newly association DIASources and create new DIAObjects from
