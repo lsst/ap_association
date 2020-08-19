@@ -236,9 +236,9 @@ class TotalUnassociatedDiaObjectsMetricTask(ApdbMetricTask):
             Raised if outputDataId is not empty
         """
         # All data ID types define keys()
-        if outputDataId.keys():
-            raise ValueError("%s must not be associated with specific data IDs."
-                             % self.config.metricName)
+        if outputDataId.keys() - {'instrument'}:
+            raise ValueError("%s must not be associated with specific data IDs (gave %s)."
+                             % (self.config.metricName, outputDataId))
 
         try:
             nUnassociatedDiaObjects = dbHandle.countUnassociatedObjects()

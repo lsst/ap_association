@@ -190,7 +190,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         butlerQC.put(outputs, outputRefs)
 
     @pipeBase.timeMethod
-    def run(self, diaSourceCat, diffIm, exposure, template, ccdExposureIdBits):
+    def run(self, diaSourceCat, diffIm, exposure, warpedExposure, ccdExposureIdBits):
         """Process DiaSources and DiaObjects.
 
         Load previous DiaObjects and their DiaSource history. Calibrate the
@@ -208,7 +208,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         exposure : `lsst.afw.image.ExposureF`
             Calibrated exposure differenced with a template to create
             ``diffIm``.
-        template : `lsst.afw.image.ExposureF`
+        warpedExposure : `lsst.afw.image.ExposureF`
             Template exposure used to create diffIm.
         ccdExposureIdBits : `int`
             Number of bits used for a unique ``ccdVisitId``.
@@ -262,7 +262,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                    loaderResult.diaSources,
                                    diaForcedSources,
                                    diffIm,
-                                   template,
+                                   warpedExposure,
                                    ccdExposureIdBits)
 
         return pipeBase.Struct(apdbMarker=self.config.apdb.value)
