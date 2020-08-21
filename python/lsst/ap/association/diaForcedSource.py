@@ -129,6 +129,7 @@ class DiaForcedSourceTask(pipeBase.Task):
         self.makeSubtask("forcedMeasurement",
                          refSchema=afwTable.SourceTable.makeMinimalSchema())
 
+    @pipeBase.timeMethod
     def run(self, dia_objects, expIdBits, exposure, diffim):
         """Measure forced sources on the direct and difference images.
 

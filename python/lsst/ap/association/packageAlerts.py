@@ -75,6 +75,7 @@ class PackageAlertsTask(pipeBase.Task):
         self.alertSchema = alertPack.Schema.from_file(self.config.schemaFile)
         os.makedirs(self.config.alertWriteLocation, exist_ok=True)
 
+    @pipeBase.timeMethod
     def run(self,
             diaSourceCat,
             diaObjectCat,

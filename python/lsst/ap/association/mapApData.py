@@ -75,6 +75,7 @@ class MapApDataTask(pipeBase.Task):
                 outputName,
                 True)
 
+    @pipeBase.timeMethod
     def run(self, inputCatalog, exposure=None):
         """Copy data from the inputCatalog into an output catalog with
         requested columns.
@@ -208,6 +209,7 @@ class MapDiaSourceTask(MapApDataTask):
                         "schema. Please check that the requested input column "
                         "exists." % outputFlag['columnName'])
 
+    @pipeBase.timeMethod
     def run(self, inputCatalog, exposure, return_pandas=False):
         """Copy data from the inputCatalog into an output catalog with
         requested columns.
