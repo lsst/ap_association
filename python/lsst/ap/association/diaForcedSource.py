@@ -25,8 +25,6 @@ locations.
 
 __all__ = ["DiaForcedSourceTask", "DiaForcedSourcedConfig"]
 
-import numpy as np
-
 import lsst.afw.table as afwTable
 from lsst.daf.base import DateTime
 import lsst.geom as geom
@@ -132,24 +130,14 @@ class DiaForcedSourceTask(pipeBase.Task):
                          refSchema=afwTable.SourceTable.makeMinimalSchema())
 
     @pipeBase.timeMethod
-    def run(self,
-            dia_objects,
-            updatedDiaObjectIds,
-            expIdBits,
-            exposure,
-            diffim):
+    def run(self, dia_objects, expIdBits, exposure, diffim):
         """Measure forced sources on the direct and difference images.
 
         Parameters
         ----------
         dia_objects : `pandas.DataFrame`
             Catalog of previously observed and newly created DiaObjects
-            contained within the difference and direct images. DiaObjects
-            must be indexed on the ``diaObjectId`` column.
-        updatedDiaObjectIds : `numpy.ndarray`
-            Array of diaObjectIds that were updated during this dia processing.
-            Used to assure that the pipeline includes all diaObjects that were
-            updated in case one falls on the edge of the CCD.
+            contained within the difference and direct images.
         expIdBits : `int`
             Bit length of the exposure id.
         exposure : `lsst.afw.image.Exposure`
@@ -191,7 +179,6 @@ class DiaForcedSourceTask(pipeBase.Task):
                                                           exposure)
 
         output_forced_sources = self._trim_to_exposure(output_forced_sources,
-                                                       updatedDiaObjectIds,
                                                        exposure)
         return output_forced_sources.set_index(
             ["diaObjectId", "diaForcedSourceId"],
@@ -277,24 +264,22 @@ class DiaForcedSourceTask(pipeBase.Task):
         midPointTaiMJD = visit_info.getDate().get(system=DateTime.MJD)
         output_catalog["ccdVisitId"] = ccdVisitId
         output_catalog["midPointTai"] = midPointTaiMJD
-        output_catalog["filterName"] = diff_exp.getFilter().getCanonicalName()
+        # TODO DM-27170: fix this [0] workaround which gets a single character
+        # representation of the band.
+        output_catalog["filterName"] = diff_exp.getFilter().getCanonicalName()[0]
 
         # Drop superfluous columns from output DataFrame.
         output_catalog.drop(columns=self.config.dropColumns, inplace=True)
 
         return output_catalog
 
-    def _trim_to_exposure(self, catalog, updatedDiaObjectIds, exposure):
+    def _trim_to_exposure(self, catalog, exposure):
         """Remove DiaForcedSources that are outside of the bounding box region.
 
         Paramters
         ---------
         catalog : `pandas.DataFrame`
             DiaForcedSources to check against the exposure bounding box.
-        updatedDiaObjectIds : `numpy.ndarray`
-            Array of diaObjectIds that were updated during this dia processing.
-            Used to assure that the pipeline includes all diaObjects that were
-            updated in case one falls on the edge of the CCD.
         exposure : `lsst.afw.image.Exposure`
             Exposure to check against.
 
@@ -309,7 +294,4 @@ class DiaForcedSourceTask(pipeBase.Task):
         xS = catalog.loc[:, "x"]
         yS = catalog.loc[:, "y"]
 
-        return catalog[
-            np.logical_or(bbox.contains(xS, yS),
-                          np.isin(catalog.loc[:, "diaObjectId"],
-                                  updatedDiaObjectIds))]
+        return catalog[bbox.contains(xS, yS)]
