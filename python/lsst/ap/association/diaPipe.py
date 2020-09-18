@@ -28,6 +28,7 @@ images at the updated locations of DiaObjects.
 Currently loads directly from the Apdb rather than pre-loading.
 """
 
+import numpy as np
 import os
 
 import lsst.dax.apdb as daxApdb
@@ -264,6 +265,10 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             ccdExposureIdBits,
             exposure,
             diffIm)
+
+        if len(assocResults.updatedDiaObjects) != len(np.unique(assocResults.updatedDiaObjects.loc[:, "diaObjectId"])):
+            self.log.fail("Updated DiaObjects has non-unquie values.")
+            raise ValueError
 
         # Store DiaSources and updated DiaObjects in the Apdb.
         self.apdb.storeDiaSources(assocResults.diaSources)
