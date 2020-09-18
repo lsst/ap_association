@@ -262,7 +262,7 @@ class AssociationTask(pipeBase.Task):
         """
         scores = np.full(len(dia_sources), np.inf, dtype=np.float64)
         obj_idxs = np.full(len(dia_sources), -1, dtype=np.int)
-        obj_ids = np.full(len(dia_sources), -1, dtype=np.int)
+        obj_ids = np.zeros(len(dia_sources), dtype=np.uint64)
 
         if len(dia_objects) == 0:
             return pipeBase.Struct(
@@ -282,6 +282,10 @@ class AssociationTask(pipeBase.Task):
         matched_src_idxs = np.argwhere(np.isfinite(scores))
         obj_ids[matched_src_idxs] = dia_objects.index.to_numpy()[
             obj_idxs[matched_src_idxs]]
+
+        valid_ids = obj_ids[obj_idxs > 0]
+        if len(valid_ids) > 0 and len(valid_ids) != len(np.unique(valid_ids)):
+            self.log.warn("Multiple DiaSources can match to one DiaObjects.")
 
         return pipeBase.Struct(
             scores=scores,
@@ -389,7 +393,7 @@ class AssociationTask(pipeBase.Task):
         for score_idx in score_args:
             if not np.isfinite(score_struct.scores[score_idx]):
                 # Thanks to the sorting the rest of the sources will be
-                # NaN for their score. We therefore exit the loop to append
+                # INF for their score. We therefore exit the loop to append
                 # sources to a existing DIAObject, leaving these for
                 # the loop creating new objects.
                 break
@@ -425,6 +429,12 @@ class AssociationTask(pipeBase.Task):
         # were updated or newly created.
         n_unassociated_dia_objects = \
             n_previous_dia_objects - n_updated_dia_objects
+
+        if len(associated_dia_object_ids) != len(np.unique(associated_dia_object_ids)):
+            self.log.fail("Matched DiaObject ids contains non-unique values. "
+                          "Exiting.")
+            raise ValueError
+
         return pipeBase.Struct(
             associated_dia_object_ids=associated_dia_object_ids,
             new_dia_objects=new_dia_objects,
