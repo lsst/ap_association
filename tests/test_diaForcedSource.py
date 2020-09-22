@@ -182,10 +182,14 @@ class TestDiaForcedSource(unittest.TestCase):
         sensible values.
         """
         test_objects = self._convert_to_pandas(self.testDiaObjects)
+        test_objects.rename(columns={"id": "diaObjectId"},
+                            inplace=True)
+        test_objects.set_index("diaObjectId", drop=False, inplace=True)
+        testIds = test_objects.loc[:, "diaObjectId"].to_numpy()[:6]
 
         dfs = DiaForcedSourceTask()
         dia_forced_sources = dfs.run(
-            test_objects, self.expIdBits, self.exposure, self.diffim)
+            test_objects, testIds, self.expIdBits, self.exposure, self.diffim)
 
         direct_values = [199854.48417094944, 160097.40719241602,
                          82299.17897267535, 27148.604434624354,
@@ -202,7 +206,7 @@ class TestDiaForcedSource(unittest.TestCase):
 
         # Should be number of test objects minus one as one object is purposely
         # outside of the ccd area.
-        self.assertEqual(len(dia_forced_sources), len(self.testDiaObjects) - 3)
+        self.assertEqual(len(dia_forced_sources), len(self.testDiaObjects) - 2)
         self.assertEqual(len(dia_forced_sources.columns),
                          self.expected_n_columns)
 
