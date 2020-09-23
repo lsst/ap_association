@@ -37,7 +37,9 @@ import lsst.utils.tests
 
 
 def create_test_dia_objects(n_points, wcs, startPos=100):
-    """Create dummy DIASources or DIAObjects for use in our tests.
+    """Create dummy DIASources or DIAObjects for use in our tests. Adds
+    Three test sources outsize of the ccd area.
+
     Parameters
     ----------
     n_points : `int`
@@ -185,11 +187,14 @@ class TestDiaForcedSource(unittest.TestCase):
         test_objects.rename(columns={"id": "diaObjectId"},
                             inplace=True)
         test_objects.set_index("diaObjectId", drop=False, inplace=True)
-        testIds = test_objects.loc[:, "diaObjectId"].to_numpy()[:6]
+        # Grab the ids of the five diaObjects to test that the additional
+        # logic of ``updated`` sources works. Result in 6 total sources in
+        # the final unittest.
+        updatedTestIds = test_objects.loc[:, "diaObjectId"].to_numpy()[1:6]
 
         dfs = DiaForcedSourceTask()
         dia_forced_sources = dfs.run(
-            test_objects, testIds, self.expIdBits, self.exposure, self.diffim)
+            test_objects, updatedTestIds, self.expIdBits, self.exposure, self.diffim)
 
         direct_values = [199854.48417094944, 160097.40719241602,
                          82299.17897267535, 27148.604434624354,
