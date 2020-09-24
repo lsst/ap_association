@@ -38,6 +38,7 @@ import lsst.utils.tests
 
 def create_test_dia_objects(n_points, wcs, startPos=100):
     """Create dummy DIASources or DIAObjects for use in our tests.
+
     Parameters
     ----------
     n_points : `int`
@@ -59,23 +60,6 @@ def create_test_dia_objects(n_points, wcs, startPos=100):
         src['id'] = src_idx
         src.setCoord(wcs.pixelToSky(startPos + src_idx,
                                     startPos + src_idx))
-
-    # Add points outside of the CCD.
-    # Fully outside.
-    src = objects.addNew()
-    src['id'] = 10000000
-    src.setCoord(wcs.pixelToSky(-100000,
-                                -100000))
-    # y outside
-    src = objects.addNew()
-    src['id'] = 10000001
-    src.setCoord(wcs.pixelToSky(100,
-                                -100000))
-    # x outside
-    src = objects.addNew()
-    src['id'] = 10000001
-    src.setCoord(wcs.pixelToSky(-100000,
-                                100))
 
     return objects
 
@@ -175,6 +159,31 @@ class TestDiaForcedSource(unittest.TestCase):
         self.diffim.setPsf(psf)
 
         self.testDiaObjects = create_test_dia_objects(5, self.wcs)
+        # Add additional diaObjects that are outside of the above difference
+        # and calexp visit images.
+        # xy outside
+        src = self.testDiaObjects.addNew()
+        src['id'] = 10000000
+        src.setCoord(self.wcs.pixelToSky(-100000,
+                                         -100000))
+        # y outside
+        src = self.testDiaObjects.addNew()
+        src['id'] = 10000001
+        src.setCoord(self.wcs.pixelToSky(100,
+                                         -100000))
+        # x outside
+        src = self.testDiaObjects.addNew()
+        src['id'] = 10000002
+        src.setCoord(self.wcs.pixelToSky(-100000,
+                                         100))
+        # Ids of objects that were "updated" during "ap_association"
+        # processing.
+        self.updatedTestIds = np.array([1, 2, 3, 4, 10000001], dtype=np.uint64)
+        # Expecdted number of sources is the number of updated ids plus
+        # any that are within the CCD footprint but are not in the
+        # above list of ids.
+        self.expectedDiaForcedSources = 6
+
         self.expected_n_columns = 11
 
     def testRun(self):
@@ -182,10 +191,12 @@ class TestDiaForcedSource(unittest.TestCase):
         sensible values.
         """
         test_objects = self._convert_to_pandas(self.testDiaObjects)
-
+        test_objects.rename(columns={"id": "diaObjectId"},
+                            inplace=True)
+        test_objects.set_index("diaObjectId", inplace=True, drop=False)
         dfs = DiaForcedSourceTask()
         dia_forced_sources = dfs.run(
-            test_objects, self.expIdBits, self.exposure, self.diffim)
+            test_objects, self.updatedTestIds, self.expIdBits, self.exposure, self.diffim)
 
         direct_values = [199854.48417094944, 160097.40719241602,
                          82299.17897267535, 27148.604434624354,
@@ -202,7 +213,7 @@ class TestDiaForcedSource(unittest.TestCase):
 
         # Should be number of test objects minus one as one object is purposely
         # outside of the ccd area.
-        self.assertEqual(len(dia_forced_sources), len(self.testDiaObjects) - 3)
+        self.assertEqual(len(dia_forced_sources), self.expectedDiaForcedSources)
         self.assertEqual(len(dia_forced_sources.columns),
                          self.expected_n_columns)
 

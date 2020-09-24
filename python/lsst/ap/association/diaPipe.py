@@ -242,6 +242,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # the new and updated DiaObject locations.
         diaForcedSources = self.diaForcedSource.run(
             assocResults.diaObjects,
+            assocResults.updatedDiaObjects.loc[:, "diaObjectId"].to_numpy(),
             ccdExposureIdBits,
             exposure,
             diffIm)
