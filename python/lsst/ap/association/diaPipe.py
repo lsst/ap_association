@@ -95,6 +95,19 @@ class DiaPipelineConnections(pipeBase.PipelineTaskConnections,
         storageClass="Config",
         dimensions=("instrument", "visit", "detector"),
     )
+    associatedDiaSources = connTypes.Output(
+        doc="Optional output storing the DiaSource catalog after matching and "
+            "SDMification.",
+        name="{fakesType}{coaddName}Diff_assocDiaSrc",
+        storageClass="DataFrame",
+        dimensions=("instrument", "visit", "detector"),
+    )
+
+    def __init__(self, *, config=None):
+        super().__init__(config=config)
+
+        if not config.doWriteAssociatedSources:
+            self.outputs.remove("associatedDiaSources")
 
 
 class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
@@ -139,6 +152,11 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         default=False,
         doc="Package Dia-data into serialized alerts for distribution and "
             "write them to disk.",
+    )
+    doWriteAssociatedSources = pexConfig.Field(
+        dtype=bool,
+        default=False,
+        doc="Write out associated and SDMed DiaSources.",
     )
 
     def setDefaults(self):
@@ -266,4 +284,5 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                    warpedExposure,
                                    ccdExposureIdBits)
 
-        return pipeBase.Struct(apdbMarker=self.config.apdb.value)
+        return pipeBase.Struct(apdbMarker=self.config.apdb.value,
+                               associatedDiaSources=assocResults.diaSources)
