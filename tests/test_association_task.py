@@ -323,7 +323,8 @@ class TestAssociationTask(unittest.TestCase):
                 dia_source=dia_source,
                 flux=10000,
                 fluxErr=100,
-                # TODO DM-21333: Remove [0] (first character only) workaround
+                # TODO DM-27170: fix this [0] workaround which gets a
+                # single character representation of the band.
                 filterName=self.exposure.getFilter().getCanonicalName()[0],
                 filterId=self.exposure.getFilter().getId(),
                 ccdVisitId=self.exposure.getInfo().getVisitInfo().getExposureId(),

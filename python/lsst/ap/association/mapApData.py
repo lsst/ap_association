@@ -233,8 +233,8 @@ class MapDiaSourceTask(MapApDataTask):
         ccdVisitId = visit_info.getExposureId()
         midPointTaiMJD = visit_info.getDate().get(system=DateTime.MJD)
         filterId = exposure.getFilter().getId()
-        # canonical name should always be the abstract filter (in Gen 3 sense)
-        # TODO DM-21333: Remove [0] (first character only) workaround
+        # TODO DM-27170: fix this [0] workaround which gets a single character
+        # representation of the band.
         filterName = exposure.getFilter().getCanonicalName()[0]
         wcs = exposure.getWcs()
 
