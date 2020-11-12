@@ -157,7 +157,8 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
                      "diaSourceId": idx,
                      "pixelId": htmIdx,
                      "midPointTai": midPointTaiMJD + 1.0 * idx,
-                     # TODO DM-21333: Remove [0] (first character only) workaround
+                     # TODO DM-27170: fix this [0] workaround which gets a
+                     # single character representation of the band.
                      "filterName": exposure.getFilter().getCanonicalName()[0],
                      "filterId": 0,
                      "psNdata": 0,
@@ -198,7 +199,8 @@ def makeDiaForcedSources(nSources, diaObjectIds, exposure):
                      "ccdVisitId": ccdVisitId + idx,
                      "diaObjectId": objId,
                      "midPointTai": midPointTaiMJD + 1.0 * idx,
-                     # TODO DM-21333: Remove [0] (first character only) workaround
+                     # TODO DM-27170: fix this [0] workaround which gets a
+                     # single character representation of the band.
                      "filterName": exposure.getFilter().getCanonicalName()[0],
                      "flags": 0})
 
