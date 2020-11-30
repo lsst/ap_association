@@ -96,8 +96,8 @@ class DiaPipelineConnections(pipeBase.PipelineTaskConnections,
         dimensions=("instrument", "visit", "detector"),
     )
     associatedDiaSources = connTypes.Output(
-        doc="Optional output storing the DiaSource catalog after matching and "
-            "SDMification.",
+        doc="Optional output storing the DiaSource catalog after matching, "
+            "calibration, and standardization for insertation into the Apdb.",
         name="{fakesType}{coaddName}Diff_assocDiaSrc",
         storageClass="DataFrame",
         dimensions=("instrument", "visit", "detector"),
