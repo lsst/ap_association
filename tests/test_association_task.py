@@ -26,7 +26,6 @@ import unittest
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
-import lsst.afw.image.utils as afwImageUtils
 import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
 import lsst.geom as geom
@@ -162,15 +161,7 @@ class TestAssociationTask(unittest.TestCase):
     def setUp(self):
         """Create a sqlite3 database with default tables and schemas.
         """
-        # CFHT Filters from the camera mapper.
         self.filter_names = ["u", "g", "r", "i", "z"]
-        afwImageUtils.resetFilters()
-        afwImageUtils.defineFilter('u', lambdaEff=374, alias="u.MP9301")
-        afwImageUtils.defineFilter('g', lambdaEff=487, alias="g.MP9401")
-        afwImageUtils.defineFilter('r', lambdaEff=628, alias="r.MP9601")
-        afwImageUtils.defineFilter('i', lambdaEff=778, alias="i.MP9701")
-        afwImageUtils.defineFilter('z', lambdaEff=1170, alias="z.MP9801")
-
         self.dia_object_schema = make_dia_object_schema()
 
         # metadata taken from CFHT data
@@ -210,7 +201,7 @@ class TestAssociationTask(unittest.TestCase):
                                   dafBase.DateTime.Timescale.TAI))
         self.exposure.setDetector(detector)
         self.exposure.getInfo().setVisitInfo(visit)
-        self.exposure.setFilter(afwImage.Filter('g'))
+        self.exposure.setFilterLabel(afwImage.FilterLabel(band='g'))
         self.flux0 = 10000
         self.flux0_err = 100
         self.exposure.setPhotoCalib(
@@ -323,9 +314,7 @@ class TestAssociationTask(unittest.TestCase):
                 dia_source=dia_source,
                 flux=10000,
                 fluxErr=100,
-                # TODO DM-27170: fix this [0] workaround which gets a
-                # single character representation of the band.
-                filterName=self.exposure.getFilter().getCanonicalName()[0],
+                filterName=self.exposure.getFilterLabel().bandLabel,
                 ccdVisitId=self.exposure.getInfo().getVisitInfo().getExposureId(),
                 midPointTai=self.exposure.getInfo().getVisitInfo().getDate().get(system=dafBase.DateTime.MJD))
 

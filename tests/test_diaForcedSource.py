@@ -26,7 +26,6 @@ import unittest.mock
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
-import lsst.afw.image.utils as afwImageUtils
 import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
 import lsst.meas.algorithms as measAlg
@@ -67,15 +66,6 @@ def create_test_dia_objects(n_points, wcs, startPos=100):
 class TestDiaForcedSource(unittest.TestCase):
 
     def setUp(self):
-        # CFHT Filters from the camera mapper.
-        self.filter_names = ["u", "g", "r", "i", "z"]
-        afwImageUtils.resetFilters()
-        afwImageUtils.defineFilter('u', lambdaEff=374, alias="u.MP9301")
-        afwImageUtils.defineFilter('g', lambdaEff=487, alias="g.MP9401")
-        afwImageUtils.defineFilter('r', lambdaEff=628, alias="r.MP9601")
-        afwImageUtils.defineFilter('i', lambdaEff=778, alias="i.MP9701")
-        afwImageUtils.defineFilter('z', lambdaEff=1170, alias="z.MP9801")
-
         # metadata taken from CFHT data
         # v695856-e0/v695856-e0-c000-a00.sci_img.fits
         self.metadata = dafBase.PropertySet()
@@ -132,7 +122,7 @@ class TestDiaForcedSource(unittest.TestCase):
                                   dafBase.DateTime.Timescale.TAI))
         self.exposure.setDetector(detector)
         self.exposure.getInfo().setVisitInfo(visit)
-        self.exposure.setFilter(afwImage.Filter('g'))
+        self.exposure.setFilterLabel(afwImage.FilterLabel(band='g', physical='g.MP9401'))
         self.exposure.setPhotoCalib(afwImage.PhotoCalib(self.calibration, self.calibrationErr))
 
         # Difference Image
@@ -148,7 +138,7 @@ class TestDiaForcedSource(unittest.TestCase):
         self.diffim = afwImage.makeExposure(masked_image, self.wcs)
         self.diffim.setDetector(detector)
         self.diffim.getInfo().setVisitInfo(visit)
-        self.diffim.setFilter(afwImage.Filter('g'))
+        self.diffim.setFilterLabel(afwImage.FilterLabel(band='g', physical='g.MP9401'))
         self.diffim.setPhotoCalib(afwImage.PhotoCalib(self.calibration, self.calibrationErr))
 
         self.expIdBits = 16

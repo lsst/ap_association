@@ -232,9 +232,7 @@ class MapDiaSourceTask(MapApDataTask):
         visit_info = exposure.getInfo().getVisitInfo()
         ccdVisitId = visit_info.getExposureId()
         midPointTaiMJD = visit_info.getDate().get(system=DateTime.MJD)
-        # TODO DM-27170: fix this [0] workaround which gets a single character
-        # representation of the band.
-        filterName = exposure.getFilter().getCanonicalName()[0]
+        filterName = exposure.getFilterLabel().bandLabel
         wcs = exposure.getWcs()
 
         photoCalib = exposure.getPhotoCalib()

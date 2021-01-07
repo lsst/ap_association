@@ -277,9 +277,7 @@ class DiaForcedSourceTask(pipeBase.Task):
         midPointTaiMJD = visit_info.getDate().get(system=DateTime.MJD)
         output_catalog["ccdVisitId"] = ccdVisitId
         output_catalog["midPointTai"] = midPointTaiMJD
-        # TODO DM-27170: fix this [0] workaround which gets a single character
-        # representation of the band.
-        output_catalog["filterName"] = diff_exp.getFilter().getCanonicalName()[0]
+        output_catalog["filterName"] = diff_exp.getFilterLabel().bandLabel
 
         # Drop superfluous columns from output DataFrame.
         output_catalog.drop(columns=self.config.dropColumns, inplace=True)
