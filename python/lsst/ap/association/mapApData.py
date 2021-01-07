@@ -232,7 +232,6 @@ class MapDiaSourceTask(MapApDataTask):
         visit_info = exposure.getInfo().getVisitInfo()
         ccdVisitId = visit_info.getExposureId()
         midPointTaiMJD = visit_info.getDate().get(system=DateTime.MJD)
-        filterId = exposure.getFilter().getId()
         # TODO DM-27170: fix this [0] workaround which gets a single character
         # representation of the band.
         filterName = exposure.getFilter().getCanonicalName()[0]
@@ -253,7 +252,6 @@ class MapDiaSourceTask(MapApDataTask):
             self.computeBBoxSize(inputRecord, outputRecord)
             outputRecord.set("ccdVisitId", ccdVisitId)
             outputRecord.set("midPointTai", midPointTaiMJD)
-            outputRecord.set("filterId", filterId)
             outputRecord.set("filterName", filterName)
 
         if not outputCatalog.isContiguous():

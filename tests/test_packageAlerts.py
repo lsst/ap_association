@@ -160,7 +160,6 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
                      # TODO DM-27170: fix this [0] workaround which gets a
                      # single character representation of the band.
                      "filterName": exposure.getFilter().getCanonicalName()[0],
-                     "filterId": 0,
                      "psNdata": 0,
                      "trailNdata": 0,
                      "dipNdata": 0,

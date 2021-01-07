@@ -711,9 +711,6 @@ def make_dia_source_schema():
     schema.addField("filterName", type='String', size=10,
                     doc='String name of the filter this source was observed '
                         'in.')
-    schema.addField("filterId", type='L',
-                    doc='Obs package id of the filter this source was '
-                        'observed in.')
     schema.addField("isDipole", type='Flag',
                     doc='Object determined to be a dipole.')
     schema.addField("bboxSize", type='L',
@@ -769,7 +766,6 @@ def getCcdVisitSchemaSql():
     return oDict([("ccdVisitId", "INTEGER PRIMARY KEY"),
                   ("ccdNum", "INTEGER"),
                   ("filterName", "TEXT"),
-                  ("filterId", "INTEGER"),
                   ("ra", "REAL"),
                   ("decl", "REAL"),
                   ("expTime", "REAL"),
