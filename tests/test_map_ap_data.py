@@ -32,7 +32,6 @@ from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
 import lsst.afw.image as afwImage
-import lsst.afw.image.utils as afwImageUtils
 import lsst.geom as geom
 import lsst.meas.base.tests as measTests
 from lsst.utils import getPackageDir
@@ -88,16 +87,7 @@ def make_input_source_catalog(dataset, add_flags=False):
 class TestAPDataMapperTask(unittest.TestCase):
 
     def setUp(self):
-
         nSources = 10
-        # CFHT Filters from the camera mapper.
-        afwImageUtils.resetFilters()
-        afwImageUtils.defineFilter('u', lambdaEff=374, alias="u.MP9301")
-        afwImageUtils.defineFilter('g', lambdaEff=487, alias="g.MP9401")
-        afwImageUtils.defineFilter('r', lambdaEff=628, alias="r.MP9601")
-        afwImageUtils.defineFilter('i', lambdaEff=778, alias="i.MP9701")
-        afwImageUtils.defineFilter('z', lambdaEff=1170, alias="z.MP9801")
-
         self.bbox = geom.Box2I(geom.Point2I(0, 0),
                                geom.Extent2I(1024, 1153))
         dataset = measTests.TestDataset(self.bbox)
@@ -114,7 +104,7 @@ class TestAPDataMapperTask(unittest.TestCase):
             date=dafBase.DateTime(nsecs=1400000000 * 10**9))
         self.exposure.setDetector(detector)
         self.exposure.getInfo().setVisitInfo(visit)
-        self.exposure.setFilter(afwImage.Filter('g.MP9401'))
+        self.exposure.setFilterLabel(afwImage.FilterLabel(band='g', physical='g.MP9401'))
         scale = 2
         scaleErr = 1
         self.photoCalib = afwImage.PhotoCalib(scale, scaleErr)

@@ -28,7 +28,6 @@ import unittest
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
-import lsst.afw.image.utils as afwImageUtils
 from lsst.ap.association import (LoadDiaCatalogsTask,
                                  LoadDiaCatalogsConfig,
                                  make_dia_source_schema,
@@ -117,7 +116,7 @@ def makeExposure(flipX=False, flipY=False):
                               dafBase.DateTime.Timescale.TAI))
     exposure.setDetector(detector)
     exposure.getInfo().setVisitInfo(visit)
-    exposure.setFilter(afwImage.Filter('g'))
+    exposure.setFilterLabel(afwImage.FilterLabel(band='g'))
 
     return exposure
 
@@ -248,11 +247,6 @@ class TestLoadDiaCatalogs(unittest.TestCase):
 
     def setUp(self):
         np.random.seed(1234)
-
-        # CFHT Filters from the camera mapper.
-        self.filter_names = ["g"]
-        afwImageUtils.resetFilters()
-        afwImageUtils.defineFilter('g', lambdaEff=487, alias="g.MP9401")
 
         self.db_file_fd, self.db_file = tempfile.mkstemp(
             dir=os.path.dirname(__file__))

@@ -612,10 +612,6 @@ columns:
   type: CHAR
   nullable: false
   description: Name of stored filter.
-- name: filterId
-  type: INT
-  nullable: false
-  description: id number of stored filter.
 - name: isDipole
   type: BOOL
   nullable: true

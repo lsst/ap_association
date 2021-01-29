@@ -26,7 +26,6 @@ import unittest
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
-import lsst.afw.image.utils as afwImageUtils
 import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
 import lsst.geom as geom
@@ -162,15 +161,7 @@ class TestAssociationTask(unittest.TestCase):
     def setUp(self):
         """Create a sqlite3 database with default tables and schemas.
         """
-        # CFHT Filters from the camera mapper.
         self.filter_names = ["u", "g", "r", "i", "z"]
-        afwImageUtils.resetFilters()
-        afwImageUtils.defineFilter('u', lambdaEff=374, alias="u.MP9301")
-        afwImageUtils.defineFilter('g', lambdaEff=487, alias="g.MP9401")
-        afwImageUtils.defineFilter('r', lambdaEff=628, alias="r.MP9601")
-        afwImageUtils.defineFilter('i', lambdaEff=778, alias="i.MP9701")
-        afwImageUtils.defineFilter('z', lambdaEff=1170, alias="z.MP9801")
-
         self.dia_object_schema = make_dia_object_schema()
 
         # metadata taken from CFHT data
@@ -210,7 +201,7 @@ class TestAssociationTask(unittest.TestCase):
                                   dafBase.DateTime.Timescale.TAI))
         self.exposure.setDetector(detector)
         self.exposure.getInfo().setVisitInfo(visit)
-        self.exposure.setFilter(afwImage.Filter('g'))
+        self.exposure.setFilterLabel(afwImage.FilterLabel(band='g'))
         self.flux0 = 10000
         self.flux0_err = 100
         self.exposure.setPhotoCalib(
@@ -323,10 +314,7 @@ class TestAssociationTask(unittest.TestCase):
                 dia_source=dia_source,
                 flux=10000,
                 fluxErr=100,
-                # TODO DM-27170: fix this [0] workaround which gets a
-                # single character representation of the band.
-                filterName=self.exposure.getFilter().getCanonicalName()[0],
-                filterId=self.exposure.getFilter().getId(),
+                filterName=self.exposure.getFilterLabel().bandLabel,
                 ccdVisitId=self.exposure.getInfo().getVisitInfo().getExposureId(),
                 midPointTai=self.exposure.getInfo().getVisitInfo().getDate().get(system=dafBase.DateTime.MJD))
 
@@ -356,7 +344,7 @@ class TestAssociationTask(unittest.TestCase):
         return results.diaObjects
 
     def _set_source_values(self, dia_source, flux, fluxErr, filterName,
-                           filterId, ccdVisitId, midPointTai):
+                           ccdVisitId, midPointTai):
         """Set fluxes and visit info for DiaSources.
 
         Parameters
@@ -369,8 +357,6 @@ class TestAssociationTask(unittest.TestCase):
             Flux error of DiaSource
         filterName : `string`
             Name of filter for flux.
-        filterId : `int`
-            Unique id of filter.
         ccdVisitId : `int`
             Integer id of this ccd/visit.
         midPointTai : `double`
@@ -391,7 +377,6 @@ class TestAssociationTask(unittest.TestCase):
             (fluxErr / self.flux0) ** 2
             + (flux * self.flux0_err / self.flux0 ** 2) ** 2)
         dia_source["filterName"] = filterName
-        dia_source["filterId"] = filterId
         dia_source["x"] = 0.
         dia_source["y"] = 0.
 
@@ -452,7 +437,6 @@ class TestAssociationTask(unittest.TestCase):
                     flux=10000,
                     fluxErr=100,
                     filterName='g',
-                    filterId=1,
                     ccdVisitId=1232,
                     midPointTai=dateTime.get(system=dafBase.DateTime.MJD))
             else:
@@ -461,7 +445,6 @@ class TestAssociationTask(unittest.TestCase):
                     flux=10000,
                     fluxErr=100,
                     filterName='r',
-                    filterId=2,
                     ccdVisitId=1233,
                     midPointTai=dateTime.get(system=dafBase.DateTime.MJD))
         dia_sources = dia_sources.asAstropy().to_pandas()

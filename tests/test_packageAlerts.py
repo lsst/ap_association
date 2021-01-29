@@ -36,7 +36,6 @@ from lsst.ap.association import (PackageAlertsConfig,
                                  make_dia_object_schema)
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.image as afwImage
-import lsst.afw.image.utils as afwImageUtils
 import lsst.daf.base as dafBase
 from lsst.dax.apdb import Apdb, ApdbConfig
 import lsst.geom as geom
@@ -157,10 +156,7 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
                      "diaSourceId": idx,
                      "pixelId": htmIdx,
                      "midPointTai": midPointTaiMJD + 1.0 * idx,
-                     # TODO DM-27170: fix this [0] workaround which gets a
-                     # single character representation of the band.
-                     "filterName": exposure.getFilter().getCanonicalName()[0],
-                     "filterId": 0,
+                     "filterName": exposure.getFilterLabel().bandLabel,
                      "psNdata": 0,
                      "trailNdata": 0,
                      "dipNdata": 0,
@@ -199,9 +195,7 @@ def makeDiaForcedSources(nSources, diaObjectIds, exposure):
                      "ccdVisitId": ccdVisitId + idx,
                      "diaObjectId": objId,
                      "midPointTai": midPointTaiMJD + 1.0 * idx,
-                     # TODO DM-27170: fix this [0] workaround which gets a
-                     # single character representation of the band.
-                     "filterName": exposure.getFilter().getCanonicalName()[0],
+                     "filterName": exposure.getFilterLabel().bandLabel,
                      "flags": 0})
 
     return pd.DataFrame(data=data)
@@ -306,10 +300,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                                   dafBase.DateTime.Timescale.TAI))
         self.exposure.getInfo().setVisitInfo(visit)
 
-        self.filter_names = ["g"]
-        afwImageUtils.resetFilters()
-        afwImageUtils.defineFilter('g', lambdaEff=487, alias="g.MP9401")
-        self.exposure.setFilter(afwImage.Filter('g'))
+        self.exposure.setFilterLabel(afwImage.FilterLabel(band='g', physical="g.MP9401"))
 
         diaObjects = makeDiaObjects(2, self.exposure)
         diaSourceHistory = makeDiaSources(10,
