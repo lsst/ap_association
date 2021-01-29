@@ -109,6 +109,31 @@ class DiaPipelineConnections(pipeBase.PipelineTaskConnections,
         if not config.doWriteAssociatedSources:
             self.outputs.remove("associatedDiaSources")
 
+    def adjustQuantum(self, datasetRefMap: pipeBase.InputQuantizedConnection):
+        """Override to make adjustments to `lsst.daf.butler.DatasetRef` objects
+        in the `lsst.daf.butler.core.Quantum` during the graph generation stage
+        of the activator.
+
+        This implementation checks to make sure that the filters in the dataset
+        are compatible with AP processing as set by the Apdb/DPDD schema.
+
+        Parameters
+        ----------
+        datasetRefMap : `NamedKeyDict`
+            Mapping from dataset type to a `set` of
+            `lsst.daf.butler.DatasetRef` objects
+        """
+        refs = datasetRefMap[self.diffIm.name]
+        for ref in refs:
+            if ref.dataId["band"] not in self.config.validBands:
+                raise ValueError(
+                    f"Requested '{ref.dataId['band']}' not in validBands list "
+                    "in DiaPipelineTask config. To process bands not in the "
+                    "standard Rubin set, ugrizy, you must add the band to the "
+                    "validBands list in DiaPipelineConfig and add the "
+                    "appropriate columns to the Apdb schema.")
+        return super().adjustQuantum(datasetRefMap)
+
 
 class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
                         pipelineConnections=DiaPipelineConnections):
@@ -124,6 +149,13 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         ConfigClass=daxApdb.ApdbConfig,
         doc="Database connection for storing associated DiaSources and "
             "DiaObjects. Must already be initialized.",
+    )
+    validBands = pexConfig.ListField(
+        dtype=str,
+        default=["u", "g", "r", "i", "z", "y"],
+        doc="List of bands that are  valid for AP processing. To process a "
+            "band not on this list, the appropriate, band specific columns "
+            "must be added to the Apdb schema in dax_apdb.",
     )
     diaSourceDpddifier = pexConfig.ConfigurableField(
         target=MapDiaSourceTask,
