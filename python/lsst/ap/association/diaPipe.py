@@ -29,7 +29,9 @@ Currently loads directly from the Apdb rather than pre-loading.
 """
 
 import os
+import typing
 
+from lsst.daf.butler import DatasetRef, DatasetType, NamedKeyDict, Quantum
 import lsst.dax.apdb as daxApdb
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
@@ -108,6 +110,23 @@ class DiaPipelineConnections(pipeBase.PipelineTaskConnections,
 
         if not config.doWriteAssociatedSources:
             self.outputs.remove("associatedDiaSources")
+
+    def adjustQuantum(self, datasetRefMap: NamedKeyDict[DatasetType, typing.Set[DatasetRef]]
+                      )
+        """Override to make adjustments to `lsst.daf.butler.DatasetRef` objects
+        in the `lsst.daf.butler.core.Quantum` during the graph generation stage
+        of the activator.
+
+        This implementation checks to make sure that the filters in the dataset
+        are compatible with AP processing as set by the Apdb/DPDD schema.
+
+        Parameters
+        ----------
+        datasetRefMap : `NamedKeyDict`
+            Mapping from dataset type to a `set` of
+            `lsst.daf.butler.DatasetRef` objects
+        """
+        import pdb; pdb.set_trace()
 
 
 class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
