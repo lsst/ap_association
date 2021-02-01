@@ -111,8 +111,7 @@ class DiaPipelineConnections(pipeBase.PipelineTaskConnections,
         if not config.doWriteAssociatedSources:
             self.outputs.remove("associatedDiaSources")
 
-    def adjustQuantum(self, datasetRefMap: NamedKeyDict[DatasetType, typing.Set[DatasetRef]]
-                      )
+    def adjustQuantum(self, datasetRefMap: pipeBase.InputQuantizedConnection):
         """Override to make adjustments to `lsst.daf.butler.DatasetRef` objects
         in the `lsst.daf.butler.core.Quantum` during the graph generation stage
         of the activator.
@@ -126,7 +125,12 @@ class DiaPipelineConnections(pipeBase.PipelineTaskConnections,
             Mapping from dataset type to a `set` of
             `lsst.daf.butler.DatasetRef` objects
         """
-        import pdb; pdb.set_trace()
+        for connection in pipeBase.connections.iterConnections(self, "inputs"):
+            refs = datasetRefMap[connection.name]
+            for ref in refs:
+                if ref.dataId["band"] not in ["g"]:
+                    raise ValueError("Not a fake filter")
+        return super().adjustQuantum(datasetRefMap)
 
 
 class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
