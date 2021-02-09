@@ -122,14 +122,26 @@ class DiaPipelineConnections(pipeBase.PipelineTaskConnections,
         datasetRefMap : `NamedKeyDict`
             Mapping from dataset type to a `set` of
             `lsst.daf.butler.DatasetRef` objects
+
+        Returns
+        -------
+        datasetRefMap : `NamedKeyDict`
+            Mapping of input with assurances that bands incompatible with the
+            Apdb are present.
+
+        Raises
+        ------
+        ValueError
+            Raises if a data ref in the quantum has a band not available in the
+            Apdb.
         """
         refs = datasetRefMap[self.diffIm.name]
         for ref in refs:
             if ref.dataId["band"] not in self.config.validBands:
                 raise ValueError(
-                    f"Requested '{ref.dataId['band']}' not in validBands list "
-                    "in DiaPipelineTask config. To process bands not in the "
-                    "standard Rubin set, ugrizy, you must add the band to the "
+                    f"Requested '{ref.dataId['band']}' not in "
+                    "DiaPipelineConfig.validBands. To process bands not in the "
+                    "standard Rubin set (ugrizy) you must add the band to the "
                     "validBands list in DiaPipelineConfig and add the "
                     "appropriate columns to the Apdb schema.")
         return super().adjustQuantum(datasetRefMap)
@@ -153,8 +165,8 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     validBands = pexConfig.ListField(
         dtype=str,
         default=["u", "g", "r", "i", "z", "y"],
-        doc="List of bands that are  valid for AP processing. To process a "
-            "band not on this list, the appropriate, band specific columns "
+        doc="List of bands that are valid for AP processing. To process a "
+            "band not on this list, the appropriate band specific columns "
             "must be added to the Apdb schema in dax_apdb.",
     )
     diaSourceDpddifier = pexConfig.ConfigurableField(
