@@ -1,0 +1,22 @@
+# Small set of columns to use for testing of the SDM transformer.
+funcs:
+    diaSourceId: # the index of deepCoadd_disSource IS the diaSourceId
+        functor: Index
+    ccdVisitId:
+        functor: Column
+        args: ccdVisitId
+    diaObjectId:
+      functor: Column
+      args: diaObjectId
+    midPointTai:
+      functor: Column
+      args: midPointTai
+    pixelId:
+      functor: Column
+      args: pixelId
+    bboxSize:
+        functor: Column
+        args: bboxSize
+    filterName:
+        functor: Column
+        args: filterName

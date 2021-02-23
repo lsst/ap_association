@@ -30,8 +30,7 @@ from lsst.daf.base import DateTime
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
-from lsst.pipe.tasks.functors import CompositeFunctor
-from lsst.pipe.tasks.postprocess import PostprocessAnalysis
+from lsst.pipe.tasks.postprocess import TransformCatalogBaseTask
 from lsst.pipe.tasks.parquetTable import ParquetTable
 from lsst.utils import getPackageDir
 
@@ -67,15 +66,22 @@ class TransformDiaSourceCatalogConfig(pipeBase.PipelineTaskConfig,
     """
     functorFile = pexConfig.Field(
         dtype=str,
-        doc='Path to YAML file specifying functors to be computed',
+        doc='Path to YAML file specifying Science DataModel functors to use '
+            'when copying columns and computing calibrated values.',
         default=os.path.join(getPackageDir("ap_association"),
                              "data",
                              "DiaSource.yaml")
     )
 
 
-class TransformDiaSourceCatalogTask(pipeBase.PipelineTask):
-    """
+class TransformDiaSourceCatalogTask(pipeBase.PipelineTask,
+                                    TransformCatalogBaseTask):
+    """Apply Science DataModel-ification on the DiaSource afw table.
+
+    This task calibrates and renames columns in the DiaSource catalog
+    to ready the catalog for insertion into the Apdb.
+
+    This is a Gen3 Butler only task. It will not run in Gen2.
     """
 
     ConfigClass = TransformDiaSourceCatalogConfig
@@ -102,7 +108,22 @@ class TransformDiaSourceCatalogTask(pipeBase.PipelineTask):
             band,
             ccdVisitId,
             funcs=None):
-        """
+        """Convert input catalog to ParquetTable/Pandas and run functors.
+
+        Additionally, add new columns for stripping information from the
+        exposure and into the DiaSource catalog.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        results : `lsst.pipe.base.Struct`
+            Results struct with components.
+
+            - ``diaSourceTable`` : Catalog of DiaSources with calibrated values
+              and renamed columns.
+              (`lsst.pipe.tasks.ParquetTable` or `pandas.DataFrame`)
         """
         self.log.info(
             "Transforming/standardizing the DiaSource table ccdVisitId: %i",
@@ -114,7 +135,7 @@ class TransformDiaSourceCatalogTask(pipeBase.PipelineTask):
         diaSourceDf["filterName"] = band
         diaSourceDf["midPointTai"] = diffIm.getInfo().getVisitInfo().getDate().get(system=DateTime.MJD)
         diaSourceDf["diaObjectId"] = 0
-        diaSourceDf["htmId20"] = 0
+        diaSourceDf["pixelId"] = 0
 
         df = self.transform(band,
                             ParquetTable(dataFrame=diaSourceDf),
@@ -159,76 +180,3 @@ class TransformDiaSourceCatalogTask(pipeBase.PipelineTask):
             outputBBoxSizes[idx] = bboxSize
 
         return outputBBoxSizes
-
-    def transform(self, band, parq, funcs, dataId):
-        analysis = self.getAnalysis(parq, funcs=funcs, band=band)
-        df = analysis.df
-        if dataId is not None:
-            for key, value in dataId.items():
-                df[key] = value
-
-        return pipeBase.Struct(
-            df=df,
-            analysis=analysis
-        )
-
-    def getAnalysis(self, parq, funcs=None, band=None):
-        # Avoids disk access if funcs is passed
-        if funcs is None:
-            funcs = self.getFunctors()
-        analysis = PostprocessAnalysis(parq, funcs, filt=band)
-        return analysis
-
-    def getFunctors(self):
-        funcs = CompositeFunctor.from_file(self.config.functorFile)
-        funcs.update(dict(PostprocessAnalysis._defaultFuncs))
-        return funcs
-
-    # Below are temporary functions to preserve functionality before
-    def bitPackFlags(self, inputRecord, outputRecord):
-        """Pack requested flag columns in inputRecord into single columns in
-        outputRecord.
-
-        Parameters
-        ----------
-        inputRecord : `lsst.afw.table.SourceRecord`
-            Record to copy flux values from.
-        outputRecord : `lsst.afw.table.SourceRecord`
-            Record to copy and calibrate values into.
-        """
-        for outputFlag in self.bit_pack_columns:
-            bitList = outputFlag['bitList']
-            value = 0
-            for bit in bitList:
-                value += inputRecord[bit['name']] * 2 ** bit['bit']
-            outputRecord.set(outputFlag['columnName'], value)
-
-    def computeDipoleFluxes(self, inputRecord, outputRecord, photoCalib):
-        """Calibrate and compute dipole mean flux and diff flux.
-
-        Parameters
-        ----------
-        inputRecord : `lsst.afw.table.SourceRecord`
-            Record to copy flux values from.
-        outputRecord : `lsst.afw.table.SourceRecord`
-            Record to copy and calibrate values into.
-        photoCalib  `lsst.afw.image.PhotoCalib`
-            Calibration object from the difference exposure.
-        """
-
-        neg_meas = photoCalib.instFluxToNanojansky(
-            inputRecord, self.config.dipFluxPrefix + "_neg")
-        pos_meas = photoCalib.instFluxToNanojansky(
-            inputRecord, self.config.dipFluxPrefix + "_pos")
-        outputRecord.set(
-            "dipMeanFlux",
-            0.5 * (np.abs(neg_meas.value) + np.abs(pos_meas.value)))
-        outputRecord.set(
-            "dipMeanFluxErr",
-            0.5 * np.sqrt(neg_meas.error ** 2 + pos_meas.error ** 2))
-        outputRecord.set(
-            "dipFluxDiff",
-            np.abs(pos_meas.value) - np.abs(neg_meas.value))
-        outputRecord.set(
-            "dipFluxDiffErr",
-            np.sqrt(neg_meas.error ** 2 + pos_meas.error ** 2))
