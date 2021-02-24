@@ -74,8 +74,7 @@ class TransformDiaSourceCatalogConfig(pipeBase.PipelineTaskConfig,
     )
 
 
-class TransformDiaSourceCatalogTask(pipeBase.PipelineTask,
-                                    TransformCatalogBaseTask):
+class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
     """Apply Science DataModel-ification on the DiaSource afw table.
 
     This task calibrates and renames columns in the DiaSource catalog
