@@ -1,6 +1,7 @@
 funcs:
     diaSourceId: # the index of deepCoadd_disSource IS the diaSourceId
-        functor: Index
+        functor: Column
+        args: id
     ccdVisitId:
         functor: Column
         args: ccdVisitId
