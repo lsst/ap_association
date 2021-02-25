@@ -1,0 +1,150 @@
+funcs:
+    diaSourceId: # the index of deepCoadd_disSource IS the diaSourceId
+        functor: Column
+        args: id
+    ccdVisitId:
+        functor: Column
+        args: ccdVisitId
+    diaObjectId:
+      functor: Column
+      args: diaObjectId
+    # ssObjectId not implemented
+    parentDiaSourceId:
+      functor: Column
+      args: parent
+    midPointTai:
+      functor: Column
+      args: midPointTai
+    pixelId:
+      functor: Column
+      args: pixelId
+    bboxSize:
+        functor: Column
+        args: bboxSize
+    ra:
+        functor: RAColumn
+    # raErr: not available yet DM-15180
+    decl:
+        functor: DecColumn
+    # declErr: not available yet DM-15180
+    # ra_decl_Cov: not available yet
+    x:
+        functor: Column
+        args: slot_Centroid_x
+    y:
+        functor: Column
+        args: slot_Centroid_y
+    xErr:
+        functor: Column
+        args: slot_Centroid_xErr
+    yErr:
+        functor: Column
+        args: slot_Centroid_yErr
+    # x_y_Cov: not available
+    apFlux:
+        functor: LocalNanojansky
+        args:
+            - slot_ApFlux_instFlux
+            - slot_ApFlux_instFluxErr
+            - base_LocalPhotoCalib
+            - base_LocalPhotoCalibErr
+    apFluxErr:
+        functor: LocalNanojanskyErr
+        args:
+            - slot_ApFlux_instFlux
+            - slot_ApFlux_instFluxErr
+            - base_LocalPhotoCalib
+            - base_LocalPhotoCalibErr
+    # SNR need to make functor. DM-
+    psFlux:
+        functor: LocalNanojansky
+        args:
+            - slot_PsfFlux_instFlux
+            - slot_PsfFlux_instFluxErr
+            - base_LocalPhotoCalib
+            - base_LocalPhotoCalibErr
+    psFluxErr:
+        functor: LocalNanojanskyErr
+        args:
+            - slot_PsfFlux_instFlux
+            - slot_PsfFlux_instFluxErr
+            - base_LocalPhotoCalib
+            - base_LocalPhotoCalibErr
+    # ps_ra_cov not implemented
+    # ps_dec_cov not implemented
+    # psLnl not implemented
+    # psChi2 not implemented
+    # psNdata not implemented
+    # trailFlux not implemented
+    # trailRa not implemented
+    # trailDec not implemented
+    # trailAngle not implemented
+    # trailCov[15] not implemented
+    # trailLnL not implemented
+    # trailChi2 not implemented
+    # trailNdata not implemented
+    # dipMeanFlux needs functor DM-
+    # dipFluxDiff needs functor DM-
+    # dipRa not implemented
+    # dipDec not implemented
+    #    (this may be redundant with RA/DEC as the default centroid is the
+    #     dip model, defaulting to SdssCentroid on Dip-Fit failure.)
+    dipLength:
+        functor: ConvertPixelToArcseconds
+        args:
+            - ip_diffim_DipoleFit_separation
+            - base_LocalWcs_CDMatrix_1_1
+            - base_LocalWcs_CDMatrix_1_2
+            - base_LocalWcs_CDMatrix_2_1
+            - base_LocalWcs_CDMatrix_2_2
+    dipAngle:
+        functor: Column
+        args: ip_diffim_DipoleFit_orientation
+    # dipCov not implemented
+    # dipLnl not implemented
+    dipChi2:
+        functor: Column
+        args: ip_diffim_DipoleFit_chi2dof
+    # dipNdata not implemented
+    totFlux:
+        functor: LocalNanojansky
+        args:
+            - ip_diffim_forced_PsfFlux_instFlux
+            - ip_diffim_forced_PsfFlux_instFluxErr
+            - base_LocalPhotoCalib
+            - base_LocalPhotoCalibErr
+    totFluxErr:
+        functor: LocalNanojanskyErr
+        args:
+            - ip_diffim_forced_PsfFlux_instFlux
+            - ip_diffim_forced_PsfFlux_instFluxErr
+            - base_LocalPhotoCalib
+            - base_LocalPhotoCalibErr
+    # diffFlux not implemented and likely dropped due to no snaps.
+    # diffFluxErr not implemented and likely dropped due to no snaps.
+    # fpBkgd not measured yet. DM-
+    # fpBkgdErr not measured yet. DM-
+
+    # These values below work but need a new functor for converting pixel^2
+    # units to arcsec^2 DM-
+    Ixx:
+        functor: Column
+        args: slot_Shape_xx
+    Iyy:
+        functor: Column
+        args: slot_Shape_yy
+    Ixy:
+        functor: Column
+        args: slot_Shape_xy
+    # Icov not implemented
+    IxxPsf:
+        functor: Column
+        args: slot_PsfShape_xx
+    IyyPsf:
+        functor: Column
+        args: slot_PsfShape_yy
+    IxyPsf:
+        functor: Column
+        args: slot_PsfShape_xy
+    # extendedness not implemented
+    # spuriousness not implemented
