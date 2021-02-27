@@ -320,6 +320,12 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 diaForcedSources = diaForcedSources.append(
                     loaderResult.diaForcedSources,
                     sort=True)
+            if diaForcedSources.index.has_duplicates:
+                self.log.warn(
+                    "DiaForcedForce cat has Non-unique ids introduced after "
+                    "diaForcedSources. Dropping duplicates.")
+                diaForcedSources = diaForcedSources.groupby(
+                    diaForcedSources.index).first()
             self.alertPackager.run(assocResults.diaSources,
                                    assocResults.diaObjects,
                                    loaderResult.diaSources,

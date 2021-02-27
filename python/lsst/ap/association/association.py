@@ -129,6 +129,12 @@ class AssociationTask(pipeBase.Task):
 
         diaObjects = diaObjects.append(matchResult.new_dia_objects,
                                        sort=True)
+        if diaObjects.index.has_duplicates:
+            self.log.warn(
+                "DiaObjects with non-unique ids introduced after association. "
+                "Dropping duplicates.")
+            diaObjects = diaObjects.groupby(diaObjects.index).first()
+
         # Now that we know the DiaObjects our new DiaSources are associated
         # with, we index the new DiaSources the same way as the full history
         # and merge the tables.
@@ -136,6 +142,12 @@ class AssociationTask(pipeBase.Task):
                              drop=False,
                              inplace=True)
         mergedDiaSourceHistory = diaSourceHistory.append(diaSources, sort=True)
+        if mergedDiaSourceHistory.index.has_duplicates:
+            self.log.warn(
+                "DiaSource History Non-unique ids introduced after association. "
+                "Dropping duplicates.")
+            mergedDiaSourceHistory = mergedDiaSourceHistory.groupby(
+                mergedDiaSourceHistory.index).first()
 
         # Get the current filter being processed.
         filterName = diaSources["filterName"].iat[0]
@@ -148,10 +160,24 @@ class AssociationTask(pipeBase.Task):
             mergedDiaSourceHistory,
             matchResult.associated_dia_object_ids,
             filterName)
+        allDiaObjects = updatedResults.diaObjectCat
+        updatedDiaObjects = updatedResults.updatedDiaObjects
+        if allDiaObjects.index.has_duplicates:
+            self.log.warn(
+                "Full set of DiaObjects (loaded + updated) has Non-unique ids "
+                "introduced after DiaCalculation. "
+                "Dropping duplicates.")
+            allDiaObjects = allDiaObjects.groupby(allDiaObjects.index).first()
+        if updatedDiaObjects.index.has_duplicates:
+            self.log.warn(
+                "Updated DiaObjects has Non-unique ids introduced after "
+                "DiaCalculation. Dropping duplicates.")
+            updatedDiaObjects = updatedDiaObjects.groupby(
+                updatedDiaObjects.index).first()
 
         return pipeBase.Struct(
-            diaObjects=updatedResults.diaObjectCat,
-            updatedDiaObjects=updatedResults.updatedDiaObjects,
+            diaObjects=allDiaObjects,
+            updatedDiaObjects=updatedDiaObjects,
             diaSources=diaSources,
         )
 

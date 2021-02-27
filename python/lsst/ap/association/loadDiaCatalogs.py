@@ -23,6 +23,7 @@
 """
 import numpy as np
 import pandas as pd
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 import lsst.geom as geom
 import lsst.pex.config as pexConfig
@@ -97,11 +98,19 @@ class LoadDiaCatalogsTask(pipeBase.Task):
               ``diaObjectId``, ``filterName``, ``diaSourceId`` columns.
               (`pandas.DataFrame`)
         """
+        visit_info = exposure.getInfo().getVisitInfo()
         pixelRanges = self._getPixelRanges(exposure)
 
-        diaObjects = self.loadDiaObjects(pixelRanges, apdb)
+        # This is the first database query
+        try:
+            diaObjects = self.loadDiaObjects(pixelRanges, apdb)
+        except (OperationalError, ProgrammingError) as e:
+            raise RuntimeError(
+                "Database query failed to load DiaObjects; did you call "
+                "make_apdb.py first? If you did, some other error occurred "
+                "during database access of the DiaObject table.") from e
 
-        dateTime = exposure.getInfo().getVisitInfo().getDate().toPython()
+        dateTime = visit_info.getDate().toPython()
 
         diaSources = self.loadDiaSources(diaObjects,
                                          dateTime,
@@ -140,7 +149,15 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             diaObjects = pd.DataFrame(columns=["diaObjectId"])
         else:
             diaObjects = apdb.getDiaObjects(pixelRanges, return_pandas=True)
+
         diaObjects.set_index("diaObjectId", drop=False, inplace=True)
+        if diaObjects.index.has_duplicates:
+            self.log.fail(
+                "Duplicate DiaObjects loaded from the Apdb. This may cause "
+                "downstream pipeline issues. Dropping duplicated rows")
+            # Drop duplicates via index and keep the first appearance.
+            diaObjects = diaObjects.groupby(diaObjects.index).first()
+
         return diaObjects.replace(to_replace=[None], value=np.nan)
 
     @pipeBase.timeMethod
@@ -195,6 +212,13 @@ class LoadDiaCatalogsTask(pipeBase.Task):
         diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
                              drop=False,
                              inplace=True)
+        if diaSources.index.has_duplicates:
+            self.log.fail(
+                "Duplicate DiaSources loaded from the Apdb. This may cause "
+                "downstream pipeline issues. Dropping duplicated rows")
+            # Drop duplicates via index and keep the first appearance.
+            diaSources = diaSources.groupby(diaSources.index).first()
+
         return diaSources.replace(to_replace=[None], value=np.nan)
 
     @pipeBase.timeMethod
@@ -226,9 +250,17 @@ class LoadDiaCatalogsTask(pipeBase.Task):
                 diaObjects.loc[:, "diaObjectId"],
                 dateTime,
                 return_pandas=True)
+
         diaForcedSources.set_index(["diaObjectId", "diaForcedSourceId"],
                                    drop=False,
                                    inplace=True)
+        if diaForcedSources.index.has_duplicates:
+            self.log.fail(
+                "Duplicate DiaForcedSources loaded from the Apdb. This may "
+                "cause downstream pipeline issues. Dropping duplicated rows.")
+            # Drop duplicates via index and keep the first appearance.
+            diaForcedSources = diaForcedSources.groupby(diaForcedSources.index).first()
+
         return diaForcedSources.replace(to_replace=[None], value=np.nan)
 
     @pipeBase.timeMethod
