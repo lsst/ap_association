@@ -131,8 +131,9 @@ class AssociationTask(pipeBase.Task):
                                        sort=True)
         if diaObjects.index.has_duplicates:
             self.log.warn(
-                "DiaObjects with non-unique ids introduced after association. "
-                "Dropping duplicates.")
+                "Duplicate DiaObjects created after association. This may "
+                "cause downstream pipeline issues. Dropping duplicated rows.")
+            # Drop duplicates via index and keep the first appearance.
             diaObjects = diaObjects.groupby(diaObjects.index).first()
 
         # Now that we know the DiaObjects our new DiaSources are associated
@@ -144,10 +145,17 @@ class AssociationTask(pipeBase.Task):
         mergedDiaSourceHistory = diaSourceHistory.append(diaSources, sort=True)
         if mergedDiaSourceHistory.index.has_duplicates:
             self.log.warn(
-                "DiaSource History Non-unique ids introduced after association. "
-                "Dropping duplicates.")
+                "Duplicate DiaSources created after association and merging "
+                "with history. This may cause downstream pipeline issues. "
+                "Dropping duplicated rows.")
+            # Drop duplicates via index and keep the first appearance. Reset
+            # due to the index shape being slight different thatn expected.
             mergedDiaSourceHistory = mergedDiaSourceHistory.groupby(
-                mergedDiaSourceHistory.index).first()
+                mergedDiaSourceHistory.index).first().reset_index(drop=True)
+            mergedDiaSourceHistory.set_index(
+                ["diaObjectId", "filterName", "diaSourceId"],
+                drop=False,
+                inplace=True)
 
         # Get the current filter being processed.
         filterName = diaSources["filterName"].iat[0]
@@ -164,14 +172,17 @@ class AssociationTask(pipeBase.Task):
         updatedDiaObjects = updatedResults.updatedDiaObjects
         if allDiaObjects.index.has_duplicates:
             self.log.warn(
-                "Full set of DiaObjects (loaded + updated) has Non-unique ids "
-                "introduced after DiaCalculation. "
-                "Dropping duplicates.")
+                "Duplicate DiaObjects (loaded + updated) created after "
+                "DiaCalculation. This may cause downstream pipeline issues. "
+                "Dropping duplicated rows.")
+            # Drop duplicates via index and keep the first appearance.
             allDiaObjects = allDiaObjects.groupby(allDiaObjects.index).first()
         if updatedDiaObjects.index.has_duplicates:
             self.log.warn(
-                "Updated DiaObjects has Non-unique ids introduced after "
-                "DiaCalculation. Dropping duplicates.")
+                "Duplicate DiaObjects (updated) created after "
+                "DiaCalculation. This may cause downstream pipeline issues. "
+                "Dropping duplicated rows.")
+            # Drop duplicates via index and keep the first appearance.
             updatedDiaObjects = updatedDiaObjects.groupby(
                 updatedDiaObjects.index).first()
 

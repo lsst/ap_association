@@ -315,6 +315,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             assocResults.updatedDiaObjects,
             exposure.getInfo().getVisitInfo().getDate().toPython())
         self.apdb.storeDiaForcedSources(diaForcedSources)
+
         if self.config.doPackageAlerts:
             if len(loaderResult.diaForcedSources) > 1:
                 diaForcedSources = diaForcedSources.append(
@@ -322,10 +323,19 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                     sort=True)
             if diaForcedSources.index.has_duplicates:
                 self.log.warn(
-                    "DiaForcedForce cat has Non-unique ids introduced after "
-                    "diaForcedSources. Dropping duplicates.")
+                    "Duplicate DiaForcedSources created after merge with "
+                    "history and new sources. This may cause downstream "
+                    "problems. Dropping duplicates.")
+                # Drop duplicates via index and keep the first appearance.
+                # Reset due to the index shape being slight different than
+                # expected.
                 diaForcedSources = diaForcedSources.groupby(
                     diaForcedSources.index).first()
+                diaForcedSources.reset_index(drop=True, inplace=True)
+                diaForcedSources.set_index(
+                    ["diaObjectId", "diaForcedSourceId"],
+                    drop=False,
+                    inplace=True)
             self.alertPackager.run(assocResults.diaSources,
                                    assocResults.diaObjects,
                                    loaderResult.diaSources,
