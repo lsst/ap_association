@@ -152,7 +152,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
 
         diaObjects.set_index("diaObjectId", drop=False, inplace=True)
         if diaObjects.index.has_duplicates:
-            self.log.fail(
+            self.log.warn(
                 "Duplicate DiaObjects loaded from the Apdb. This may cause "
                 "downstream pipeline issues. Dropping duplicated rows")
             # Drop duplicates via index and keep the first appearance.
@@ -213,11 +213,15 @@ class LoadDiaCatalogsTask(pipeBase.Task):
                              drop=False,
                              inplace=True)
         if diaSources.index.has_duplicates:
-            self.log.fail(
+            self.log.warn(
                 "Duplicate DiaSources loaded from the Apdb. This may cause "
                 "downstream pipeline issues. Dropping duplicated rows")
-            # Drop duplicates via index and keep the first appearance.
-            diaSources = diaSources.groupby(diaSources.index).first()
+            # Drop duplicates via index and keep the first appearance. Reset
+            # due to the index shape being slight different thatn expected.
+            diaSources = diaSources.groupby(diaSources.index).first().reset_index(drop=True)
+            diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
+                                 drop=False,
+                                 inplace=True)
 
         return diaSources.replace(to_replace=[None], value=np.nan)
 
@@ -255,11 +259,16 @@ class LoadDiaCatalogsTask(pipeBase.Task):
                                    drop=False,
                                    inplace=True)
         if diaForcedSources.index.has_duplicates:
-            self.log.fail(
+            self.log.warn(
                 "Duplicate DiaForcedSources loaded from the Apdb. This may "
                 "cause downstream pipeline issues. Dropping duplicated rows.")
-            # Drop duplicates via index and keep the first appearance.
+            # Drop duplicates via index and keep the first appearance. Reset
+            # due to the index shape being slight different thatn expected.
             diaForcedSources = diaForcedSources.groupby(diaForcedSources.index).first()
+            diaForcedSources.reset_index(drop=True, inplace=True)
+            diaForcedSources.set_index(["diaObjectId", "diaForcedSourceId"],
+                                       drop=False,
+                                       inplace=True)
 
         return diaForcedSources.replace(to_replace=[None], value=np.nan)
 
