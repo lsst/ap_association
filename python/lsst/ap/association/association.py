@@ -129,9 +129,7 @@ class AssociationTask(pipeBase.Task):
 
         diaObjects = diaObjects.append(matchResult.new_dia_objects,
                                        sort=True)
-        # if len(diaObjects) > 0:
-        #     dups = diaObjects.iloc[[0, -1]]
-        #     diaObjects = diaObjects.append(dups, sort=True)
+
         if diaObjects.index.has_duplicates:
             self.log.warn(
                 "Duplicate DiaObjects created after association. This may "

@@ -98,7 +98,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
               ``diaObjectId``, ``filterName``, ``diaSourceId`` columns.
               (`pandas.DataFrame`)
         """
-        visit_info = exposure.getInfo().getVisitInfo()
+        visiInfo = exposure.getInfo().getVisitInfo()
         pixelRanges = self._getPixelRanges(exposure)
 
         # This is the first database query
@@ -110,7 +110,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
                 "make_apdb.py first? If you did, some other error occurred "
                 "during database access of the DiaObject table.") from e
 
-        dateTime = visit_info.getDate().toPython()
+        dateTime = visiInfo.getDate().toPython()
 
         diaSources = self.loadDiaSources(diaObjects,
                                          dateTime,
