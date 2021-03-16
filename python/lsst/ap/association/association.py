@@ -127,36 +127,34 @@ class AssociationTask(pipeBase.Task):
 
         matchResult = self.associate_sources(diaObjects, diaSources)
 
-        diaObjects = diaObjects.append(matchResult.new_dia_objects,
-                                       sort=True)
-
-        if diaObjects.index.has_duplicates:
-            self.log.warn(
-                "Duplicate DiaObjects created after association. This may "
-                "cause downstream pipeline issues. Dropping duplicated rows.")
-            # Drop duplicates via index and keep the first appearance.
-            diaObjects = diaObjects.groupby(diaObjects.index).first()
-
         # Now that we know the DiaObjects our new DiaSources are associated
         # with, we index the new DiaSources the same way as the full history
         # and merge the tables.
         diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
                              drop=False,
                              inplace=True)
+        # Test for DiaSource duplication first. If duplicates are found,
+        # this likely means this is duplicate data being processed and sent
+        # to the Apdb.
         mergedDiaSourceHistory = diaSourceHistory.append(diaSources, sort=True)
         if mergedDiaSourceHistory.index.has_duplicates:
-            self.log.warn(
-                "Duplicate DiaSources created after association and merging "
-                "with history. This may cause downstream pipeline issues. "
-                "Dropping duplicated rows.")
-            # Drop duplicates via index and keep the first appearance. Reset
-            # due to the index shape being slight different thatn expected.
-            mergedDiaSourceHistory = mergedDiaSourceHistory.groupby(
-                mergedDiaSourceHistory.index).first().reset_index(drop=True)
-            mergedDiaSourceHistory.set_index(
-                ["diaObjectId", "filterName", "diaSourceId"],
-                drop=False,
-                inplace=True)
+            raise RuntimeError(
+                "Duplicate DiaSources found after association and merging "
+                "with history. This is likely due to re-running data with an "
+                "already populated Apdb. If this was not the case then there "
+                "was a failure in Association which should not happen. "
+                "Exiting.")
+
+        diaObjects = diaObjects.append(matchResult.new_dia_objects,
+                                       sort=True)
+        # Double check to make sure there are no duplicates in the DiaObject
+        # table after association.
+        if diaObjects.index.has_duplicates:
+            raise RuntimeError(
+                "Duplicate DiaObjects created after association. This is "
+                "likely due to re-running data with an already populated "
+                "Apdb. If this was not the case then there was a failure in "
+                "Association which should not happen. Exiting.")
 
         # Get the current filter being processed.
         filterName = diaSources["filterName"].iat[0]
@@ -173,20 +171,15 @@ class AssociationTask(pipeBase.Task):
         allDiaObjects = updatedResults.diaObjectCat
         updatedDiaObjects = updatedResults.updatedDiaObjects
         if allDiaObjects.index.has_duplicates:
-            self.log.warn(
+            raise RuntimeError(
                 "Duplicate DiaObjects (loaded + updated) created after "
-                "DiaCalculation. This may cause downstream pipeline issues. "
-                "Dropping duplicated rows.")
-            # Drop duplicates via index and keep the first appearance.
-            allDiaObjects = allDiaObjects.groupby(allDiaObjects.index).first()
+                "DiaCalculation. This is unexpected behavior and should be "
+                "reported. Existing.")
         if updatedDiaObjects.index.has_duplicates:
-            self.log.warn(
+            raise RuntimeError(
                 "Duplicate DiaObjects (updated) created after "
-                "DiaCalculation. This may cause downstream pipeline issues. "
-                "Dropping duplicated rows.")
-            # Drop duplicates via index and keep the first appearance.
-            updatedDiaObjects = updatedDiaObjects.groupby(
-                updatedDiaObjects.index).first()
+                "DiaCalculation. This is unexpected behavior and should be "
+                "reported. Existing.")
 
         return pipeBase.Struct(
             diaObjects=allDiaObjects,
@@ -300,8 +293,8 @@ class AssociationTask(pipeBase.Task):
             INF, -1, and -1 respectively for unassociated sources.
         """
         scores = np.full(len(dia_sources), np.inf, dtype=np.float64)
-        obj_idxs = np.full(len(dia_sources), -1, dtype=np.int)
-        obj_ids = np.full(len(dia_sources), -1, dtype=np.int)
+        obj_idxs = np.full(len(dia_sources), -1, dtype=np.int64)
+        obj_ids = np.full(len(dia_sources), 0, dtype=np.int64)
 
         if len(dia_objects) == 0:
             return pipeBase.Struct(
@@ -410,8 +403,8 @@ class AssociationTask(pipeBase.Task):
         """
 
         n_previous_dia_objects = len(dia_objects)
-        used_dia_object = np.zeros(n_previous_dia_objects, dtype=np.bool)
-        used_dia_source = np.zeros(len(dia_sources), dtype=np.bool)
+        used_dia_object = np.zeros(n_previous_dia_objects, dtype=bool)
+        used_dia_source = np.zeros(len(dia_sources), dtype=bool)
         associated_dia_object_ids = np.zeros(len(dia_sources),
                                              dtype=np.uint64)
         new_dia_objects = []

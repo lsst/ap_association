@@ -426,7 +426,7 @@ class UnpackApdbFlags:
         for column in self.bit_pack_columns:
             names = []
             for bit in column["bitList"]:
-                names.append((bit["name"], np.bool))
+                names.append((bit["name"], bool))
             self.output_flag_columns[column["columnName"]] = names
 
     def unpack(self, input_flag_values, flag_name):

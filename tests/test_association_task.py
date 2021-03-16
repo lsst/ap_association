@@ -270,7 +270,28 @@ class TestAssociationTask(unittest.TestCase):
             self.assertEqual(output_dia_object['gPSFluxNdata'], 1)
             self.assertEqual(df_idx, obj_idx + 10)
 
-    def _run_association_and_retrieve_objects(self, create_objects=False):
+    def test_run_dup_diaSources(self):
+        """Test that duplicate sources being run through association throw the
+        correct error.
+        """
+        with self.assertRaises(RuntimeError):
+            self._run_association_and_retrieve_objects(create_objects=True,
+                                                       dupDiaSources=True,
+                                                       dupDiaObjects=False)
+
+    def test_run_dup_diaObjects(self):
+        """Test that duplicate objects being run through association throw the
+        correct error.
+        """
+        with self.assertRaises(RuntimeError):
+            self._run_association_and_retrieve_objects(create_objects=True,
+                                                       dupDiaSources=False,
+                                                       dupDiaObjects=True)
+
+    def _run_association_and_retrieve_objects(self,
+                                              create_objects=False,
+                                              dupDiaSources=False,
+                                              dupDiaObjects=False):
         """Convenience method for testing the Association run method.
 
         Parameters
@@ -278,6 +299,12 @@ class TestAssociationTask(unittest.TestCase):
         create_objects : `bool`
             Boolean specifying if seed DIAObjects and DIASources should be
             inserted into the database before association.
+        dupDiaSources : `bool`
+            Add duplicate diaSources into processing to force an error. Must
+            be used with ``create_objects`` equal to True.
+        dupDiaObjects : `bool`
+            Add duplicate diaObjects into processing to force an error. Must
+            be used with ``create_objects`` equal to True.
 
         Return
         ------
@@ -328,6 +355,9 @@ class TestAssociationTask(unittest.TestCase):
                           inplace=True)
         diaSources["ra"] = np.degrees(diaSources["ra"])
         diaSources["decl"] = np.degrees(diaSources["decl"])
+        if dupDiaSources:
+            diaSources = diaSources.append(diaSourceHistory.iloc[[0, -1]],
+                                           ignore_index=True)
 
         if len(diaObjects) == 0:
             diaSourceHistory = pd.DataFrame(columns=["diaObjectId",
@@ -337,6 +367,9 @@ class TestAssociationTask(unittest.TestCase):
             ["diaObjectId", "filterName", "diaSourceId"],
             drop=False,
             inplace=True)
+        if dupDiaObjects:
+            diaObjects = diaObjects.append(diaObjects.iloc[[0, -1]],
+                                           ignore_index=True)
 
         results = assoc_task.run(diaSources,
                                  diaObjects,
