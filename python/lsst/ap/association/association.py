@@ -127,15 +127,35 @@ class AssociationTask(pipeBase.Task):
 
         matchResult = self.associate_sources(diaObjects, diaSources)
 
-        diaObjects = diaObjects.append(matchResult.new_dia_objects,
-                                       sort=True)
         # Now that we know the DiaObjects our new DiaSources are associated
         # with, we index the new DiaSources the same way as the full history
         # and merge the tables.
         diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
                              drop=False,
                              inplace=True)
+        # Test for DiaSource duplication first. If duplicates are found,
+        # this likely means this is duplicate data being processed and sent
+        # to the Apdb.
         mergedDiaSourceHistory = diaSourceHistory.append(diaSources, sort=True)
+        if mergedDiaSourceHistory.index.has_duplicates:
+            raise RuntimeError(
+                "Duplicate DiaSources found after association and merging "
+                "with history. This is likely due to re-running data with an "
+                "already populated Apdb. If this was not the case then there "
+                "was an unexpected failure in Association while matching "
+                "sources to objects, and should be reported. Exiting.")
+
+        diaObjects = diaObjects.append(matchResult.new_dia_objects,
+                                       sort=True)
+        # Double check to make sure there are no duplicates in the DiaObject
+        # table after association.
+        if diaObjects.index.has_duplicates:
+            raise RuntimeError(
+                "Duplicate DiaObjects created after association. This is "
+                "likely due to re-running data with an already populated "
+                "Apdb. If this was not the case then there was an unexpected "
+                "failure in Association while matching and creating new "
+                "DiaObjectsand should be reported. Exiting.")
 
         # Get the current filter being processed.
         filterName = diaSources["filterName"].iat[0]
@@ -149,9 +169,22 @@ class AssociationTask(pipeBase.Task):
             matchResult.associated_dia_object_ids,
             filterName)
 
+        allDiaObjects = updatedResults.diaObjectCat
+        updatedDiaObjects = updatedResults.updatedDiaObjects
+        if allDiaObjects.index.has_duplicates:
+            raise RuntimeError(
+                "Duplicate DiaObjects (loaded + updated) created after "
+                "DiaCalculation. This is unexpected behavior and should be "
+                "reported. Existing.")
+        if updatedDiaObjects.index.has_duplicates:
+            raise RuntimeError(
+                "Duplicate DiaObjects (updated) created after "
+                "DiaCalculation. This is unexpected behavior and should be "
+                "reported. Existing.")
+
         return pipeBase.Struct(
-            diaObjects=updatedResults.diaObjectCat,
-            updatedDiaObjects=updatedResults.updatedDiaObjects,
+            diaObjects=allDiaObjects,
+            updatedDiaObjects=updatedDiaObjects,
             diaSources=diaSources,
         )
 
@@ -261,8 +294,8 @@ class AssociationTask(pipeBase.Task):
             INF, -1, and -1 respectively for unassociated sources.
         """
         scores = np.full(len(dia_sources), np.inf, dtype=np.float64)
-        obj_idxs = np.full(len(dia_sources), -1, dtype=np.int)
-        obj_ids = np.full(len(dia_sources), -1, dtype=np.int)
+        obj_idxs = np.full(len(dia_sources), -1, dtype=np.int64)
+        obj_ids = np.full(len(dia_sources), 0, dtype=np.int64)
 
         if len(dia_objects) == 0:
             return pipeBase.Struct(
@@ -371,8 +404,8 @@ class AssociationTask(pipeBase.Task):
         """
 
         n_previous_dia_objects = len(dia_objects)
-        used_dia_object = np.zeros(n_previous_dia_objects, dtype=np.bool)
-        used_dia_source = np.zeros(len(dia_sources), dtype=np.bool)
+        used_dia_object = np.zeros(n_previous_dia_objects, dtype=bool)
+        used_dia_source = np.zeros(len(dia_sources), dtype=bool)
         associated_dia_object_ids = np.zeros(len(dia_sources),
                                              dtype=np.uint64)
         new_dia_objects = []

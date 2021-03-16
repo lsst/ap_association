@@ -163,7 +163,7 @@ class TestDiaCalcluation(unittest.TestCase):
         self.diaSources = pd.DataFrame(data=diaSources)
 
         self.updatedDiaObjectIds = np.array([0, 1, 2, self.newDiaObjectId],
-                                            dtype=np.int)
+                                            dtype=np.int64)
 
         conf = DiaObjectCalculationConfig()
         conf.plugins = ["testDiaPlugin",
@@ -224,7 +224,7 @@ class TestDiaCalcluation(unittest.TestCase):
         self.diaObjects.reset_index()
         results = diaObjectCalTask.run(self.diaObjects,
                                        unindexedDiaSources,
-                                       np.array([0], dtype=np.int),
+                                       np.array([0], dtype=np.int64),
                                        "g")
         updatedDiaObjects = results.updatedDiaObjects
         self.assertEqual(updatedDiaObjects.at[0, "count"],
