@@ -142,8 +142,8 @@ class AssociationTask(pipeBase.Task):
                 "Duplicate DiaSources found after association and merging "
                 "with history. This is likely due to re-running data with an "
                 "already populated Apdb. If this was not the case then there "
-                "was a failure in Association which should not happen. "
-                "Exiting.")
+                "was an unexpected failure in Association while matching "
+                "sources to objects, and should be reported. Exiting.")
 
         diaObjects = diaObjects.append(matchResult.new_dia_objects,
                                        sort=True)
@@ -153,8 +153,9 @@ class AssociationTask(pipeBase.Task):
             raise RuntimeError(
                 "Duplicate DiaObjects created after association. This is "
                 "likely due to re-running data with an already populated "
-                "Apdb. If this was not the case then there was a failure in "
-                "Association which should not happen. Exiting.")
+                "Apdb. If this was not the case then there was an unexpected "
+                "failure in Association while matching and creating new "
+                "DiaObjectsand should be reported. Exiting.")
 
         # Get the current filter being processed.
         filterName = diaSources["filterName"].iat[0]
