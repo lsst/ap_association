@@ -25,6 +25,7 @@ __all__ = ("TransformDiaSourceCatalogConnections",
 
 import numpy as np
 import os
+import yaml
 
 from lsst.daf.base import DateTime
 import lsst.pex.config as pexConfig
@@ -40,6 +41,11 @@ class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
                                            defaultTemplates={"coaddName": "deep", "fakesType": ""}):
     """Butler connections for TransformDiaSourceCatalogTask.
     """
+    diaSourceSchema = connTypes.InitInput(
+        doc="Schema for DIASource catalog output by ImageDifference.",
+        storageClass="SourceCatalog",
+        name="{fakesType}{coaddName}Diff_diaSrc_schema",
+    )
     diaSourceCat = connTypes.Input(
         doc="Catalog of DiaSources produced during image differencing.",
         name="{fakesType}{coaddName}Diff_diaSrc",
@@ -64,6 +70,13 @@ class TransformDiaSourceCatalogConfig(pipeBase.PipelineTaskConfig,
                                       pipelineConnections=TransformDiaSourceCatalogConnections):
     """
     """
+    flagMap = pexConfig.Field(
+        dtype=str,
+        doc="Yaml file specifying SciencePipelines flag fields to bit packs.",
+        default=os.path.join(getPackageDir("ap_association"),
+                             "data",
+                             "association-flag-map.yaml"),
+    )
     functorFile = pexConfig.Field(
         dtype=str,
         doc='Path to YAML file specifying Science DataModel functors to use '
@@ -85,10 +98,38 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
 
     ConfigClass = TransformDiaSourceCatalogConfig
     _DefaultName = "transformDiaSourceCatalog"
+    RunnerClass = pipeBase.ButlerInitializedTaskRunner
 
-    def __init__(self, **kwargs):
+    def __init__(self, initInputs, **kwargs):
         super().__init__(**kwargs)
         self.funcs = self.getFunctors()
+        self.inputSchema = initInputs['diaSourceSchema'].schema
+        self._create_bit_pack_mappings()
+
+    def _create_bit_pack_mappings(self):
+        """Setup all flag bit packings.
+        """
+        self.bit_pack_columns = []
+        with open(self.config.flagMap) as yaml_stream:
+            table_list = list(yaml.safe_load_all(yaml_stream))
+            for table in table_list:
+                if table['tableName'] == 'DiaSource':
+                    self.bit_pack_columns = table['columns']
+                    break
+
+        # Test that all flags requested are present in the input schemas.
+        # Output schemas are flexible, however if names are not specified in
+        # the Apdb schema, flag columns will not be persisted.
+        for outputFlag in self.bit_pack_columns:
+            bitList = outputFlag['bitList']
+            for bit in bitList:
+                try:
+                    self.inputSchema.find(bit['name'])
+                except KeyError:
+                    raise KeyError(
+                        "Requested column %s not found in input DiaSource "
+                        "schema. Please check that the requested input "
+                        "column exists." % bit['name'])
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
@@ -135,6 +176,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         diaSourceDf["midPointTai"] = diffIm.getInfo().getVisitInfo().getDate().get(system=DateTime.MJD)
         diaSourceDf["diaObjectId"] = 0
         diaSourceDf["pixelId"] = 0
+        self.bitPackFlags(diaSourceDf)
 
         df = self.transform(band,
                             ParquetTable(dataFrame=diaSourceDf),
@@ -179,3 +221,76 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             outputBBoxSizes[idx] = bboxSize
 
         return outputBBoxSizes
+
+    def bitPackFlags(self, df):
+        """Pack requested flag columns in inputRecord into single columns in
+        outputRecord.
+
+        Parameters
+        ----------
+        df : `pandas.DataFrame`
+            DataFrame to read bits from and pack them into.
+        """
+        for outputFlag in self.bit_pack_columns:
+            bitList = outputFlag['bitList']
+            value = np.zeros(len(df), dtype=np.uint64)
+            for bit in bitList:
+                # Hard type the bit arrays.
+                value += (df[bit['name']]*2**bit['bit']).to_numpy().astype(np.uint64)
+            df[outputFlag['columnName']] = value
+
+
+class UnpackApdbFlags:
+    """Class for unpacking bits from integer flag fields stored in the Apdb.
+
+    Attributes
+    ----------
+    flag_map_file : `str`
+        Absolute or relative path to a yaml file specifiying mappings of flags
+        to integer bits.
+    table_name : `str`
+        Name of the Apdb table the integer bit data are coming from.
+    """
+
+    def __init__(self, flag_map_file, table_name):
+        self.bit_pack_columns = []
+        with open(flag_map_file) as yaml_stream:
+            table_list = list(yaml.safe_load_all(yaml_stream))
+            for table in table_list:
+                if table['tableName'] == table_name:
+                    self.bit_pack_columns = table['columns']
+                    break
+
+        self.output_flag_columns = {}
+
+        for column in self.bit_pack_columns:
+            names = []
+            for bit in column["bitList"]:
+                names.append((bit["name"], bool))
+            self.output_flag_columns[column["columnName"]] = names
+
+    def unpack(self, input_flag_values, flag_name):
+        """Determine individual boolean flags from an input array of unsigned
+        ints.
+
+        Parameters
+        ----------
+        input_flag_values : array-like of type uint
+            Input integer flags to unpack.
+        flag_name : `str`
+            Apdb column name of integer flags to unpack. Names of packed int
+            flags are given by the flag_map_file.
+
+        Returns
+        -------
+        output_flags : `numpy.ndarray`
+            Numpy named tuple of booleans.
+        """
+        bit_names_types = self.output_flag_columns[flag_name]
+        output_flags = np.zeros(len(input_flag_values), dtype=bit_names_types)
+
+        for bit_idx, (bit_name, dtypes) in enumerate(bit_names_types):
+            masked_bits = np.bitwise_and(input_flag_values, 2 ** bit_idx)
+            output_flags[bit_name] = masked_bits
+
+        return output_flags

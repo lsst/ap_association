@@ -193,6 +193,7 @@ class TestAPDataMapperTask(unittest.TestCase):
         configurable.flagMap = os.path.join(
             getPackageDir("ap_association"),
             "tests",
+            "data",
             "test-flag-map.yaml")
 
         return configurable
