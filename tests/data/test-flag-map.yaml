@@ -1,5 +1,5 @@
 # This file lists columns for bit-packing using columns for use in the testing
-# 
+#
 tableName: DiaSource
 doc: "Flag packing definitions for the DiaSource table."
 columns:
