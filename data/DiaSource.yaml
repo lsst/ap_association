@@ -21,6 +21,9 @@ funcs:
     bboxSize:
         functor: Column
         args: bboxSize
+    flags:
+        functor: Column
+        args: flags
     ra:
         functor: RAColumn
     # raErr: not available yet DM-15180
