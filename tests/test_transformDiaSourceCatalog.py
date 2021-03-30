@@ -29,8 +29,11 @@ import lsst.daf.base as dafBase
 import lsst.afw.image as afwImage
 import lsst.geom as geom
 import lsst.meas.base.tests as measTests
+from lsst.pipe.base import Struct
 from lsst.utils import getPackageDir
 import lsst.utils.tests
+
+from lsst.ap.association.transformDiaSourceCatalog import UnpackApdbFlags
 
 
 class TestTransformDiaSourceCatalogTask(unittest.TestCase):
@@ -45,7 +48,13 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         for srcIdx in range(nSources):
             dataset.addSource(100000.0, geom.Point2D(self.xyLoc, self.xyLoc))
         schema = dataset.makeMinimalSchema()
+        schema.addField("base_PixelFlags_flag", type="Flag")
+        schema.addField("base_PixelFlags_flag_offimage", type="Flag")
         self.exposure, self.inputCatalog = dataset.realize(10.0, schema, randomSeed=1234)
+        # Create schemas for use in initializing the TransformDiaSourceCatalog
+        # task.
+        self.initInputs = {"diaSourceSchema": Struct(schema=schema)}
+        self.initInputsBadFlags = {"diaSourceSchema": Struct(schema=dataset.makeMinimalSchema())}
 
         self.expId = 4321
         self.date = dafBase.DateTime(nsecs=1400000000 * 10**9)
@@ -67,11 +76,18 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         """Test output dataFrame is created and values are correctly inserted
         from the exposure.
         """
-        transformConfig = TransformDiaSourceCatalogConfig()
-        transformConfig.functorFile = os.path.join(getPackageDir("ap_association"),
-                                                   "tests/data/",
-                                                   "testDiaSource.yaml")
-        transformTask = TransformDiaSourceCatalogTask(config=transformConfig)
+        transConfig = TransformDiaSourceCatalogConfig()
+        transConfig.flagMap = os.path.join(
+            getPackageDir("ap_association"),
+            "tests",
+            "data",
+            "test-flag-map.yaml")
+        transConfig.functorFile = os.path.join(getPackageDir("ap_association"),
+                                               "tests",
+                                               "data",
+                                               "testDiaSource.yaml")
+        transformTask = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
+                                                      config=transConfig)
         result = transformTask.run(self.inputCatalog,
                                    self.exposure,
                                    self.filterName,
@@ -87,14 +103,67 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
             self.assertEqual(src["pixelId"], 0)
             self.assertEqual(src["diaObjectId"], 0)
 
+    def test_run_dia_source_wrong_flags(self):
+        """Test that the proper errors are thrown when requesting flag columns
+        that are not in the input schema.
+        """
+        with self.assertRaises(KeyError):
+            TransformDiaSourceCatalogTask(initInputs=self.initInputsBadFlags)
+
     def test_computeBBoxSize(self):
         """Test the values created for diaSourceBBox.
         """
-        transform = TransformDiaSourceCatalogTask()
+        transConfig = TransformDiaSourceCatalogConfig()
+        transConfig.flagMap = os.path.join(
+            getPackageDir("ap_association"),
+            "tests",
+            "data",
+            "test-flag-map.yaml")
+        transform = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
+                                                  config=transConfig)
         bboxArray = transform.computeBBoxSizes(self.inputCatalog)
 
         # Default in catalog is 18.
         self.assertEqual(bboxArray[0], self.bboxSize)
+
+    def test_bit_unpacker(self):
+        """Test that the integer bit packer is functioning correctly.
+        """
+        transConfig = TransformDiaSourceCatalogConfig()
+        transConfig.flagMap = os.path.join(
+            getPackageDir("ap_association"),
+            "tests",
+            "data",
+            "test-flag-map.yaml")
+        transConfig.functorFile = os.path.join(getPackageDir("ap_association"),
+                                               "tests",
+                                               "data",
+                                               "testDiaSource.yaml")
+        transform = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
+                                                  config=transConfig)
+        for idx, obj in enumerate(self.inputCatalog):
+            if idx in [1, 3, 5]:
+                obj.set("base_PixelFlags_flag", 1)
+            if idx in [1, 4, 6]:
+                obj.set("base_PixelFlags_flag_offimage", 1)
+        outputCatalog = transform.run(self.inputCatalog,
+                                      self.exposure,
+                                      self.filterName,
+                                      ccdVisitId=self.expId).diaSourceTable
+
+        unpacker = UnpackApdbFlags(transConfig.flagMap, "DiaSource")
+        flag_values = unpacker.unpack(outputCatalog["flags"], "flags")
+
+        for idx, flag in enumerate(flag_values):
+            if idx in [1, 3, 5]:
+                self.assertTrue(flag['base_PixelFlags_flag'])
+            else:
+                self.assertFalse(flag['base_PixelFlags_flag'])
+
+            if idx in [1, 4, 6]:
+                self.assertTrue(flag['base_PixelFlags_flag_offimage'])
+            else:
+                self.assertFalse(flag['base_PixelFlags_flag_offimage'])
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

@@ -20,3 +20,6 @@ funcs:
     filterName:
         functor: Column
         args: filterName
+    flags:
+        functor: Column
+        args: flags

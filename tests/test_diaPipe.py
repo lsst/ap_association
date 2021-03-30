@@ -46,6 +46,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         config.diaSourceDpddifier.flagMap = os.path.join(
             getPackageDir("ap_association"),
             "tests",
+            "data",
             "test-flag-map.yaml")
         config.doPackageAlerts = doPackageAlerts
         return config
