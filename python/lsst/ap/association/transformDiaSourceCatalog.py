@@ -276,7 +276,7 @@ class UnpackApdbFlags:
         Parameters
         ----------
         input_flag_values : array-like of type uint
-            Input integer flags to unpack.
+            Array of integer flags to unpack.
         flag_name : `str`
             Apdb column name of integer flags to unpack. Names of packed int
             flags are given by the flag_map_file.
@@ -290,7 +290,7 @@ class UnpackApdbFlags:
         output_flags = np.zeros(len(input_flag_values), dtype=bit_names_types)
 
         for bit_idx, (bit_name, dtypes) in enumerate(bit_names_types):
-            masked_bits = np.bitwise_and(input_flag_values, 2 ** bit_idx)
+            masked_bits = np.bitwise_and(input_flag_values, 2**bit_idx)
             output_flags[bit_name] = masked_bits
 
         return output_flags

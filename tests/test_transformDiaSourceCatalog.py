@@ -51,7 +51,8 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         schema.addField("base_PixelFlags_flag", type="Flag")
         schema.addField("base_PixelFlags_flag_offimage", type="Flag")
         self.exposure, self.inputCatalog = dataset.realize(10.0, schema, randomSeed=1234)
-        # Make up expected task inputs.
+        # Create schemas for use in initializing the TransformDiaSourceCatalog
+        # task.
         self.initInputs = {"diaSourceSchema": Struct(schema=schema)}
         self.initInputsBadFlags = {"diaSourceSchema": Struct(schema=dataset.makeMinimalSchema())}
 
