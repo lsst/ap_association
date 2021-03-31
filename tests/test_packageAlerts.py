@@ -357,7 +357,9 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         ccdData = packageAlerts.createCcdDataCutout(
             self.exposure,
             self.exposure.getWcs().getSkyOrigin(),
-            self.exposure.getPhotoCalib())
+            self.exposure.getBBox().getDimensions(),
+            self.exposure.getPhotoCalib(),
+            1234)
         calibExposure = self.exposure.getPhotoCalib().calibrateImage(
             self.exposure.getMaskedImage())
 
@@ -365,6 +367,14 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                                      self.cutoutWcs.wcs.cd)
         self.assertFloatsAlmostEqual(ccdData.data,
                                      calibExposure.getImage().array)
+
+        ccdData = packageAlerts.createCcdDataCutout(
+            self.exposure,
+            geom.SpherePoint(0, 0, geom.degrees),
+            self.exposure.getBBox().getDimensions(),
+            self.exposure.getPhotoCalib(),
+            1234)
+        self.assertTrue(ccdData is None)
 
     def testMakeLocalTransformMatrix(self):
         """Test that the local WCS approximation is correct.
@@ -417,7 +427,11 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                                              geom.Extent2I(self.cutoutSize,
                                                            self.cutoutSize))
             ccdCutout = packageAlerts.createCcdDataCutout(
-                cutout, sphPoint, cutout.getPhotoCalib())
+                cutout,
+                sphPoint,
+                geom.Extent2I(self.cutoutSize, self.cutoutSize),
+                cutout.getPhotoCalib(),
+                1234)
             cutoutBytes = packageAlerts.streamCcdDataToBytes(
                 ccdCutout)
             objSources = self.diaSourceHistory.loc[srcIdx[0]]
@@ -479,7 +493,11 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                                              geom.Extent2I(self.cutoutSize,
                                                            self.cutoutSize))
             ccdCutout = packageAlerts.createCcdDataCutout(
-                cutout, sphPoint, cutout.getPhotoCalib())
+                cutout,
+                sphPoint,
+                geom.Extent2I(self.cutoutSize, self.cutoutSize),
+                cutout.getPhotoCalib(),
+                1234)
             self.assertEqual(alert["cutoutDifference"],
                              packageAlerts.streamCcdDataToBytes(ccdCutout))
 

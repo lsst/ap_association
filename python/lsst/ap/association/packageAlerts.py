@@ -33,6 +33,7 @@ import lsst.alert.packet as alertPack
 import lsst.afw.geom as afwGeom
 import lsst.geom as geom
 import lsst.pex.config as pexConfig
+from lsst.pex.exceptions import InvalidParameterError
 import lsst.pipe.base as pipeBase
 
 
@@ -128,17 +129,20 @@ class PackageAlertsTask(pipeBase.Task):
             sphPoint = geom.SpherePoint(diaSource["ra"],
                                         diaSource["decl"],
                                         geom.degrees)
+
             cutoutBBox = self.createDiaSourceBBox(diaSource["bboxSize"])
             diffImCutout = self.createCcdDataCutout(
-                diffIm.getCutout(sphPoint, cutoutBBox),
+                diffIm,
                 sphPoint,
-                diffImPhotoCalib)
-
-            templateBBox = self.createDiaSourceBBox(diaSource["bboxSize"])
+                cutoutBBox,
+                diffImPhotoCalib,
+                diaSource["diaSourceId"])
             templateCutout = self.createCcdDataCutout(
-                template.getCutout(sphPoint, templateBBox),
+                template,
                 sphPoint,
-                templatePhotoCalib)
+                cutoutBBox,
+                templatePhotoCalib,
+                diaSource["diaSourceId"])
 
             # TODO: Create alertIds DM-24858
             alertId = diaSource["diaSourceId"]
@@ -186,24 +190,49 @@ class PackageAlertsTask(pipeBase.Task):
             bbox = geom.Extent2I(bboxSize, bboxSize)
         return bbox
 
-    def createCcdDataCutout(self, cutout, skyCenter, photoCalib):
-        """Convert a cutout into a calibrate CCDData image.
+    def createCcdDataCutout(self, image, skyCenter, bbox, photoCalib, srcId):
+        """Grab an image as a cuttout and return a calibrated CCDData image.
 
         Parameters
         ----------
-        cutout : `lsst.afw.image.ExposureF`
-            Cutout to convert.
+        image : `lsst.afw.image.ExposureF`
+            Image to pull cutout from.
         skyCenter : `lsst.geom.SpherePoint`
             Center point of DiaSource on the sky.
+        bbox : `lsst.geom.Extent2I`
+            Bounding box to cutout from the image.
         photoCalib : `lsst.afw.image.PhotoCalib`
             Calibrate object of the image the cutout is cut from.
+        srcId : `int`
+            Unique id of DiaSource. Used for when an error occurs extracting
+            a cutout.
 
         Returns
         -------
-        ccdData : `astropy.nddata.CCDData`
+        ccdData : `astropy.nddata.CCDData` or `None`
             CCDData object storing the calibrate information from the input
             difference or template image.
         """
+        # Catch errors in retrieving the cutout.
+        try:
+            cutout = image.getCutout(skyCenter, bbox)
+        except InvalidParameterError:
+            point = image.getWcs().skyToPixel(skyCenter)
+            imBBox = image.getBBox()
+            self.log.warn(
+                "Failed to retrieve cutout from image for DiaSource with "
+                "id=%i. InvalidParameterError thrown during cutout creation. "
+                "Returning `None` for cuttout."
+                % srcId)
+            if not geom.Box2D(image.getBBox()).contains(point):
+                self.log.warn(
+                    "DiaSource centroid lies at pixel (%.2f, %.2f) "
+                    "which is outside the Exposure with bounding box "
+                    "((%i, %i), (%i, %i))." %
+                    (point.x, point.y,
+                     imBBox.minX, imBBox.maxX, imBBox.minY, imBBox.maxY))
+            return None
+
         # Find the value of the bottom corner of our cutout's BBox and
         # subtract 1 so that the CCDData cutout position value will be
         # [1, 1].
@@ -310,8 +339,15 @@ class PackageAlertsTask(pipeBase.Task):
 
         alert['ssObject'] = None
 
-        alert['cutoutDifference'] = self.streamCcdDataToBytes(diffImCutout)
-        alert["cutoutTemplate"] = self.streamCcdDataToBytes(templateCutout)
+        if diffImCutout is None:
+            alert['cutoutDifference'] = None
+        else:
+            alert['cutoutDifference'] = self.streamCcdDataToBytes(diffImCutout)
+
+        if templateCutout is None:
+            alert["cutoutTemplate"] = None
+        else:
+            alert["cutoutTemplate"] = self.streamCcdDataToBytes(templateCutout)
 
         return alert
 
