@@ -33,6 +33,7 @@ import lsst.alert.packet as alertPack
 import lsst.afw.geom as afwGeom
 import lsst.geom as geom
 import lsst.pex.config as pexConfig
+from lsst.pex.exceptions import InvalidParameterError
 import lsst.pipe.base as pipeBase
 
 
@@ -128,17 +129,20 @@ class PackageAlertsTask(pipeBase.Task):
             sphPoint = geom.SpherePoint(diaSource["ra"],
                                         diaSource["decl"],
                                         geom.degrees)
-            cutoutBBox = self.createDiaSourceBBox(diaSource["bboxSize"])
-            diffImCutout = self.createCcdDataCutout(
-                diffIm.getCutout(sphPoint, cutoutBBox),
-                sphPoint,
-                diffImPhotoCalib)
 
-            templateBBox = self.createDiaSourceBBox(diaSource["bboxSize"])
-            templateCutout = self.createCcdDataCutout(
-                template.getCutout(sphPoint, templateBBox),
+            cutoutExtent = self.createDiaSourceExtent(diaSource["bboxSize"])
+            diffImCutout = self.createCcdDataCutout(
+                diffIm,
                 sphPoint,
-                templatePhotoCalib)
+                cutoutExtent,
+                diffImPhotoCalib,
+                diaSource["diaSourceId"])
+            templateCutout = self.createCcdDataCutout(
+                template,
+                sphPoint,
+                cutoutExtent,
+                templatePhotoCalib,
+                diaSource["diaSourceId"])
 
             # TODO: Create alertIds DM-24858
             alertId = diaSource["diaSourceId"]
@@ -165,9 +169,9 @@ class PackageAlertsTask(pipeBase.Task):
         """
         diaSources["programId"] = 0
 
-    def createDiaSourceBBox(self, bboxSize):
-        """Create a bounding box for the cutouts given the size of the square
-        BBox that covers the source footprint.
+    def createDiaSourceExtent(self, bboxSize):
+        """Create a extent for a  box for the cutouts given the size of the
+        square BBox that covers the source footprint.
 
         Parameters
         ----------
@@ -176,34 +180,60 @@ class PackageAlertsTask(pipeBase.Task):
 
         Returns
         -------
-        bbox : `lsst.geom.Extent2I`
+        extent : `lsst.geom.Extent2I`
             Geom object representing the size of the bounding box.
         """
         if bboxSize < self.config.minCutoutSize:
-            bbox = geom.Extent2I(self.config.minCutoutSize,
-                                 self.config.minCutoutSize)
+            extent = geom.Extent2I(self.config.minCutoutSize,
+                                   self.config.minCutoutSize)
         else:
-            bbox = geom.Extent2I(bboxSize, bboxSize)
-        return bbox
+            extent = geom.Extent2I(bboxSize, bboxSize)
+        return extent
 
-    def createCcdDataCutout(self, cutout, skyCenter, photoCalib):
-        """Convert a cutout into a calibrate CCDData image.
+    def createCcdDataCutout(self, image, skyCenter, extent, photoCalib, srcId):
+        """Grab an image as a cutout and return a calibrated CCDData image.
 
         Parameters
         ----------
-        cutout : `lsst.afw.image.ExposureF`
-            Cutout to convert.
+        image : `lsst.afw.image.ExposureF`
+            Image to pull cutout from.
         skyCenter : `lsst.geom.SpherePoint`
             Center point of DiaSource on the sky.
+        extent : `lsst.geom.Extent2I`
+            Bounding box to cutout from the image.
         photoCalib : `lsst.afw.image.PhotoCalib`
             Calibrate object of the image the cutout is cut from.
+        srcId : `int`
+            Unique id of DiaSource. Used for when an error occurs extracting
+            a cutout.
 
         Returns
         -------
-        ccdData : `astropy.nddata.CCDData`
+        ccdData : `astropy.nddata.CCDData` or `None`
             CCDData object storing the calibrate information from the input
             difference or template image.
         """
+        # Catch errors in retrieving the cutout.
+        try:
+            cutout = image.getCutout(skyCenter, extent)
+        except InvalidParameterError:
+            point = image.getWcs().skyToPixel(skyCenter)
+            imBBox = image.getBBox()
+            if not geom.Box2D(image.getBBox()).contains(point):
+                self.log.warn(
+                    "DiaSource id=%i centroid lies at pixel (%.2f, %.2f) "
+                    "which is outside the Exposure with bounding box "
+                    "((%i, %i), (%i, %i)). Returning None for cutout..." %
+                    (srcId, point.x, point.y,
+                     imBBox.minX, imBBox.maxX, imBBox.minY, imBBox.maxY))
+            else:
+                raise InvalidParameterError(
+                    "Failed to retrieve cutout from image for DiaSource with "
+                    "id=%i. InvalidParameterError thrown during cutout "
+                    "creation. Exiting."
+                    % srcId)
+            return None
+
         # Find the value of the bottom corner of our cutout's BBox and
         # subtract 1 so that the CCDData cutout position value will be
         # [1, 1].
@@ -310,8 +340,15 @@ class PackageAlertsTask(pipeBase.Task):
 
         alert['ssObject'] = None
 
-        alert['cutoutDifference'] = self.streamCcdDataToBytes(diffImCutout)
-        alert["cutoutTemplate"] = self.streamCcdDataToBytes(templateCutout)
+        if diffImCutout is None:
+            alert['cutoutDifference'] = None
+        else:
+            alert['cutoutDifference'] = self.streamCcdDataToBytes(diffImCutout)
+
+        if templateCutout is None:
+            alert["cutoutTemplate"] = None
+        else:
+            alert["cutoutTemplate"] = self.streamCcdDataToBytes(templateCutout)
 
         return alert
 
