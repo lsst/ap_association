@@ -333,20 +333,21 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         self.cutoutWcs.wcs.cd = self.exposure.getWcs().getCdMatrix()
         self.cutoutWcs.wcs.ctype = ["RA---TAN", "DEC--TAN"]
 
-    def testCreateBBox(self):
-        """Test the bbox creation
+    def testCreateExtent(self):
+        """Test the extent creation for the cutout bbox.
         """
         packConfig = PackageAlertsConfig()
         # Just create a minimum less than the default cutout.
         packConfig.minCutoutSize = self.cutoutSize - 5
         packageAlerts = PackageAlertsTask(config=packConfig)
-        bbox = packageAlerts.createDiaSourceBBox(packConfig.minCutoutSize - 5)
-        self.assertTrue(bbox == geom.Extent2I(packConfig.minCutoutSize,
-                                              packConfig.minCutoutSize))
+        extent = packageAlerts.createDiaSourceExtent(
+            packConfig.minCutoutSize - 5)
+        self.assertTrue(extent == geom.Extent2I(packConfig.minCutoutSize,
+                                                packConfig.minCutoutSize))
         # Test that the cutout size is correct.
-        bbox = packageAlerts.createDiaSourceBBox(self.cutoutSize)
-        self.assertTrue(bbox == geom.Extent2I(self.cutoutSize,
-                                              self.cutoutSize))
+        extent = packageAlerts.createDiaSourceExtent(self.cutoutSize)
+        self.assertTrue(extent == geom.Extent2I(self.cutoutSize,
+                                                self.cutoutSize))
 
     def testCreateCcdDataCutout(self):
         """Test that the data is being extracted into the CCDData cutout
@@ -354,12 +355,13 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         """
         packageAlerts = PackageAlertsTask()
 
+        diaSrcId = 1234
         ccdData = packageAlerts.createCcdDataCutout(
             self.exposure,
             self.exposure.getWcs().getSkyOrigin(),
             self.exposure.getBBox().getDimensions(),
             self.exposure.getPhotoCalib(),
-            1234)
+            diaSrcId)
         calibExposure = self.exposure.getPhotoCalib().calibrateImage(
             self.exposure.getMaskedImage())
 
@@ -373,7 +375,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             geom.SpherePoint(0, 0, geom.degrees),
             self.exposure.getBBox().getDimensions(),
             self.exposure.getPhotoCalib(),
-            1234)
+            diaSrcId)
         self.assertTrue(ccdData is None)
 
     def testMakeLocalTransformMatrix(self):

@@ -130,17 +130,17 @@ class PackageAlertsTask(pipeBase.Task):
                                         diaSource["decl"],
                                         geom.degrees)
 
-            cutoutBBox = self.createDiaSourceBBox(diaSource["bboxSize"])
+            cutoutExtent = self.createDiaSourceExtent(diaSource["bboxSize"])
             diffImCutout = self.createCcdDataCutout(
                 diffIm,
                 sphPoint,
-                cutoutBBox,
+                cutoutExtent,
                 diffImPhotoCalib,
                 diaSource["diaSourceId"])
             templateCutout = self.createCcdDataCutout(
                 template,
                 sphPoint,
-                cutoutBBox,
+                cutoutExtent,
                 templatePhotoCalib,
                 diaSource["diaSourceId"])
 
@@ -169,9 +169,9 @@ class PackageAlertsTask(pipeBase.Task):
         """
         diaSources["programId"] = 0
 
-    def createDiaSourceBBox(self, bboxSize):
-        """Create a bounding box for the cutouts given the size of the square
-        BBox that covers the source footprint.
+    def createDiaSourceExtent(self, bboxSize):
+        """Create a extent for a  box for the cutouts given the size of the
+        square BBox that covers the source footprint.
 
         Parameters
         ----------
@@ -180,18 +180,18 @@ class PackageAlertsTask(pipeBase.Task):
 
         Returns
         -------
-        bbox : `lsst.geom.Extent2I`
+        extent : `lsst.geom.Extent2I`
             Geom object representing the size of the bounding box.
         """
         if bboxSize < self.config.minCutoutSize:
-            bbox = geom.Extent2I(self.config.minCutoutSize,
-                                 self.config.minCutoutSize)
+            extent = geom.Extent2I(self.config.minCutoutSize,
+                                   self.config.minCutoutSize)
         else:
-            bbox = geom.Extent2I(bboxSize, bboxSize)
-        return bbox
+            extent = geom.Extent2I(bboxSize, bboxSize)
+        return extent
 
-    def createCcdDataCutout(self, image, skyCenter, bbox, photoCalib, srcId):
-        """Grab an image as a cuttout and return a calibrated CCDData image.
+    def createCcdDataCutout(self, image, skyCenter, extent, photoCalib, srcId):
+        """Grab an image as a cutout and return a calibrated CCDData image.
 
         Parameters
         ----------
@@ -199,7 +199,7 @@ class PackageAlertsTask(pipeBase.Task):
             Image to pull cutout from.
         skyCenter : `lsst.geom.SpherePoint`
             Center point of DiaSource on the sky.
-        bbox : `lsst.geom.Extent2I`
+        extent : `lsst.geom.Extent2I`
             Bounding box to cutout from the image.
         photoCalib : `lsst.afw.image.PhotoCalib`
             Calibrate object of the image the cutout is cut from.
@@ -215,22 +215,23 @@ class PackageAlertsTask(pipeBase.Task):
         """
         # Catch errors in retrieving the cutout.
         try:
-            cutout = image.getCutout(skyCenter, bbox)
+            cutout = image.getCutout(skyCenter, extent)
         except InvalidParameterError:
             point = image.getWcs().skyToPixel(skyCenter)
             imBBox = image.getBBox()
-            self.log.warn(
-                "Failed to retrieve cutout from image for DiaSource with "
-                "id=%i. InvalidParameterError thrown during cutout creation. "
-                "Returning `None` for cuttout."
-                % srcId)
             if not geom.Box2D(image.getBBox()).contains(point):
                 self.log.warn(
-                    "DiaSource centroid lies at pixel (%.2f, %.2f) "
+                    "DiaSource id=%i centroid lies at pixel (%.2f, %.2f) "
                     "which is outside the Exposure with bounding box "
-                    "((%i, %i), (%i, %i))." %
-                    (point.x, point.y,
+                    "((%i, %i), (%i, %i)). Returning None for cutout..." %
+                    (srcId, point.x, point.y,
                      imBBox.minX, imBBox.maxX, imBBox.minY, imBBox.maxY))
+            else:
+                raise InvalidParameterError(
+                    "Failed to retrieve cutout from image for DiaSource with "
+                    "id=%i. InvalidParameterError thrown during cutout "
+                    "creation. Exiting."
+                    % srcId)
             return None
 
         # Find the value of the bottom corner of our cutout's BBox and
