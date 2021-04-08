@@ -21,7 +21,8 @@
 
 __all__ = ("TransformDiaSourceCatalogConnections",
            "TransformDiaSourceCatalogConfig",
-           "TransformDiaSourceCatalogTask")
+           "TransformDiaSourceCatalogTask",
+           "UnpackApdbFlags")
 
 import numpy as np
 import os
@@ -182,8 +183,9 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
                             ParquetTable(dataFrame=diaSourceDf),
                             self.funcs,
                             dataId=None).df
+
         return pipeBase.Struct(
-            diaSourceTable=df
+            diaSourceTable=df.drop(columns=["coord_ra", "coord_dec"]),
         )
 
     def computeBBoxSizes(self, inputCatalog):
