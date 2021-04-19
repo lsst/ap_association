@@ -31,7 +31,6 @@ from lsst.dax.apdb import Apdb
 from lsst.pipe.base import Task, Struct
 import lsst.pipe.base.testUtils
 from lsst.verify import Name
-from lsst.verify.gen2tasks.testUtils import MetricTaskTestCase
 from lsst.verify.tasks import MetricComputationError
 from lsst.verify.tasks.testUtils import MetadataMetricTestCase, ApdbMetricTestCase
 
@@ -269,7 +268,6 @@ class TestTotalUnassociatedObjects(ApdbMetricTestCase):
 
 
 # Hack around unittest's hacky test setup system
-del MetricTaskTestCase
 del MetadataMetricTestCase
 del ApdbMetricTestCase
 
