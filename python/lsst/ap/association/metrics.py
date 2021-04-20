@@ -23,16 +23,19 @@
 __all__ = ["NumberNewDiaObjectsMetricTask",
            "NumberUnassociatedDiaObjectsMetricTask",
            "FractionUpdatedDiaObjectsMetricTask",
+           "FractionAssociatedSourcesMetricTask",
            "TotalUnassociatedDiaObjectsMetricTask",
            ]
 
 
 import astropy.units as u
 
+from lsst.pipe.base import connectionTypes, Struct
 from lsst.verify import Measurement
 from lsst.verify.gen2tasks import register
 from lsst.verify.tasks import MetadataMetricTask, MetadataMetricConfig, \
-    ApdbMetricTask, ApdbMetricConfig, MetricComputationError
+    ApdbMetricTask, ApdbMetricConfig, MetricComputationError, \
+    AbstractMetadataMetricTask, SingleMetadataMetricConnections
 
 
 class NumberNewDiaObjectsMetricConfig(MetadataMetricConfig):
@@ -247,3 +250,84 @@ class TotalUnassociatedDiaObjectsMetricTask(ApdbMetricTask):
 
         meas = Measurement(self.config.metricName, nUnassociatedDiaObjects * u.count)
         return meas
+
+
+class FractionAssociatedSourcesConnections(
+        SingleMetadataMetricConnections,
+        dimensions={"instrument", "visit", "detector"},
+        defaultTemplates={"labelName": "diaPipe",
+                          "package": "ap_association",
+                          "metric": "fracAssociatedDiaSources",
+                          "coaddName": "deep",
+                          "fakesType": ""}):
+    # metadata input inherited from SingleMetadataMetricConnections
+    diaSources = connectionTypes.Input(
+        doc="The catalog of DIA sources.",
+        name="{fakesType}{coaddName}Diff_diaSrc",
+        storageClass="SourceCatalog",
+        dimensions={"instrument", "visit", "detector"},
+    )
+
+
+class FractionAssociatedSourcesConfig(MetadataMetricConfig,
+                                      pipelineConnections=FractionAssociatedSourcesConnections):
+    pass
+
+
+# Can't use MetadataMetricTask, because it assumes metadata is the only input
+class FractionAssociatedSourcesMetricTask(AbstractMetadataMetricTask):
+    """Task that computes the ratio of newly associated sources to DIA sources.
+    """
+    _DefaultName = "fracAssociatedDiaSources"
+    ConfigClass = FractionAssociatedSourcesConfig
+
+    def run(self, metadata, diaSources):
+        """Compute the ratio of associated sources to input sources.
+
+        Parameters
+        ----------
+        metadata : `lsst.daf.base.PropertySet` or `None`
+            A metadata object produced by `DiaPipelineTask`.
+        diaSources : `lsst.afw.table.SourceCatalog` or `None`
+            The source catalog input to `DiaPipelineTask`.
+
+        Returns
+        -------
+        result : `lsst.pipe.base.Struct`
+            A `~lsst.pipe.base.Struct` containing the following component:
+            - ``measurement``: the value of the metric
+              (`lsst.verify.Measurement` or `None`)
+        """
+        if diaSources is None:
+            self.log.info("Nothing to do: no DIA results found.")
+            return Struct(measurement=None)
+        nSources = len(diaSources)
+        if nSources <= 0:
+            raise MetricComputationError(
+                "No DIA sources found; ratio of associations to DIA sources ill-defined.")
+
+        metadataKeys = self.getInputMetadataKeys(self.config)
+        if metadata is not None:
+            data = self.extractMetadata(metadata, metadataKeys)
+        else:
+            data = {dataName: None for dataName in metadataKeys}
+
+        if data["updatedObjects"] is not None and data["newObjects"] is not None:
+            try:
+                nUpdated = int(data["updatedObjects"])
+                nNew = int(data["newObjects"])
+            except (ValueError, TypeError) as e:
+                raise MetricComputationError("Corrupted value of numUpdatedDiaObjects "
+                                             "or numNewDiaObjects") from e
+            else:
+                fraction = (nUpdated + nNew) / nSources
+                meas = Measurement(self.config.metricName, fraction * u.dimensionless_unscaled)
+        else:
+            self.log.info("Nothing to do: no association results found.")
+            meas = None
+        return Struct(measurement=meas)
+
+    @classmethod
+    def getInputMetadataKeys(cls, config):
+        return {"updatedObjects": ".numUpdatedDiaObjects",
+                "newObjects": ".numNewDiaObjects"}

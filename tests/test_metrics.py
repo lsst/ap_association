@@ -27,18 +27,21 @@ import astropy.units as u
 import lsst.utils.tests
 from lsst.pex.config import Config
 from lsst.daf.base import PropertySet
+from lsst.afw.table import SourceCatalog
 from lsst.dax.apdb import Apdb
 from lsst.pipe.base import Task, Struct
 import lsst.pipe.base.testUtils
 from lsst.verify import Name
 from lsst.verify.tasks import MetricComputationError
-from lsst.verify.tasks.testUtils import MetadataMetricTestCase, ApdbMetricTestCase
+from lsst.verify.tasks.testUtils import MetricTaskTestCase, MetadataMetricTestCase, ApdbMetricTestCase
 
+from lsst.ap.association import make_dia_source_schema
 from lsst.ap.association.metrics import \
     NumberNewDiaObjectsMetricTask, \
     NumberUnassociatedDiaObjectsMetricTask, \
     FractionUpdatedDiaObjectsMetricTask, \
-    TotalUnassociatedDiaObjectsMetricTask
+    TotalUnassociatedDiaObjectsMetricTask, \
+    FractionAssociatedSourcesMetricTask
 
 
 def _makeAssociationMetadata(numUpdated=27, numNew=4, numUnassociated=15):
@@ -267,7 +270,79 @@ class TestTotalUnassociatedObjects(ApdbMetricTestCase):
             self.task.run([self.makeDbInfo()], outputDataId={"visit": 42})
 
 
+class TestFracAssociatedSources(MetricTaskTestCase):
+
+    def setUp(self):
+        super().setUp()
+
+        self.N_SOURCES = 5
+        self.diaSources = SourceCatalog(make_dia_source_schema())
+        for x in range(self.N_SOURCES):
+            self.diaSources.addNew()
+
+    @classmethod
+    def makeTask(cls):
+        return FractionAssociatedSourcesMetricTask()
+
+    def testValid(self):
+        metadata = _makeAssociationMetadata()
+        result = self.task.run(metadata=metadata, diaSources=self.diaSources)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+        meas = result.measurement
+
+        self.assertEqual(meas.metric_name, Name(metric="ap_association.fracAssociatedDiaSources"))
+        nUpdated = metadata.getAsDouble("association.numUpdatedDiaObjects")
+        nAssociated = metadata.getAsDouble("association.numNewDiaObjects") + nUpdated
+        self.assertEqual(meas.quantity, nAssociated / self.N_SOURCES * u.dimensionless_unscaled)
+
+    def testNoAssociations(self):
+        metadata = _makeAssociationMetadata(numUpdated=0, numNew=0)
+        result = self.task.run(metadata=metadata, diaSources=self.diaSources)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+        meas = result.measurement
+
+        self.assertEqual(meas.metric_name, Name(metric="ap_association.fracAssociatedDiaSources"))
+        self.assertEqual(meas.quantity, 0.0 * u.dimensionless_unscaled)
+
+    def testNoSources(self):
+        metadata = _makeAssociationMetadata(numUpdated=0, numNew=0)
+        with self.assertRaises(MetricComputationError):
+            self.task.run(metadata=metadata, diaSources=SourceCatalog(make_dia_source_schema()))
+
+    def testNoSourcesInconsistent(self):
+        metadata = _makeAssociationMetadata()  # >0 outputs despite 0 inputs
+        with self.assertRaises(MetricComputationError):
+            self.task.run(metadata=metadata, diaSources=SourceCatalog(make_dia_source_schema()))
+
+    def testMissingMetadata(self):
+        result = self.task.run(metadata=None, diaSources=self.diaSources)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+        meas = result.measurement
+        self.assertIsNone(meas)
+
+    def testMissingSources(self):
+        metadata = _makeAssociationMetadata()
+        result = self.task.run(metadata=metadata, diaSources=None)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+        meas = result.measurement
+        self.assertIsNone(meas)
+
+    def testAssociationFailed(self):
+        result = self.task.run(metadata=PropertySet(), diaSources=self.diaSources)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+        meas = result.measurement
+        self.assertIsNone(meas)
+
+    def testBadlyTypedKeys(self):
+        metadata = _makeAssociationMetadata()
+        metadata.set("association.numNewDiaObjects", "Ultimate Answer")
+
+        with self.assertRaises(MetricComputationError):
+            self.task.run(metadata=metadata, diaSources=self.diaSources)
+
+
 # Hack around unittest's hacky test setup system
+del MetricTaskTestCase
 del MetadataMetricTestCase
 del ApdbMetricTestCase
 
