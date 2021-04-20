@@ -84,7 +84,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         diffIm = Mock(spec=afwImage.ExposureF)
         exposure = Mock(spec=afwImage.ExposureF)
         template = Mock(spec=afwImage.ExposureF)
-        diaSrc = Mock(sepc=afwTable.SourceCatalog)
+        diaSrc = Mock(spec=afwTable.SourceCatalog)
         ccdExposureIdBits = 32
 
         # Each of these subtasks should be called once during diaPipe
