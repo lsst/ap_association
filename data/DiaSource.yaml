@@ -93,24 +93,42 @@ funcs:
     # trailLnL not implemented
     # trailChi2 not implemented
     # trailNdata not implemented
-    # dipMeanFlux:
-    #     functor: LocalDipoleMeanFlux
-    #     args:
-    #         - ip_diffim_DipoleFluxPos_instFlux
-    #         - ip_diffim_DipoleFluxNeg_instFlux
-    #         - ip_diffim_DipoleFluxPos_instFluxErr
-    #         - ip_diffim_DipoleFluxNeg_instFluxErr
-    #         - base_LocalPhotoCalib
-    #         - base_LocalPhotoCalibErr
-    # dipFluxDiff:
-    #     functor: LocalDipoleDiffFlux
-    #     args:
-    #         - ip_diffim_DipoleFluxPos_instFlux
-    #         - ip_diffim_DipoleFluxNeg_instFlux
-    #         - ip_diffim_DipoleFluxPos_instFluxErr             
-    #         - ip_diffim_DipoleFluxNeg_instFluxErr
-    #         - base_LocalPhotoCalib
-    #         - base_LocalPhotoCalibErr
+    dipMeanFlux:
+        functor: LocalDipoleMeanFlux
+        args:
+            - ip_diffim_NaiveDipoleFlux_pos_instFlux
+            - ip_diffim_NaiveDipoleFlux_neg_instFlux
+            - ip_diffim_NaiveDipoleFlux_pos_instFluxErr
+            - ip_diffim_NaiveDipoleFlux_neg_instFluxErr
+            - base_LocalPhotoCalib
+            - base_LocalPhotoCalibErr
+    dipMeanFluxErr:
+        functor: LocalDipoleMeanFluxErr
+        args:
+            - ip_diffim_NaiveDipoleFlux_pos_instFlux
+            - ip_diffim_NaiveDipoleFlux_neg_instFlux
+            - ip_diffim_NaiveDipoleFlux_pos_instFluxErr
+            - ip_diffim_NaiveDipoleFlux_neg_instFluxErr
+            - base_LocalPhotoCalib
+            - base_LocalPhotoCalibErr
+    dipFluxDiff:
+        functor: LocalDipoleDiffFlux
+        args:
+            - ip_diffim_NaiveDipoleFlux_pos_instFlux
+            - ip_diffim_NaiveDipoleFlux_neg_instFlux
+            - ip_diffim_NaiveDipoleFlux_pos_instFluxErr
+            - ip_diffim_NaiveDipoleFlux_neg_instFluxErr
+            - base_LocalPhotoCalib
+            - base_LocalPhotoCalibErr
+    dipFluxDiffErr:
+        functor: LocalDipoleDiffFluxErr
+        args:
+            - ip_diffim_NaiveDipoleFlux_pos_instFlux
+            - ip_diffim_NaiveDipoleFlux_neg_instFlux
+            - ip_diffim_NaiveDipoleFlux_pos_instFluxErr
+            - ip_diffim_NaiveDipoleFlux_neg_instFluxErr
+            - base_LocalPhotoCalib
+            - base_LocalPhotoCalibErr
     # dipRa not implemented
     # dipDec not implemented
     #    (this may be redundant with RA/DEC as the default centroid is the
@@ -131,6 +149,9 @@ funcs:
     dipChi2:
         functor: Column
         args: ip_diffim_DipoleFit_chi2dof
+    isDipole:
+        functor: Column
+        args: ip_diffim_DipoleFit_flag_classification
     # dipNdata not implemented
     totFlux:
         functor: LocalNanojansky

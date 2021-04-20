@@ -183,7 +183,9 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
                             ParquetTable(dataFrame=diaSourceDf),
                             self.funcs,
                             dataId=None).df
-
+        # The Ra/DecColumn functors preserve the coord_ra/dec original columns.
+        # Since we don't need these and keeping them causes a DB insert crash
+        # we drop them from the DataFrame before returning out value.
         return pipeBase.Struct(
             diaSourceTable=df.drop(columns=["coord_ra", "coord_dec"]),
         )
