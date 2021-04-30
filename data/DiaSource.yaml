@@ -1,3 +1,5 @@
+# Column names defined in http://ls.st/dpdd with some modification as needed
+# by database schema defined in lsst.dax.apdb
 funcs:
     diaSourceId: # the index of deepCoadd_disSource IS the diaSourceId
         functor: Column
@@ -202,7 +204,7 @@ funcs:
     IxxPsf:
         functor: ConvertPixelSqToArcsecondsSq
         args:
-            - slot_Shape_xx 
+            - slot_PsfShape_xx
             - base_LocalWcs_CDMatrix_1_1
             - base_LocalWcs_CDMatrix_1_2
             - base_LocalWcs_CDMatrix_2_1
@@ -210,14 +212,14 @@ funcs:
     IyyPsf:
         functor: ConvertPixelSqToArcsecondsSq
         args:
-            - slot_Shape_xy
+            - slot_PsfShape_xy
             - base_LocalWcs_CDMatrix_1_1
             - base_LocalWcs_CDMatrix_1_2
             - base_LocalWcs_CDMatrix_2_1
             - base_LocalWcs_CDMatrix_2_2
     IxyPsf:
         functor: ConvertPixelSqToArcsecondsSq
-        args: 
+        args:
             - slot_PsfShape_xy
             - base_LocalWcs_CDMatrix_1_1
             - base_LocalWcs_CDMatrix_1_2

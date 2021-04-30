@@ -56,7 +56,7 @@ class DiaPipelineConnections(
     """Butler connections for DiaPipelineTask.
     """
     diaSourceTable = connTypes.Input(
-        doc=".",
+        doc="Catalog of calibrated DiaSources.",
         name="{fakesType}{coaddName}Diff_diaSrcTable",
         storageClass="DataFrame",
         dimensions=("instrument", "visit", "detector"),
