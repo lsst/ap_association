@@ -19,13 +19,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import os
 import unittest
+import pandas as pd
 
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
 import lsst.pipe.base as pipeBase
-from lsst.utils import getPackageDir
 import lsst.utils.tests
 from unittest.mock import patch, Mock, DEFAULT
 
@@ -39,15 +38,6 @@ class TestDiaPipelineTask(unittest.TestCase):
         config = DiaPipelineTask.ConfigClass()
         config.apdb.db_url = "sqlite://"
         config.apdb.isolation_level = "READ_UNCOMMITTED"
-        config.diaSourceDpddifier.copyColumns = {"id": "id",
-                                                 "parent": "parent",
-                                                 "coord_ra": "coord_ra",
-                                                 "coord_dec": "coord_dec"}
-        config.diaSourceDpddifier.flagMap = os.path.join(
-            getPackageDir("ap_association"),
-            "tests",
-            "data",
-            "test-flag-map.yaml")
         config.doPackageAlerts = doPackageAlerts
         return config
 
@@ -78,13 +68,11 @@ class TestDiaPipelineTask(unittest.TestCase):
         """Test the normal workflow of each ap_pipe step.
         """
         config = self._makeDefaultConfig(doPackageAlerts=doPackageAlerts)
-        task = DiaPipelineTask(
-            config=config,
-            initInputs={"diaSourceSchema": self.srcSchema})
+        task = DiaPipelineTask(config=config)
         diffIm = Mock(spec=afwImage.ExposureF)
         exposure = Mock(spec=afwImage.ExposureF)
         template = Mock(spec=afwImage.ExposureF)
-        diaSrc = Mock(sepc=afwTable.SourceCatalog)
+        diaSrc = Mock(sepc=pd.DataFrame)
         ccdExposureIdBits = 32
 
         # Each of these subtasks should be called once during diaPipe
@@ -92,7 +80,6 @@ class TestDiaPipelineTask(unittest.TestCase):
         # appropriately.
         subtasksToMock = [
             "diaCatalogLoader",
-            "diaSourceDpddifier",
             "associator",
             "diaForcedSource",
         ]

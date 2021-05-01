@@ -40,7 +40,6 @@ from lsst.ap.association import (
     AssociationTask,
     DiaForcedSourceTask,
     LoadDiaCatalogsTask,
-    MapDiaSourceTask,
     make_dia_object_schema,
     make_dia_source_schema,
     PackageAlertsTask)
@@ -50,22 +49,16 @@ __all__ = ("DiaPipelineConfig",
            "DiaPipelineConnections")
 
 
-class DiaPipelineConnections(pipeBase.PipelineTaskConnections,
-                             dimensions=("instrument", "visit", "detector"),
-                             defaultTemplates={"coaddName": "deep", "fakesType": ""}):
+class DiaPipelineConnections(
+        pipeBase.PipelineTaskConnections,
+        dimensions=("instrument", "visit", "detector"),
+        defaultTemplates={"coaddName": "deep", "fakesType": ""}):
     """Butler connections for DiaPipelineTask.
     """
-    diaSourceSchema = connTypes.InitInput(
-        doc="Schema of the DiaSource catalog produced during image "
-            "differencing",
-        name="{fakesType}{coaddName}Diff_diaSrc_schema",
-        storageClass="SourceCatalog",
-        multiple=True
-    )
-    diaSourceCat = connTypes.Input(
-        doc="Catalog of DiaSources produced during image differencing.",
-        name="{fakesType}{coaddName}Diff_diaSrc",
-        storageClass="SourceCatalog",
+    diaSourceTable = connTypes.Input(
+        doc="Catalog of calibrated DiaSources.",
+        name="{fakesType}{coaddName}Diff_diaSrcTable",
+        storageClass="DataFrame",
         dimensions=("instrument", "visit", "detector"),
     )
     diffIm = connTypes.Input(
@@ -140,9 +133,9 @@ class DiaPipelineConnections(pipeBase.PipelineTaskConnections,
             if ref.dataId["band"] not in self.config.validBands:
                 raise ValueError(
                     f"Requested '{ref.dataId['band']}' not in "
-                    "DiaPipelineConfig.validBands. To process bands not in the "
-                    "standard Rubin set (ugrizy) you must add the band to the "
-                    "validBands list in DiaPipelineConfig and add the "
+                    "DiaPipelineConfig.validBands. To process bands not in "
+                    "the standard Rubin set (ugrizy) you must add the band to "
+                    "the validBands list in DiaPipelineConfig and add the "
                     "appropriate columns to the Apdb schema.")
         return super().adjustQuantum(datasetRefMap)
 
@@ -168,11 +161,6 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         doc="List of bands that are valid for AP processing. To process a "
             "band not on this list, the appropriate band specific columns "
             "must be added to the Apdb schema in dax_apdb.",
-    )
-    diaSourceDpddifier = pexConfig.ConfigurableField(
-        target=MapDiaSourceTask,
-        doc="Task for assigning columns from the raw output of ip_diffim into "
-            "a schema that more closely resembles the DPDD.",
     )
     diaCatalogLoader = pexConfig.ConfigurableField(
         target=LoadDiaCatalogsTask,
@@ -233,8 +221,6 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         self.apdb = self.config.apdb.apply(
             afw_schemas=dict(DiaObject=make_dia_object_schema(),
                              DiaSource=make_dia_source_schema()))
-        self.makeSubtask("diaSourceDpddifier",
-                         inputSchema=initInputs["diaSourceSchema"].schema)
         self.makeSubtask("diaCatalogLoader")
         self.makeSubtask("associator")
         self.makeSubtask("diaForcedSource")
@@ -252,7 +238,12 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         butlerQC.put(outputs, outputRefs)
 
     @pipeBase.timeMethod
-    def run(self, diaSourceCat, diffIm, exposure, warpedExposure, ccdExposureIdBits):
+    def run(self,
+            diaSourceTable,
+            diffIm,
+            exposure,
+            warpedExposure,
+            ccdExposureIdBits):
         """Process DiaSources and DiaObjects.
 
         Load previous DiaObjects and their DiaSource history. Calibrate the
@@ -262,7 +253,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         Parameters
         ----------
-        diaSourceCat : `lsst.afw.table.SourceCatalog`
+        diaSourceTable : `pandas.DataFrame`
             Newly detected DiaSources.
         diffIm : `lsst.afw.image.ExposureF`
             Difference image exposure in which the sources in ``diaSourceCat``
@@ -287,16 +278,13 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         self.log.info("Running DiaPipeline...")
         # Put the SciencePipelines through a SDMification step and return
         # calibrated columns with the expect output database names.
-        diaSources = self.diaSourceDpddifier.run(diaSourceCat,
-                                                 diffIm,
-                                                 return_pandas=True)
 
         # Load the DiaObjects and DiaSource history.
         loaderResult = self.diaCatalogLoader.run(diffIm, self.apdb)
 
         # Associate new DiaSources with existing DiaObjects and update
         # DiaObject summary statistics using the full DiaSource history.
-        assocResults = self.associator.run(diaSources,
+        assocResults = self.associator.run(diaSourceTable,
                                            loaderResult.diaObjects,
                                            loaderResult.diaSources)
 
