@@ -143,6 +143,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
 
         butlerQC.put(outputs, outputRefs)
 
+    @pipeBase.timeMethod
     def run(self,
             diaSourceCat,
             diffIm,
