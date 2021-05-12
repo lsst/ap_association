@@ -370,6 +370,7 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         the WCS.
         """
         diaConfig = LoadDiaCatalogsConfig()
+        diaConfig.pixelMargin = 300  # overriding to value tests were conditioned on
         diaConfig.htmMaxRanges = 4
         diaLoader = LoadDiaCatalogsTask(config=diaConfig)
 
