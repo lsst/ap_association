@@ -67,7 +67,7 @@ funcs:
         functor: Ratio
         args:
             - slot_ApFlux_instFlux
-            - slot_ApFlux_instFluxErr 
+            - slot_ApFlux_instFluxErr
     psFlux:
         functor: LocalNanojansky
         args:
@@ -201,7 +201,7 @@ funcs:
             - base_LocalWcs_CDMatrix_2_1
             - base_LocalWcs_CDMatrix_2_2
     # icov not implemented
-    ixxPsf:
+    ixxPSF:
         functor: ConvertPixelSqToArcsecondsSq
         args:
             - slot_PsfShape_xx
@@ -209,7 +209,7 @@ funcs:
             - base_LocalWcs_CDMatrix_1_2
             - base_LocalWcs_CDMatrix_2_1
             - base_LocalWcs_CDMatrix_2_2
-    iyyPsf:
+    iyyPSF:
         functor: ConvertPixelSqToArcsecondsSq
         args:
             - slot_PsfShape_xy
@@ -217,7 +217,7 @@ funcs:
             - base_LocalWcs_CDMatrix_1_2
             - base_LocalWcs_CDMatrix_2_1
             - base_LocalWcs_CDMatrix_2_2
-    ixyPsf:
+    ixyPSF:
         functor: ConvertPixelSqToArcsecondsSq
         args:
             - slot_PsfShape_xy
