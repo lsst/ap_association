@@ -97,6 +97,13 @@ class DiaObjectCalculationPlugin(CatalogCalculationPlugin):
     them. eg ``PSFluxMean`` instead of ``uPSFluxMean``.
     """
 
+    needsFilter = True
+    """This pluggin requires a filter to be specified. Pluggin's using filter
+    names usually deal with fluxes and only a sub-set of the DiaSource
+    catalog. Pluggins that to not use the filter name usually run over a value
+    common across all observations/detections such as position.
+    """
+
     def __init__(self, config, name, metadata):
         BasePlugin.__init__(self, config, name)
 
@@ -269,7 +276,11 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
                 self.outputCols.append(outputName)
 
     @lsst.pipe.base.timeMethod
-    def run(self, diaObjectCat, diaSourceCat, updatedDiaObjectIds, filterName):
+    def run(self,
+            diaObjectCat,
+            diaSourceCat,
+            updatedDiaObjectIds,
+            filterNames):
         """The entry point for the DIA catalog calculation task.
 
         Run method both updates the values in the diaObjectCat and appends
@@ -288,8 +299,8 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
             `["diaObjectId", "filterName", "diaSourceId"]`
         updatedDiaObjectIds : `numpy.ndarray`
             Integer ids of the DiaObjects to update and create.
-        filterName : `str`
-            String name of the filter being processed.
+        filterNames : `list` of `str`
+            List of string names of filters to be being processed.
 
         Returns
         -------
@@ -334,14 +345,14 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
         return self.callCompute(diaObjectCat,
                                 diaSourceCat,
                                 updatedDiaObjectIds,
-                                filterName)
+                                filterNames)
 
     @lsst.pipe.base.timeMethod
     def callCompute(self,
                     diaObjectCat,
                     diaSourceCat,
                     updatedDiaObjectIds,
-                    filterName):
+                    filterNames):
         """Run each of the plugins on the catalog.
 
         For catalog column names see the lsst.cat schema definitions for the
@@ -358,8 +369,8 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
             ["diaObjectId", "filterName", "diaSourceId"]`
         updatedDiaObjectIds : `numpy.ndarray`
             Integer ids of the DiaObjects to update and create.
-        filterName : `str`
-            String name of the filter being processed.
+        filterNames : `list` of `str`
+            List of string names of filters to be being processed.
 
         Returns
         -------
@@ -382,26 +393,17 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
         diaObjectsToUpdate = diaObjectCat.loc[updatedDiaObjectIds, :]
 
         updatingDiaSources = diaSourceCat.loc[updatedDiaObjectIds, :]
-        # Pandas does not convert NULL to `nan` values in custom select
-        # statements, instead using None. We thus must replace to None with
-        # `nan` manually.
-        updatingFilterDiaSources = updatingDiaSources.loc[
-            (slice(None), filterName), :
-        ]
-
-        # Level=0 here groups by diaObjectId.
         diaSourcesGB = updatingDiaSources.groupby(level=0)
-        filterDiaSourcesGB = updatingFilterDiaSources.groupby(level=0)
-
         for runlevel in sorted(self.executionDict):
             for plug in self.executionDict[runlevel].single:
+                if plug.needsFilter:
+                    continue
                 for updatedDiaObjectId in updatedDiaObjectIds:
 
                     # Sub-select diaSources associated with this diaObject.
                     objDiaSources = updatingDiaSources.loc[updatedDiaObjectId]
 
                     # Sub-select on diaSources observed in the current filter.
-                    filterObjDiaSources = objDiaSources.loc[filterName]
                     with CCContext(plug, updatedDiaObjectId, self.log):
                         # We feed the catalog we need to update and the id
                         # so as to get a few into the catalog and not a copy.
@@ -409,14 +411,52 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
                         plug.calculate(diaObjects=diaObjectsToUpdate,
                                        diaObjectId=updatedDiaObjectId,
                                        diaSources=objDiaSources,
-                                       filterDiaSources=filterObjDiaSources,
-                                       filterName=filterName)
+                                       filterDiaSources=None,
+                                       filterName=None)
             for plug in self.executionDict[runlevel].multi:
+                if plug.needsFilter:
+                    continue
                 with CCContext(plug, diaObjectsToUpdate, self.log):
                     plug.calculate(diaObjects=diaObjectsToUpdate,
                                    diaSources=diaSourcesGB,
-                                   filterDiaSources=filterDiaSourcesGB,
-                                   filterName=filterName)
+                                   filterDiaSources=None,
+                                   filterName=None)
+
+        for filterName in filterNames:
+            updatingFilterDiaSources = updatingDiaSources.loc[
+                (slice(None), filterName), :
+            ]
+            # Level=0 here groups by diaObjectId.
+            filterDiaSourcesGB = updatingFilterDiaSources.groupby(level=0)
+
+            for runlevel in sorted(self.executionDict):
+                for plug in self.executionDict[runlevel].single:
+                    if not plug.needsFilter:
+                        continue
+                    for updatedDiaObjectId in updatedDiaObjectIds:
+
+                        # Sub-select diaSources associated with this diaObject.
+                        objDiaSources = updatingDiaSources.loc[updatedDiaObjectId]
+
+                        # Sub-select on diaSources observed in the current filter.
+                        filterObjDiaSources = objDiaSources.loc[filterName]
+                        with CCContext(plug, updatedDiaObjectId, self.log):
+                            # We feed the catalog we need to update and the id
+                            # so as to get a few into the catalog and not a copy.
+                            # This updates the values in the catalog.
+                            plug.calculate(diaObjects=diaObjectsToUpdate,
+                                           diaObjectId=updatedDiaObjectId,
+                                           diaSources=objDiaSources,
+                                           filterDiaSources=filterObjDiaSources,
+                                           filterName=filterName)
+                for plug in self.executionDict[runlevel].multi:
+                    if not plug.needsFilter:
+                        continue
+                    with CCContext(plug, diaObjectsToUpdate, self.log):
+                        plug.calculate(diaObjects=diaObjectsToUpdate,
+                                       diaSources=diaSourcesGB,
+                                       filterDiaSources=filterDiaSourcesGB,
+                                       filterName=filterName)
         # Need to store the newly updated diaObjects directly as the editing
         # a view into diaObjectsToUpdate does not update the values of
         # diaObjectCat.

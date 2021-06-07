@@ -176,7 +176,7 @@ class TestDiaCalcluation(unittest.TestCase):
         results = self.diaObjCalTask.run(self.diaObjects,
                                          self.diaSources,
                                          self.updatedDiaObjectIds,
-                                         "g")
+                                         ["g"])
         diaObjectCat = results.diaObjectCat
         updatedDiaObjects = results.updatedDiaObjects
         updatedDiaObjects.set_index("diaObjectId", inplace=True)
@@ -225,7 +225,7 @@ class TestDiaCalcluation(unittest.TestCase):
         results = diaObjectCalTask.run(self.diaObjects,
                                        unindexedDiaSources,
                                        np.array([0], dtype=np.int64),
-                                       "g")
+                                       ["g"])
         updatedDiaObjects = results.updatedDiaObjects
         self.assertEqual(updatedDiaObjects.at[0, "count"],
                          len(unindexedDiaSources))

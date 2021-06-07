@@ -167,7 +167,7 @@ class AssociationTask(pipeBase.Task):
             diaObjects,
             mergedDiaSourceHistory,
             matchResult.associated_dia_object_ids,
-            filterName)
+            [filterName])
 
         allDiaObjects = updatedResults.diaObjectCat
         updatedDiaObjects = updatedResults.updatedDiaObjects

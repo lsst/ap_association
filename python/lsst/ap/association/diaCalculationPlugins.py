@@ -93,6 +93,7 @@ class MeanDiaPosition(DiaObjectCalculationPlugin):
     plugType = 'multi'
 
     outputCols = ["ra", "decl", "radecTai"]
+    needsFilter = False
 
     @classmethod
     def getExecutionOrder(cls):
@@ -153,6 +154,7 @@ class HTMIndexDiaPosition(DiaObjectCalculationPlugin):
 
     inputCols = ["ra", "decl"]
     outputCols = ["pixelId"]
+    needsFilter = False
 
     def __init__(self, config, name, metadata):
         DiaObjectCalculationPlugin.__init__(self, config, name, metadata)
@@ -193,6 +195,7 @@ class NumDiaSourcesDiaPlugin(DiaObjectCalculationPlugin):
     ConfigClass = NumDiaSourcesDiaPluginConfig
     outputCols = ["nDiaSources"]
     plugType = "multi"
+    needsFilter = False
 
     @classmethod
     def getExecutionOrder(cls):
@@ -225,6 +228,7 @@ class SimpleSourceFlagDiaPlugin(DiaObjectCalculationPlugin):
     ConfigClass = NumDiaSourcesDiaPluginConfig
     outputCols = ["flags"]
     plugType = "multi"
+    needsFilter = False
 
     @classmethod
     def getExecutionOrder(cls):
@@ -260,6 +264,7 @@ class WeightedMeanDiaPsFlux(DiaObjectCalculationPlugin):
     ConfigClass = WeightedMeanDiaPsFluxConfig
     outputCols = ["PSFluxMean", "PSFluxMeanErr", "PSFluxNdata"]
     plugType = "multi"
+    needsFilter = True
 
     @classmethod
     def getExecutionOrder(cls):
@@ -340,6 +345,7 @@ class PercentileDiaPsFlux(DiaObjectCalculationPlugin):
     # Output columns are created upon instantiation of the class.
     outputCols = []
     plugType = "multi"
+    needsFilter = True
 
     def __init__(self, config, name, metadata, **kwargs):
         DiaObjectCalculationPlugin.__init__(self,
@@ -408,6 +414,7 @@ class SigmaDiaPsFlux(DiaObjectCalculationPlugin):
     # Output columns are created upon instantiation of the class.
     outputCols = ["PSFluxSigma"]
     plugType = "multi"
+    needsFilter = True
 
     @classmethod
     def getExecutionOrder(cls):
@@ -458,6 +465,7 @@ class Chi2DiaPsFlux(DiaObjectCalculationPlugin):
     # Output columns are created upon instantiation of the class.
     outputCols = ["PSFluxChi2"]
     plugType = "multi"
+    needsFilter = True
 
     @classmethod
     def getExecutionOrder(cls):
@@ -513,6 +521,7 @@ class MadDiaPsFlux(DiaObjectCalculationPlugin):
     # Output columns are created upon instantiation of the class.
     outputCols = ["PSFluxMAD"]
     plugType = "multi"
+    needsFilter = True
 
     @classmethod
     def getExecutionOrder(cls):
@@ -562,6 +571,7 @@ class SkewDiaPsFlux(DiaObjectCalculationPlugin):
     # Output columns are created upon instantiation of the class.
     outputCols = ["PSFluxSkew"]
     plugType = "multi"
+    needsFilter = True
 
     @classmethod
     def getExecutionOrder(cls):
@@ -609,6 +619,7 @@ class MinMaxDiaPsFlux(DiaObjectCalculationPlugin):
     # Output columns are created upon instantiation of the class.
     outputCols = ["PSFluxMin", "PSFluxMax"]
     plugType = "multi"
+    needsFilter = True
 
     @classmethod
     def getExecutionOrder(cls):
@@ -663,6 +674,7 @@ class MaxSlopeDiaPsFlux(DiaObjectCalculationPlugin):
     # Output columns are created upon instantiation of the class.
     outputCols = ["PSFluxMaxSlope"]
     plugType = "multi"
+    needsFilter = True
 
     @classmethod
     def getExecutionOrder(cls):
@@ -722,6 +734,7 @@ class ErrMeanDiaPsFlux(DiaObjectCalculationPlugin):
     # Output columns are created upon instantiation of the class.
     outputCols = ["PSFluxErrMean"]
     plugType = "multi"
+    needsFilter = True
 
     @classmethod
     def getExecutionOrder(cls):
@@ -769,6 +782,7 @@ class LinearFitDiaPsFlux(DiaObjectCalculationPlugin):
     # Output columns are created upon instantiation of the class.
     outputCols = ["PSFluxLinearSlope", "PSFluxLinearIntercept"]
     plugType = "multi"
+    needsFilter = True
 
     @classmethod
     def getExecutionOrder(cls):
@@ -838,6 +852,7 @@ class StetsonJDiaPsFlux(DiaObjectCalculationPlugin):
     # Output columns are created upon instantiation of the class.
     outputCols = ["PSFluxStetsonJ"]
     plugType = "multi"
+    needsFilter = True
 
     @classmethod
     def getExecutionOrder(cls):
@@ -992,6 +1007,7 @@ class WeightedMeanDiaTotFlux(DiaObjectCalculationPlugin):
     ConfigClass = WeightedMeanDiaPsFluxConfig
     outputCols = ["TOTFluxMean", "TOTFluxMeanErr"]
     plugType = "multi"
+    needsFilter = True
 
     @classmethod
     def getExecutionOrder(cls):
@@ -1058,6 +1074,7 @@ class SigmaDiaTotFlux(DiaObjectCalculationPlugin):
     # Output columns are created upon instantiation of the class.
     outputCols = ["TOTFluxSigma"]
     plugType = "multi"
+    needsFilter = True
 
     @classmethod
     def getExecutionOrder(cls):
