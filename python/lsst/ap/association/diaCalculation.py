@@ -423,9 +423,14 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
                                    filterName=None)
 
         for filterName in filterNames:
-            updatingFilterDiaSources = updatingDiaSources.loc[
-                (slice(None), filterName), :
-            ]
+            try:
+                updatingFilterDiaSources = updatingDiaSources.loc[
+                    (slice(None), filterName), :
+                ]
+            except KeyError:
+                self.log.warn(f"No DiaSource data with fitler={filterName}. "
+                              "Continuing...")
+                continue
             # Level=0 here groups by diaObjectId.
             filterDiaSourcesGB = updatingFilterDiaSources.groupby(level=0)
 
@@ -439,7 +444,13 @@ class DiaObjectCalculationTask(CatalogCalculationTask):
                         objDiaSources = updatingDiaSources.loc[updatedDiaObjectId]
 
                         # Sub-select on diaSources observed in the current filter.
-                        filterObjDiaSources = objDiaSources.loc[filterName]
+                        try:
+                            filterObjDiaSources = objDiaSources.loc[filterName]
+                        except KeyError:
+                            self.log.warn(
+                                "DiaObjectId={updatedDiaObjectId} has no "
+                                "DiaSources for filter={filterName}. "
+                                "Continuing...")
                         with CCContext(plug, updatedDiaObjectId, self.log):
                             # We feed the catalog we need to update and the id
                             # so as to get a few into the catalog and not a copy.
