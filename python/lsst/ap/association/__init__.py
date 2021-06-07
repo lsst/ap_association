@@ -23,8 +23,6 @@ from .version import *
 from .association import *
 from .diaForcedSource import *
 from .afwUtils import *
-from .diaCalculation import *
-from .diaCalculationPlugins import *
 from .loadDiaCatalogs import *
 from .packageAlerts import *
 from .diaPipe import *
