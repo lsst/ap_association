@@ -67,7 +67,7 @@ funcs:
         functor: Ratio
         args:
             - slot_ApFlux_instFlux
-            - slot_ApFlux_instFluxErr 
+            - slot_ApFlux_instFluxErr
     psFlux:
         functor: LocalNanojansky
         args:
@@ -176,7 +176,7 @@ funcs:
 
     # These values below work but need a new functor for converting pixel^2
     # units to arcsec^2 DM-
-    Ixx:
+    ixx:
         functor: ConvertPixelSqToArcsecondsSq
         args:
             - slot_Shape_xx
@@ -184,7 +184,7 @@ funcs:
             - base_LocalWcs_CDMatrix_1_2
             - base_LocalWcs_CDMatrix_2_1
             - base_LocalWcs_CDMatrix_2_2
-    Iyy:
+    iyy:
         functor: ConvertPixelSqToArcsecondsSq
         args:
             - slot_Shape_yy
@@ -192,7 +192,7 @@ funcs:
             - base_LocalWcs_CDMatrix_1_2
             - base_LocalWcs_CDMatrix_2_1
             - base_LocalWcs_CDMatrix_2_2
-    Ixy:
+    ixy:
         functor: ConvertPixelSqToArcsecondsSq
         args:
             - slot_Shape_xy
@@ -200,8 +200,8 @@ funcs:
             - base_LocalWcs_CDMatrix_1_2
             - base_LocalWcs_CDMatrix_2_1
             - base_LocalWcs_CDMatrix_2_2
-    # Icov not implemented
-    IxxPsf:
+    # icov not implemented
+    ixxPSF:
         functor: ConvertPixelSqToArcsecondsSq
         args:
             - slot_PsfShape_xx
@@ -209,7 +209,7 @@ funcs:
             - base_LocalWcs_CDMatrix_1_2
             - base_LocalWcs_CDMatrix_2_1
             - base_LocalWcs_CDMatrix_2_2
-    IyyPsf:
+    iyyPSF:
         functor: ConvertPixelSqToArcsecondsSq
         args:
             - slot_PsfShape_xy
@@ -217,7 +217,7 @@ funcs:
             - base_LocalWcs_CDMatrix_1_2
             - base_LocalWcs_CDMatrix_2_1
             - base_LocalWcs_CDMatrix_2_2
-    IxyPsf:
+    ixyPSF:
         functor: ConvertPixelSqToArcsecondsSq
         args:
             - slot_PsfShape_xy

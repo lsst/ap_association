@@ -24,6 +24,7 @@ import numpy as np
 import pandas as pd
 import tempfile
 import unittest
+import yaml
 
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.geom as afwGeom
@@ -295,6 +296,10 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         self.apdb.storeDiaObjects(self.diaObjects,
                                   self.dateTime)
 
+        # These columns are not in the DPDD, yet do appear in DiaSource.yaml.
+        # We don't need to check them against the default APDB schema.
+        self.ignoreColumns = ["filterName", "bboxSize", "isDipole"]
+
     def tearDown(self):
         os.close(self.db_file_fd)
         os.remove(self.db_file)
@@ -389,6 +394,25 @@ class TestLoadDiaCatalogs(unittest.TestCase):
             self.assertEqual(normPix, flipPix)
             self.assertEqual(normPix, testPix)
             self.assertEqual(flipPix, testPix)
+
+    def test_apdbSchema(self):
+        """Test that the default DiaSource schema from dax_apdb agrees with the
+        column names defined here in ap_association/data/DiaSource.yaml.
+        """
+        functorFile = _data_file_name("DiaSource.yaml", "ap_association")
+        apdbSchemaFile = _data_file_name("apdb-schema.yaml", "dax_apdb")
+        with open(apdbSchemaFile) as yaml_stream:
+            table_list = list(yaml.safe_load_all(yaml_stream))
+            for table in table_list:
+                if table['table'] == 'DiaSource':
+                    apdbSchemaColumns = [column['name'] for column in table['columns']]
+                    break
+        with open(functorFile) as yaml_stream:
+            diaSourceFunctor = yaml.safe_load_all(yaml_stream)
+            for functor in diaSourceFunctor:
+                diaSourceColumns = [column for column in list(functor['funcs'].keys())
+                                    if column not in self.ignoreColumns]
+            self.assertLess(set(diaSourceColumns), set(apdbSchemaColumns))
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
