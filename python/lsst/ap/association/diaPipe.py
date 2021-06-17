@@ -102,7 +102,7 @@ class DiaPipelineConnections(
         if not config.doWriteAssociatedSources:
             self.outputs.remove("associatedDiaSources")
 
-    def adjustQuantum(self, datasetRefMap: pipeBase.InputQuantizedConnection):
+    def adjustQuantum(self, inputs, outputs, label, dataId):
         """Override to make adjustments to `lsst.daf.butler.DatasetRef` objects
         in the `lsst.daf.butler.core.Quantum` during the graph generation stage
         of the activator.
@@ -112,23 +112,53 @@ class DiaPipelineConnections(
 
         Parameters
         ----------
-        datasetRefMap : `NamedKeyDict`
-            Mapping from dataset type to a `set` of
-            `lsst.daf.butler.DatasetRef` objects
+        inputs : `dict`
+            Dictionary whose keys are an input (regular or prerequisite)
+            connection name and whose values are a tuple of the connection
+            instance and a collection of associated `DatasetRef` objects.
+            The exact type of the nested collections is unspecified; it can be
+            assumed to be multi-pass iterable and support `len` and ``in``, but
+            it should not be mutated in place.  In contrast, the outer
+            dictionaries are guaranteed to be temporary copies that are true
+            `dict` instances, and hence may be modified and even returned; this
+            is especially useful for delegating to `super` (see notes below).
+        outputs : `dict`
+            Dict of output datasets, with the same structure as ``inputs``.
+        label : `str`
+            Label for this task in the pipeline (should be used in all
+            diagnostic messages).
+        data_id : `lsst.daf.butler.DataCoordinate`
+            Data ID for this quantum in the pipeline (should be used in all
+            diagnostic messages).
 
         Returns
         -------
-        datasetRefMap : `NamedKeyDict`
-            Mapping of input with assurances that bands incompatible with the
-            Apdb are present.
+        adjusted_inputs : `dict`
+            Dict of the same form as ``inputs`` with updated containers of
+            input `DatasetRef` objects.  Connections that are not changed
+            should not be returned at all.  Datasets may only be removed, not
+            added.  Nested collections may be of any multi-pass iterable type,
+            and the order of iteration will set the order of iteration within
+            `PipelineTask.runQuantum`.
+        adjusted_outputs : `dict`
+            Dict of updated output datasets, with the same structure and
+            interpretation as ``adjusted_inputs``.
 
         Raises
         ------
-        ValueError
-            Raises if a data ref in the quantum has a band not available in the
-            Apdb.
+        ScalarError
+            Raised if any `Input` or `PrerequisiteInput` connection has
+            ``multiple`` set to `False`, but multiple datasets.
+        NoWorkFound
+            Raised to indicate that this quantum should not be run; not enough
+            datasets were found for a regular `Input` connection, and the
+            quantum should be pruned or skipped.
+        FileNotFoundError
+            Raised to cause QuantumGraph generation to fail (with the message
+            included in this exception); not enough datasets were found for a
+            `PrerequisiteInput` connection.
         """
-        refs = datasetRefMap[self.diffIm.name]
+        _, refs = inputs["diffIm"]
         for ref in refs:
             if ref.dataId["band"] not in self.config.validBands:
                 raise ValueError(
@@ -137,7 +167,7 @@ class DiaPipelineConnections(
                     "the standard Rubin set (ugrizy) you must add the band to "
                     "the validBands list in DiaPipelineConfig and add the "
                     "appropriate columns to the Apdb schema.")
-        return super().adjustQuantum(datasetRefMap)
+        return super().adjustQuantum(inputs, outputs, label, dataId)
 
 
 class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
