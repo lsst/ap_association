@@ -32,7 +32,7 @@ import lsst.geom as geom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 
-from .diaCalculation import DiaObjectCalculationTask
+from lsst.meas.base import DiaObjectCalculationTask
 
 # Enforce an error for unsafe column/array value setting in pandas.
 pd.options.mode.chained_assignment = 'raise'
@@ -167,7 +167,7 @@ class AssociationTask(pipeBase.Task):
             diaObjects,
             mergedDiaSourceHistory,
             matchResult.associated_dia_object_ids,
-            filterName)
+            [filterName])
 
         allDiaObjects = updatedResults.diaObjectCat
         updatedDiaObjects = updatedResults.updatedDiaObjects
