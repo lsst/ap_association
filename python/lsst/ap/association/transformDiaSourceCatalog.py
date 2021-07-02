@@ -82,7 +82,7 @@ class TransformDiaSourceCatalogConfig(pipeBase.PipelineTaskConfig,
         dtype=str,
         doc='Path to YAML file specifying Science DataModel functors to use '
             'when copying columns and computing calibrated values.',
-        default=os.path.join(getPackageDir("ap_association"),
+        default=os.path.join("${AP_ASSOCIATION_DIR}",
                              "data",
                              "DiaSource.yaml")
     )
