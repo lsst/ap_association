@@ -34,7 +34,6 @@ import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
 from lsst.pipe.tasks.postprocess import TransformCatalogBaseTask
 from lsst.pipe.tasks.parquetTable import ParquetTable
-from lsst.utils import getPackageDir
 
 
 class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
@@ -74,7 +73,7 @@ class TransformDiaSourceCatalogConfig(pipeBase.PipelineTaskConfig,
     flagMap = pexConfig.Field(
         dtype=str,
         doc="Yaml file specifying SciencePipelines flag fields to bit packs.",
-        default=os.path.join(getPackageDir("ap_association"),
+        default=os.path.join("${AP_ASSOCIATION_DIR}",
                              "data",
                              "association-flag-map.yaml"),
     )
@@ -82,7 +81,7 @@ class TransformDiaSourceCatalogConfig(pipeBase.PipelineTaskConfig,
         dtype=str,
         doc='Path to YAML file specifying Science DataModel functors to use '
             'when copying columns and computing calibrated values.',
-        default=os.path.join(getPackageDir("ap_association"),
+        default=os.path.join("${AP_ASSOCIATION_DIR}",
                              "data",
                              "DiaSource.yaml")
     )
@@ -111,7 +110,8 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         """Setup all flag bit packings.
         """
         self.bit_pack_columns = []
-        with open(self.config.flagMap) as yaml_stream:
+        flag_map_file = os.path.expandvars(self.config.flagMap)
+        with open(flag_map_file) as yaml_stream:
             table_list = list(yaml.safe_load_all(yaml_stream))
             for table in table_list:
                 if table['tableName'] == 'DiaSource':

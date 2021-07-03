@@ -34,7 +34,6 @@ import lsst.dax.apdb as daxApdb
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
-from lsst.utils import getPackageDir
 
 from lsst.ap.association import (
     AssociationTask,
@@ -225,7 +224,7 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         self.apdb.dia_object_index = "baseline"
         self.apdb.dia_object_columns = []
         self.apdb.extra_schema_file = os.path.join(
-            getPackageDir("ap_association"),
+            "${AP_ASSOCIATION_DIR}",
             "data",
             "apdb-ap-pipe-schema-extra.yaml")
 
