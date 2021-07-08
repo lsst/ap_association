@@ -87,6 +87,7 @@ class TransformDiaSourceCatalogConfig(pipeBase.PipelineTaskConfig,
     )
     doRemoveSkySources = pexConfig.Field(
         dtype=bool,
+        default=False,
         doc="Input DiaSource catalog contains SkySources that should be "
             "removed before storing the output DiaSource catalog."
     )
@@ -209,11 +210,11 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
 
         Returns
         -------
-        outputBBoxSizes : `numpy.ndarray`, (N,)
+        outputBBoxSizes : `list` of `float`
             Array of bbox sizes.
         """
         outputBBoxSizes = []
-        for idx, record in enumerate(inputCatalog):
+        for record in inputCatalog:
             if self.config.doRemoveSkySources:
                 if record["sky_source"]:
                     continue
