@@ -85,6 +85,12 @@ class TransformDiaSourceCatalogConfig(pipeBase.PipelineTaskConfig,
                              "data",
                              "DiaSource.yaml")
     )
+    doRemoveSkySources = pexConfig.Field(
+        dtype=bool,
+        default=False,
+        doc="Input DiaSource catalog contains SkySources that should be "
+            "removed before storing the output DiaSource catalog."
+    )
 
 
 class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
@@ -172,6 +178,8 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             ccdVisitId)
 
         diaSourceDf = diaSourceCat.asAstropy().to_pandas()
+        if self.config.doRemoveSkySources:
+            diaSourceDf = diaSourceDf[~diaSourceDf["sky_source"]]
         diaSourceDf["bboxSize"] = self.computeBBoxSizes(diaSourceCat)
         diaSourceDf["ccdVisitId"] = ccdVisitId
         diaSourceDf["filterName"] = band
@@ -202,11 +210,14 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
 
         Returns
         -------
-        outputBBoxSizes : `numpy.ndarray`, (N,)
+        outputBBoxSizes : `list` of `float`
             Array of bbox sizes.
         """
-        outputBBoxSizes = np.empty(len(inputCatalog), dtype=int)
-        for idx, record in enumerate(inputCatalog):
+        outputBBoxSizes = []
+        for record in inputCatalog:
+            if self.config.doRemoveSkySources:
+                if record["sky_source"]:
+                    continue
             footprintBBox = record.getFootprint().getBBox()
             # Compute twice the size of the largest dimension of the footprint
             # bounding box. This is the largest footprint we should need to cover
@@ -223,7 +234,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
                                             footprintBBox.minY - recY]))))
             if bboxSize > maxSize:
                 bboxSize = maxSize
-            outputBBoxSizes[idx] = bboxSize
+            outputBBoxSizes.append(bboxSize)
 
         return outputBBoxSizes
 
