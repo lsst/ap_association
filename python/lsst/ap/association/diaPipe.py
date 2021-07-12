@@ -31,6 +31,7 @@ Currently loads directly from the Apdb rather than pre-loading.
 import os
 
 import lsst.dax.apdb as daxApdb
+from lsst.meas.base import DiaObjectCalculationTask
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
@@ -199,6 +200,10 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         target=AssociationTask,
         doc="Task used to associate DiaSources with DiaObjects.",
     )
+    diaCalculation = pexConfig.ConfigurableField(
+        target=DiaObjectCalculationTask,
+        doc="Task to compute summary statistics for DiaObjects.",
+    )
     diaForcedSource = pexConfig.ConfigurableField(
         target=DiaForcedSourceTask,
         doc="Task used for force photometer DiaObject locations in direct and "
@@ -227,14 +232,34 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
             "${AP_ASSOCIATION_DIR}",
             "data",
             "apdb-ap-pipe-schema-extra.yaml")
+        self.diaCalculation.plugins = ["ap_meanPosition",
+                                       "ap_HTMIndex",
+                                       "ap_nDiaSources",
+                                       "ap_diaObjectFlag",
+                                       "ap_meanFlux",
+                                       "ap_percentileFlux",
+                                       "ap_sigmaFlux",
+                                       "ap_chi2Flux",
+                                       "ap_madFlux",
+                                       "ap_skewFlux",
+                                       "ap_minMaxFlux",
+                                       "ap_maxSlopeFlux",
+                                       "ap_meanErrFlux",
+                                       "ap_linearFit",
+                                       "ap_stetsonJ",
+                                       "ap_meanTotFlux",
+                                       "ap_sigmaTotFlux"]
 
     def validate(self):
         pexConfig.Config.validate(self)
         if self.diaCatalogLoader.htmLevel != \
-           self.associator.diaCalculation.plugins["ap_HTMIndex"].htmLevel:
+           self.diaCalculation.plugins["ap_HTMIndex"].htmLevel:
             raise ValueError("HTM index level in LoadDiaCatalogsTask must be "
                              "equal to HTMIndexDiaCalculationPlugin index "
                              "level.")
+        if "ap_HTMIndex" not in self.diaCalculation.plugins:
+            raise ValueError("DiaPipe requires the ap_HTMIndex plugin "
+                             "be enabled for proper insertion into the Apdb.")
 
 
 class DiaPipelineTask(pipeBase.PipelineTask):
@@ -252,6 +277,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                              DiaSource=make_dia_source_schema()))
         self.makeSubtask("diaCatalogLoader")
         self.makeSubtask("associator")
+        self.makeSubtask("diaCalculation")
         self.makeSubtask("diaForcedSource")
         if self.config.doPackageAlerts:
             self.makeSubtask("alertPackager")
@@ -261,6 +287,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         expId, expBits = butlerQC.quantum.dataId.pack("visit_detector",
                                                       returnMaxBits=True)
         inputs["ccdExposureIdBits"] = expBits
+        inputs["band"] = butlerQC.quantum.dataId["band"]
 
         outputs = self.run(**inputs)
 
@@ -272,7 +299,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diffIm,
             exposure,
             warpedExposure,
-            ccdExposureIdBits):
+            ccdExposureIdBits,
+            band):
         """Process DiaSources and DiaObjects.
 
         Load previous DiaObjects and their DiaSource history. Calibrate the
@@ -316,12 +344,47 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         assocResults = self.associator.run(diaSourceTable,
                                            loaderResult.diaObjects,
                                            loaderResult.diaSources)
+        if assocResults.diaObjects.index.has_duplicates:
+            raise RuntimeError(
+                "Duplicate DiaObjects (loaded + updated) created after "
+                "DiaCalculation. This is unexpected behavior and should be "
+                "reported. Existing.")
+
+        mergedDiaSourceHistory = loaderResult.diaSources.append(
+            assocResults.diaSources,
+            sort=True)
+        # Test for DiaSource duplication first. If duplicates are found,
+        # this likely means this is duplicate data being processed and sent
+        # to the Apdb.
+        if mergedDiaSourceHistory.index.has_duplicates:
+            raise RuntimeError(
+                "Duplicate DiaSources found after association and merging "
+                "with history. This is likely due to re-running data with an "
+                "already populated Apdb. If this was not the case then there "
+                "was an unexpected failure in Association while matching "
+                "sources to objects, and should be reported. Exiting.")
+
+        diaCalResult = self.diaCalculation.run(
+            assocResults.diaObjects,
+            mergedDiaSourceHistory,
+            assocResults.matchedDiaObjectIds,
+            [band])
+        if diaCalResult.diaObjectCat.index.has_duplicates:
+            raise RuntimeError(
+                "Duplicate DiaObjects (loaded + updated) created after "
+                "DiaCalculation. This is unexpected behavior and should be "
+                "reported. Existing.")
+        if diaCalResult.updatedDiaObjects.index.has_duplicates:
+            raise RuntimeError(
+                "Duplicate DiaObjects (updated) created after "
+                "DiaCalculation. This is unexpected behavior and should be "
+                "reported. Existing.")
 
         # Force photometer on the Difference and Calibrated exposures using
         # the new and updated DiaObject locations.
         diaForcedSources = self.diaForcedSource.run(
-            assocResults.diaObjects,
-            assocResults.updatedDiaObjects.loc[:, "diaObjectId"].to_numpy(),
+            diaCalResult.diaObjectCat,
+            diaCalResult.updatedDiaObjects.loc[:, "diaObjectId"].to_numpy(),
             ccdExposureIdBits,
             exposure,
             diffIm)
@@ -329,7 +392,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Store DiaSources and updated DiaObjects in the Apdb.
         self.apdb.storeDiaSources(assocResults.diaSources)
         self.apdb.storeDiaObjects(
-            assocResults.updatedDiaObjects,
+            diaCalResult.updatedDiaObjects,
             exposure.getInfo().getVisitInfo().getDate().toPython())
         self.apdb.storeDiaForcedSources(diaForcedSources)
 
@@ -354,7 +417,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                     drop=False,
                     inplace=True)
             self.alertPackager.run(assocResults.diaSources,
-                                   assocResults.diaObjects,
+                                   diaCalResult.diaObjectCat,
                                    loaderResult.diaSources,
                                    diaForcedSources,
                                    diffIm,
