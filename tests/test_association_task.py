@@ -242,21 +242,13 @@ class TestAssociationTask(unittest.TestCase):
             if df_idx == not_updated_idx:
                 # Test the DIAObject we expect to not be associated with any
                 # new DIASources.
-                self.assertEqual(dia_object['gPSFluxNdata'], 1)
-                self.assertEqual(dia_object['rPSFluxNdata'], 1)
-                self.assertEqual(dia_object['nDiaSources'], 2)
                 self.assertEqual(df_idx, obj_idx)
             elif updated_idx_start <= df_idx < new_idx_start:
                 # Test that associating to the existing DIAObjects went
                 # as planned and test that the IDs of the newly associated
                 # DIASources is correct.
-                self.assertEqual(dia_object['gPSFluxNdata'], 2)
-                self.assertEqual(dia_object['rPSFluxNdata'], 1)
-                self.assertEqual(dia_object['nDiaSources'], 3)
                 self.assertEqual(df_idx, obj_idx)
             else:
-                self.assertEqual(dia_object['gPSFluxNdata'], 1)
-                self.assertEqual(dia_object['nDiaSources'], 1)
                 self.assertEqual(df_idx, obj_idx + 4 + 5)
 
     def test_run_no_existing_objects(self):
@@ -267,17 +259,7 @@ class TestAssociationTask(unittest.TestCase):
         self.assertEqual(len(dia_objects),
                          total_expected_dia_objects)
         for obj_idx, (df_idx, output_dia_object) in enumerate(dia_objects.iterrows()):
-            self.assertEqual(output_dia_object['gPSFluxNdata'], 1)
             self.assertEqual(df_idx, obj_idx + 10)
-
-    def test_run_dup_diaSources(self):
-        """Test that duplicate sources being run through association throw the
-        correct error.
-        """
-        with self.assertRaises(RuntimeError):
-            self._run_association_and_retrieve_objects(create_objects=True,
-                                                       dupDiaSources=True,
-                                                       dupDiaObjects=False)
 
     def test_run_dup_diaObjects(self):
         """Test that duplicate objects being run through association throw the
@@ -370,6 +352,9 @@ class TestAssociationTask(unittest.TestCase):
         if dupDiaObjects:
             diaObjects = diaObjects.append(diaObjects.iloc[[0, -1]],
                                            ignore_index=True)
+            diaObjects.set_index("diaObjectId",
+                                 inplace=True,
+                                 drop=False)
 
         results = assoc_task.run(diaSources,
                                  diaObjects,

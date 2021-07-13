@@ -99,7 +99,6 @@ class AssociationTask(pipeBase.Task):
         diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
                              drop=False,
                              inplace=True)
-
         # Append the newly created DiaObjectds.
         diaObjects = diaObjects.append(matchResult.new_dia_objects,
                                        sort=True)
@@ -111,7 +110,7 @@ class AssociationTask(pipeBase.Task):
                 "likely due to re-running data with an already populated "
                 "Apdb. If this was not the case then there was an unexpected "
                 "failure in Association while matching and creating new "
-                "DiaObjectsand should be reported. Exiting.")
+                "DiaObjects and should be reported. Exiting.")
 
         return pipeBase.Struct(
             diaObjects=diaObjects,

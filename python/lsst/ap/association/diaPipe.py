@@ -344,11 +344,6 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         assocResults = self.associator.run(diaSourceTable,
                                            loaderResult.diaObjects,
                                            loaderResult.diaSources)
-        if assocResults.diaObjects.index.has_duplicates:
-            raise RuntimeError(
-                "Duplicate DiaObjects (loaded + updated) created after "
-                "DiaCalculation. This is unexpected behavior and should be "
-                "reported. Existing.")
 
         mergedDiaSourceHistory = loaderResult.diaSources.append(
             assocResults.diaSources,
@@ -356,7 +351,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Test for DiaSource duplication first. If duplicates are found,
         # this likely means this is duplicate data being processed and sent
         # to the Apdb.
-        if mergedDiaSourceHistory.index.has_duplicates:
+        if self.testDataFrameIndex(mergedDiaSourceHistory):
             raise RuntimeError(
                 "Duplicate DiaSources found after association and merging "
                 "with history. This is likely due to re-running data with an "
@@ -369,12 +364,12 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             mergedDiaSourceHistory,
             assocResults.matchedDiaObjectIds,
             [band])
-        if diaCalResult.diaObjectCat.index.has_duplicates:
+        if self.testDataFrameIndex(diaCalResult.diaObjectCat):
             raise RuntimeError(
                 "Duplicate DiaObjects (loaded + updated) created after "
                 "DiaCalculation. This is unexpected behavior and should be "
                 "reported. Existing.")
-        if diaCalResult.updatedDiaObjects.index.has_duplicates:
+        if self.testDataFrameIndex(diaCalResult.updatedDiaObjects):
             raise RuntimeError(
                 "Duplicate DiaObjects (updated) created after "
                 "DiaCalculation. This is unexpected behavior and should be "
@@ -401,7 +396,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 diaForcedSources = diaForcedSources.append(
                     loaderResult.diaForcedSources,
                     sort=True)
-            if diaForcedSources.index.has_duplicates:
+            if self.testDataFrameIndex(diaForcedSources):
                 self.log.warn(
                     "Duplicate DiaForcedSources created after merge with "
                     "history and new sources. This may cause downstream "
@@ -426,3 +421,21 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         return pipeBase.Struct(apdbMarker=self.config.apdb.value,
                                associatedDiaSources=assocResults.diaSources)
+
+    def testDataFrameIndex(self, df):
+        """Test the sorted DataFrame index for duplicates.
+
+        Wrapped as a separate function to allow for mocking of the this task
+        in unittesting. Default of a mock return for this test is True.
+
+        Parameters
+        ----------
+        df : `pandas.DataFrame`
+            DataFrame to text.
+
+        Returns
+        -------
+        `bool`
+            True if DataFrame contains duplicate rows.
+        """
+        return df.index.has_duplicates
