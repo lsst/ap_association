@@ -51,9 +51,6 @@ class TestDiaPipelineTask(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def testRunQuantum(self):
-        pass
-
     def testRunWithAlerts(self):
         """Test running while creating and packaging alerts.
         """
@@ -69,6 +66,9 @@ class TestDiaPipelineTask(unittest.TestCase):
         """
         config = self._makeDefaultConfig(doPackageAlerts=doPackageAlerts)
         task = DiaPipelineTask(config=config)
+        # Set DataFrame index testing to always return False. Mocks return
+        # true for this check otherwise.
+        task.testDataFrameIndex = lambda x: False
         diffIm = Mock(spec=afwImage.ExposureF)
         exposure = Mock(spec=afwImage.ExposureF)
         template = Mock(spec=afwImage.ExposureF)
@@ -81,6 +81,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         subtasksToMock = [
             "diaCatalogLoader",
             "associator",
+            "diaCalculation",
             "diaForcedSource",
         ]
         if doPackageAlerts:
@@ -97,7 +98,8 @@ class TestDiaPipelineTask(unittest.TestCase):
                               diffIm,
                               exposure,
                               template,
-                              ccdExposureIdBits)
+                              ccdExposureIdBits,
+                              "g")
             for subtaskName in subtasksToMock:
                 getattr(task, subtaskName).run.assert_called_once()
             pipeBase.testUtils.assertValidOutput(task, result)

@@ -32,8 +32,6 @@ import lsst.geom as geom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 
-from lsst.meas.base import DiaObjectCalculationTask
-
 # Enforce an error for unsafe column/array value setting in pandas.
 pd.options.mode.chained_assignment = 'raise'
 
@@ -47,34 +45,6 @@ class AssociationConfig(pexConfig.Config):
         'match to a DIAObject.',
         default=1.0,
     )
-    diaCalculation = pexConfig.ConfigurableField(
-        target=DiaObjectCalculationTask,
-        doc="Task to compute summary statistics for DiaObjects.",
-    )
-
-    def setDefaults(self):
-        self.diaCalculation.plugins = ["ap_meanPosition",
-                                       "ap_HTMIndex",
-                                       "ap_nDiaSources",
-                                       "ap_diaObjectFlag",
-                                       "ap_meanFlux",
-                                       "ap_percentileFlux",
-                                       "ap_sigmaFlux",
-                                       "ap_chi2Flux",
-                                       "ap_madFlux",
-                                       "ap_skewFlux",
-                                       "ap_minMaxFlux",
-                                       "ap_maxSlopeFlux",
-                                       "ap_meanErrFlux",
-                                       "ap_linearFit",
-                                       "ap_stetsonJ",
-                                       "ap_meanTotFlux",
-                                       "ap_sigmaTotFlux"]
-
-    def validate(self):
-        if "ap_HTMIndex" not in self.diaCalculation.plugins:
-            raise ValueError("AssociationTask requires the ap_HTMIndex plugin "
-                             "be enabled for proper insertion into the Apdb.")
 
 
 class AssociationTask(pipeBase.Task):
@@ -88,10 +58,6 @@ class AssociationTask(pipeBase.Task):
 
     ConfigClass = AssociationConfig
     _DefaultName = "association"
-
-    def __init__(self, **kwargs):
-        pipeBase.Task.__init__(self, **kwargs)
-        self.makeSubtask("diaCalculation")
 
     @pipeBase.timeMethod
     def run(self,
@@ -120,8 +86,8 @@ class AssociationTask(pipeBase.Task):
               diaObjects. (`pandas.DataFrame`)
             - ``updatedDiaObjects`` : Subset of DiaObjects that were updated
               or created during processing. (`pandas.DataFrame`)
-            - ``diaSources`` : DiaSources detected in this ccdVisit with
-              associated diaObjectIds. (`pandas.DataFrame`)
+            - ``matchedDiaObjectIds`` : DiaSources detected in this ccdVisit with
+              associated diaObjectIds. (`numpy.ndarray`)
         """
         diaSources = self.check_dia_source_radec(diaSources)
 
@@ -133,18 +99,7 @@ class AssociationTask(pipeBase.Task):
         diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
                              drop=False,
                              inplace=True)
-        # Test for DiaSource duplication first. If duplicates are found,
-        # this likely means this is duplicate data being processed and sent
-        # to the Apdb.
-        mergedDiaSourceHistory = diaSourceHistory.append(diaSources, sort=True)
-        if mergedDiaSourceHistory.index.has_duplicates:
-            raise RuntimeError(
-                "Duplicate DiaSources found after association and merging "
-                "with history. This is likely due to re-running data with an "
-                "already populated Apdb. If this was not the case then there "
-                "was an unexpected failure in Association while matching "
-                "sources to objects, and should be reported. Exiting.")
-
+        # Append the newly created DiaObjectds.
         diaObjects = diaObjects.append(matchResult.new_dia_objects,
                                        sort=True)
         # Double check to make sure there are no duplicates in the DiaObject
@@ -155,37 +110,12 @@ class AssociationTask(pipeBase.Task):
                 "likely due to re-running data with an already populated "
                 "Apdb. If this was not the case then there was an unexpected "
                 "failure in Association while matching and creating new "
-                "DiaObjectsand should be reported. Exiting.")
-
-        # Get the current filter being processed.
-        filterName = diaSources["filterName"].iat[0]
-
-        # Update previously existing DIAObjects with the information from their
-        # newly association DIASources and create new DIAObjects from
-        # unassociated sources.
-        updatedResults = self.diaCalculation.run(
-            diaObjects,
-            mergedDiaSourceHistory,
-            matchResult.associated_dia_object_ids,
-            [filterName])
-
-        allDiaObjects = updatedResults.diaObjectCat
-        updatedDiaObjects = updatedResults.updatedDiaObjects
-        if allDiaObjects.index.has_duplicates:
-            raise RuntimeError(
-                "Duplicate DiaObjects (loaded + updated) created after "
-                "DiaCalculation. This is unexpected behavior and should be "
-                "reported. Existing.")
-        if updatedDiaObjects.index.has_duplicates:
-            raise RuntimeError(
-                "Duplicate DiaObjects (updated) created after "
-                "DiaCalculation. This is unexpected behavior and should be "
-                "reported. Existing.")
+                "DiaObjects and should be reported. Exiting.")
 
         return pipeBase.Struct(
-            diaObjects=allDiaObjects,
-            updatedDiaObjects=updatedDiaObjects,
+            diaObjects=diaObjects,
             diaSources=diaSources,
+            matchedDiaObjectIds=matchResult.associated_dia_object_ids,
         )
 
     def check_dia_source_radec(self, dia_sources):
