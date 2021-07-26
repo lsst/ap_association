@@ -116,7 +116,10 @@ class DiaForcedSourcedConfig(pexConfig.Config):
                             'slot_PsfFlux_flag',
                             'base_PsfFlux_flag_noGoodPixels',
                             'slot_PsfFlux_flag_noGoodPixels',
-                            'base_PsfFlux_flag_edge', 'slot_PsfFlux_flag_edge']
+                            'base_PsfFlux_flag_edge', 'slot_PsfFlux_flag_edge',
+                            'base_PsfFlux_chi2', 'slot_PsfFlux_chi2',
+                            'base_PsfFlux_npixels', 'slot_PsfFlux_npixels',
+                            ]
 
 
 class DiaForcedSourceTask(pipeBase.Task):
