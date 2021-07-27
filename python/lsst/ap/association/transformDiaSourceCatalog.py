@@ -105,6 +105,9 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
     ConfigClass = TransformDiaSourceCatalogConfig
     _DefaultName = "transformDiaSourceCatalog"
     RunnerClass = pipeBase.ButlerInitializedTaskRunner
+    # Needed to create a valid TransformCatalogBaseTask, but unused
+    inputDataset = "deepDiff_diaSrc"
+    outputDataset = "deepDiff_diaSrcTable"
 
     def __init__(self, initInputs, **kwargs):
         super().__init__(**kwargs)

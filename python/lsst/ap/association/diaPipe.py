@@ -322,6 +322,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             Template exposure used to create diffIm.
         ccdExposureIdBits : `int`
             Number of bits used for a unique ``ccdVisitId``.
+        band : `str`
+            The band in which the new DiaSources were detected.
 
         Returns
         -------
