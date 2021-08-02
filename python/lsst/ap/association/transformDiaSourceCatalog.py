@@ -273,6 +273,7 @@ class UnpackApdbFlags:
 
     def __init__(self, flag_map_file, table_name):
         self.bit_pack_columns = []
+        flag_map_file = os.path.expandvars(flag_map_file)
         with open(flag_map_file) as yaml_stream:
             table_list = list(yaml.safe_load_all(yaml_stream))
             for table in table_list:
