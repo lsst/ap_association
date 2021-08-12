@@ -237,22 +237,20 @@ class PreComputeEphemerisTask(PipelineTask):
 
             # TODO: Siegfried, test against the splines. Append to output pandas DataFrame if
             # inside exposure.
-            skybot = self._testSkybot(expCenter, expMidPointMJD, 600/3600)  
-            skybot['ccdVisitId'] = exposureId   
-            ssODF.append(skybot)    
+            skybot = self._testSkybot(expCenter, expMidPointMJD, 600/3600)
+            skybot['ccdVisitId'] = exposureId
+            ssODF.append(skybot)
 
             self.log.info(f"Finished ccdVisit {exposureId}")
 
         ssObjectDataFrame = pd.concat(ssODF)
-        # TODO: Siegfried concatenate DataFrame if needed.
-    
 
         return pipeBase.Struct(
             ssObjects=ssObjectDataFrame,
         )
 
 
-    def _testSkybot(self, expCenter, expMidPointMJD, radius):   
+    def _testSkybot(self, expCenter, expMidPointMJD, radius):
         """Extracts SSOs per field in cone search.
         """
 
@@ -270,7 +268,7 @@ class PreComputeEphemerisTask(PipelineTask):
         dfSSO['ra'] = res['RA']
         dfSSO['decl'] = res['DEC']
         nFound = len(dfSSO)
-        self.log.info(f"{nFound} Solar System Objects in ccdVisit") 
+        self.log.info(f"{nFound} Solar System Objects in ccdVisit")
 
         return dfSSO
 
