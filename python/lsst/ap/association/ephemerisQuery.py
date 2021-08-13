@@ -47,7 +47,8 @@ pd.options.mode.chained_assignment = 'raise'
 
 
 class EphemerisQueryConnections(PipelineTaskConnections,
-                                dimensions=("skymap", "instrument"),
+                                dimensions=("instrument",
+                                            "visit"),
                                 defaultTemplates={"coaddName": "deep",
                                                   "fakesType": ""}):
     diffIms = connTypes.Input(
@@ -55,21 +56,15 @@ class EphemerisQueryConnections(PipelineTaskConnections,
         name="{fakesType}{coaddName}Diff_differenceExp",
         storageClass="ExposureF",
         dimensions=("instrument", "visit", "detector"),
-        multiple=True,
         deferLoad=True,
+        multiple=True
     )
     ssObjects = connTypes.Output(
         doc="Solar System Objects for all difference images in diffIm.",
-        name="{fakesType}{coaddName}_ccdVisitSsObjects",
+        name="ccdVisitSsObjects",
         storageClass="DataFrame",
-        dimensions=("skymap", "instrument"),
+        dimensions=("instrument", "visit"),
     )
-    # ssoEphemerisDB = cT.Output(
-    #     doc="Solar System Object ephemeris database.",
-    #     name="ssoEphemerisDB",
-    #     storageClass="DataFrame",
-    #     dimensions=("tract", "skymap")
-    # )
 
 
 class EphemerisQueryConfig(PipelineTaskConfig,
@@ -80,11 +75,11 @@ class EphemerisQueryConfig(PipelineTaskConfig,
         doc='IAU Minor Planet Center observer code for LSST.',
         default='I11'
     )
-    queryRadius = pexConfig.Field(
-        dtype=str,
+    queryRadiusArcesonds = pexConfig.Field(
+        dtype=float,
         doc='On sky radius for Ephemeris cone search.'
         'Also limits sky position error in ephemeris query.',
-        default=600/3600)
+        default=600)
 
 
 class EphemerisQueryTask(PipelineTask):
@@ -148,7 +143,9 @@ class EphemerisQueryTask(PipelineTask):
             exposureId = diffIm.getInfo().getVisitInfo().getExposureId()
 
             # Ephemeris service query
-            skybot = self._skybotConeSearch(expCenter, expMidPointMJD)
+            skybot = self._skybotConeSearch(expCenter,
+                                            expMidPointMJD,
+                                            self.config.queryRadiusArcesonds/3600)
             skybot['ccdVisitId'] = exposureId
             ssODF.append(skybot)
 
@@ -160,7 +157,7 @@ class EphemerisQueryTask(PipelineTask):
             ssObjects=ssObjectDataFrame,
         )
 
-    def _skybotConeSearch(self, expCenter, expMidPointMJD):
+    def _skybotConeSearch(self, expCenter, expMidPointMJD, queryRadius):
         """Query IMCCE SkyBot ephemeris service for cone search to get RADEC
         positions of Solar System Objects in FOV.
 
@@ -181,8 +178,8 @@ class EphemerisQueryTask(PipelineTask):
         fieldDec = expCenter.getDec().asDegrees()
         epochJD = expMidPointMJD + 2400000.5
         observerMPCId = self.config.observerCode
-        radius = self.config.queryRadius
-        orbitUncertaintyFilter = self.config.queryRadius
+        radius = queryRadius
+        orbitUncertaintyFilter = queryRadius
 
         q = ['http://vo.imcce.fr/webservices/skybot/skybotconesearch_query.php?']
         q.append('-ra=' + str(fieldRA))
@@ -195,17 +192,18 @@ class EphemerisQueryTask(PipelineTask):
         query = ''.join(q)
 
         conedf = pd.DataFrame()
-        try:
-            r = requests.request("GET", query)
-            dfSSO = pd.read_csv(StringIO(r.text), sep='|', skiprows=2)
-            columns = [col.strip() for col in conedf.columns]
-            coldict = dict(zip(conedf.columns, columns))
+        r = requests.request("GET", query)
+        dfSSO = pd.read_csv(StringIO(r.text), sep='|', skiprows=2)
+        if len(dfSSO) > 0:
+            columns = [col.strip() for col in dfSSO.columns]
+            coldict = dict(zip(dfSSO.columns, columns))
             dfSSO.rename(columns=coldict, inplace=True)
-            dfSSO['RA(deg)'] = self._rahms2radeg(conedf['RA(h)'])
-            dfSSO['DEC(deg)'] = self._decdms2decdeg(conedf['DE(deg)'])
-            dfSSO.drop(columns=['RA(h)', 'DE(deg)', 'Dg(ua)', 'Dh(ua)', 'd(arcsec)'], inplace=True)
+            dfSSO.to_parquet("/project/morriscb/test_sso.parq")
+            dfSSO["ra"] = self._rahms2radeg(dfSSO["RA(h)"])
+            dfSSO["decl"] = self._decdms2decdeg(dfSSO["DE(deg)"])
+            dfSSO["ssObjectId"] = dfSSO["# Num"]
 
-        except RuntimeError:
+        else:
             self.log.info("No Solar System objects found for ccdVisit.")
             return pd.DataFrame()
 
@@ -235,7 +233,7 @@ class EphemerisQueryTask(PipelineTask):
             i = i+1
         return decdeg
 
-    def _rahms2radeg(rahms):
+    def _rahms2radeg(self, rahms):
         """Convert Right Ascension from hours minutes seconds to decimal degrees.
 
         Parameters

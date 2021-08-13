@@ -44,6 +44,8 @@ from lsst.ap.association import (
     make_dia_object_schema,
     make_dia_source_schema,
     PackageAlertsTask)
+from lsst.ap.association.ssoAssociation import (SolarSystemAssociationTask,
+                                                SolarSystemAssociationConfig)
 
 __all__ = ("DiaPipelineConfig",
            "DiaPipelineTask",
@@ -568,9 +570,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 class DiaPipelineSolarSystemConnections(DiaPipelineConnections):
     ssObjects = connTypes.Input(
         doc="Solar System Objects for all difference images in diffIm.",
-        name="{fakesType}{coaddName}_ccdVisitSsObjects",
+        name="ccdVisitSsObjects",
         storageClass="DataFrame",
-        dimensions=("skymap", "instrument"),
+        dimensions=("instrument", "visit"),
     )
 
 
@@ -586,13 +588,13 @@ class DiaPipelineSolarSystemTask(DiaPipelineTask):
     """Task for loading, associating and storing Difference Image Analysis
     (DIA) Objects and Sources.
     """
-    ConfigClass = DiaPipelineConfig
+    ConfigClass = DiaPipelineSolarySystemConfig
     _DefaultName = "diaPipe"
     RunnerClass = pipeBase.ButlerInitializedTaskRunner
 
     def __init__(self, initInputs=None, **kwargs):
-        self.makeSubtask("solarSystemAssociation")
         super().__init__(**kwargs)
+        self.makeSubtask("solarSystemAssociation")
 
     @pipeBase.timeMethod
     def run(self,
@@ -648,9 +650,8 @@ class DiaPipelineSolarSystemTask(DiaPipelineTask):
         assocResults = self.associator.run(diaSourceTable,
                                            loaderResult.diaObjects,
                                            loaderResult.diaSources)
-        ssAssocResults =  self.associator.run(diaSourceTable,
-                                              ssObjects,
-                                              None)
+        ssAssocResults =  self.solarSystemAssociation.run(diaSourceTable.reset_index(drop=True),
+                                                          ssObjects)
 
         mergedDiaSourceHistory = loaderResult.diaSources.append(
             assocResults.diaSources,

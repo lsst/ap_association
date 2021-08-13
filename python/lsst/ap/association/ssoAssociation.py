@@ -1,78 +1,109 @@
+#
+# LSST Data Management System
+# Copyright 2008-2016 AURA/LSST.
+#
+# This product includes software developed by the
+# LSST Project (http://www.lsst.org/).
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the LSST License Statement and
+# the GNU General Public License along with this program.  If not,
+# see <https://www.lsstcorp.org/LegalNotices/>.
+#
+
+"""Spatial association for Solar System Objects."""
+
+__all__ = ["SolarSystemAssociationConfig", "SolarSystemAssociationTask"]
+
 import numpy as np
 import pandas as pd
-
 from scipy.spatial import cKDTree
-from .transforms import radec2icrfu
+import unittest
+
+import lsst.utils.tests
+
+import lsst.pex.config as pexConfig
+import lsst.pipe.base as pipeBase
 
 
-__all__ = ['associateDIA2SSO']
-
-def associateDIA2SSO(diadf,ssodf,rOnSky=2,diara='ra',diadec='decl',ssora='AstRA(deg)',ssodec='AstDec(deg)',
-                    diaId='diaSourceId',ssoId='ObjID',dId='dOnSky(arcsec)'):
+class SolarSystemAssociationConfig(pexConfig.Config):
+    """Config class for SolarSystemAssociationTask.
     """
-    Match DIA sources within rOnSky [arcsec] to Solar System Object predicted positions.
-    
-    Parameters:
-    -----------
-    diadf  ...      pandas DataFrame containing DIA source RADEC coordinates[deg]
-    ssodf  ...      pandas DataFrame containing predicted SSO RADEC coordinates [deg]
-    rOnSky ...      radius of kdTree search for nearest DIA neighbors to SSOs in FOV [arcsec]
-    
-    
-    Returns:
-    --------
-    dia2ssodf   ... pandas DataFrame with DIA sources that have SSOs attributed to them 
-                    (one SSO may have multiple dia sources in its vicinity)
-    sso2dia     ... list of SSOs with attributed DIA sources
-    
-    
-    External:
-    ---------
-    
-    numpy, pandas, radec2icrfu, scipy: cKDTree
-    
+    maxDistArcSeconds = pexConfig.Field(
+        dtype=float,
+        doc='Maximum distance in arcseconds to test for a DIASource to be a '
+        'match to a SSObject.',
+        default=2.0,
+    )
+
+
+class SolarSystemAssociationTask(pipeBase.Task):
+    """Associate DIASources into existing SolarSystem Objects.
+
+    This task performs the association of detected DIASources in a visit
+    with the previous SolarSystem detected over time.
     """
-    deg2rad = np.deg2rad
-    rad2deg = np.rad2deg
-    array = np.array
-    where = np.where
-    full = np.full
-    norm = np.linalg.norm
-    
-    r=deg2rad(rOnSky/3600)
-    
-    # Transform DIA RADEC coordinates to unit sphere xyz for tree building.
-    diaSourcesX = radec2icrfu(diadf[diara].values,diadf[diadec].values).T
-    
-    # Create KDTree of DIA sources
-    tree = cKDTree(diaSourcesX,balanced_tree=True)
-    
-    treeQuery = tree.query_ball_point
-    
-    diaSourcesId = diadf[diaId].values
-    
-    sso2dia = []
-    sso2diaAdd = sso2dia.append
-    
-    diaSsoId = []
-    diaSsoIdAdd = diaSsoId.append
-    
-    # Query the KDtree for DIA nearest neighbors to SSOs
-    for index, row in ssodf.iterrows():
+    ConfigClass = SolarSystemAssociationConfig
+    _DefaultName = "association"
 
-        # convert SSO radec to ICRF position
-        x = radec2icrfu(row[ssora],row[ssodec])
+    @pipeBase.timeMethod
+    def run(self, diaSourceCatalog, solarSystemObjects):
+        """Create a searchable tree of unassociated DiaSources and match
+        to the nearest ssoObject.
+        """
+        maxRadius = np.deg2rad(self.config.maxDistArcSeconds / 3600)
 
-        # Which DIA Sources fall within r? 
-        idx = treeQuery(x, r, p=2., eps=0)
-        
-        # calculate approximate on sky distance d [rad]
-        d=3600.*rad2deg([norm(x-diaSourcesX[i]) for i in idx])
-        
-        if(len(idx)>0):
-            sso2diaAdd([row[ssoId].astype(int), diaSourcesId[idx],d])
-            diaSsoIdAdd(array([diaSourcesId[idx],full(len(idx),row[ssoId].astype(int)),d]).T)
-        
-    dia2ssodf=pd.DataFrame(np.concatenate(diaSsoId),columns=[diaId,ssoId,dId]).astype({diaId:int,ssoId:int,dId:float})
+        # Transform DIA RADEC coordinates to unit sphere xyz for tree building.
+        vectors = self._radec_to_xyz(diaSourceCatalog)
 
-    return dia2ssodf,sso2dia
+        # Create KDTree of DIA sources
+        tree = cKDTree(vectors)
+
+        # Query the KDtree for DIA nearest neighbors to SSOs. Currently only
+        # picks the DiaSource with the shortest distance. We can do something
+        # fancier later.
+        for index, ssObject in solarSystemObjects.iterrows():
+
+            # convert SSO radec to ICRF position
+            ssoVect = self._radec_to_xyz(ssObject)
+
+            # Which DIA Sources fall within r?
+            dist, idx = tree.query(ssoVect, maxRadius)
+
+            if np.isfinite(dist[0]):
+                diaSourceCatalog.loc[idx[0], "ssObjectId"] = ssObject["ssObjectId"]
+
+        return diaSourceCatalog
+
+    def _radec_to_xyz(self, catalog):
+        """Convert input ra/dec coordinates to spherical unit-vectors.
+
+        Parameters
+        ----------
+        catalog : `pandas.DataFrame`
+            Catalog to produce spherical unit-vector from.
+
+        Returns
+        -------
+        vectors : `numpy.ndarray`, (N, 3)
+            Output unit-vectors
+        """
+        ras = np.radians(catalog["ra"])
+        decs = np.radians(catalog["decl"])
+        vectors = np.empty((len(catalog), 3))
+
+        sin_dec = np.sin(np.pi / 2 - decs)
+        vectors[:, 0] = sin_dec * np.cos(ras)
+        vectors[:, 1] = sin_dec * np.sin(ras)
+        vectors[:, 2] = np.cos(np.pi / 2 - decs)
+
+        return vectors
