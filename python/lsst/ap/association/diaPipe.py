@@ -570,9 +570,15 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 class DiaPipelineSolarSystemConnections(DiaPipelineConnections):
     ssObjects = connTypes.Input(
         doc="Solar System Objects for all difference images in diffIm.",
-        name="ccdVisitSsObjects",
+        name="visitSsObjects",
         storageClass="DataFrame",
         dimensions=("instrument", "visit"),
+    )
+    ssObjectAssocDiaSources = connTypes.Output(
+        doc="Solar System Objects for all difference images in diffIm.",
+        name="{fakesType}{coaddName}Diff_ssObjectAssocDiaSrc",
+        storageClass="DataFrame",
+        dimensions=("instrument", "visit", "detector"),     
     )
 
 
@@ -650,8 +656,9 @@ class DiaPipelineSolarSystemTask(DiaPipelineTask):
         assocResults = self.associator.run(diaSourceTable,
                                            loaderResult.diaObjects,
                                            loaderResult.diaSources)
-        ssAssocResults =  self.solarSystemAssociation.run(diaSourceTable.reset_index(drop=True),
-                                                          ssObjects)
+        ssoAssocResults =  self.solarSystemAssociation.run(diaSourceTable.reset_index(drop=True),
+                                                           ssObjects)
+        ssoAssocSources = ssoAssocResults[ssoAssocResults["ssObjectId"] != 0]
 
         mergedDiaSourceHistory = loaderResult.diaSources.append(
             assocResults.diaSources,
@@ -729,4 +736,5 @@ class DiaPipelineSolarSystemTask(DiaPipelineTask):
                                    ccdExposureIdBits)
 
         return pipeBase.Struct(apdbMarker=self.config.apdb.value,
-                               associatedDiaSources=assocResults.diaSources)
+                               associatedDiaSources=assocResults.diaSources,
+                               ssObjectAssocDiaSources=ssoAssocSources)

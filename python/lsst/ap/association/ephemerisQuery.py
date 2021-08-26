@@ -48,20 +48,18 @@ pd.options.mode.chained_assignment = 'raise'
 
 class EphemerisQueryConnections(PipelineTaskConnections,
                                 dimensions=("instrument",
-                                            "visit"),
-                                defaultTemplates={"coaddName": "deep",
-                                                  "fakesType": ""}):
-    diffIms = connTypes.Input(
-        doc="Difference image on which the DiaSources were detected.",
-        name="{fakesType}{coaddName}Diff_differenceExp",
-        storageClass="ExposureF",
-        dimensions=("instrument", "visit", "detector"),
+                                            "visit")):
+    visitInfos = connTypes.Input(
+        doc="Information defining the visit on a per detector basis..",
+        name="raw.visitInfo",
+        storageClass="VisitInfo",
+        dimensions=("instrument", "exposure", "detector"),
         deferLoad=True,
         multiple=True
     )
     ssObjects = connTypes.Output(
         doc="Solar System Objects for all difference images in diffIm.",
-        name="ccdVisitSsObjects",
+        name="visitSsObjects",
         storageClass="DataFrame",
         dimensions=("instrument", "visit"),
     )
@@ -75,11 +73,12 @@ class EphemerisQueryConfig(PipelineTaskConfig,
         doc='IAU Minor Planet Center observer code for LSST.',
         default='I11'
     )
-    queryRadiusArcesonds = pexConfig.Field(
+    queryRadiusDegrees = pexConfig.Field(
         dtype=float,
         doc='On sky radius for Ephemeris cone search.'
-        'Also limits sky position error in ephemeris query.',
-        default=600)
+        'Also limits sky position error in ephemeris query. '
+        'Defaults to the radius of Rubin Obs FoV in degrees',
+        default=1.75)
 
 
 class EphemerisQueryTask(PipelineTask):
@@ -94,8 +93,16 @@ class EphemerisQueryTask(PipelineTask):
     ConfigClass = EphemerisQueryConfig
     _DefaultName = "EphemerisQuery"
 
+    def runQuantum(self, butlerQC, inputRefs, outputRefs):
+        inputs = butlerQC.get(inputRefs)
+        inputs["visit"] = butlerQC.quantum.dataId["visit"]
+
+        outputs = self.run(**inputs)
+
+        butlerQC.put(outputs, outputRefs)
+
     @pipeBase.timeMethod
-    def run(self, diffIms):
+    def run(self, visitInfos, visit):
         """Load MPCORB.DAT file containing orbits of known Solar System Objects.
         Query Ephemeris service for RADEC positions of Solar System Objects
         in Field of View.
@@ -115,46 +122,29 @@ class EphemerisQueryTask(PipelineTask):
                 Contains pandas DataFrame with name, RADEC position and position
                 uncertainty on sky of Solar System Objects in Field of View.
         """
+        # Grab the visitInfo from the raw to get the information needed on the
+        # full visit.
+        visitInfo = visitInfos[0].get(
+            datasetType=self.config.connections.visitInfos,
+            immediate=True)
 
-        # Loop over our list of difference image exposures. For the output
-        # DataFrame, my guess is you should try to follow the columns in the
-        # DPDD (http://ls.st/dpdd) as closely as possible. If you need extra
-        # columns or don't fill some, that's fine but the should follow those
-        # naming conventions.
-        ssODF = []
-        for diffImRef in diffIms:
-            # Load the difference image.
-            diffIm = diffImRef.get(
-                datasetType=self.config.connections.diffIms,
-                immediate=True)
+        # mid exposure MJD
+        expMidPointMJD = visitInfo.date.get(system=DateTime.MJD)
 
-            # mid exposure MJD
-            expMidPointMJD = diffIm.getInfo().getVisitInfo().getDate().get(system=DateTime.MJD)
+        # expTime in seconds.
+        # expTime = diffIm.getInfo().getVisitInfo().getExposureTime()
 
-            # expTime in seconds.
-            # expTime = diffIm.getInfo().getVisitInfo().getExposureTime()
+        expCenter = visitInfo.boresightRaDec
 
-            # The center here is a SpherePoint object. It has a method called
-            # `getVector` if you need the unit sphere 3 vector. You can access
-            # those values as x, y, z from the object returned by getVector.
-            expCenter = diffIm.getWcs().pixelToSky(geom.Box2D(diffIm.getBBox()).getCenter())
-
-            # Make sure to add this value as a column to the output dataFrame.
-            exposureId = diffIm.getInfo().getVisitInfo().getExposureId()
-
-            # Ephemeris service query
-            skybot = self._skybotConeSearch(expCenter,
-                                            expMidPointMJD,
-                                            self.config.queryRadiusArcesonds/3600)
-            skybot['ccdVisitId'] = exposureId
-            ssODF.append(skybot)
-
-            self.log.info(f"Finished ccdVisit {exposureId}")
-
-        ssObjectDataFrame = pd.concat(ssODF)
+        # Ephemeris service query
+        skybotSsObjects = self._skybotConeSearch(
+            expCenter,
+            expMidPointMJD,
+            self.config.queryRadiusDegrees)
+        skybotSsObjects['visitId'] = visit
 
         return pipeBase.Struct(
-            ssObjects=ssObjectDataFrame,
+            ssObjects=skybotSsObjects,
         )
 
     def _skybotConeSearch(self, expCenter, expMidPointMJD, queryRadius):
@@ -198,17 +188,16 @@ class EphemerisQueryTask(PipelineTask):
             columns = [col.strip() for col in dfSSO.columns]
             coldict = dict(zip(dfSSO.columns, columns))
             dfSSO.rename(columns=coldict, inplace=True)
-            dfSSO.to_parquet("/project/morriscb/test_sso.parq")
             dfSSO["ra"] = self._rahms2radeg(dfSSO["RA(h)"])
             dfSSO["decl"] = self._decdms2decdeg(dfSSO["DE(deg)"])
-            dfSSO["ssObjectId"] = dfSSO["# Num"]
+            dfSSO["ssObjectId"] = dfSSO["Name"]
 
         else:
-            self.log.info("No Solar System objects found for ccdVisit.")
+            self.log.info("No Solar System objects found for visit.")
             return pd.DataFrame()
 
         nFound = len(dfSSO)
-        self.log.info(f"{nFound} Solar System Objects in ccdVisit")
+        self.log.info(f"{nFound} Solar System Objects in visit")
 
         return dfSSO
 

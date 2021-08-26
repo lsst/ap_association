@@ -13,7 +13,9 @@ funcs:
     diaObjectId:
         functor: Column
         args: diaObjectId
-    # ssObjectId not implemented
+    ssObjectId:
+        functor: Column
+        args: ssObjectId
     parentDiaSourceId:
         functor: Column
         args: parent
