@@ -59,6 +59,24 @@ class SolarSystemAssociationTask(pipeBase.Task):
     def run(self, diaSourceCatalog, solarSystemObjects):
         """Create a searchable tree of unassociated DiaSources and match
         to the nearest ssoObject.
+
+        Parameters
+        ----------
+        diaSourceCatalog : `pandas.DataFrame`
+            Catalog of DiaSources. Modified in place to add ssObjectId to
+            successfully associated DiaSources.
+        solarSystemObjects : `pandas.DataFrame`
+            Set of solar system objects that should be within the footprint
+            of the current visit.
+
+        Returns
+        -------
+        resultsStruct : `lsst.pipe.base.Struct`
+
+            - ``ssoAssocDiaSources`` : Set of DiaSources associated with
+              solar system objects in this visit. (`pandas.DataFrame`)
+            - ``unAssocDiaSources`` : Set of DiaSources that were unassociated
+              with any solar system object. (`pandas.DataFrame`)
         """
         maxRadius = np.deg2rad(self.config.maxDistArcSeconds / 3600)
 
@@ -82,7 +100,11 @@ class SolarSystemAssociationTask(pipeBase.Task):
             if np.isfinite(dist[0]):
                 diaSourceCatalog.loc[idx[0], "ssObjectId"] = ssObject["ssObjectId"]
 
-        return diaSourceCatalog
+        assocMask = diaSourceCatalog["ssObjectId"] != 0
+        return pipeBase.Struct(
+            ssoAssocDiaSources=diaSourceCatalog[assocMask],
+            unAssocDiaSources=diaSourceCatalog[~assocMask])
+
 
     def _radec_to_xyz(self, catalog):
         """Convert input ra/dec coordinates to spherical unit-vectors.

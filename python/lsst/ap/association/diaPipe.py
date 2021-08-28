@@ -578,7 +578,7 @@ class DiaPipelineSolarSystemConnections(DiaPipelineConnections):
         doc="Solar System Objects for all difference images in diffIm.",
         name="{fakesType}{coaddName}Diff_ssObjectAssocDiaSrc",
         storageClass="DataFrame",
-        dimensions=("instrument", "visit", "detector"),     
+        dimensions=("instrument", "visit", "detector"),
     )
 
 
@@ -591,8 +591,12 @@ class DiaPipelineSolarySystemConfig(DiaPipelineConfig,
 
 
 class DiaPipelineSolarSystemTask(DiaPipelineTask):
-    """Task for loading, associating and storing Difference Image Analysis
-    (DIA) Objects and Sources.
+    """Task for loading and storing Difference Image Analysis
+    (DIA) Sources after associating them to previous DiaObjects and
+    SSObjects.
+
+    SSO behavior currently necessitates a separte pipelinetask, however, after
+    DM-31389 is merged this SSO operations will merge into the default class.
     """
     ConfigClass = DiaPipelineSolarySystemConfig
     _DefaultName = "diaPipe"
@@ -643,6 +647,11 @@ class DiaPipelineSolarSystemTask(DiaPipelineTask):
             - ``apdb_maker`` : Marker dataset to store in the Butler indicating
               that this ccdVisit has completed successfully.
               (`lsst.dax.apdb.ApdbConfig`)
+            - ``associatedDiaSources`` : Full set of DiaSources associated
+              to current and new DiaObjects. This is an options Butler output.
+              (`pandas.DataFrame`)
+            - ``ssObjectAssocDiaSources`` : Set of DiaSources associated with
+              solar system objects. (`pandas.DataFrame`)
         """
         self.log.info("Running DiaPipeline...")
         # Put the SciencePipelines through a SDMification step and return
@@ -656,9 +665,9 @@ class DiaPipelineSolarSystemTask(DiaPipelineTask):
         assocResults = self.associator.run(diaSourceTable,
                                            loaderResult.diaObjects,
                                            loaderResult.diaSources)
-        ssoAssocResults =  self.solarSystemAssociation.run(diaSourceTable.reset_index(drop=True),
-                                                           ssObjects)
-        ssoAssocSources = ssoAssocResults[ssoAssocResults["ssObjectId"] != 0]
+        ssObjectAssocResults =  self.solarSystemAssociation.run(
+            diaSourceTable.reset_index(drop=True),
+            ssObjects)
 
         mergedDiaSourceHistory = loaderResult.diaSources.append(
             assocResults.diaSources,
@@ -735,6 +744,7 @@ class DiaPipelineSolarSystemTask(DiaPipelineTask):
                                    warpedExposure,
                                    ccdExposureIdBits)
 
-        return pipeBase.Struct(apdbMarker=self.config.apdb.value,
-                               associatedDiaSources=assocResults.diaSources,
-                               ssObjectAssocDiaSources=ssoAssocSources)
+        return pipeBase.Struct(
+            apdbMarker=self.config.apdb.value,
+            associatedDiaSources=assocResults.diaSources,
+            ssObjectAssocDiaSources=ssObjectAssocResults.ssoAssocDiaSources)

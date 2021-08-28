@@ -19,16 +19,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Solar System Object Query to Ephemeris Service.
+"""Solar System Object Query to Skybot in place of the Ephemeris task and
+internal Rubin data.
 
-Will currently compute the location for of SSObjects for a known set of PVIs.
-NOT TO BE RUN AS PART OF A PIPELINE! This is an Ephemeris Query step for
-integration only.
+Will compute the location for of SSObjects for a know visit. Currently uses
+a full external service across the web to fill data.
 """
 
 __all__ = ["EphemerisQueryConfig", "EphemerisQueryTask"]
 
 
+from haslib import blake2b
 import numpy as np
 import pandas as pd
 import requests
@@ -67,7 +68,6 @@ class EphemerisQueryConnections(PipelineTaskConnections,
 
 class EphemerisQueryConfig(PipelineTaskConfig,
                            pipelineConnections=EphemerisQueryConnections):
-
     observerCode = pexConfig.Field(
         dtype=str,
         doc='IAU Minor Planet Center observer code for LSST.',
@@ -82,13 +82,7 @@ class EphemerisQueryConfig(PipelineTaskConfig,
 
 
 class EphemerisQueryTask(PipelineTask):
-    """Fetch latest MPCORB and Solar System Object ephemeris data and compute
-    expected SSObjects within a set of difference images.
-
-    Create interpolants in ICRF xyz on the observer unit sphere
-    rather than RADEC to facilitate calculations of objects in field
-    of view through dot products. Interpolated xyz values can be turned
-    into RADEC.
+    """
     """
     ConfigClass = EphemerisQueryConfig
     _DefaultName = "EphemerisQuery"
@@ -103,15 +97,15 @@ class EphemerisQueryTask(PipelineTask):
 
     @pipeBase.timeMethod
     def run(self, visitInfos, visit):
-        """Load MPCORB.DAT file containing orbits of known Solar System Objects.
-        Query Ephemeris service for RADEC positions of Solar System Objects
-        in Field of View.
+        """
 
         Parameters
         ----------
-        diffIm : `list` of `lst.daf.butler.DeferredDatasetHandle`
-            Full set of difference images in a repo to pre-compute SSObject
-            locations within.
+        visitInfos : `list` of `lsst.daf.butler.DeferredDatasetHandle`
+            Set of visitInfos for raws covered by this visit/exposure. We
+            only use the first instance to retrieve the exposure boresight.
+        visit : `int`
+            Id number of the visit being run.
 
         Returns
         -------
@@ -119,8 +113,9 @@ class EphemerisQueryTask(PipelineTask):
             Results struct with components:
 
             - ``ssObjects``: `pandas DataFrame`
-                Contains pandas DataFrame with name, RADEC position and position
-                uncertainty on sky of Solar System Objects in Field of View.
+                Contains pandas DataFrame with name, RADEC position, position
+                uncertainty, and unique Id of on sky of Solar System Objects in
+                Field of View as retrieved by SkyBot.
         """
         # Grab the visitInfo from the raw to get the information needed on the
         # full visit.
@@ -128,19 +123,18 @@ class EphemerisQueryTask(PipelineTask):
             datasetType=self.config.connections.visitInfos,
             immediate=True)
 
-        # mid exposure MJD
+        # Midpoint time of the exposure in MJD
         expMidPointMJD = visitInfo.date.get(system=DateTime.MJD)
 
-        # expTime in seconds.
-        # expTime = diffIm.getInfo().getVisitInfo().getExposureTime()
-
+        # Boresight of the exposure on sky.
         expCenter = visitInfo.boresightRaDec
 
-        # Ephemeris service query
+        # Skybot service query
         skybotSsObjects = self._skybotConeSearch(
             expCenter,
             expMidPointMJD,
             self.config.queryRadiusDegrees)
+        # Add the visit as an extra column.
         skybotSsObjects['visitId'] = visit
 
         return pipeBase.Struct(
@@ -153,15 +147,16 @@ class EphemerisQueryTask(PipelineTask):
 
         Parameters
         ----------
-        expCenter : diffIm.getWcs().pixelToSky(geom.Box2D(diffIm.getBBox()).getCenter()) object
+        expCenter : `lsst.geom.SpherePoint`
             Center of Exposure RADEC [deg]
-        expMidPointMJD : diffIm.getInfo().getVisitInfo().getDate().get(system=DateTime.MJD)
-            Mid point time of exposure [MJD]
+        expMidPointMJD : `float`
+            Mid point time of exposure [MJD].
 
         Returns
         -------
-        dfSSO ... Pandas DataFrame
-            DataFrame with Solar System Object information and RADEC positin in Field of View
+        dfSSO : `pandas.DataFrame`
+            DataFrame with Solar System Object information and RADEC position
+            within the exposure.
         """
 
         fieldRA = expCenter.getRa().asDegrees()
@@ -190,7 +185,15 @@ class EphemerisQueryTask(PipelineTask):
             dfSSO.rename(columns=coldict, inplace=True)
             dfSSO["ra"] = self._rahms2radeg(dfSSO["RA(h)"])
             dfSSO["decl"] = self._decdms2decdeg(dfSSO["DE(deg)"])
-            dfSSO["ssObjectId"] = dfSSO["Name"]
+            # SkyBot returns a string name for the object. To store the id in
+            # the Apdb we convert this string to an int by hashing the object
+            # name. This is a stop gap until such a time as the Rubin
+            # Emphemeris system exists and we create our own Ids.
+            dfSSO["ssObjectId"] = [
+                int(blake2b(bytes(name, "utf-8"), digest_size=8).hexdigest(),
+                    base=16)
+                for name in dfSSO["Name"]
+            ]
 
         else:
             self.log.info("No Solar System objects found for visit.")
@@ -206,39 +209,35 @@ class EphemerisQueryTask(PipelineTask):
 
         Parameters
         ----------
-        decdms ... str
+        decdms : `list` of `str`
             Declination string "degrees minutes seconds"
 
         Returns
         -------
-        decdeg ... float / array of floats
-            Declination in degrees
+        decdeg : `numpy.ndarray`, (N,)
+            Declination in degrees.
         """
-        decdeg = np.zeros(len(decdms))
-        i = 0
-        for dec in decdms:
+        decdeg = np.empty(len(decdms))
+        for idx, dec in enumerate(decdms):
             deglist = [float(d) for d in dec.split()]
-            decdeg[i] = deglist[0] + deglist[1]/60 + deglist[2]/3600
-            i = i+1
+            decdeg[idx] = deglist[0] + deglist[1]/60 + deglist[2]/3600
         return decdeg
 
     def _rahms2radeg(self, rahms):
-        """Convert Right Ascension from hours minutes seconds to decimal degrees.
+        """Convert Right Ascension from hours minutes seconds to decimal
+        degrees.
 
         Parameters
         ----------
-        rahms ... str
+        rahms : `list` of `str`
             Declination string "hours minutes seconds"
-
         Returns
         -------
-        radeg ... float / array of floats
-            Declination in degrees
+        radeg : `numpy.ndarray`, (N,)
+            Right Ascension in degrees
         """
-        radeg = np.zeros(len(rahms))
-        i = 0
-        for ra in rahms:
+        radeg = np.empty(len(rahms))
+        for idx, ra in enumerate(rahms):
             ralist = [float(r) for r in ra.split()]
-            radeg[i] = (ralist[0]/24 + ralist[1]/1440 + ralist[2]/86400)*360
-            i = i+1
+            radeg[idx] = (ralist[0]/24 + ralist[1]/1440 + ralist[2]/86400)*360
         return radeg
