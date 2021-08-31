@@ -81,7 +81,9 @@ class SolarSystemAssociationTask(pipeBase.Task):
         maxRadius = np.deg2rad(self.config.maxDistArcSeconds / 3600)
 
         # Transform DIA RADEC coordinates to unit sphere xyz for tree building.
-        vectors = self._radec_to_xyz(diaSourceCatalog)
+        vectors = self._radec_to_xyz(diaSourceCatalog["ra"],
+                                     diaSourceCatalog["decl"],
+        )
 
         # Create KDTree of DIA sources
         tree = cKDTree(vectors)
@@ -92,11 +94,10 @@ class SolarSystemAssociationTask(pipeBase.Task):
         for index, ssObject in solarSystemObjects.iterrows():
 
             # convert SSO radec to ICRF position
-            ssoVect = self._radec_to_xyz(ssObject)
+            ssoVect = self._radec_to_xyz(ssObject["ra"], ssObject["decl"])
 
             # Which DIA Sources fall within r?
             dist, idx = tree.query(ssoVect, maxRadius)
-
             if np.isfinite(dist[0]):
                 diaSourceCatalog.loc[idx[0], "ssObjectId"] = ssObject["ssObjectId"]
 
@@ -106,7 +107,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
             unAssocDiaSources=diaSourceCatalog[~assocMask])
 
 
-    def _radec_to_xyz(self, catalog):
+    def _radec_to_xyz(self, ras, decs):
         """Convert input ra/dec coordinates to spherical unit-vectors.
 
         Parameters
@@ -119,9 +120,12 @@ class SolarSystemAssociationTask(pipeBase.Task):
         vectors : `numpy.ndarray`, (N, 3)
             Output unit-vectors
         """
-        ras = np.radians(catalog["ra"])
-        decs = np.radians(catalog["decl"])
-        vectors = np.empty((len(catalog), 3))
+        ras = np.radians(ras)
+        decs = np.radians(decs)
+        try:
+            vectors = np.empty((len(ras), 3))
+        except TypeError:
+            vectors = np.empty((1, 3))
 
         sin_dec = np.sin(np.pi / 2 - decs)
         vectors[:, 0] = sin_dec * np.cos(ras)
