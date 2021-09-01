@@ -194,7 +194,7 @@ class EphemerisQueryTask(PipelineTask):
             # name. This is a stop gap until such a time as the Rubin
             # Ephemeris system exists and we create our own Ids.
             dfSSO["ssObjectId"] = [
-                int(blake2b(bytes(name, "utf-8"), digest_size=8).hexdigest(),
+                int(blake2b(bytes(name, "utf-8"), digest_size=7).hexdigest(),
                     base=16)
                 for name in dfSSO["Name"]
             ]

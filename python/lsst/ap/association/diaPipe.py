@@ -739,7 +739,6 @@ class DiaPipelineSolarSystemTask(DiaPipelineTask):
                                    loaderResult.diaSources,
                                    diaForcedSources,
                                    diffIm,
-                                   exposure,
                                    warpedExposure,
                                    ccdExposureIdBits)
 
