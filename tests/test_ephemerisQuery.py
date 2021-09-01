@@ -21,18 +21,43 @@
 
 from mock import patch
 import numpy as np
+import os
 import pandas as pd
 import unittest
 
-from lsst.ap.association.ephemerisQuery import (EphemerisQueryConfig,
-                                                EphemerisQueryTask)
+import lsst.ap.association.ephemerisQuery as ephQ
+import lsst.geom as geom
+import lsst.pipe.base as pipeBase
+from lsst.utils import getPackageDir
 import lsst.utils.tests
 
 
 class TestEphemerisQuery(unittest.TestCase):
 
-    def test_run(self):
-        pass
+    def test_skyBotConeSearch(self):
+        """Test that our parsing of SkyBot return data success and produces
+        conistent hashed dataIds.
+        """
+        def requestReplace(input1, input2):
+            """Junk wrapper for replacing the external internal call with an
+            internel data load.
+            """
+            with open(os.path.join(getPackageDir("ap_association"),
+                                  "data",
+                                  "testSSObjects.txt"),
+                     "r") as f:
+                outputText = f.read()
+            return pipeBase.Struct(text=outputText)
+        with patch('lsst.ap.association.ephemerisQuery.requests.request', new=requestReplace):
+            ephTask = ephQ.EphemerisQueryTask()
+            testOut = ephTask._skybotConeSearch(geom.SpherePoint(0, 0, geom.degrees), 57071, 1.7)
+        testData = pd.read_parquet(
+            os.path.join(getPackageDir("ap_association"),
+                         "data",
+                         "testSSObjects.parq")
+        )
+        self.assertEqual(len(testData), len(testOut))
+        self.assertTrue(np.all(np.equal(testData["ssObjectId"], testData["ssObjectId"])))
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

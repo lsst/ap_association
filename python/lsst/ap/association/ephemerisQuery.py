@@ -29,7 +29,7 @@ a full external service across the web to fill data.
 __all__ = ["EphemerisQueryConfig", "EphemerisQueryTask"]
 
 
-from haslib import blake2b
+from hashlib import blake2b
 import numpy as np
 import pandas as pd
 import requests
@@ -128,6 +128,8 @@ class EphemerisQueryTask(PipelineTask):
 
         # Boresight of the exposure on sky.
         expCenter = visitInfo.boresightRaDec
+        ra = expCenter.getRa().asDegrees()
+        decl =  expCenter.getDec().asDegrees()
 
         # Skybot service query
         skybotSsObjects = self._skybotConeSearch(
@@ -177,8 +179,8 @@ class EphemerisQueryTask(PipelineTask):
         query = ''.join(q)
 
         conedf = pd.DataFrame()
-        r = requests.request("GET", query)
-        dfSSO = pd.read_csv(StringIO(r.text), sep='|', skiprows=2)
+        result = requests.request("GET", query)
+        dfSSO = pd.read_csv(StringIO(result.text), sep='|', skiprows=2)
         if len(dfSSO) > 0:
             columns = [col.strip() for col in dfSSO.columns]
             coldict = dict(zip(dfSSO.columns, columns))
