@@ -20,7 +20,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import numpy as np
-import pandas as pd
 import unittest
 
 from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
@@ -32,35 +31,38 @@ import lsst.utils.tests
 class TestSsoAssociation(unittest.TestCase):
 
     def setUp(self):
+        # Make fake sources
         self.nSources = 10
         self.bbox = geom.Box2I(geom.Point2I(0, 0),
                                geom.Extent2I(1024, 1153))
         self.xyLoc = 100
         dataset = measTests.TestDataset(self.bbox)
         for srcIdx in range(self.nSources):
-            dataset.addSource(100000.0, 
-                              geom.Point2D(srcIdx*self.xyLoc, 
-                                           srcIdx*self.xyLoc)
-            )
+            dataset.addSource(100000.0,
+                              geom.Point2D(srcIdx*self.xyLoc,
+                                           srcIdx*self.xyLoc))
         schema = dataset.makeMinimalSchema()
         schema.addField("base_PixelFlags_flag", type="Flag")
         schema.addField("base_PixelFlags_flag_offimage", type="Flag")
         exposure, catalog = dataset.realize(
             10.0, schema, randomSeed=1234)
         for src in catalog:
-           src.setCoord(exposure.getWcs().pixelToSky(src.getCentroid()))
+            src.setCoord(exposure.getWcs().pixelToSky(src.getCentroid()))
+
+        # Convert to task required format
         self.testDiaSources = catalog.asAstropy().to_pandas()
         self.testDiaSources.rename(columns={"coord_ra": "ra",
                                             "coord_dec": "decl"},
-                                   inplace=True,
-        )
+                                   inplace=True,)
         self.testDiaSources.loc[:, "ra"] = np.rad2deg(self.testDiaSources["ra"])
         self.testDiaSources.loc[:, "decl"] = np.rad2deg(self.testDiaSources["decl"])
         self.testDiaSources["ssObjectId"] = 0
+
+        # Grab a subset to treat as solar system objects
         self.testSsObjects = self.testDiaSources[2:8].reset_index()
+        # Assign them ids starting from 1.
         self.testSsObjects.loc[:, "ssObjectId"] = np.arange(
-            1, len(self.testSsObjects) + 1, dtype=int,
-        )
+            1, len(self.testSsObjects) + 1, dtype=int,)
 
     def test_run(self):
         """Test that association and id assignment work as expected.
@@ -69,19 +71,16 @@ class TestSsoAssociation(unittest.TestCase):
         results = ssAssocTask.run(self.testDiaSources, self.testSsObjects)
         self.assertEqual(self.nSources,
                          len(results.ssoAssocDiaSources)
-                         + len(results.unAssocDiaSources)
-        )
+                         + len(results.unAssocDiaSources))
         self.assertEqual(len(self.testSsObjects),
-                         len(results.ssoAssocDiaSources)
-        )
+                         len(results.ssoAssocDiaSources))
         self.assertEqual(self.nSources - len(self.testSsObjects),
-                         len(results.unAssocDiaSources)
-        )
+                         len(results.unAssocDiaSources))
         for idx, ssObject in self.testSsObjects.iterrows():
             self.assertEqual(
                 ssObject["ssObjectId"],
-                results.ssoAssocDiaSources.iloc[idx]["ssObjectId"]
-            )
+                results.ssoAssocDiaSources.iloc[idx]["ssObjectId"])
+
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass

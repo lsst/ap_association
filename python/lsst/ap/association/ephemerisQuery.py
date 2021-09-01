@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Solar System Object Query to Skybot in place of the Ephemeris task and
+"""Solar System Object Query to Skybot in place of the EphemerisChache task and
 internal Rubin data.
 
 Will compute the location for of SSObjects for a know visit. Currently uses
@@ -35,7 +35,6 @@ import pandas as pd
 import requests
 from io import StringIO
 
-import lsst.geom as geom
 from lsst.daf.base import DateTime
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
@@ -51,7 +50,7 @@ class EphemerisQueryConnections(PipelineTaskConnections,
                                 dimensions=("instrument",
                                             "visit")):
     visitInfos = connTypes.Input(
-        doc="Information defining the visit on a per detector basis..",
+        doc="Information defining the visit on a per detector basis.",
         name="raw.visitInfo",
         storageClass="VisitInfo",
         dimensions=("instrument", "exposure", "detector"),
@@ -59,7 +58,8 @@ class EphemerisQueryConnections(PipelineTaskConnections,
         multiple=True
     )
     ssObjects = connTypes.Output(
-        doc="Solar System Objects for all difference images in diffIm.",
+        doc="Solar System objects observable in this visit retrieved from "
+            "SkyBoty",
         name="visitSsObjects",
         storageClass="DataFrame",
         dimensions=("instrument", "visit"),
@@ -70,19 +70,20 @@ class EphemerisQueryConfig(PipelineTaskConfig,
                            pipelineConnections=EphemerisQueryConnections):
     observerCode = pexConfig.Field(
         dtype=str,
-        doc='IAU Minor Planet Center observer code for LSST.',
+        doc="IAU Minor Planet Center observer code for LSST.",
         default='I11'
     )
     queryRadiusDegrees = pexConfig.Field(
         dtype=float,
-        doc='On sky radius for Ephemeris cone search.'
-        'Also limits sky position error in ephemeris query. '
-        'Defaults to the radius of Rubin Obs FoV in degrees',
+        doc="On sky radius for Ephemeris cone search. Also limits sky "
+            "position error in ephemeris query. Defaults to the radius of "
+            "Rubin Obs FoV in degrees",
         default=1.75)
 
 
 class EphemerisQueryTask(PipelineTask):
-    """
+    """Tasks to query the SkyBot service and retrieve the solar system objects
+    that are observable within the input visit.
     """
     ConfigClass = EphemerisQueryConfig
     _DefaultName = "EphemerisQuery"
@@ -97,7 +98,8 @@ class EphemerisQueryTask(PipelineTask):
 
     @pipeBase.timeMethod
     def run(self, visitInfos, visit):
-        """
+        """Parse the information on the current visit and retrieve the
+        observable solar system objects from SkyBot.
 
         Parameters
         ----------
@@ -128,14 +130,13 @@ class EphemerisQueryTask(PipelineTask):
 
         # Boresight of the exposure on sky.
         expCenter = visitInfo.boresightRaDec
-        ra = expCenter.getRa().asDegrees()
-        decl =  expCenter.getDec().asDegrees()
 
         # Skybot service query
         skybotSsObjects = self._skybotConeSearch(
             expCenter,
             expMidPointMJD,
             self.config.queryRadiusDegrees)
+
         # Add the visit as an extra column.
         skybotSsObjects['visitId'] = visit
 
@@ -153,12 +154,14 @@ class EphemerisQueryTask(PipelineTask):
             Center of Exposure RADEC [deg]
         expMidPointMJD : `float`
             Mid point time of exposure [MJD].
+        queryRadius : `float`
+            Radius of the cone search in degrees.
 
         Returns
         -------
         dfSSO : `pandas.DataFrame`
             DataFrame with Solar System Object information and RADEC position
-            within the exposure.
+            within the visit.
         """
 
         fieldRA = expCenter.getRa().asDegrees()
@@ -178,7 +181,6 @@ class EphemerisQueryTask(PipelineTask):
         q.append('&-objFilter=111&-refsys=EQJ2000&-output=obs&-mime=text')
         query = ''.join(q)
 
-        conedf = pd.DataFrame()
         result = requests.request("GET", query)
         dfSSO = pd.read_csv(StringIO(result.text), sep='|', skiprows=2)
         if len(dfSSO) > 0:
@@ -190,7 +192,7 @@ class EphemerisQueryTask(PipelineTask):
             # SkyBot returns a string name for the object. To store the id in
             # the Apdb we convert this string to an int by hashing the object
             # name. This is a stop gap until such a time as the Rubin
-            # Emphemeris system exists and we create our own Ids.
+            # Ephemeris system exists and we create our own Ids.
             dfSSO["ssObjectId"] = [
                 int(blake2b(bytes(name, "utf-8"), digest_size=8).hexdigest(),
                     base=16)

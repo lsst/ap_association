@@ -44,8 +44,7 @@ from lsst.ap.association import (
     make_dia_object_schema,
     make_dia_source_schema,
     PackageAlertsTask)
-from lsst.ap.association.ssoAssociation import (SolarSystemAssociationTask,
-                                                SolarSystemAssociationConfig)
+from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
 
 __all__ = ("DiaPipelineConfig",
            "DiaPipelineTask",
@@ -665,7 +664,7 @@ class DiaPipelineSolarSystemTask(DiaPipelineTask):
         assocResults = self.associator.run(diaSourceTable,
                                            loaderResult.diaObjects,
                                            loaderResult.diaSources)
-        ssObjectAssocResults =  self.solarSystemAssociation.run(
+        ssObjectAssocResults = self.solarSystemAssociation.run(
             diaSourceTable.reset_index(drop=True),
             ssObjects)
 

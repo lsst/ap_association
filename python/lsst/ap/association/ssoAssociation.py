@@ -25,11 +25,7 @@
 __all__ = ["SolarSystemAssociationConfig", "SolarSystemAssociationTask"]
 
 import numpy as np
-import pandas as pd
 from scipy.spatial import cKDTree
-import unittest
-
-import lsst.utils.tests
 
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
@@ -50,7 +46,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
     """Associate DIASources into existing SolarSystem Objects.
 
     This task performs the association of detected DIASources in a visit
-    with the previous SolarSystem detected over time.
+    with known solar system objects.
     """
     ConfigClass = SolarSystemAssociationConfig
     _DefaultName = "association"
@@ -82,8 +78,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
 
         # Transform DIA RADEC coordinates to unit sphere xyz for tree building.
         vectors = self._radec_to_xyz(diaSourceCatalog["ra"],
-                                     diaSourceCatalog["decl"],
-        )
+                                     diaSourceCatalog["decl"])
 
         # Create KDTree of DIA sources
         tree = cKDTree(vectors)
@@ -106,14 +101,15 @@ class SolarSystemAssociationTask(pipeBase.Task):
             ssoAssocDiaSources=diaSourceCatalog[assocMask],
             unAssocDiaSources=diaSourceCatalog[~assocMask])
 
-
     def _radec_to_xyz(self, ras, decs):
         """Convert input ra/dec coordinates to spherical unit-vectors.
 
         Parameters
         ----------
-        catalog : `pandas.DataFrame`
-            Catalog to produce spherical unit-vector from.
+        ras : `array-like`
+            RA coordinates of objects in degrees.
+        decs : `array-like`
+            DEC coordinates of objects in degrees.
 
         Returns
         -------

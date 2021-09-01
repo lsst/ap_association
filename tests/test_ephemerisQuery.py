@@ -43,9 +43,9 @@ class TestEphemerisQuery(unittest.TestCase):
             internel data load.
             """
             with open(os.path.join(getPackageDir("ap_association"),
-                                  "data",
-                                  "testSSObjects.txt"),
-                     "r") as f:
+                                   "data",
+                                   "testSSObjects.txt"),
+                      "r") as f:
                 outputText = f.read()
             return pipeBase.Struct(text=outputText)
         with patch('lsst.ap.association.ephemerisQuery.requests.request', new=requestReplace):
