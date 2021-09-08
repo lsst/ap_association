@@ -62,8 +62,7 @@ class AssociationTask(pipeBase.Task):
     @pipeBase.timeMethod
     def run(self,
             diaSources,
-            diaObjects,
-            diaSourceHistory):
+            diaObjects):
         """Associate the new DiaSources with existing or new DiaObjects,
         updating the DiaObjects.
 
@@ -73,50 +72,23 @@ class AssociationTask(pipeBase.Task):
             New DIASources to be associated with existing DIAObjects.
         diaObjects : `pandas.DataFrame`
             Existing diaObjects from the Apdb.
-        diaSourceHistory : `pandas.DataFrame`
-            12 month DiaSource history of the loaded ``diaObjects``.
 
         Returns
         -------
         result : `lsst.pipe.base.Struct`
             Results struct with components.
 
-            - ``diaObjects`` : Complete set of dia_objects covering the input
-              exposure. Catalog contains newly created, updated, and untouched
-              diaObjects. (`pandas.DataFrame`)
-            - ``updatedDiaObjects`` : Subset of DiaObjects that were updated
-              or created during processing. (`pandas.DataFrame`)
-            - ``matchedDiaObjectIds`` : DiaSources detected in this ccdVisit with
-              associated diaObjectIds. (`numpy.ndarray`)
+            - ``diaSources`` : Full set of diaSources both matched and not.
+              (`pandas.DataFrame`)
         """
         diaSources = self.check_dia_source_radec(diaSources)
 
         matchResult = self.associate_sources(diaObjects, diaSources)
 
-        # Now that we know the DiaObjects our new DiaSources are associated
-        # with, we index the new DiaSources the same way as the full history
-        # and merge the tables.
-        diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
-                             drop=False,
-                             inplace=True)
-        # Append the newly created DiaObjectds.
-        diaObjects = diaObjects.append(matchResult.new_dia_objects,
-                                       sort=True)
-        # Double check to make sure there are no duplicates in the DiaObject
-        # table after association.
-        if diaObjects.index.has_duplicates:
-            raise RuntimeError(
-                "Duplicate DiaObjects created after association. This is "
-                "likely due to re-running data with an already populated "
-                "Apdb. If this was not the case then there was an unexpected "
-                "failure in Association while matching and creating new "
-                "DiaObjects and should be reported. Exiting.")
-
         return pipeBase.Struct(
-            diaObjects=diaObjects,
             diaSources=diaSources,
-            matchedDiaObjectIds=matchResult.associated_dia_object_ids,
-        )
+            nUpdatedDiaObjects=matchResult.nUpdatedDiaObjects,
+            nUnassociatedDiaObjects=matchResult.nUnassociatedDiaObjects)
 
     def check_dia_source_radec(self, dia_sources):
         """Check that all DiaSources have non-NaN values for RA/DEC.
@@ -178,13 +150,10 @@ class AssociationTask(pipeBase.Task):
             - ``n_unupdated_dia_objects`` : Number of previous DIAObjects that
               were not associated to a new DIASource (`int`).
         """
-
         scores = self.score(
             dia_objects, dia_sources,
             self.config.maxDistArcSeconds * geom.arcseconds)
         match_result = self.match(dia_objects, dia_sources, scores)
-
-        self._add_association_meta_data(match_result)
 
         return match_result
 
@@ -307,6 +276,7 @@ class AssociationTask(pipeBase.Task):
             Results struct with components:
 
             - ``scores``: array of floats of match quality
+
                 updated DIAObjects (array-like of `float`).
             - ``obj_ids``: array of floats of match quality
                 updated DIAObjects (array-like of `int`).
@@ -315,33 +285,13 @@ class AssociationTask(pipeBase.Task):
 
             Default values for these arrays are
             INF, -1 and -1 respectively for unassociated sources.
-
-        Returns
-        -------
-        result : `lsst.pipeBase.Struct`
-            Results struct with components:
-
-            - ``updated_and_new_dia_object_ids`` : ids of new and updated
-              dia_objects as the result of association. (`list` of `int`).
-            - ``new_dia_objects`` : Newly created DiaObjects from unassociated
-              diaSources. (`pandas.DataFrame`)
-            - ``n_updated_dia_objects`` : Number of previously know dia_objects
-              with newly associated DIASources. (`int`).
-            - ``n_new_dia_objects`` : Number of newly created DIAObjects from
-              unassociated DIASources (`int`).
-            - ``n_unupdated_dia_objects`` : Number of previous DIAObjects that
-              were not associated to a new DIASource (`int`).
         """
-
         n_previous_dia_objects = len(dia_objects)
         used_dia_object = np.zeros(n_previous_dia_objects, dtype=bool)
         used_dia_source = np.zeros(len(dia_sources), dtype=bool)
         associated_dia_object_ids = np.zeros(len(dia_sources),
                                              dtype=np.uint64)
-        new_dia_objects = []
-
         n_updated_dia_objects = 0
-        n_new_dia_objects = 0
 
         # We sort from best match to worst to effectively perform a
         # "handshake" match where both the DIASources and DIAObjects agree
@@ -363,96 +313,10 @@ class AssociationTask(pipeBase.Task):
             used_dia_source[score_idx] = True
             obj_id = score_struct.obj_ids[score_idx]
             associated_dia_object_ids[score_idx] = obj_id
-            n_updated_dia_objects += 1
             dia_sources.loc[score_idx, "diaObjectId"] = obj_id
+            n_updated_dia_objects += 1
 
-        # Argwhere returns a array shape (N, 1) so we access the index
-        # thusly to retrieve the value rather than the tuple
-        for (src_idx,) in np.argwhere(np.logical_not(used_dia_source)):
-            src_id = dia_sources.loc[src_idx, "diaSourceId"]
-            new_dia_objects.append(self._initialize_dia_object(src_id))
-            associated_dia_object_ids[src_idx] = src_id
-            dia_sources.loc[src_idx, "diaObjectId"] = src_id
-            n_new_dia_objects += 1
-
-        if len(new_dia_objects) > 0:
-            new_dia_objects = pd.DataFrame(data=new_dia_objects)
-        else:
-            # Create a junk DiaObject to get the columns.
-            tmpObj = self._initialize_dia_object(0)
-            new_dia_objects = pd.DataFrame(data=new_dia_objects,
-                                           columns=tmpObj.keys())
-        new_dia_objects.set_index("diaObjectId", inplace=True, drop=False)
-
-        # Return the ids of the DIAObjects in this DIAObjectCollection that
-        # were updated or newly created.
-        n_unassociated_dia_objects = \
-            n_previous_dia_objects - n_updated_dia_objects
         return pipeBase.Struct(
-            associated_dia_object_ids=associated_dia_object_ids,
-            new_dia_objects=new_dia_objects,
-            n_updated_dia_objects=n_updated_dia_objects,
-            n_new_dia_objects=n_new_dia_objects,
-            n_unassociated_dia_objects=n_unassociated_dia_objects,)
-
-    def _initialize_dia_object(self, objId):
-        """Create a new DiaObject with values required to be initialized by the
-        Ppdb.
-
-        Parameters
-        ----------
-        objid : `int`
-            ``diaObjectId`` value for the of the new DiaObject.
-
-        Returns
-        -------
-        diaObject : `dict`
-            Newly created DiaObject with keys:
-
-            ``diaObjectId``
-                Unique DiaObjectId (`int`).
-            ``pmParallaxNdata``
-                Number of data points used for parallax calculation (`int`).
-            ``nearbyObj1``
-                Id of the a nearbyObject in the Object table (`int`).
-            ``nearbyObj2``
-                Id of the a nearbyObject in the Object table (`int`).
-            ``nearbyObj3``
-                Id of the a nearbyObject in the Object table (`int`).
-            ``?PSFluxData``
-                Number of data points used to calculate point source flux
-                summary statistics in each bandpass (`int`).
-        """
-        new_dia_object = {"diaObjectId": objId,
-                          "pmParallaxNdata": 0,
-                          "nearbyObj1": 0,
-                          "nearbyObj2": 0,
-                          "nearbyObj3": 0,
-                          "flags": 0}
-        for f in ["u", "g", "r", "i", "z", "y"]:
-            new_dia_object["%sPSFluxNdata" % f] = 0
-        return new_dia_object
-
-    def _add_association_meta_data(self, match_result):
-        """Store summaries of the association step in the task metadata.
-
-        Parameters
-        ----------
-        match_result : `lsst.pipeBase.Struct`
-            Results struct with components:
-
-            - ``updated_and_new_dia_object_ids`` : ids new and updated
-              dia_objects in the collection (`list` of `int`).
-            - ``n_updated_dia_objects`` : Number of previously know dia_objects
-              with newly associated DIASources. (`int`).
-            - ``n_new_dia_objects`` : Number of newly created DIAObjects from
-              unassociated DIASources (`int`).
-            - ``n_unupdated_dia_objects`` : Number of previous DIAObjects that
-              were not associated to a new DIASource (`int`).
-        """
-        self.metadata.add('numUpdatedDiaObjects',
-                          match_result.n_updated_dia_objects)
-        self.metadata.add('numNewDiaObjects',
-                          match_result.n_new_dia_objects)
-        self.metadata.add('numUnassociatedDiaObjects',
-                          match_result.n_unassociated_dia_objects)
+            nUpdatedDiaObjects=n_updated_dia_objects,
+            nUnassociatedDiaObjects=n_previous_dia_objects
+                                    - n_updated_dia_objects)
