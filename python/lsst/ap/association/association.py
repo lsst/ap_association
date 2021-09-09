@@ -80,13 +80,20 @@ class AssociationTask(pipeBase.Task):
 
             - ``diaSources`` : Full set of diaSources both matched and not.
               (`pandas.DataFrame`)
+            - ``nUnassociatedDiaObjects`` : Number of DiaObjects that were
+              not matched a new DiaSource. (`int`)
         """
         diaSources = self.check_dia_source_radec(diaSources)
+        if len(diaObjects) == 0:
+            return pipeBase.Struct(
+                diaSources=diaSources,
+                nUpdatedDiaObjects=0,
+                nUnassociatedDiaObjects=0)
 
         matchResult = self.associate_sources(diaObjects, diaSources)
 
         return pipeBase.Struct(
-            diaSources=diaSources,
+            diaSources=matchResult.diaSources,
             nUpdatedDiaObjects=matchResult.nUpdatedDiaObjects,
             nUnassociatedDiaObjects=matchResult.nUnassociatedDiaObjects)
 
@@ -136,19 +143,15 @@ class AssociationTask(pipeBase.Task):
 
         Returns
         -------
-        result : `lsst.pipeBase.Struct`
-            Results struct with components:
+        result : `lsst.pipe.base.Struct`
+            Results struct with components.
 
-            - ``updated_and_new_dia_object_ids`` : ids of new and updated
-              dia_objects as the result of association. (`list` of `int`).
-            - ``new_dia_objects`` : Newly created DiaObjects from
-              unassociated diaSources. (`pandas.DataFrame`)
-            - ``n_updated_dia_objects`` : Number of previously known
-              dia_objects with newly associated DIASources. (`int`).
-            - ``n_new_dia_objects`` : Number of newly created DIAObjects from
-              unassociated DIASources (`int`).
-            - ``n_unupdated_dia_objects`` : Number of previous DIAObjects that
-              were not associated to a new DIASource (`int`).
+            - ``diaSources`` : Full set of diaSources both matched and not.
+              (`pandas.DataFrame`)
+            - ``nUpdatedDiaObjects`` : Number of DiaObjects that were
+              associated. (`int`)
+            - ``nUnassociatedDiaObjects`` : Number of DiaObjects that were
+              not matched a new DiaSource. (`int`)
         """
         scores = self.score(
             dia_objects, dia_sources,
@@ -285,6 +288,18 @@ class AssociationTask(pipeBase.Task):
 
             Default values for these arrays are
             INF, -1 and -1 respectively for unassociated sources.
+
+        Returns
+        -------
+        result : `lsst.pipe.base.Struct`
+            Results struct with components.
+
+            - ``diaSources`` : Full set of diaSources both matched and not.
+              (`pandas.DataFrame`)
+            - ``nUpdatedDiaObjects`` : Number of DiaObjects that were
+              associated. (`int`)
+            - ``nUnassociatedDiaObjects`` : Number of DiaObjects that were
+              not matched a new DiaSource. (`int`)
         """
         n_previous_dia_objects = len(dia_objects)
         used_dia_object = np.zeros(n_previous_dia_objects, dtype=bool)
@@ -317,6 +332,7 @@ class AssociationTask(pipeBase.Task):
             n_updated_dia_objects += 1
 
         return pipeBase.Struct(
+            diaSources=dia_sources,
             nUpdatedDiaObjects=n_updated_dia_objects,
-            nUnassociatedDiaObjects=n_previous_dia_objects
-                                    - n_updated_dia_objects)
+            nUnassociatedDiaObjects=(n_previous_dia_objects
+                                     - n_updated_dia_objects))

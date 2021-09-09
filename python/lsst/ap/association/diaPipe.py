@@ -334,6 +334,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             - ``apdb_maker`` : Marker dataset to store in the Butler indicating
               that this ccdVisit has completed successfully.
               (`lsst.dax.apdb.ApdbConfig`)
+            - ``associatedDiaSources`` : Catalog of newly associated
+              DiaSources. (`pandas.DataFrame`)
         """
         self.log.info("Running DiaPipeline...")
         # Put the SciencePipelines through a SDMification step and return
@@ -342,20 +344,29 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Load the DiaObjects and DiaSource history.
         loaderResult = self.diaCatalogLoader.run(diffIm, self.apdb)
 
-        # Associate new DiaSources with existing DiaObjects and update
-        # DiaObject summary statistics using the full DiaSource history.
+        # Associate new DiaSources with existing DiaObjects.
         assocResults = self.associator.run(diaSourceTable,
                                            loaderResult.diaObjects)
 
+        # Create new DiaObjects from unassociated diaSources.
         createResults = self.createNewDiaObjects(assocResults.diaSources)
+        self._add_association_meta_data(assocResults.nUpdatedDiaObjects,
+                                        assocResults.nUnassociatedDiaObjects,
+                                        len(createResults.newDiaObjects))
+
+        # Index the DiaSource catalog for this visit after all associations
+        # have been made.
         updatedDiaObjectIds = createResults.diaSources["diaObjectId"][
             createResults.diaSources["diaObjectId"] != 0].to_numpy()
         diaSources = createResults.diaSources.set_index(["diaObjectId",
                                                          "filterName",
                                                          "diaSourceId"],
-                                                         drop=False)
+                                                        drop=False)
+
+        # Append new DiaObjects and DiaSources to their previous history.
         diaObjects = loaderResult.diaObjects.append(
-            createResults.newDiaObjects.set_index("diaObjectId", drop=False), sort=True)
+            createResults.newDiaObjects.set_index("diaObjectId", drop=False),
+            sort=True)
         if self.testDataFrameIndex(diaObjects):
             raise RuntimeError(
                 "Duplicate DiaObjects created after association. This is "
@@ -377,11 +388,14 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 "was an unexpected failure in Association while matching "
                 "sources to objects, and should be reported. Exiting.")
 
+        # Compute DiaObject Summary statistics from their full DiaSource
+        # history.
         diaCalResult = self.diaCalculation.run(
             diaObjects,
             mergedDiaSourceHistory,
             updatedDiaObjectIds,
             [band])
+        # Test for duplication in the updated DiaObjects.
         if self.testDataFrameIndex(diaCalResult.diaObjectCat):
             raise RuntimeError(
                 "Duplicate DiaObjects (loaded + updated) created after "
@@ -403,7 +417,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diffIm)
 
         # Store DiaSources and updated DiaObjects in the Apdb.
-        self.apdb.storeDiaSources(assocResults.diaSources)
+        self.apdb.storeDiaSources(diaSources)
         self.apdb.storeDiaObjects(
             diaCalResult.updatedDiaObjects,
             exposure.getInfo().getVisitInfo().getDate().toPython())
@@ -438,7 +452,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                    ccdExposureIdBits)
 
         return pipeBase.Struct(apdbMarker=self.config.apdb.value,
-                               associatedDiaSources=createResults.diaSources)
+                               associatedDiaSources=diaSources)
 
     def createNewDiaObjects(self, diaSources):
         """Loop through the set of DiaSources and create new DiaObjects
@@ -461,7 +475,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         """
         newDiaObjectsList = []
         for idx, diaSource in diaSources.iterrows():
-            if diaSource["diaObjectId"] == 0 and diaSource["ssObjectId"] == 0:
+            if diaSource["diaObjectId"] == 0:
                 newDiaObjectsList.append(
                     self._initialize_dia_object(diaSource["diaSourceId"]))
                 diaSources.loc[idx, "diaObjectId"] = diaSource["diaSourceId"]
@@ -530,26 +544,23 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         """
         return df.index.has_duplicates
 
-    def _add_association_meta_data(self, matchResult):
+    def _add_association_meta_data(self,
+                                   nUpdatedDiaObjects,
+                                   nUnassociatedDiaObjects,
+                                   nNewDiaObjects):
         """Store summaries of the association step in the task metadata.
 
         Parameters
         ----------
-        match_result : `lsst.pipeBase.Struct`
-            Results struct with components:
-
-            - ``updated_and_new_dia_object_ids`` : ids new and updated
-              dia_objects in the collection (`list` of `int`).
-            - ``n_updated_dia_objects`` : Number of previously know dia_objects
-              with newly associated DIASources. (`int`).
-            - ``n_new_dia_objects`` : Number of newly created DIAObjects from
-              unassociated DIASources (`int`).
-            - ``n_unupdated_dia_objects`` : Number of previous DIAObjects that
-              were not associated to a new DIASource (`int`).
+        nUpdatedDiaObjects : `int`
+            Number of previous DiaObjects associated and updated in this
+            ccdVisit.
+        nUnassociatedDiaObjects : `int`
+            Number of previous DiaObjects that were not associated or updated
+            in this ccdVisit.
+        nNewDiaObjects : `int`
+            Number of newly created DiaObjects for this ccdVisit.
         """
-        self.metadata.add('numUpdatedDiaObjects',
-                          match_result.n_updated_dia_objects)
-        self.metadata.add('numNewDiaObjects',
-                          match_result.n_new_dia_objects)
-        self.metadata.add('numUnassociatedDiaObjects',
-                          match_result.n_unassociated_dia_objects)
+        self.metadata.add('numUpdatedDiaObjects', nUpdatedDiaObjects)
+        self.metadata.add('numUnassociatedDiaObjects', nUnassociatedDiaObjects)
+        self.metadata.add('numNewDiaObjects', nNewDiaObjects)

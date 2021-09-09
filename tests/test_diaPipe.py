@@ -20,6 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import unittest
+import numpy as np
 import pandas as pd
 
 import lsst.afw.image as afwImage
@@ -106,6 +107,27 @@ class TestDiaPipelineTask(unittest.TestCase):
             self.assertEqual(result.apdbMarker.db_url, "sqlite://")
             self.assertEqual(result.apdbMarker.isolation_level,
                              "READ_UNCOMMITTED")
+
+    def test_createDiaObjects(self):
+        """Test that creating new DiaObjects works as expected.
+        """
+        nSources = 5
+        diaSources = pd.DataFrame(data=[
+            {"ra": 0.04*idx, "decl": 0.04*idx,
+             "diaSourceId": idx + 1 + nSources, "diaObjectId": 0,
+             "ssObjectId": 0}
+            for idx in range(nSources)])
+
+        config = self._makeDefaultConfig(doPackageAlerts=False)
+        task = DiaPipelineTask(config=config)
+        result = task.createNewDiaObjects(diaSources)
+        self.assertEqual(nSources, len(result.newDiaObjects))
+        self.assertTrue(np.all(np.equal(
+            result.diaSources["diaObjectId"].to_numpy(),
+            result.diaSources["diaSourceId"].to_numpy())))
+        self.assertTrue(np.all(np.equal(
+            result.newDiaObjects["diaObjectId"].to_numpy(),
+            result.diaSources["diaSourceId"].to_numpy())))
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
