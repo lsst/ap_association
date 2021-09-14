@@ -30,56 +30,9 @@ import numpy as np
 import lsst.afw.table as afwTable
 from lsst.daf.base import DateTime
 import lsst.geom as geom
-from lsst.meas.base.pluginRegistry import register
-from lsst.meas.base import (
-    ForcedMeasurementTask,
-    ForcedTransformedCentroidConfig,
-    ForcedTransformedCentroidPlugin)
+from lsst.meas.base import ForcedMeasurementTask
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
-
-
-class ForcedTransformedCentroidFromCoordConfig(ForcedTransformedCentroidConfig):
-    """Configuration for the forced transformed coord algorithm.
-    """
-    pass
-
-
-@register("ap_assoc_TransformedCentroid")
-class ForcedTransformedCentroidFromCoordPlugin(ForcedTransformedCentroidPlugin):
-    """Record the transformation of the reference catalog coord.
-    The coord recorded in the reference catalog is tranformed to the
-    measurement coordinate system and stored.
-
-    Parameters
-    ----------
-    config : `ForcedTransformedCentroidFromCoordConfig`
-        Plugin configuration
-    name : `str`
-        Plugin name
-    schemaMapper : `lsst.afw.table.SchemaMapper`
-        A mapping from reference catalog fields to output
-        catalog fields. Output fields are added to the output schema.
-    metadata : `lsst.daf.base.PropertySet`
-        Plugin metadata that will be attached to the output catalog.
-
-    Notes
-    -----
-    This can be used as the slot centroid in forced measurement when only a
-    reference coord exits, allowing subsequent measurements to simply refer to
-    the slot value just as they would in single-frame measurement.
-    """
-
-    ConfigClass = ForcedTransformedCentroidFromCoordConfig
-
-    def measure(self, measRecord, exposure, refRecord, refWcs):
-        targetWcs = exposure.getWcs()
-
-        targetPos = targetWcs.skyToPixel(refRecord.getCoord())
-        measRecord.set(self.centroidKey, targetPos)
-
-        if self.flagKey is not None:
-            measRecord.set(self.flagKey, refRecord.getCentroidFlag())
 
 
 class DiaForcedSourcedConfig(pexConfig.Config):
@@ -97,19 +50,19 @@ class DiaForcedSourcedConfig(pexConfig.Config):
     )
 
     def setDefaults(self):
-        self.forcedMeasurement.plugins = ["ap_assoc_TransformedCentroid",
+        self.forcedMeasurement.plugins = ["base_TransformedCentroidFromCoord",
                                           "base_PsfFlux"]
         self.forcedMeasurement.doReplaceWithNoise = False
         self.forcedMeasurement.copyColumns = {
             "id": "diaObjectId",
             "coord_ra": "coord_ra",
             "coord_dec": "coord_dec"}
-        self.forcedMeasurement.slots.centroid = "ap_assoc_TransformedCentroid"
+        self.forcedMeasurement.slots.centroid = "base_TransformedCentroidFromCoord"
         self.forcedMeasurement.slots.psfFlux = "base_PsfFlux"
         self.forcedMeasurement.slots.shape = None
         self.dropColumns = ['coord_ra', 'coord_dec', 'parent',
-                            'ap_assoc_TransformedCentroid_x',
-                            'ap_assoc_TransformedCentroid_y',
+                            'base_TransformedCentroidFromCoord_x',
+                            'base_TransformedCentroidFromCoord_y',
                             'base_PsfFlux_instFlux',
                             'base_PsfFlux_instFluxErr', 'base_PsfFlux_area',
                             'slot_PsfFlux_area', 'base_PsfFlux_flag',
