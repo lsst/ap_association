@@ -29,6 +29,7 @@ Currently loads directly from the Apdb rather than pre-loading.
 """
 
 import os
+import pandas as pd
 
 import lsst.dax.apdb as daxApdb
 from lsst.meas.base import DiaObjectCalculationTask
@@ -333,6 +334,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             - ``apdb_maker`` : Marker dataset to store in the Butler indicating
               that this ccdVisit has completed successfully.
               (`lsst.dax.apdb.ApdbConfig`)
+            - ``associatedDiaSources`` : Catalog of newly associated
+              DiaSources. (`pandas.DataFrame`)
         """
         self.log.info("Running DiaPipeline...")
         # Put the SciencePipelines through a SDMification step and return
@@ -341,14 +344,38 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Load the DiaObjects and DiaSource history.
         loaderResult = self.diaCatalogLoader.run(diffIm, self.apdb)
 
-        # Associate new DiaSources with existing DiaObjects and update
-        # DiaObject summary statistics using the full DiaSource history.
+        # Associate new DiaSources with existing DiaObjects.
         assocResults = self.associator.run(diaSourceTable,
-                                           loaderResult.diaObjects,
-                                           loaderResult.diaSources)
+                                           loaderResult.diaObjects)
 
+        # Create new DiaObjects from unassociated diaSources.
+        createResults = self.createNewDiaObjects(assocResults.diaSources)
+        self._add_association_meta_data(assocResults.nUpdatedDiaObjects,
+                                        assocResults.nUnassociatedDiaObjects,
+                                        len(createResults.newDiaObjects))
+
+        # Index the DiaSource catalog for this visit after all associations
+        # have been made.
+        updatedDiaObjectIds = createResults.diaSources["diaObjectId"][
+            createResults.diaSources["diaObjectId"] != 0].to_numpy()
+        diaSources = createResults.diaSources.set_index(["diaObjectId",
+                                                         "filterName",
+                                                         "diaSourceId"],
+                                                        drop=False)
+
+        # Append new DiaObjects and DiaSources to their previous history.
+        diaObjects = loaderResult.diaObjects.append(
+            createResults.newDiaObjects.set_index("diaObjectId", drop=False),
+            sort=True)
+        if self.testDataFrameIndex(diaObjects):
+            raise RuntimeError(
+                "Duplicate DiaObjects created after association. This is "
+                "likely due to re-running data with an already populated "
+                "Apdb. If this was not the case then there was an unexpected "
+                "failure in Association while matching and creating new "
+                "DiaObjects and should be reported. Exiting.")
         mergedDiaSourceHistory = loaderResult.diaSources.append(
-            assocResults.diaSources,
+            diaSources,
             sort=True)
         # Test for DiaSource duplication first. If duplicates are found,
         # this likely means this is duplicate data being processed and sent
@@ -361,11 +388,14 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 "was an unexpected failure in Association while matching "
                 "sources to objects, and should be reported. Exiting.")
 
+        # Compute DiaObject Summary statistics from their full DiaSource
+        # history.
         diaCalResult = self.diaCalculation.run(
-            assocResults.diaObjects,
+            diaObjects,
             mergedDiaSourceHistory,
-            assocResults.matchedDiaObjectIds,
+            updatedDiaObjectIds,
             [band])
+        # Test for duplication in the updated DiaObjects.
         if self.testDataFrameIndex(diaCalResult.diaObjectCat):
             raise RuntimeError(
                 "Duplicate DiaObjects (loaded + updated) created after "
@@ -387,7 +417,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diffIm)
 
         # Store DiaSources and updated DiaObjects in the Apdb.
-        self.apdb.storeDiaSources(assocResults.diaSources)
+        self.apdb.storeDiaSources(diaSources)
         self.apdb.storeDiaObjects(
             diaCalResult.updatedDiaObjects,
             exposure.getInfo().getVisitInfo().getDate().toPython())
@@ -413,7 +443,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                     ["diaObjectId", "diaForcedSourceId"],
                     drop=False,
                     inplace=True)
-            self.alertPackager.run(assocResults.diaSources,
+            self.alertPackager.run(diaSources,
                                    diaCalResult.diaObjectCat,
                                    loaderResult.diaSources,
                                    diaForcedSources,
@@ -422,7 +452,79 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                    ccdExposureIdBits)
 
         return pipeBase.Struct(apdbMarker=self.config.apdb.value,
-                               associatedDiaSources=assocResults.diaSources)
+                               associatedDiaSources=diaSources)
+
+    def createNewDiaObjects(self, diaSources):
+        """Loop through the set of DiaSources and create new DiaObjects
+        for unassociated DiaSources.
+
+        Parameters
+        ----------
+        diaSources : `pandas.DataFrame`
+            Set of DiaSources to create new DiaObjects from.
+
+        Returns
+        -------
+        results : `lsst.pipe.base.Struct`
+            Results struct containing:
+
+            - ``diaSources`` : DiaSource catalog with updated DiaObject ids.
+              (`pandas.DataFrame`)
+            - ``newDiaObjects`` : Newly created DiaObjects from the
+              unassociated DiaSources. (`pandas.DataFrame`)
+        """
+        newDiaObjectsList = []
+        for idx, diaSource in diaSources.iterrows():
+            if diaSource["diaObjectId"] == 0:
+                newDiaObjectsList.append(
+                    self._initialize_dia_object(diaSource["diaSourceId"]))
+                diaSources.loc[idx, "diaObjectId"] = diaSource["diaSourceId"]
+        if len(newDiaObjectsList) > 0:
+            newDiaObjects = pd.DataFrame(data=newDiaObjectsList)
+        else:
+            tmpObj = self._initialize_dia_object(0)
+            newDiaObjects = pd.DataFrame(data=newDiaObjectsList,
+                                         columns=tmpObj.keys())
+        return pipeBase.Struct(diaSources=diaSources,
+                               newDiaObjects=pd.DataFrame(data=newDiaObjects))
+
+    def _initialize_dia_object(self, objId):
+        """Create a new DiaObject with values required to be initialized by the
+        Ppdb.
+
+        Parameters
+        ----------
+        objid : `int`
+            ``diaObjectId`` value for the of the new DiaObject.
+
+        Returns
+        -------
+        diaObject : `dict`
+            Newly created DiaObject with keys:
+
+            ``diaObjectId``
+                Unique DiaObjectId (`int`).
+            ``pmParallaxNdata``
+                Number of data points used for parallax calculation (`int`).
+            ``nearbyObj1``
+                Id of the a nearbyObject in the Object table (`int`).
+            ``nearbyObj2``
+                Id of the a nearbyObject in the Object table (`int`).
+            ``nearbyObj3``
+                Id of the a nearbyObject in the Object table (`int`).
+            ``?PSFluxData``
+                Number of data points used to calculate point source flux
+                summary statistics in each bandpass (`int`).
+        """
+        new_dia_object = {"diaObjectId": objId,
+                          "pmParallaxNdata": 0,
+                          "nearbyObj1": 0,
+                          "nearbyObj2": 0,
+                          "nearbyObj3": 0,
+                          "flags": 0}
+        for f in ["u", "g", "r", "i", "z", "y"]:
+            new_dia_object["%sPSFluxNdata" % f] = 0
+        return new_dia_object
 
     def testDataFrameIndex(self, df):
         """Test the sorted DataFrame index for duplicates.
@@ -441,3 +543,24 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             True if DataFrame contains duplicate rows.
         """
         return df.index.has_duplicates
+
+    def _add_association_meta_data(self,
+                                   nUpdatedDiaObjects,
+                                   nUnassociatedDiaObjects,
+                                   nNewDiaObjects):
+        """Store summaries of the association step in the task metadata.
+
+        Parameters
+        ----------
+        nUpdatedDiaObjects : `int`
+            Number of previous DiaObjects associated and updated in this
+            ccdVisit.
+        nUnassociatedDiaObjects : `int`
+            Number of previous DiaObjects that were not associated or updated
+            in this ccdVisit.
+        nNewDiaObjects : `int`
+            Number of newly created DiaObjects for this ccdVisit.
+        """
+        self.metadata.add('numUpdatedDiaObjects', nUpdatedDiaObjects)
+        self.metadata.add('numUnassociatedDiaObjects', nUnassociatedDiaObjects)
+        self.metadata.add('numNewDiaObjects', nNewDiaObjects)
