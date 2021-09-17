@@ -11,18 +11,20 @@ funcs:
         functor: Column
         args: filterName
     diaObjectId:
-      functor: Column
-      args: diaObjectId
+        functor: Column
+        args: diaObjectId
     # ssObjectId not implemented
     parentDiaSourceId:
-      functor: Column
-      args: parent
+        functor: Column
+        args: parent
     midPointTai:
-      functor: Column
-      args: midPointTai
+        functor: Column
+        args: midPointTai
     pixelId:
-      functor: Column
-      args: pixelId
+        functor: HtmIndex20
+        args:
+            - coord_ra
+            - coord_dec
     bboxSize:
         functor: Column
         args: bboxSize
