@@ -41,8 +41,6 @@ from lsst.ap.association import (
     AssociationTask,
     DiaForcedSourceTask,
     LoadDiaCatalogsTask,
-    make_dia_object_schema,
-    make_dia_source_schema,
     PackageAlertsTask)
 from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
 
@@ -274,9 +272,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
     def __init__(self, initInputs=None, **kwargs):
         super().__init__(**kwargs)
-        self.apdb = self.config.apdb.apply(
-            afw_schemas=dict(DiaObject=make_dia_object_schema(),
-                             DiaSource=make_dia_source_schema()))
+        self.apdb = self.config.apdb.apply()
         self.makeSubtask("diaCatalogLoader")
         self.makeSubtask("associator")
         self.makeSubtask("diaCalculation")

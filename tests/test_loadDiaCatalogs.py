@@ -29,10 +29,7 @@ import yaml
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
-from lsst.ap.association import (LoadDiaCatalogsTask,
-                                 LoadDiaCatalogsConfig,
-                                 make_dia_source_schema,
-                                 make_dia_object_schema)
+from lsst.ap.association import LoadDiaCatalogsTask, LoadDiaCatalogsConfig
 import lsst.daf.base as dafBase
 from lsst.dax.apdb import Apdb, ApdbConfig
 import lsst.geom as geom
@@ -259,14 +256,10 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         self.apdbConfig.dia_object_columns = []
         self.apdbConfig.schema_file = _data_file_name(
             "apdb-schema.yaml", "dax_apdb")
-        self.apdbConfig.column_map = _data_file_name(
-            "apdb-ap-pipe-afw-map.yaml", "ap_association")
         self.apdbConfig.extra_schema_file = _data_file_name(
             "apdb-ap-pipe-schema-extra.yaml", "ap_association")
 
-        self.apdb = Apdb(config=self.apdbConfig,
-                         afw_schemas=dict(DiaObject=make_dia_object_schema(),
-                                          DiaSource=make_dia_source_schema()))
+        self.apdb = Apdb(config=self.apdbConfig)
         self.apdb.makeSchema()
 
         # Expected HTM pixel ranges for max range=4 and level = 20. This

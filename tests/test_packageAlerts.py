@@ -30,10 +30,7 @@ import unittest
 from astropy import wcs
 from astropy.nddata import CCDData
 
-from lsst.ap.association import (PackageAlertsConfig,
-                                 PackageAlertsTask,
-                                 make_dia_source_schema,
-                                 make_dia_object_schema)
+from lsst.ap.association import PackageAlertsConfig, PackageAlertsTask
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.image as afwImage
 import lsst.daf.base as dafBase
@@ -232,39 +229,31 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
     apdbConfig.dia_object_columns = []
     apdbConfig.schema_file = _data_file_name(
         "apdb-schema.yaml", "dax_apdb")
-    apdbConfig.column_map = _data_file_name(
-        "apdb-ap-pipe-afw-map.yaml", "ap_association")
     apdbConfig.extra_schema_file = _data_file_name(
         "apdb-ap-pipe-schema-extra.yaml", "ap_association")
 
-    apdb = Apdb(config=apdbConfig,
-                afw_schemas=dict(DiaObject=make_dia_object_schema(),
-                                 DiaSource=make_dia_source_schema()))
+    apdb = Apdb(config=apdbConfig)
     apdb.makeSchema()
 
     minId = objects["pixelId"].min()
     maxId = objects["pixelId"].max()
-    diaObjects = apdb.getDiaObjects([[minId, maxId + 1]], return_pandas=True).append(objects)
+    diaObjects = apdb.getDiaObjects([[minId, maxId + 1]]).append(objects)
     diaSources = apdb.getDiaSources(np.unique(objects["diaObjectId"]),
-                                    dateTime,
-                                    return_pandas=True).append(sources)
+                                    dateTime).append(sources)
     diaForcedSources = apdb.getDiaForcedSources(
         np.unique(objects["diaObjectId"]),
-        dateTime,
-        return_pandas=True).append(forcedSources)
+        dateTime).append(forcedSources)
 
     apdb.storeDiaSources(diaSources)
     apdb.storeDiaForcedSources(diaForcedSources)
     apdb.storeDiaObjects(diaObjects, dateTime)
 
-    diaObjects = apdb.getDiaObjects([[minId, maxId + 1]], return_pandas=True)
+    diaObjects = apdb.getDiaObjects([[minId, maxId + 1]])
     diaSources = apdb.getDiaSources(np.unique(diaObjects["diaObjectId"]),
-                                    dateTime,
-                                    return_pandas=True)
+                                    dateTime)
     diaForcedSources = apdb.getDiaForcedSources(
         np.unique(diaObjects["diaObjectId"]),
-        dateTime,
-        return_pandas=True)
+        dateTime)
 
     diaObjects.set_index("diaObjectId", drop=False, inplace=True)
     diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],

@@ -616,4 +616,6 @@ columns:
   type: BOOL
   nullable: true
   description: Object determined to be a dipole.
-
+- name: bboxSize
+  type: BIGINT
+  nullable: true

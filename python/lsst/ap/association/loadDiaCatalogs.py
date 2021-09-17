@@ -148,7 +148,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             # the column used for indexing later in AssociationTask.
             diaObjects = pd.DataFrame(columns=["diaObjectId"])
         else:
-            diaObjects = apdb.getDiaObjects(pixelRanges, return_pandas=True)
+            diaObjects = apdb.getDiaObjects(pixelRanges)
 
         diaObjects.set_index("diaObjectId", drop=False, inplace=True)
         if diaObjects.index.has_duplicates:
@@ -193,9 +193,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
                                                    "filterName",
                                                    "diaSourceId"])
             else:
-                diaSources = apdb.getDiaSourcesInRegion(pixelRanges,
-                                                        dateTime,
-                                                        return_pandas=True)
+                diaSources = apdb.getDiaSourcesInRegion(pixelRanges, dateTime)
         else:
             if len(diaObjects) == 0:
                 # If no diaObjects are available return an empty DataFrame with
@@ -206,8 +204,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             else:
                 diaSources = apdb.getDiaSources(
                     diaObjects.loc[:, "diaObjectId"],
-                    dateTime,
-                    return_pandas=True)
+                    dateTime)
 
         diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
                              drop=False,
@@ -252,8 +249,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
         else:
             diaForcedSources = apdb.getDiaForcedSources(
                 diaObjects.loc[:, "diaObjectId"],
-                dateTime,
-                return_pandas=True)
+                dateTime)
 
         diaForcedSources.set_index(["diaObjectId", "diaForcedSourceId"],
                                    drop=False,
