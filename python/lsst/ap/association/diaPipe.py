@@ -252,11 +252,7 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
 
     def validate(self):
         pexConfig.Config.validate(self)
-        if self.diaCatalogLoader.htmLevel != \
-           self.diaCalculation.plugins["ap_HTMIndex"].htmLevel:
-            raise ValueError("HTM index level in LoadDiaCatalogsTask must be "
-                             "equal to HTMIndexDiaCalculationPlugin index "
-                             "level.")
+        # TODO: this plugin is not useful, pixelization is handled by Apdb
         if "ap_HTMIndex" not in self.diaCalculation.plugins:
             raise ValueError("DiaPipe requires the ap_HTMIndex plugin "
                              "be enabled for proper insertion into the Apdb.")

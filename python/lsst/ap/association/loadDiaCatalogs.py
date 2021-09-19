@@ -36,18 +36,6 @@ __all__ = ("LoadDiaCatalogsTask", "LoadDiaCatalogsConfig")
 class LoadDiaCatalogsConfig(pexConfig.Config):
     """Config class for LoadDiaCatalogsConfig.
     """
-    htmLevel = pexConfig.RangeField(
-        dtype=int,
-        doc="Level of the HTM pixelization.",
-        default=20,
-        min=1,
-    )
-    htmMaxRanges = pexConfig.RangeField(
-        dtype=int,
-        doc="Maximum number of HTM (min, max) ranges to return.",
-        default=128,
-        min=2,
-    )
     pixelMargin = pexConfig.RangeField(
         doc="Padding to add to 4 all edges of the bounding box (pixels)",
         dtype=int,
@@ -71,7 +59,6 @@ class LoadDiaCatalogsTask(pipeBase.Task):
 
     def __init__(self, **kwargs):
         pipeBase.Task.__init__(self, **kwargs)
-        self.pixelator = sphgeom.HtmPixelization(self.config.htmLevel)
 
     @pipeBase.timeMethod
     def run(self, exposure, apdb):
@@ -99,11 +86,11 @@ class LoadDiaCatalogsTask(pipeBase.Task):
               (`pandas.DataFrame`)
         """
         visiInfo = exposure.getInfo().getVisitInfo()
-        pixelRanges = self._getPixelRanges(exposure)
+        region = self._getRegion(exposure)
 
         # This is the first database query
         try:
-            diaObjects = self.loadDiaObjects(pixelRanges, apdb)
+            diaObjects = self.loadDiaObjects(region, apdb)
         except (OperationalError, ProgrammingError) as e:
             raise RuntimeError(
                 "Database query failed to load DiaObjects; did you call "
@@ -113,7 +100,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
         dateTime = visiInfo.getDate().toPython()
 
         diaSources = self.loadDiaSources(diaObjects,
-                                         pixelRanges,
+                                         region,
                                          dateTime,
                                          apdb)
 
@@ -127,13 +114,13 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             diaForcedSources=diaForcedSources)
 
     @pipeBase.timeMethod
-    def loadDiaObjects(self, pixelRanges, apdb):
+    def loadDiaObjects(self, region, apdb):
         """Load DiaObjects from the Apdb based on their HTM location.
 
         Parameters
         ----------
-        pixelRanges : `tuple` [`int`]
-            Ranges of pixel values that cover region of interest.
+        region : `sphgeom.Region`
+            Region of interest.
         apdb : `lsst.dax.apdb.Apdb`
             Database connection object to load from.
 
@@ -143,12 +130,12 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             DiaObjects loaded from the Apdb that are within the area defined
             by ``pixelRanges``.
         """
-        if len(pixelRanges) == 0:
+        if region is None:
             # If no area is specified return an empty DataFrame with the
             # the column used for indexing later in AssociationTask.
             diaObjects = pd.DataFrame(columns=["diaObjectId"])
         else:
-            diaObjects = apdb.getDiaObjects(pixelRanges)
+            diaObjects = apdb.getDiaObjects(region)
 
         diaObjects.set_index("diaObjectId", drop=False, inplace=True)
         if diaObjects.index.has_duplicates:
@@ -161,7 +148,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
         return diaObjects.replace(to_replace=[None], value=np.nan)
 
     @pipeBase.timeMethod
-    def loadDiaSources(self, diaObjects, pixelRanges, dateTime, apdb):
+    def loadDiaSources(self, diaObjects, region, dateTime, apdb):
         """Load DiaSources from the Apdb based on their diaObjectId or
         pixelId location.
 
@@ -172,8 +159,8 @@ class LoadDiaCatalogsTask(pipeBase.Task):
         diaObjects : `pandas.DataFrame`
             DiaObjects loaded from the Apdb that are within the area defined
             by ``pixelRanges``.
-        pixelRanges : `list` of `tuples`
-            Ranges of pixelIds that cover region of interest.
+        region : `sphgeom.Region`
+            Region of interest.
         dateTime : `datetime.datetime`
             Time of the current visit
         apdb : `lsst.dax.apdb.Apdb`
@@ -186,14 +173,14 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             by ``pixelRange`` and associated with ``diaObjects``.
         """
         if self.config.loadDiaSourcesByPixelId:
-            if len(pixelRanges) == 0:
+            if region is None:
                 # If no area is specified return an empty DataFrame with the
                 # the column used for indexing later in AssociationTask.
                 diaSources = pd.DataFrame(columns=["diaObjectId",
                                                    "filterName",
                                                    "diaSourceId"])
             else:
-                diaSources = apdb.getDiaSourcesInRegion(pixelRanges, dateTime)
+                diaSources = apdb.getDiaSourcesInRegion(region, dateTime)
         else:
             if len(diaObjects) == 0:
                 # If no diaObjects are available return an empty DataFrame with
@@ -269,8 +256,8 @@ class LoadDiaCatalogsTask(pipeBase.Task):
         return diaForcedSources.replace(to_replace=[None], value=np.nan)
 
     @pipeBase.timeMethod
-    def _getPixelRanges(self, exposure):
-        """Calculate covering HTM pixels for the current exposure.
+    def _getRegion(self, exposure):
+        """Calculate an enveloping region for an exposure.
 
         Parameters
         ----------
@@ -279,8 +266,8 @@ class LoadDiaCatalogsTask(pipeBase.Task):
 
         Returns
         -------
-        htmRanges : `list` of `tuples`
-            A list of tuples containing `int` values.
+        region : `sphgeom.Region`
+            Region enveloping an exposure.
         """
         bbox = geom.Box2D(exposure.getBBox())
         bbox.grow(self.config.pixelMargin)
@@ -289,6 +276,4 @@ class LoadDiaCatalogsTask(pipeBase.Task):
         region = sphgeom.ConvexPolygon([wcs.pixelToSky(pp).getVector()
                                         for pp in bbox.getCorners()])
 
-        indices = self.pixelator.envelope(region, self.config.htmMaxRanges)
-
-        return indices.ranges()
+        return region

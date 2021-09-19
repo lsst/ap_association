@@ -37,6 +37,7 @@ import lsst.daf.base as dafBase
 from lsst.dax.apdb import Apdb, ApdbConfig
 import lsst.geom as geom
 import lsst.meas.base.tests
+from lsst.sphgeom import Box
 from lsst.utils import getPackageDir
 import lsst.utils.tests
 
@@ -87,12 +88,10 @@ def makeDiaObjects(nObjects, exposure):
     data = []
     for idx, (x, y) in enumerate(zip(rand_x, rand_y)):
         coord = wcs.pixelToSky(x, y)
-        htmIdx = 1
         newObject = {"ra": coord.getRa().asDegrees(),
                      "decl": coord.getDec().asDegrees(),
                      "radecTai": midPointTaiMJD,
                      "diaObjectId": idx,
-                     "pixelId": htmIdx,
                      "pmParallaxNdata": 0,
                      "nearbyObj1": 0,
                      "nearbyObj2": 0,
@@ -117,8 +116,6 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
         Integer Ids of diaobjects to "associate" with the DiaSources.
     exposure : `lsst.afw.image.Exposure`
         Exposure to create sources over.
-    pixelator : `lsst.sphgeom.HtmPixelization`
-        Object to compute spatial indicies from.
 
     Returns
     -------
@@ -138,7 +135,6 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
     data = []
     for idx, (x, y) in enumerate(zip(rand_x, rand_y)):
         coord = wcs.pixelToSky(x, y)
-        htmIdx = 1
         objId = diaObjectIds[idx % len(diaObjectIds)]
         # Put together the minimum values for the alert.
         data.append({"ra": coord.getRa().asDegrees(),
@@ -151,7 +147,6 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
                      "parentDiaSourceId": 0,
                      "prv_procOrder": 0,
                      "diaSourceId": idx,
-                     "pixelId": htmIdx,
                      "midPointTai": midPointTaiMJD + 1.0 * idx,
                      "filterName": exposure.getFilterLabel().bandLabel,
                      "psNdata": 0,
@@ -235,9 +230,8 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
     apdb = Apdb(config=apdbConfig)
     apdb.makeSchema()
 
-    minId = objects["pixelId"].min()
-    maxId = objects["pixelId"].max()
-    diaObjects = apdb.getDiaObjects([[minId, maxId + 1]]).append(objects)
+    wholeSky = Box.full()
+    diaObjects = apdb.getDiaObjects(wholeSky).append(objects)
     diaSources = apdb.getDiaSources(np.unique(objects["diaObjectId"]),
                                     dateTime).append(sources)
     diaForcedSources = apdb.getDiaForcedSources(
@@ -248,7 +242,7 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
     apdb.storeDiaForcedSources(diaForcedSources)
     apdb.storeDiaObjects(diaObjects, dateTime)
 
-    diaObjects = apdb.getDiaObjects([[minId, maxId + 1]])
+    diaObjects = apdb.getDiaObjects(wholeSky)
     diaSources = apdb.getDiaSources(np.unique(diaObjects["diaObjectId"]),
                                     dateTime)
     diaForcedSources = apdb.getDiaForcedSources(
