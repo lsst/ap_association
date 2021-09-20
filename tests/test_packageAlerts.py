@@ -238,9 +238,7 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
         np.unique(objects["diaObjectId"]),
         dateTime).append(forcedSources)
 
-    apdb.storeDiaSources(diaSources)
-    apdb.storeDiaForcedSources(diaForcedSources)
-    apdb.storeDiaObjects(diaObjects, dateTime)
+    apdb.store(dateTime, diaObjects, diaSources, diaForcedSources)
 
     diaObjects = apdb.getDiaObjects(wholeSky)
     diaSources = apdb.getDiaSources(np.unique(diaObjects["diaObjectId"]),

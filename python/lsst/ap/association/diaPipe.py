@@ -406,11 +406,11 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diffIm)
 
         # Store DiaSources and updated DiaObjects in the Apdb.
-        self.apdb.storeDiaSources(diaSources)
-        self.apdb.storeDiaObjects(
+        self.apdb.store(
+            exposure.getInfo().getVisitInfo().getDate().toPython(),
             diaCalResult.updatedDiaObjects,
-            exposure.visitInfo.date.toPython())
-        self.apdb.storeDiaForcedSources(diaForcedSources)
+            diaSources,
+            diaForcedSources)
 
         if self.config.doPackageAlerts:
             if len(loaderResult.diaForcedSources) > 1:

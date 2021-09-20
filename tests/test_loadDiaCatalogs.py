@@ -265,12 +265,12 @@ class TestLoadDiaCatalogs(unittest.TestCase):
             self.diaObjects["diaObjectId"].to_numpy(),
             self.exposure)
 
-        self.apdb.storeDiaSources(self.diaSources)
-        self.apdb.storeDiaForcedSources(self.diaForcedSources)
         self.dateTime = \
             self.exposure.getInfo().getVisitInfo().getDate().toPython()
-        self.apdb.storeDiaObjects(self.diaObjects,
-                                  self.dateTime)
+        self.apdb.store(self.dateTime,
+                        self.diaObjects,
+                        self.diaSources,
+                        self.diaForcedSources)
 
         # These columns are not in the DPDD, yet do appear in DiaSource.yaml.
         # We don't need to check them against the default APDB schema.
