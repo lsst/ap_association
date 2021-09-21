@@ -205,7 +205,7 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
         Set of test DiaSources to round trip.
     forcedSources : `pandas.DataFrame`
         Set of test DiaForcedSources to round trip.
-    dateTime : `datetime.datetime`
+    dateTime : `lsst.daf.base.DateTime`
         Time for the Apdb.
 
     Returns
@@ -232,20 +232,15 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
 
     wholeSky = Box.full()
     diaObjects = apdb.getDiaObjects(wholeSky).append(objects)
-    diaSources = apdb.getDiaSources(np.unique(objects["diaObjectId"]),
-                                    dateTime).append(sources)
-    diaForcedSources = apdb.getDiaForcedSources(
-        np.unique(objects["diaObjectId"]),
-        dateTime).append(forcedSources)
+    diaSources = apdb.getDiaSources(wholeSky, [], dateTime).append(sources)
+    diaForcedSources = apdb.getDiaForcedSources(wholeSky, [], dateTime).append(forcedSources)
 
     apdb.store(dateTime, diaObjects, diaSources, diaForcedSources)
 
     diaObjects = apdb.getDiaObjects(wholeSky)
-    diaSources = apdb.getDiaSources(np.unique(diaObjects["diaObjectId"]),
-                                    dateTime)
+    diaSources = apdb.getDiaSources(wholeSky, np.unique(diaObjects["diaObjectId"]), dateTime)
     diaForcedSources = apdb.getDiaForcedSources(
-        np.unique(diaObjects["diaObjectId"]),
-        dateTime)
+        wholeSky, np.unique(diaObjects["diaObjectId"]), dateTime)
 
     diaObjects.set_index("diaObjectId", drop=False, inplace=True)
     diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
@@ -294,7 +289,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             diaObjects,
             diaSourceHistory,
             diaForcedSources,
-            self.exposure.getInfo().getVisitInfo().getDate().toPython())
+            self.exposure.getInfo().getVisitInfo().getDate())
         self.diaObjects.replace(to_replace=[None], value=np.nan, inplace=True)
         diaSourceHistory.replace(to_replace=[None], value=np.nan, inplace=True)
         self.diaForcedSources.replace(to_replace=[None], value=np.nan, inplace=True)

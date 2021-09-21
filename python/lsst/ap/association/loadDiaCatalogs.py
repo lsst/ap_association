@@ -42,12 +42,6 @@ class LoadDiaCatalogsConfig(pexConfig.Config):
         default=250,
         min=0,
     )
-    loadDiaSourcesByPixelId = pexConfig.Field(
-        doc="Load DiaSources by their HTM pixelId instead of by their "
-            "associated diaObjectId",
-        dtype=bool,
-        default=True,
-    )
 
 
 class LoadDiaCatalogsTask(pipeBase.Task):
@@ -97,7 +91,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
                 "make_apdb.py first? If you did, some other error occurred "
                 "during database access of the DiaObject table.") from e
 
-        dateTime = visiInfo.getDate().toPython()
+        dateTime = visiInfo.getDate()
 
         diaSources = self.loadDiaSources(diaObjects,
                                          region,
@@ -105,6 +99,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
                                          apdb)
 
         diaForcedSources = self.loadDiaForcedSources(diaObjects,
+                                                     region,
                                                      dateTime,
                                                      apdb)
 
@@ -161,7 +156,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             by ``pixelRanges``.
         region : `sphgeom.Region`
             Region of interest.
-        dateTime : `datetime.datetime`
+        dateTime : `lsst.daf.base.DateTime`
             Time of the current visit
         apdb : `lsst.dax.apdb.Apdb`
             Database connection object to load from.
@@ -172,26 +167,14 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             DiaSources loaded from the Apdb that are within the area defined
             by ``pixelRange`` and associated with ``diaObjects``.
         """
-        if self.config.loadDiaSourcesByPixelId:
-            if region is None:
-                # If no area is specified return an empty DataFrame with the
-                # the column used for indexing later in AssociationTask.
-                diaSources = pd.DataFrame(columns=["diaObjectId",
-                                                   "filterName",
-                                                   "diaSourceId"])
-            else:
-                diaSources = apdb.getDiaSourcesInRegion(region, dateTime)
+        if region is None:
+            # If no area is specified return an empty DataFrame with the
+            # the column used for indexing later in AssociationTask.
+            diaSources = pd.DataFrame(columns=["diaObjectId",
+                                               "filterName",
+                                               "diaSourceId"])
         else:
-            if len(diaObjects) == 0:
-                # If no diaObjects are available return an empty DataFrame with
-                # the the column used for indexing later in AssociationTask.
-                diaSources = pd.DataFrame(columns=["diaObjectId",
-                                                   "filterName",
-                                                   "diaSourceId"])
-            else:
-                diaSources = apdb.getDiaSources(
-                    diaObjects.loc[:, "diaObjectId"],
-                    dateTime)
+            diaSources = apdb.getDiaSources(region, diaObjects.loc[:, "diaObjectId"], dateTime)
 
         diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
                              drop=False,
@@ -210,14 +193,16 @@ class LoadDiaCatalogsTask(pipeBase.Task):
         return diaSources.replace(to_replace=[None], value=np.nan)
 
     @pipeBase.timeMethod
-    def loadDiaForcedSources(self, diaObjects, dateTime, apdb):
+    def loadDiaForcedSources(self, diaObjects, region, dateTime, apdb):
         """Load DiaObjects from the Apdb based on their HTM location.
 
         Parameters
         ----------
         diaObjects : `pandas.DataFrame`
             DiaObjects loaded from the Apdb.
-        dateTime : `datetime.datetime`
+        region : `sphgeom.Region`
+            Region of interest.
+        dateTime : `lsst.daf.base.DateTime`
             Time of the current visit
         apdb : `lsst.dax.apdb.Apdb`
             Database connection object to load from.
@@ -235,6 +220,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
                                                      "diaForcedSourceId"])
         else:
             diaForcedSources = apdb.getDiaForcedSources(
+                region,
                 diaObjects.loc[:, "diaObjectId"],
                 dateTime)
 

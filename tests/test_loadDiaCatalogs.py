@@ -265,8 +265,7 @@ class TestLoadDiaCatalogs(unittest.TestCase):
             self.diaObjects["diaObjectId"].to_numpy(),
             self.exposure)
 
-        self.dateTime = \
-            self.exposure.getInfo().getVisitInfo().getDate().toPython()
+        self.dateTime = self.exposure.getInfo().getVisitInfo().getDate()
         self.apdb.store(self.dateTime,
                         self.diaObjects,
                         self.diaSources,
@@ -304,39 +303,21 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         """Test that the correct number of diaForcedSources are loaded.
         """
         diaLoader = LoadDiaCatalogsTask()
+        region = diaLoader._getRegion(self.exposure)
         diaForcedSources = diaLoader.loadDiaForcedSources(
             self.diaObjects,
+            region,
             self.dateTime,
             self.apdb)
         self.assertEqual(len(diaForcedSources), len(self.diaForcedSources))
 
-    def testLoadDiaSourcesByPixelId(self):
+    def testLoadDiaSources(self):
         """Test that the correct number of diaSources are loaded.
 
         Also check that they can be properly loaded both by location and
         ``diaObjectId``.
-        """
-        self._testLoadDiaSources(True)
-
-    def testLoadDiaSourcesByDiaObjectId(self):
-        """Test that the correct number of diaSources are loaded.
-
-        Also check that they can be properly loaded both by location and
-        ``diaObjectId``.
-        """
-        self._testLoadDiaSources(False)
-
-    def _testLoadDiaSources(self, loadByPixelId):
-        """Test that DiaSources are loaded correctly.
-
-        Parameters
-        ----------
-        loadByPixelId : `bool`
-            Load DiaSources by ``pixelId`` if ``True`` and by ``diaObjectId``
-            if ``False``.
         """
         diaConfig = LoadDiaCatalogsConfig()
-        diaConfig.loadDiaSourcesByPixelId = loadByPixelId
         diaLoader = LoadDiaCatalogsTask(config=diaConfig)
 
         region = diaLoader._getRegion(self.exposure)
