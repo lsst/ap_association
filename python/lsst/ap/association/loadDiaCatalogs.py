@@ -58,7 +58,7 @@ class LoadDiaCatalogsConfig(pexConfig.Config):
         doc="Load DiaSources by their HTM pixelId instead of by their "
             "associated diaObjectId",
         dtype=bool,
-        default=False,
+        default=True,
     )
 
 
@@ -113,8 +113,8 @@ class LoadDiaCatalogsTask(pipeBase.Task):
         dateTime = visiInfo.getDate().toPython()
 
         diaSources = self.loadDiaSources(diaObjects,
-                                         dateTime,
                                          pixelRanges,
+                                         dateTime,
                                          apdb)
 
         diaForcedSources = self.loadDiaForcedSources(diaObjects,
