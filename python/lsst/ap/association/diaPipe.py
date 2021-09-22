@@ -179,9 +179,7 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         dtype=str,
         default="deep",
     )
-    apdb = pexConfig.ConfigurableField(
-        target=daxApdb.Apdb,
-        ConfigClass=daxApdb.ApdbConfig,
+    apdb = daxApdb.ApdbSql.makeField(
         doc="Database connection for storing associated DiaSources and "
             "DiaObjects. Must already be initialized.",
     )

@@ -31,7 +31,7 @@ import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 from lsst.ap.association import LoadDiaCatalogsTask, LoadDiaCatalogsConfig
 import lsst.daf.base as dafBase
-from lsst.dax.apdb import Apdb, ApdbConfig
+from lsst.dax.apdb import ApdbSql, ApdbSqlConfig
 import lsst.geom as geom
 from lsst.utils import getPackageDir
 import lsst.utils.tests
@@ -240,9 +240,8 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         self.db_file_fd, self.db_file = tempfile.mkstemp(
             dir=os.path.dirname(__file__))
 
-        self.apdbConfig = ApdbConfig()
+        self.apdbConfig = ApdbSqlConfig()
         self.apdbConfig.db_url = "sqlite:///" + self.db_file
-        self.apdbConfig.isolation_level = "READ_UNCOMMITTED"
         self.apdbConfig.dia_object_index = "baseline"
         self.apdbConfig.dia_object_columns = []
         self.apdbConfig.schema_file = _data_file_name(
@@ -250,7 +249,7 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         self.apdbConfig.extra_schema_file = _data_file_name(
             "apdb-ap-pipe-schema-extra.yaml", "ap_association")
 
-        self.apdb = Apdb(config=self.apdbConfig)
+        self.apdb = ApdbSql(config=self.apdbConfig)
         self.apdb.makeSchema()
 
         self.exposure = makeExposure(False, False)

@@ -34,7 +34,7 @@ from lsst.ap.association import PackageAlertsConfig, PackageAlertsTask
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.image as afwImage
 import lsst.daf.base as dafBase
-from lsst.dax.apdb import Apdb, ApdbConfig
+from lsst.dax.apdb import ApdbSql, ApdbSqlConfig
 import lsst.geom as geom
 import lsst.meas.base.tests
 from lsst.sphgeom import Box
@@ -217,9 +217,8 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
     """
     tmpFile = tempfile.NamedTemporaryFile()
 
-    apdbConfig = ApdbConfig()
+    apdbConfig = ApdbSqlConfig()
     apdbConfig.db_url = "sqlite:///" + tmpFile.name
-    apdbConfig.isolation_level = "READ_UNCOMMITTED"
     apdbConfig.dia_object_index = "baseline"
     apdbConfig.dia_object_columns = []
     apdbConfig.schema_file = _data_file_name(
@@ -227,7 +226,7 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
     apdbConfig.extra_schema_file = _data_file_name(
         "apdb-ap-pipe-schema-extra.yaml", "ap_association")
 
-    apdb = Apdb(config=apdbConfig)
+    apdb = ApdbSql(config=apdbConfig)
     apdb.makeSchema()
 
     wholeSky = Box.full()
