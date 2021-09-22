@@ -19,14 +19,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Solar System Object Query to Skybot in place of the EphemerisChache task and
-internal Rubin data.
+"""Solar System Object Query to Skybot in place of a internal Rubin solar
+system object caching/retrieval code.
 
-Will compute the location for of SSObjects for a know visit. Currently uses
-a full external service across the web to fill data.
+Will compute the location for of known SSObjects within a visit. This code
+blocks on web requests, so should not be used as part of any real-time or
+time-sensitive system. Use in a larger pipeline at your own risk.
 """
 
-__all__ = ["EphemerisQueryConfig", "EphemerisQueryTask"]
+__all__ = ["SkyBotEphemerisQueryConfig", "SkyBotEphemerisQueryTask"]
 
 
 from hashlib import blake2b
@@ -46,9 +47,9 @@ import lsst.pipe.base.connectionTypes as connTypes
 pd.options.mode.chained_assignment = 'raise'
 
 
-class EphemerisQueryConnections(PipelineTaskConnections,
-                                dimensions=("instrument",
-                                            "visit")):
+class SkyBotEphemerisQueryConnections(PipelineTaskConnections,
+                                      dimensions=("instrument",
+                                                  "visit")):
     visitInfos = connTypes.Input(
         doc="Information defining the visit on a per detector basis.",
         name="raw.visitInfo",
@@ -59,18 +60,20 @@ class EphemerisQueryConnections(PipelineTaskConnections,
     )
     ssObjects = connTypes.Output(
         doc="Solar System objects observable in this visit retrieved from "
-            "SkyBoty",
+            "SkyBoy",
         name="visitSsObjects",
         storageClass="DataFrame",
         dimensions=("instrument", "visit"),
     )
 
 
-class EphemerisQueryConfig(PipelineTaskConfig,
-                           pipelineConnections=EphemerisQueryConnections):
+class SkyBotEphemerisQueryConfig(
+        PipelineTaskConfig,
+        pipelineConnections=SkyBotEphemerisQueryConnections):
     observerCode = pexConfig.Field(
         dtype=str,
-        doc="IAU Minor Planet Center observer code for LSST.",
+        doc="IAU Minor Planet Center observer code for queries "
+            "(Rubin Obs./LSST default is I11)",
         default='I11'
     )
     queryRadiusDegrees = pexConfig.Field(
@@ -81,12 +84,12 @@ class EphemerisQueryConfig(PipelineTaskConfig,
         default=1.75)
 
 
-class EphemerisQueryTask(PipelineTask):
+class SkyBotEphemerisQueryTask(PipelineTask):
     """Tasks to query the SkyBot service and retrieve the solar system objects
     that are observable within the input visit.
     """
-    ConfigClass = EphemerisQueryConfig
-    _DefaultName = "EphemerisQuery"
+    ConfigClass = SkyBotEphemerisQueryConfig
+    _DefaultName = "SkyBotEphemerisQuery"
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
@@ -114,19 +117,18 @@ class EphemerisQueryTask(PipelineTask):
         result : `lsst.pipe.base.Struct`
             Results struct with components:
 
-            - ``ssObjects``: `pandas DataFrame`
-                Contains pandas DataFrame with name, RADEC position, position
+            - ``ssObjects``: `pandas.DataFrame`
+                DataFrame containing name, RA/DEC position, position
                 uncertainty, and unique Id of on sky of Solar System Objects in
-                Field of View as retrieved by SkyBot.
+                field of view as retrieved by SkyBot.
         """
         # Grab the visitInfo from the raw to get the information needed on the
         # full visit.
         visitInfo = visitInfos[0].get(
-            datasetType=self.config.connections.visitInfos,
-            immediate=True)
+            datasetType=self.config.connections.visitInfos)
 
         # Midpoint time of the exposure in MJD
-        expMidPointMJD = visitInfo.date.get(system=DateTime.MJD)
+        expMidPointEPOCH = visitInfo.date.get(system=DateTime.EPOCH)
 
         # Boresight of the exposure on sky.
         expCenter = visitInfo.boresightRaDec
@@ -134,7 +136,7 @@ class EphemerisQueryTask(PipelineTask):
         # Skybot service query
         skybotSsObjects = self._skybotConeSearch(
             expCenter,
-            expMidPointMJD,
+            expMidPointEPOCH,
             self.config.queryRadiusDegrees)
 
         # Add the visit as an extra column.
@@ -144,33 +146,33 @@ class EphemerisQueryTask(PipelineTask):
             ssObjects=skybotSsObjects,
         )
 
-    def _skybotConeSearch(self, expCenter, expMidPointMJD, queryRadius):
-        """Query IMCCE SkyBot ephemeris service for cone search to get RADEC
-        positions of Solar System Objects in FOV.
+    def _skybotConeSearch(self, expCenter, epochJD, queryRadius):
+        """Query IMCCE SkyBot ephemeris service for cone search using the
+        exposure boresight.
 
         Parameters
         ----------
         expCenter : `lsst.geom.SpherePoint`
             Center of Exposure RADEC [deg]
-        expMidPointMJD : `float`
-            Mid point time of exposure [MJD].
+        epochJD : `float`
+            Mid point time of exposure [EPOCH].
         queryRadius : `float`
             Radius of the cone search in degrees.
 
         Returns
         -------
         dfSSO : `pandas.DataFrame`
-            DataFrame with Solar System Object information and RADEC position
+            DataFrame with Solar System Object information and RA/DEC position
             within the visit.
         """
 
         fieldRA = expCenter.getRa().asDegrees()
         fieldDec = expCenter.getDec().asDegrees()
-        epochJD = expMidPointMJD + 2400000.5
         observerMPCId = self.config.observerCode
         radius = queryRadius
         orbitUncertaintyFilter = queryRadius
 
+        # TODO: DM-31866
         q = ['http://vo.imcce.fr/webservices/skybot/skybotconesearch_query.php?']
         q.append('-ra=' + str(fieldRA))
         q.append('&-dec=' + str(fieldDec))
@@ -184,21 +186,24 @@ class EphemerisQueryTask(PipelineTask):
         result = requests.request("GET", query)
         dfSSO = pd.read_csv(StringIO(result.text), sep='|', skiprows=2)
         if len(dfSSO) > 0:
+            # Data has leading and trailing spaces hence the strip.
             columns = [col.strip() for col in dfSSO.columns]
             coldict = dict(zip(dfSSO.columns, columns))
             dfSSO.rename(columns=coldict, inplace=True)
+            # TODO: DM-31934 Replace custom conversion code with
+            #       Astropy.coordinates.
             dfSSO["ra"] = self._rahms2radeg(dfSSO["RA(h)"])
             dfSSO["decl"] = self._decdms2decdeg(dfSSO["DE(deg)"])
             # SkyBot returns a string name for the object. To store the id in
             # the Apdb we convert this string to an int by hashing the object
             # name. This is a stop gap until such a time as the Rubin
-            # Ephemeris system exists and we create our own Ids.
+            # Ephemeris system exists and we create our own Ids. Use blake2b
+            # is it can produce hashes that can fit in a 64bit int.
             dfSSO["ssObjectId"] = [
                 int(blake2b(bytes(name, "utf-8"), digest_size=7).hexdigest(),
                     base=16)
                 for name in dfSSO["Name"]
             ]
-
         else:
             self.log.info("No Solar System objects found for visit.")
             return pd.DataFrame()

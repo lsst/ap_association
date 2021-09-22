@@ -28,7 +28,7 @@ import lsst.meas.base.tests as measTests
 import lsst.utils.tests
 
 
-class TestSsoAssociation(unittest.TestCase):
+class TestSolarSystemAssociation(unittest.TestCase):
 
     def setUp(self):
         # Make fake sources

@@ -1,9 +1,10 @@
+# This file is part of ap_association.
 #
-# LSST Data Management System
-# Copyright 2008-2016 AURA/LSST.
-#
-# This product includes software developed by the
-# LSST Project (http://www.lsst.org/).
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,10 +16,8 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
-# You should have received a copy of the LSST License Statement and
-# the GNU General Public License along with this program.  If not,
-# see <https://www.lsstcorp.org/LegalNotices/>.
-#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """Spatial association for Solar System Objects."""
 
@@ -37,7 +36,7 @@ class SolarSystemAssociationConfig(pexConfig.Config):
     maxDistArcSeconds = pexConfig.Field(
         dtype=float,
         doc='Maximum distance in arcseconds to test for a DIASource to be a '
-        'match to a SSObject.',
+            'match to a SSObject.',
         default=2.0,
     )
 
@@ -49,7 +48,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
     with known solar system objects.
     """
     ConfigClass = SolarSystemAssociationConfig
-    _DefaultName = "association"
+    _DefaultName = "ssoAssociation"
 
     @pipeBase.timeMethod
     def run(self, diaSourceCatalog, solarSystemObjects):
@@ -69,10 +68,10 @@ class SolarSystemAssociationTask(pipeBase.Task):
         -------
         resultsStruct : `lsst.pipe.base.Struct`
 
-            - ``ssoAssocDiaSources`` : Set of DiaSources associated with
+            - ``ssoAssocDiaSources`` : DiaSources that were associated with
               solar system objects in this visit. (`pandas.DataFrame`)
-            - ``unAssocDiaSources`` : Set of DiaSources that were unassociated
-              with any solar system object. (`pandas.DataFrame`)
+            - ``unAssocDiaSources`` : Set of DiaSources that were not
+              associated with any solar system object. (`pandas.DataFrame`)
         """
         maxRadius = np.deg2rad(self.config.maxDistArcSeconds / 3600)
 
@@ -88,7 +87,6 @@ class SolarSystemAssociationTask(pipeBase.Task):
         # fancier later.
         for index, ssObject in solarSystemObjects.iterrows():
 
-            # convert SSO radec to ICRF position
             ssoVect = self._radec_to_xyz(ssObject["ra"], ssObject["decl"])
 
             # Which DIA Sources fall within r?

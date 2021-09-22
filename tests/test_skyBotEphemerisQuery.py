@@ -25,34 +25,37 @@ import os
 import pandas as pd
 import unittest
 
-import lsst.ap.association.ephemerisQuery as ephQ
+import lsst.ap.association.skyBotEphemerisQuery as ephQ
 import lsst.geom as geom
 import lsst.pipe.base as pipeBase
 from lsst.utils import getPackageDir
 import lsst.utils.tests
 
 
-class TestEphemerisQuery(unittest.TestCase):
+class TestSkyBotEphemerisQuery(unittest.TestCase):
 
     def test_skyBotConeSearch(self):
-        """Test that our parsing of SkyBot return data success and produces
-        conistent hashed dataIds.
+        """Test that our parsing of SkyBot return data succeeds and produces
+        consistent hashed dataIds.
         """
         def requestReplace(input1, input2):
             """Junk wrapper for replacing the external internal call with an
             internel data load.
             """
             with open(os.path.join(getPackageDir("ap_association"),
+                                   "tests",
                                    "data",
                                    "testSSObjects.txt"),
                       "r") as f:
                 outputText = f.read()
             return pipeBase.Struct(text=outputText)
-        with patch('lsst.ap.association.ephemerisQuery.requests.request', new=requestReplace):
-            ephTask = ephQ.EphemerisQueryTask()
+        with patch('lsst.ap.association.skyBotEphemerisQuery.requests.request',
+                   new=requestReplace):
+            ephTask = ephQ.SkyBotEphemerisQueryTask()
             testOut = ephTask._skybotConeSearch(geom.SpherePoint(0, 0, geom.degrees), 57071, 1.7)
         testData = pd.read_parquet(
             os.path.join(getPackageDir("ap_association"),
+                         "tests",
                          "data",
                          "testSSObjects.parq")
         )

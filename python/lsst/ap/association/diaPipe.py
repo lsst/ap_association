@@ -332,16 +332,12 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         results : `lsst.pipe.base.Struct`
             Results struct with components.
 
-            - ``apdb_maker`` : Marker dataset to store in the Butler indicating
+            - ``apdbMaker`` : Marker dataset to store in the Butler indicating
               that this ccdVisit has completed successfully.
               (`lsst.dax.apdb.ApdbConfig`)
             - ``associatedDiaSources`` : Catalog of newly associated
               DiaSources. (`pandas.DataFrame`)
         """
-        self.log.info("Running DiaPipeline...")
-        # Put the SciencePipelines through a SDMification step and return
-        # calibrated columns with the expect output database names.
-
         # Load the DiaObjects and DiaSource history.
         loaderResult = self.diaCatalogLoader.run(diffIm, self.apdb)
 
@@ -421,7 +417,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         self.apdb.storeDiaSources(diaSources)
         self.apdb.storeDiaObjects(
             diaCalResult.updatedDiaObjects,
-            exposure.getInfo().getVisitInfo().getDate().toPython())
+            exposure.visitInfo.date.toPython())
         self.apdb.storeDiaForcedSources(diaForcedSources)
 
         if self.config.doPackageAlerts:
@@ -566,15 +562,16 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         self.metadata.add('numUnassociatedDiaObjects', nUnassociatedDiaObjects)
         self.metadata.add('numNewDiaObjects', nNewDiaObjects)
 
+
 class DiaPipelineSolarSystemConnections(DiaPipelineConnections):
     ssObjects = connTypes.Input(
-        doc="Solar System Objects for all difference images in diffIm.",
+        doc="Solar System Objects observable in this visit.",
         name="visitSsObjects",
         storageClass="DataFrame",
         dimensions=("instrument", "visit"),
     )
     ssObjectAssocDiaSources = connTypes.Output(
-        doc="Solar System Objects for all difference images in diffIm.",
+        doc="DiaSources associated with existing Solar System objects..",
         name="{fakesType}{coaddName}Diff_ssObjectAssocDiaSrc",
         storageClass="DataFrame",
         dimensions=("instrument", "visit", "detector"),
@@ -594,11 +591,12 @@ class DiaPipelineSolarSystemTask(DiaPipelineTask):
     (DIA) Sources after associating them to previous DiaObjects and
     SSObjects.
 
-    SSO behavior currently necessitates a separte pipelinetask, however, after
-    DM-31389 is merged this SSO operations will merge into the default class.
+    SSO behavior currently necessitates a separate pipelinetask, however, after
+    DM-31389 is merged this SSO specific DiaPipe will merge into the default
+    class.
     """
     ConfigClass = DiaPipelineSolarySystemConfig
-    _DefaultName = "diaPipe"
+    _DefaultName = "diaPipeSSO"
     RunnerClass = pipeBase.ButlerInitializedTaskRunner
 
     def __init__(self, initInputs=None, **kwargs):
@@ -617,7 +615,7 @@ class DiaPipelineSolarSystemTask(DiaPipelineTask):
         """Process DiaSources and DiaObjects.
 
         Load previous DiaObjects and their DiaSource history. Calibrate the
-        values in the diaSourceCat. Associate new DiaSources with previous
+        values in the ``diaSourceTable``. Associate new DiaSources with previous
         DiaObjects. Run forced photometry at the updated DiaObject locations.
         Store the results in the Alert Production Database (Apdb).
 
@@ -626,8 +624,8 @@ class DiaPipelineSolarSystemTask(DiaPipelineTask):
         diaSourceTable : `pandas.DataFrame`
             Newly detected DiaSources.
         diffIm : `lsst.afw.image.ExposureF`
-            Difference image exposure in which the sources in ``diaSourceCat``
-            were detected.
+            Difference image exposure in which the sources in
+            ``diaSourceTable`` were detected.
         exposure : `lsst.afw.image.ExposureF`
             Calibrated exposure differenced with a template to create
             ``diffIm``.
@@ -643,19 +641,15 @@ class DiaPipelineSolarSystemTask(DiaPipelineTask):
         results : `lsst.pipe.base.Struct`
             Results struct with components.
 
-            - ``apdb_maker`` : Marker dataset to store in the Butler indicating
+            - ``apdbMaker`` : Marker dataset to store in the Butler indicating
               that this ccdVisit has completed successfully.
               (`lsst.dax.apdb.ApdbConfig`)
             - ``associatedDiaSources`` : Full set of DiaSources associated
-              to current and new DiaObjects. This is an options Butler output.
+              to current and new DiaObjects. This is an optional Butler output.
               (`pandas.DataFrame`)
             - ``ssObjectAssocDiaSources`` : Set of DiaSources associated with
               solar system objects. (`pandas.DataFrame`)
         """
-        self.log.info("Running DiaPipeline...")
-        # Put the SciencePipelines through a SDMification step and return
-        # calibrated columns with the expect output database names.
-
         # Load the DiaObjects and DiaSource history.
         loaderResult = self.diaCatalogLoader.run(diffIm, self.apdb)
 
@@ -711,7 +705,7 @@ class DiaPipelineSolarSystemTask(DiaPipelineTask):
         self.apdb.storeDiaSources(assocResults.diaSources)
         self.apdb.storeDiaObjects(
             diaCalResult.updatedDiaObjects,
-            exposure.getInfo().getVisitInfo().getDate().toPython())
+            exposure.visitInfo.date.toPython())
         self.apdb.storeDiaForcedSources(diaForcedSources)
 
         if self.config.doPackageAlerts:
