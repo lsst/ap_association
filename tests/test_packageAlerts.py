@@ -273,6 +273,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             exposureTime=200.,
             date=dafBase.DateTime("2014-05-13T17:00:00.000000000",
                                   dafBase.DateTime.Timescale.TAI))
+        self.exposure.info.id = 1234
         self.exposure.getInfo().setVisitInfo(visit)
 
         self.exposure.setFilterLabel(afwImage.FilterLabel(band='g', physical="g.MP9401"))
