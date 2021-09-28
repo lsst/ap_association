@@ -188,6 +188,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         diaSourceDf["filterName"] = band
         diaSourceDf["midPointTai"] = diffIm.getInfo().getVisitInfo().getDate().get(system=DateTime.MJD)
         diaSourceDf["diaObjectId"] = 0
+        diaSourceDf["ssObjectId"] = 0
         diaSourceDf["pixelId"] = 0
         self.bitPackFlags(diaSourceDf)
 
