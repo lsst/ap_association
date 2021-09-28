@@ -32,7 +32,7 @@ from lsst.daf.base import DateTime
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
-from lsst.pipe.tasks.postprocess import TransformCatalogBaseTask
+from lsst.pipe.tasks.postprocess import TransformCatalogBaseTask, TransformCatalogBaseConfig
 from lsst.pipe.tasks.parquetTable import ParquetTable
 from lsst.pipe.tasks.functors import Column
 
@@ -67,7 +67,7 @@ class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
     )
 
 
-class TransformDiaSourceCatalogConfig(pipeBase.PipelineTaskConfig,
+class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
                                       pipelineConnections=TransformDiaSourceCatalogConnections):
     """
     """
@@ -85,14 +85,6 @@ class TransformDiaSourceCatalogConfig(pipeBase.PipelineTaskConfig,
                              "data",
                              "flag-rename-rules.yaml"),
     )
-    functorFile = pexConfig.Field(
-        dtype=str,
-        doc='Path to YAML file specifying Science DataModel functors to use '
-            'when copying columns and computing calibrated values.',
-        default=os.path.join("${AP_ASSOCIATION_DIR}",
-                             "data",
-                             "DiaSource.yaml")
-    )
     doRemoveSkySources = pexConfig.Field(
         dtype=bool,
         default=False,
@@ -105,6 +97,12 @@ class TransformDiaSourceCatalogConfig(pipeBase.PipelineTaskConfig,
         doc="Do pack the flags into one integer column named 'flags'."
             "If False, instead produce one boolean column per flag."
     )
+
+    def setDefaults(self):
+        super().setDefaults()
+        self.functorFile = os.path.join("${AP_ASSOCIATION_DIR}",
+                                        "data",
+                                        "DiaSource.yaml")
 
 
 class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
