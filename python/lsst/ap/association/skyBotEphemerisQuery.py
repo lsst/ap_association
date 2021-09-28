@@ -31,10 +31,12 @@ __all__ = ["SkyBotEphemerisQueryConfig", "SkyBotEphemerisQueryTask"]
 
 
 from hashlib import blake2b
-import numpy as np
 import pandas as pd
 import requests
 from io import StringIO
+
+from astropy.coordinates import Angle
+from astropy import units as u
 
 from lsst.daf.base import DateTime
 import lsst.pex.config as pexConfig
@@ -231,10 +233,9 @@ class SkyBotEphemerisQueryTask(PipelineTask):
             columns = [col.strip() for col in dfSSO.columns]
             coldict = dict(zip(dfSSO.columns, columns))
             dfSSO.rename(columns=coldict, inplace=True)
-            # TODO: DM-31934 Replace custom conversion code with
-            #       Astropy.coordinates.
-            dfSSO["ra"] = self._rahms2radeg(dfSSO["RA(h)"])
-            dfSSO["decl"] = self._decdms2decdeg(dfSSO["DE(deg)"])
+            # Data returned in hourangle format.
+            dfSSO["ra"] = Angle(dfSSO["RA(h)"], unit=u.hourangle).deg
+            dfSSO["decl"] = Angle(dfSSO["DE(deg)"], unit=u.deg).deg
             # SkyBot returns a string name for the object. To store the id in
             # the Apdb we convert this string to an int by hashing the object
             # name. This is a stop gap until such a time as the Rubin
@@ -253,41 +254,3 @@ class SkyBotEphemerisQueryTask(PipelineTask):
         self.log.info("%d Solar System Objects in visit", nFound)
 
         return dfSSO
-
-    def _decdms2decdeg(self, decdms):
-        """Convert Declination from degrees minutes seconds to decimal degrees.
-
-        Parameters
-        ----------
-        decdms : `list` of `str`
-            Declination string "degrees minutes seconds"
-
-        Returns
-        -------
-        decdeg : `numpy.ndarray`, (N,)
-            Declination in degrees.
-        """
-        decdeg = np.empty(len(decdms))
-        for idx, dec in enumerate(decdms):
-            deglist = [float(d) for d in dec.split()]
-            decdeg[idx] = deglist[0] + deglist[1]/60 + deglist[2]/3600
-        return decdeg
-
-    def _rahms2radeg(self, rahms):
-        """Convert Right Ascension from hours minutes seconds to decimal
-        degrees.
-
-        Parameters
-        ----------
-        rahms : `list` of `str`
-            Declination string "hours minutes seconds"
-        Returns
-        -------
-        radeg : `numpy.ndarray`, (N,)
-            Right Ascension in degrees
-        """
-        radeg = np.empty(len(rahms))
-        for idx, ra in enumerate(rahms):
-            ralist = [float(r) for r in ra.split()]
-            radeg[idx] = (ralist[0]/24 + ralist[1]/1440 + ralist[2]/86400)*360
-        return radeg
