@@ -63,9 +63,16 @@ class TestAssociationTask(unittest.TestCase):
 
         self.assertEqual(results.nUpdatedDiaObjects, len(self.diaObjects) - 1)
         self.assertEqual(results.nUnassociatedDiaObjects, 1)
+        self.assertEqual(len(results.matchedDiaSources),
+                         len(self.diaObjects) - 1)
+        self.assertEqual(len(results.unAssocDiaSources), 1)
         for test_obj_id, expected_obj_id in zip(
-                results.diaSources["diaObjectId"].to_numpy(),
-                [0, 1, 2, 3, 4]):
+                results.matchedDiaSources["diaObjectId"].to_numpy(),
+                [1, 2, 3, 4]):
+            self.assertEqual(test_obj_id, expected_obj_id)
+        for test_obj_id, expected_obj_id in zip(
+                results.unAssocDiaSources["diaObjectId"].to_numpy(),
+                [0]):
             self.assertEqual(test_obj_id, expected_obj_id)
 
     def test_run_no_existing_objects(self):
@@ -77,7 +84,8 @@ class TestAssociationTask(unittest.TestCase):
             pd.DataFrame(columns=["ra", "decl", "diaObjectId"]))
         self.assertEqual(results.nUpdatedDiaObjects, 0)
         self.assertEqual(results.nUnassociatedDiaObjects, 0)
-        self.assertTrue(np.all(results.diaSources["diaObjectId"] == 0))
+        self.assertEqual(len(results.matchedDiaSources), 0)
+        self.assertTrue(np.all(results.unAssocDiaSources["diaObjectId"] == 0))
 
     def test_associate_sources(self):
         """Test the performance of the associate_sources method in

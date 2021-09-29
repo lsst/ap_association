@@ -61,6 +61,13 @@ class DiaPipelineConnections(
         storageClass="DataFrame",
         dimensions=("instrument", "visit", "detector"),
     )
+    solarSystemObjectTable = connTypes.Input(
+        doc="Catalog of SolarSolarSystem objects expected to be observable in "
+            "this detectorVisit.",
+        name="visitSsObjects",
+        storageClass="DataFrame",
+        dimensions=("instrument", "visit"),
+    )
     diffIm = connTypes.Input(
         doc="Difference image on which the DiaSources were detected.",
         name="{fakesType}{coaddName}Diff_differenceExp",
@@ -101,6 +108,8 @@ class DiaPipelineConnections(
 
         if not config.doWriteAssociatedSources:
             self.outputs.remove("associatedDiaSources")
+        if not config.doSolarSystemAssociation:
+            self.inputs.remove("solarSystemObjectTable")
 
     def adjustQuantum(self, inputs, outputs, label, dataId):
         """Override to make adjustments to `lsst.daf.butler.DatasetRef` objects
@@ -198,6 +207,10 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         target=AssociationTask,
         doc="Task used to associate DiaSources with DiaObjects.",
     )
+    solarSystemAssociator = pexConfig.ConfigurableField(
+        target=SolarSystemAssociationTask,
+        doc="Task used to associate DiaSources with SolarSystemObjects.",
+    )
     diaCalculation = pexConfig.ConfigurableField(
         target=DiaObjectCalculationTask,
         doc="Task to compute summary statistics for DiaObjects.",
@@ -210,6 +223,11 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     alertPackager = pexConfig.ConfigurableField(
         target=PackageAlertsTask,
         doc="Subtask for packaging Ap data into alerts.",
+    )
+    doSolarSystemAssociation = pexConfig.Field(
+        dtype=bool,
+        default=False,
+        doc="",
     )
     doPackageAlerts = pexConfig.Field(
         dtype=bool,
@@ -273,6 +291,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         self.makeSubtask("diaForcedSource")
         if self.config.doPackageAlerts:
             self.makeSubtask("alertPackager")
+        if self.config.doSolarSystemAssociation:
+            self.makeSubtask("solarSystemAssociator")
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
@@ -280,6 +300,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                                       returnMaxBits=True)
         inputs["ccdExposureIdBits"] = expBits
         inputs["band"] = butlerQC.quantum.dataId["band"]
+        if not config.doSolarSystemAssociation:
+            inputs["solarSystemObjectTable"] = None
 
         outputs = self.run(**inputs)
 
@@ -288,6 +310,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
     @pipeBase.timeMethod
     def run(self,
             diaSourceTable,
+            solarSystemObjectTable,
             diffIm,
             exposure,
             warpedExposure,
@@ -334,21 +357,36 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Associate new DiaSources with existing DiaObjects.
         assocResults = self.associator.run(diaSourceTable,
                                            loaderResult.diaObjects)
+        if self.config.doSolarSystemAssociation:
+            ssoAssocResult = self.solarSystemAssociator.run(
+                assocResults.unAssocDiaSources)
+            createResults = self.createNewDiaObjects(
+                ssoAssocResult.unAssocDiaSources)
+            associatedDiaSources = pd.concat(
+                [assocResults.matchedDiaSources,
+                 ssoAssocResult.ssoAssocDiaSources,
+                 createResults.diaSources])
+        else:
+            createResults = self.createNewDiaObjects(
+                assocResults.unAssocDiaSources)
+            associatedDiaSources = pd.concat(
+                [assocResults.matchedDiaSources,
+                 createResults.diaSources])
 
         # Create new DiaObjects from unassociated diaSources.
-        createResults = self.createNewDiaObjects(assocResults.diaSources)
         self._add_association_meta_data(assocResults.nUpdatedDiaObjects,
                                         assocResults.nUnassociatedDiaObjects,
                                         len(createResults.newDiaObjects))
 
         # Index the DiaSource catalog for this visit after all associations
         # have been made.
-        updatedDiaObjectIds = createResults.diaSources["diaObjectId"][
-            createResults.diaSources["diaObjectId"] != 0].to_numpy()
-        diaSources = createResults.diaSources.set_index(["diaObjectId",
-                                                         "filterName",
-                                                         "diaSourceId"],
-                                                        drop=False)
+        updatedDiaObjectIds = associatedDiaSources["diaObjectId"][
+            associatedDiaSources["diaObjectId"] != 0].to_numpy()
+        associatedDiaSources.set_index(["diaObjectId",
+                                        "filterName",
+                                        "diaSourceId"],
+                                       drop=False,
+                                       inplace=True)
 
         # Append new DiaObjects and DiaSources to their previous history.
         diaObjects = loaderResult.diaObjects.append(
@@ -362,7 +400,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 "failure in Association while matching and creating new "
                 "DiaObjects and should be reported. Exiting.")
         mergedDiaSourceHistory = loaderResult.diaSources.append(
-            diaSources,
+            associatedDiaSources,
             sort=True)
         # Test for DiaSource duplication first. If duplicates are found,
         # this likely means this is duplicate data being processed and sent
@@ -403,11 +441,12 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             exposure,
             diffIm)
 
-        # Store DiaSources and updated DiaObjects in the Apdb.
+        # Store DiaSources, updated DiaObjects, and DiaForcedSources in the
+        # Apdb.
         self.apdb.store(
             exposure.getInfo().getVisitInfo().getDate(),
             diaCalResult.updatedDiaObjects,
-            diaSources,
+            associatedDiaSources,
             diaForcedSources)
 
         if self.config.doPackageAlerts:
@@ -430,7 +469,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                     ["diaObjectId", "diaForcedSourceId"],
                     drop=False,
                     inplace=True)
-            self.alertPackager.run(diaSources,
+            self.alertPackager.run(associatedDiaSources,
                                    diaCalResult.diaObjectCat,
                                    loaderResult.diaSources,
                                    diaForcedSources,
@@ -439,15 +478,15 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                    ccdExposureIdBits)
 
         return pipeBase.Struct(apdbMarker=self.config.apdb.value,
-                               associatedDiaSources=diaSources)
+                               associatedDiaSources=associatedDiaSources,)
 
-    def createNewDiaObjects(self, diaSources):
+    def createNewDiaObjects(self, unAssocDiaSources):
         """Loop through the set of DiaSources and create new DiaObjects
         for unassociated DiaSources.
 
         Parameters
         ----------
-        diaSources : `pandas.DataFrame`
+        unAssocDiaSources : `pandas.DataFrame`
             Set of DiaSources to create new DiaObjects from.
 
         Returns
@@ -461,18 +500,19 @@ class DiaPipelineTask(pipeBase.PipelineTask):
               unassociated DiaSources. (`pandas.DataFrame`)
         """
         newDiaObjectsList = []
-        for idx, diaSource in diaSources.iterrows():
+        for idx, diaSource in unAssocDiaSources.iterrows():
             if diaSource["diaObjectId"] == 0:
                 newDiaObjectsList.append(
                     self._initialize_dia_object(diaSource["diaSourceId"]))
-                diaSources.loc[idx, "diaObjectId"] = diaSource["diaSourceId"]
+                unAssocDiaSources.loc[idx, "diaObjectId"] = \
+                    diaSource["diaSourceId"]
         if len(newDiaObjectsList) > 0:
             newDiaObjects = pd.DataFrame(data=newDiaObjectsList)
         else:
             tmpObj = self._initialize_dia_object(0)
             newDiaObjects = pd.DataFrame(data=newDiaObjectsList,
                                          columns=tmpObj.keys())
-        return pipeBase.Struct(diaSources=diaSources,
+        return pipeBase.Struct(diaSources=unAssocDiaSources,
                                newDiaObjects=pd.DataFrame(data=newDiaObjects))
 
     def _initialize_dia_object(self, objId):
