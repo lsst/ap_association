@@ -27,7 +27,7 @@ import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
 import lsst.pipe.base as pipeBase
 import lsst.utils.tests
-from unittest.mock import patch, Mock, DEFAULT
+from unittest.mock import patch, Mock, MagicMock, DEFAULT
 
 from lsst.ap.association import DiaPipelineTask
 
@@ -35,10 +35,13 @@ from lsst.ap.association import DiaPipelineTask
 class TestDiaPipelineTask(unittest.TestCase):
 
     @classmethod
-    def _makeDefaultConfig(cls, doPackageAlerts=False):
+    def _makeDefaultConfig(cls,
+                           doPackageAlerts=False,
+                           doSolarSystemAssociation=False):
         config = DiaPipelineTask.ConfigClass()
         config.apdb.db_url = "sqlite://"
         config.doPackageAlerts = doPackageAlerts
+        config.doSolarSystemAssociation = doSolarSystemAssociation
         return config
 
     def setUp(self):
@@ -51,20 +54,32 @@ class TestDiaPipelineTask(unittest.TestCase):
     def tearDown(self):
         pass
 
+    def testRun(self):
+        """Test running while creating and packaging alerts.
+        """
+        self._testRun(True, True)
+
+    def testRunWithSolarSystemAssociation(self):
+        """Test running while creating and packaging alerts.
+        """
+        self._testRun(False, True)
+
     def testRunWithAlerts(self):
         """Test running while creating and packaging alerts.
         """
-        self._testRun(True)
+        self._testRun(True, False)
 
-    def testRunWithoutAlerts(self):
+    def testRunWithoutAlertsOrSolarSystem(self):
         """Test running without creating and packaging alerts.
         """
-        self._testRun(False)
+        self._testRun(False, False)
 
-    def _testRun(self, doPackageAlerts=False):
+    def _testRun(self, doPackageAlerts=False, doSolarSystemAssociation=False):
         """Test the normal workflow of each ap_pipe step.
         """
-        config = self._makeDefaultConfig(doPackageAlerts=doPackageAlerts)
+        config = self._makeDefaultConfig(
+            doPackageAlerts=doPackageAlerts,
+            doSolarSystemAssociation=doSolarSystemAssociation)
         task = DiaPipelineTask(config=config)
         # Set DataFrame index testing to always return False. Mocks return
         # true for this check otherwise.
@@ -72,7 +87,8 @@ class TestDiaPipelineTask(unittest.TestCase):
         diffIm = Mock(spec=afwImage.ExposureF)
         exposure = Mock(spec=afwImage.ExposureF)
         template = Mock(spec=afwImage.ExposureF)
-        diaSrc = Mock(sepc=pd.DataFrame)
+        diaSrc = MagicMock(spec=pd.DataFrame())
+        ssObjects = MagicMock(spec=pd.DataFrame())
         ccdExposureIdBits = 32
 
         # Each of these subtasks should be called once during diaPipe
@@ -89,21 +105,30 @@ class TestDiaPipelineTask(unittest.TestCase):
         else:
             self.assertFalse(hasattr(task, "alertPackager"))
 
+        if doSolarSystemAssociation:
+            subtasksToMock.append("solarSystemAssociator")
+        else:
+            self.assertFalse(hasattr(task, "solarSystemAssociator"))
+
         # apdb isn't a subtask, but still needs to be mocked out for correct
         # execution in the test environment.
+        def concatMock(data):
+            return MagicMock(spec=pd.DataFrame)
         with patch.multiple(
             task, **{task: DEFAULT for task in subtasksToMock + ["apdb"]}
         ):
-            result = task.run(diaSrc,
-                              diffIm,
-                              exposure,
-                              template,
-                              ccdExposureIdBits,
-                              "g")
-            for subtaskName in subtasksToMock:
-                getattr(task, subtaskName).run.assert_called_once()
-            pipeBase.testUtils.assertValidOutput(task, result)
-            self.assertEqual(result.apdbMarker.db_url, "sqlite://")
+            with patch('lsst.ap.association.diaPipe.pd.concat',
+                       new=concatMock):
+                result = task.run(diaSrc,
+                                  diffIm,
+                                  exposure,
+                                  template,
+                                  ccdExposureIdBits,
+                                  "g")
+                for subtaskName in subtasksToMock:
+                    getattr(task, subtaskName).run.assert_called_once()
+                pipeBase.testUtils.assertValidOutput(task, result)
+                self.assertEqual(result.apdbMarker.db_url, "sqlite://")
 
     def test_createDiaObjects(self):
         """Test that creating new DiaObjects works as expected.

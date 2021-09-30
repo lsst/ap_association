@@ -102,8 +102,8 @@ class AssociationTask(pipeBase.Task):
         mask = matchResult.diaSources["diaObjectId"] != 0
 
         return pipeBase.Struct(
-            matchedDiaSources=matchResult.diaSources[mask],
-            unAssocDiaSources=matchResult.diaSources[~mask],
+            matchedDiaSources=matchResult.diaSources[mask].reset_index(drop=True),
+            unAssocDiaSources=matchResult.diaSources[~mask].reset_index(drop=True),
             nUpdatedDiaObjects=matchResult.nUpdatedDiaObjects,
             nUnassociatedDiaObjects=matchResult.nUnassociatedDiaObjects)
 

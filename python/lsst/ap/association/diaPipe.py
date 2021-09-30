@@ -207,6 +207,11 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         target=AssociationTask,
         doc="Task used to associate DiaSources with DiaObjects.",
     )
+    doSolarSystemAssociation = pexConfig.Field(
+        dtype=bool,
+        default=False,
+        doc="",
+    )
     solarSystemAssociator = pexConfig.ConfigurableField(
         target=SolarSystemAssociationTask,
         doc="Task used to associate DiaSources with SolarSystemObjects.",
@@ -223,11 +228,6 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     alertPackager = pexConfig.ConfigurableField(
         target=PackageAlertsTask,
         doc="Subtask for packaging Ap data into alerts.",
-    )
-    doSolarSystemAssociation = pexConfig.Field(
-        dtype=bool,
-        default=False,
-        doc="",
     )
     doPackageAlerts = pexConfig.Field(
         dtype=bool,
@@ -300,7 +300,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                                       returnMaxBits=True)
         inputs["ccdExposureIdBits"] = expBits
         inputs["band"] = butlerQC.quantum.dataId["band"]
-        if not config.doSolarSystemAssociation:
+        if not self.config.doSolarSystemAssociation:
             inputs["solarSystemObjectTable"] = None
 
         outputs = self.run(**inputs)
@@ -359,7 +359,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                            loaderResult.diaObjects)
         if self.config.doSolarSystemAssociation:
             ssoAssocResult = self.solarSystemAssociator.run(
-                assocResults.unAssocDiaSources)
+                assocResults.unAssocDiaSources, solarSystemObjectTable)
             createResults = self.createNewDiaObjects(
                 ssoAssocResult.unAssocDiaSources)
             associatedDiaSources = pd.concat(
@@ -376,8 +376,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Create new DiaObjects from unassociated diaSources.
         self._add_association_meta_data(assocResults.nUpdatedDiaObjects,
                                         assocResults.nUnassociatedDiaObjects,
-                                        len(createResults.newDiaObjects))
-
+                                        createResults.nNewDiaObjects)
         # Index the DiaSource catalog for this visit after all associations
         # have been made.
         updatedDiaObjectIds = associatedDiaSources["diaObjectId"][
@@ -498,14 +497,13 @@ class DiaPipelineTask(pipeBase.PipelineTask):
               (`pandas.DataFrame`)
             - ``newDiaObjects`` : Newly created DiaObjects from the
               unassociated DiaSources. (`pandas.DataFrame`)
+            - ``nNewDiaObjects`` : Number of newly created diaObjects.(`int`)
         """
         newDiaObjectsList = []
         for idx, diaSource in unAssocDiaSources.iterrows():
-            if diaSource["diaObjectId"] == 0:
-                newDiaObjectsList.append(
-                    self._initialize_dia_object(diaSource["diaSourceId"]))
-                unAssocDiaSources.loc[idx, "diaObjectId"] = \
-                    diaSource["diaSourceId"]
+            newDiaObjectsList.append(
+                self._initialize_dia_object(diaSource["diaSourceId"]))
+            unAssocDiaSources.loc[idx, "diaObjectId"] = diaSource["diaSourceId"]
         if len(newDiaObjectsList) > 0:
             newDiaObjects = pd.DataFrame(data=newDiaObjectsList)
         else:
@@ -513,7 +511,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             newDiaObjects = pd.DataFrame(data=newDiaObjectsList,
                                          columns=tmpObj.keys())
         return pipeBase.Struct(diaSources=unAssocDiaSources,
-                               newDiaObjects=pd.DataFrame(data=newDiaObjects))
+                               newDiaObjects=pd.DataFrame(data=newDiaObjects),
+                               nNewDiaObjects=len(newDiaObjects))
 
     def _initialize_dia_object(self, objId):
         """Create a new DiaObject with values required to be initialized by the

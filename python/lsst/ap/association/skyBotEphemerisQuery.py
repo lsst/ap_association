@@ -128,7 +128,8 @@ class SkyBotEphemerisQueryTask(PipelineTask):
             datasetType=self.config.connections.visitInfos)
 
         # Midpoint time of the exposure in MJD
-        expMidPointEPOCH = visitInfo.date.get(system=DateTime.EPOCH)
+        expMidPointEPOCH = visitInfo.date.get(system=DateTime.JD)
+        self.log.info(f"Exposure midpoint: {expMidPointEPOCH}")
 
         # Boresight of the exposure on sky.
         expCenter = visitInfo.boresightRaDec

@@ -96,8 +96,8 @@ class SolarSystemAssociationTask(pipeBase.Task):
 
         assocMask = diaSourceCatalog["ssObjectId"] != 0
         return pipeBase.Struct(
-            ssoAssocDiaSources=diaSourceCatalog[assocMask],
-            unAssocDiaSources=diaSourceCatalog[~assocMask])
+            ssoAssocDiaSources=diaSourceCatalog[assocMask].reset_index(drop=True),
+            unAssocDiaSources=diaSourceCatalog[~assocMask].reset_index(drop=True))
 
     def _radec_to_xyz(self, ras, decs):
         """Convert input ra/dec coordinates to spherical unit-vectors.
