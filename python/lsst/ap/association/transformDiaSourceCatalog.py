@@ -32,8 +32,9 @@ from lsst.daf.base import DateTime
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
-from lsst.pipe.tasks.postprocess import TransformCatalogBaseTask
+from lsst.pipe.tasks.postprocess import TransformCatalogBaseTask, TransformCatalogBaseConfig
 from lsst.pipe.tasks.parquetTable import ParquetTable
+from lsst.pipe.tasks.functors import Column
 
 
 class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
@@ -66,7 +67,7 @@ class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
     )
 
 
-class TransformDiaSourceCatalogConfig(pipeBase.PipelineTaskConfig,
+class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
                                       pipelineConnections=TransformDiaSourceCatalogConnections):
     """
     """
@@ -77,13 +78,12 @@ class TransformDiaSourceCatalogConfig(pipeBase.PipelineTaskConfig,
                              "data",
                              "association-flag-map.yaml"),
     )
-    functorFile = pexConfig.Field(
+    flagRenameMap = pexConfig.Field(
         dtype=str,
-        doc='Path to YAML file specifying Science DataModel functors to use '
-            'when copying columns and computing calibrated values.',
+        doc="Yaml file specifying specifying rules to rename flag names",
         default=os.path.join("${AP_ASSOCIATION_DIR}",
                              "data",
-                             "DiaSource.yaml")
+                             "flag-rename-rules.yaml"),
     )
     doRemoveSkySources = pexConfig.Field(
         dtype=bool,
@@ -91,6 +91,18 @@ class TransformDiaSourceCatalogConfig(pipeBase.PipelineTaskConfig,
         doc="Input DiaSource catalog contains SkySources that should be "
             "removed before storing the output DiaSource catalog."
     )
+    doPackFlags = pexConfig.Field(
+        dtype=bool,
+        default=True,
+        doc="Do pack the flags into one integer column named 'flags'."
+            "If False, instead produce one boolean column per flag."
+    )
+
+    def setDefaults(self):
+        super().setDefaults()
+        self.functorFile = os.path.join("${AP_ASSOCIATION_DIR}",
+                                        "data",
+                                        "DiaSource.yaml")
 
 
 class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
@@ -114,6 +126,11 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         self.funcs = self.getFunctors()
         self.inputSchema = initInputs['diaSourceSchema'].schema
         self._create_bit_pack_mappings()
+
+        if not self.config.doPackFlags:
+            # get the flag rename rules
+            with open(os.path.expandvars(self.config.flagRenameMap)) as yaml_stream:
+                self.rename_rules = list(yaml.safe_load_all(yaml_stream))
 
     def _create_bit_pack_mappings(self):
         """Setup all flag bit packings.
@@ -190,7 +207,15 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         diaSourceDf["diaObjectId"] = 0
         diaSourceDf["ssObjectId"] = 0
         diaSourceDf["pixelId"] = 0
-        self.bitPackFlags(diaSourceDf)
+        if self.config.doPackFlags:
+            # either bitpack the flags
+            self.bitPackFlags(diaSourceDf)
+        else:
+            # or add the individual flag functors
+            self.addUnpackedFlagFunctors()
+            # and remove the packed flag functor
+            if 'flags' in self.funcs.funcDict:
+                del self.funcs.funcDict['flags']
 
         df = self.transform(band,
                             ParquetTable(dataFrame=diaSourceDf),
@@ -200,6 +225,16 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         return pipeBase.Struct(
             diaSourceTable=df,
         )
+
+    def addUnpackedFlagFunctors(self):
+        """Add Column functor for each of the flags
+
+        to the internal functor dictionary
+        """
+        for flag in self.bit_pack_columns[0]['bitList']:
+            flagName = flag['name']
+            targetName = self.funcs.renameCol(flagName, self.rename_rules[0]['flag_rename_rules'])
+            self.funcs.update({targetName: Column(flagName)})
 
     def computeBBoxSizes(self, inputCatalog):
         """Compute the size of a square bbox that fully contains the detection

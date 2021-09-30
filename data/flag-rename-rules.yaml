@@ -1,0 +1,7 @@
+flag_rename_rules:
+    - ['base_PixelFlags_flag', 'pixelFlags']
+    - ['ip_diffim_forced_PsfFlux', 'forced_PsfFlux']
+    - ['slot_ApFlux', 'apFlux']
+    - ['slot_Centroid', 'centroid']
+    - ['slot_PsfFlux', 'psfFlux']
+    - ['slot_Shape', 'shape']
