@@ -91,9 +91,23 @@ funcs:
         functor: Column
         args: slot_PsfFlux_npixels
     # trailFlux not implemented
-    # trailRa not implemented
-    # trailDec not implemented
-    # trailAngle not implemented
+    trailRa:
+        functor: Column
+        args: ext_trailedSources_Naive_ra
+    trailDecl:
+        functor: Column
+        args: ext_trailedSources_Naive_dec
+    trailLength:
+        functor: ConvertPixelToArcseconds
+        args:
+            - ext_trailedSources_Naive_length
+            - base_LocalWcs_CDMatrix_1_1
+            - base_LocalWcs_CDMatrix_1_2
+            - base_LocalWcs_CDMatrix_2_1
+            - base_LocalWcs_CDMatrix_2_2
+    trailAngle:
+        functor: CoordColumn
+        args: ext_trailedSources_Naive_angle
     # trailCov[15] not implemented
     # trailLnL not implemented
     # trailChi2 not implemented
