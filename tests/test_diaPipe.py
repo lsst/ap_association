@@ -38,7 +38,6 @@ class TestDiaPipelineTask(unittest.TestCase):
     def _makeDefaultConfig(cls, doPackageAlerts=False):
         config = DiaPipelineTask.ConfigClass()
         config.apdb.db_url = "sqlite://"
-        config.apdb.isolation_level = "READ_UNCOMMITTED"
         config.doPackageAlerts = doPackageAlerts
         return config
 
@@ -105,8 +104,6 @@ class TestDiaPipelineTask(unittest.TestCase):
                 getattr(task, subtaskName).run.assert_called_once()
             pipeBase.testUtils.assertValidOutput(task, result)
             self.assertEqual(result.apdbMarker.db_url, "sqlite://")
-            self.assertEqual(result.apdbMarker.isolation_level,
-                             "READ_UNCOMMITTED")
 
     def test_createDiaObjects(self):
         """Test that creating new DiaObjects works as expected.

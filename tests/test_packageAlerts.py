@@ -30,16 +30,14 @@ import unittest
 from astropy import wcs
 from astropy.nddata import CCDData
 
-from lsst.ap.association import (PackageAlertsConfig,
-                                 PackageAlertsTask,
-                                 make_dia_source_schema,
-                                 make_dia_object_schema)
+from lsst.ap.association import PackageAlertsConfig, PackageAlertsTask
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.image as afwImage
 import lsst.daf.base as dafBase
-from lsst.dax.apdb import Apdb, ApdbConfig
+from lsst.dax.apdb import ApdbSql, ApdbSqlConfig
 import lsst.geom as geom
 import lsst.meas.base.tests
+from lsst.sphgeom import Box
 from lsst.utils import getPackageDir
 import lsst.utils.tests
 
@@ -90,12 +88,10 @@ def makeDiaObjects(nObjects, exposure):
     data = []
     for idx, (x, y) in enumerate(zip(rand_x, rand_y)):
         coord = wcs.pixelToSky(x, y)
-        htmIdx = 1
         newObject = {"ra": coord.getRa().asDegrees(),
                      "decl": coord.getDec().asDegrees(),
                      "radecTai": midPointTaiMJD,
                      "diaObjectId": idx,
-                     "pixelId": htmIdx,
                      "pmParallaxNdata": 0,
                      "nearbyObj1": 0,
                      "nearbyObj2": 0,
@@ -120,8 +116,6 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
         Integer Ids of diaobjects to "associate" with the DiaSources.
     exposure : `lsst.afw.image.Exposure`
         Exposure to create sources over.
-    pixelator : `lsst.sphgeom.HtmPixelization`
-        Object to compute spatial indicies from.
 
     Returns
     -------
@@ -141,7 +135,6 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
     data = []
     for idx, (x, y) in enumerate(zip(rand_x, rand_y)):
         coord = wcs.pixelToSky(x, y)
-        htmIdx = 1
         objId = diaObjectIds[idx % len(diaObjectIds)]
         # Put together the minimum values for the alert.
         data.append({"ra": coord.getRa().asDegrees(),
@@ -154,7 +147,6 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
                      "parentDiaSourceId": 0,
                      "prv_procOrder": 0,
                      "diaSourceId": idx,
-                     "pixelId": htmIdx,
                      "midPointTai": midPointTaiMJD + 1.0 * idx,
                      "filterName": exposure.getFilterLabel().bandLabel,
                      "psNdata": 0,
@@ -213,7 +205,7 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
         Set of test DiaSources to round trip.
     forcedSources : `pandas.DataFrame`
         Set of test DiaForcedSources to round trip.
-    dateTime : `datetime.datetime`
+    dateTime : `lsst.daf.base.DateTime`
         Time for the Apdb.
 
     Returns
@@ -225,46 +217,29 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
     """
     tmpFile = tempfile.NamedTemporaryFile()
 
-    apdbConfig = ApdbConfig()
+    apdbConfig = ApdbSqlConfig()
     apdbConfig.db_url = "sqlite:///" + tmpFile.name
-    apdbConfig.isolation_level = "READ_UNCOMMITTED"
     apdbConfig.dia_object_index = "baseline"
     apdbConfig.dia_object_columns = []
     apdbConfig.schema_file = _data_file_name(
         "apdb-schema.yaml", "dax_apdb")
-    apdbConfig.column_map = _data_file_name(
-        "apdb-ap-pipe-afw-map.yaml", "ap_association")
     apdbConfig.extra_schema_file = _data_file_name(
         "apdb-ap-pipe-schema-extra.yaml", "ap_association")
 
-    apdb = Apdb(config=apdbConfig,
-                afw_schemas=dict(DiaObject=make_dia_object_schema(),
-                                 DiaSource=make_dia_source_schema()))
+    apdb = ApdbSql(config=apdbConfig)
     apdb.makeSchema()
 
-    minId = objects["pixelId"].min()
-    maxId = objects["pixelId"].max()
-    diaObjects = apdb.getDiaObjects([[minId, maxId + 1]], return_pandas=True).append(objects)
-    diaSources = apdb.getDiaSources(np.unique(objects["diaObjectId"]),
-                                    dateTime,
-                                    return_pandas=True).append(sources)
-    diaForcedSources = apdb.getDiaForcedSources(
-        np.unique(objects["diaObjectId"]),
-        dateTime,
-        return_pandas=True).append(forcedSources)
+    wholeSky = Box.full()
+    diaObjects = apdb.getDiaObjects(wholeSky).append(objects)
+    diaSources = apdb.getDiaSources(wholeSky, [], dateTime).append(sources)
+    diaForcedSources = apdb.getDiaForcedSources(wholeSky, [], dateTime).append(forcedSources)
 
-    apdb.storeDiaSources(diaSources)
-    apdb.storeDiaForcedSources(diaForcedSources)
-    apdb.storeDiaObjects(diaObjects, dateTime)
+    apdb.store(dateTime, diaObjects, diaSources, diaForcedSources)
 
-    diaObjects = apdb.getDiaObjects([[minId, maxId + 1]], return_pandas=True)
-    diaSources = apdb.getDiaSources(np.unique(diaObjects["diaObjectId"]),
-                                    dateTime,
-                                    return_pandas=True)
+    diaObjects = apdb.getDiaObjects(wholeSky)
+    diaSources = apdb.getDiaSources(wholeSky, np.unique(diaObjects["diaObjectId"]), dateTime)
     diaForcedSources = apdb.getDiaForcedSources(
-        np.unique(diaObjects["diaObjectId"]),
-        dateTime,
-        return_pandas=True)
+        wholeSky, np.unique(diaObjects["diaObjectId"]), dateTime)
 
     diaObjects.set_index("diaObjectId", drop=False, inplace=True)
     diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
@@ -313,7 +288,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             diaObjects,
             diaSourceHistory,
             diaForcedSources,
-            self.exposure.getInfo().getVisitInfo().getDate().toPython())
+            self.exposure.getInfo().getVisitInfo().getDate())
         self.diaObjects.replace(to_replace=[None], value=np.nan, inplace=True)
         diaSourceHistory.replace(to_replace=[None], value=np.nan, inplace=True)
         self.diaForcedSources.replace(to_replace=[None], value=np.nan, inplace=True)

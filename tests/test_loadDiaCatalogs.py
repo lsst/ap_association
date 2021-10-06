@@ -29,14 +29,10 @@ import yaml
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
-from lsst.ap.association import (LoadDiaCatalogsTask,
-                                 LoadDiaCatalogsConfig,
-                                 make_dia_source_schema,
-                                 make_dia_object_schema)
+from lsst.ap.association import LoadDiaCatalogsTask, LoadDiaCatalogsConfig
 import lsst.daf.base as dafBase
-from lsst.dax.apdb import Apdb, ApdbConfig
+from lsst.dax.apdb import ApdbSql, ApdbSqlConfig
 import lsst.geom as geom
-import lsst.sphgeom as sphgeom
 from lsst.utils import getPackageDir
 import lsst.utils.tests
 
@@ -122,7 +118,7 @@ def makeExposure(flipX=False, flipY=False):
     return exposure
 
 
-def makeDiaObjects(nObjects, exposure, pixelator):
+def makeDiaObjects(nObjects, exposure):
     """Make a test set of DiaObjects.
 
     Parameters
@@ -131,8 +127,6 @@ def makeDiaObjects(nObjects, exposure, pixelator):
         Number of objects to create.
     exposure : `lsst.afw.image.Exposure`
         Exposure to create objects over.
-    pixelator : `lsst.sphgeom.HtmPixelization`
-        Object to compute spatial indicies from.
 
     Returns
     -------
@@ -151,12 +145,10 @@ def makeDiaObjects(nObjects, exposure, pixelator):
     data = []
     for idx, (x, y) in enumerate(zip(rand_x, rand_y)):
         coord = wcs.pixelToSky(x, y)
-        htmIdx = pixelator.index(coord.getVector())
         newObject = {"ra": coord.getRa().asDegrees(),
-                     "decl": coord.getRa().asDegrees(),
+                     "decl": coord.getDec().asDegrees(),
                      "radecTai": midPointTaiMJD,
                      "diaObjectId": idx,
-                     "pixelId": htmIdx,
                      "pmParallaxNdata": 0,
                      "nearbyObj1": 0,
                      "nearbyObj2": 0,
@@ -168,7 +160,7 @@ def makeDiaObjects(nObjects, exposure, pixelator):
     return pd.DataFrame(data=data)
 
 
-def makeDiaSources(nSources, diaObjectIds, exposure, pixelator):
+def makeDiaSources(nSources, diaObjectIds, exposure):
     """Make a test set of DiaSources.
 
     Parameters
@@ -179,8 +171,6 @@ def makeDiaSources(nSources, diaObjectIds, exposure, pixelator):
         Integer Ids of diaobjects to "associate" with the DiaSources.
     exposure : `lsst.afw.image.Exposure`
         Exposure to create sources over.
-    pixelator : `lsst.sphgeom.HtmPixelization`
-        Object to compute spatial indicies from.
 
     Returns
     -------
@@ -200,12 +190,10 @@ def makeDiaSources(nSources, diaObjectIds, exposure, pixelator):
     data = []
     for idx, (x, y, objId) in enumerate(zip(rand_x, rand_y, rand_ids)):
         coord = wcs.pixelToSky(x, y)
-        htmIdx = pixelator.index(coord.getVector())
         data.append({"ra": coord.getRa().asDegrees(),
-                     "decl": coord.getRa().asDegrees(),
+                     "decl": coord.getDec().asDegrees(),
                      "diaObjectId": objId,
                      "diaSourceId": idx,
-                     "pixelId": htmIdx,
                      "midPointTai": midPointTaiMJD})
 
     return pd.DataFrame(data=data)
@@ -252,49 +240,35 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         self.db_file_fd, self.db_file = tempfile.mkstemp(
             dir=os.path.dirname(__file__))
 
-        self.apdbConfig = ApdbConfig()
+        self.apdbConfig = ApdbSqlConfig()
         self.apdbConfig.db_url = "sqlite:///" + self.db_file
-        self.apdbConfig.isolation_level = "READ_UNCOMMITTED"
         self.apdbConfig.dia_object_index = "baseline"
         self.apdbConfig.dia_object_columns = []
         self.apdbConfig.schema_file = _data_file_name(
             "apdb-schema.yaml", "dax_apdb")
-        self.apdbConfig.column_map = _data_file_name(
-            "apdb-ap-pipe-afw-map.yaml", "ap_association")
         self.apdbConfig.extra_schema_file = _data_file_name(
             "apdb-ap-pipe-schema-extra.yaml", "ap_association")
 
-        self.apdb = Apdb(config=self.apdbConfig,
-                         afw_schemas=dict(DiaObject=make_dia_object_schema(),
-                                          DiaSource=make_dia_source_schema()))
+        self.apdb = ApdbSql(config=self.apdbConfig)
         self.apdb.makeSchema()
 
-        # Expected HTM pixel ranges for max range=4 and level = 20. This
-        # set of pixels should be same for the WCS created by default in
-        # makeExposure and for one with a flipped y axis.
-        self.ranges = np.sort(np.array([15154776375296, 15154779521024,
-                                        15154788958208, 15154792103936]))
-
-        self.pixelator = sphgeom.HtmPixelization(20)
         self.exposure = makeExposure(False, False)
 
-        self.diaObjects = makeDiaObjects(20, self.exposure, self.pixelator)
+        self.diaObjects = makeDiaObjects(20, self.exposure)
         self.diaSources = makeDiaSources(
             100,
             self.diaObjects["diaObjectId"].to_numpy(),
-            self.exposure,
-            self.pixelator)
+            self.exposure)
         self.diaForcedSources = makeDiaForcedSources(
             200,
             self.diaObjects["diaObjectId"].to_numpy(),
             self.exposure)
 
-        self.apdb.storeDiaSources(self.diaSources)
-        self.apdb.storeDiaForcedSources(self.diaForcedSources)
-        self.dateTime = \
-            self.exposure.getInfo().getVisitInfo().getDate().toPython()
-        self.apdb.storeDiaObjects(self.diaObjects,
-                                  self.dateTime)
+        self.dateTime = self.exposure.getInfo().getVisitInfo().getDate()
+        self.apdb.store(self.dateTime,
+                        self.diaObjects,
+                        self.diaSources,
+                        self.diaForcedSources)
 
         # These columns are not in the DPDD, yet do appear in DiaSource.yaml.
         # We don't need to check them against the default APDB schema.
@@ -319,8 +293,8 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         """Test that the correct number of diaObjects are loaded.
         """
         diaLoader = LoadDiaCatalogsTask()
-        normPixels = diaLoader._getPixelRanges(self.exposure)
-        diaObjects = diaLoader.loadDiaObjects(normPixels,
+        region = diaLoader._getRegion(self.exposure)
+        diaObjects = diaLoader.loadDiaObjects(region,
                                               self.apdb)
         self.assertEqual(len(diaObjects), len(self.diaObjects))
 
@@ -328,72 +302,29 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         """Test that the correct number of diaForcedSources are loaded.
         """
         diaLoader = LoadDiaCatalogsTask()
+        region = diaLoader._getRegion(self.exposure)
         diaForcedSources = diaLoader.loadDiaForcedSources(
             self.diaObjects,
+            region,
             self.dateTime,
             self.apdb)
         self.assertEqual(len(diaForcedSources), len(self.diaForcedSources))
 
-    def testLoadDiaSourcesByPixelId(self):
+    def testLoadDiaSources(self):
         """Test that the correct number of diaSources are loaded.
 
         Also check that they can be properly loaded both by location and
         ``diaObjectId``.
-        """
-        self._testLoadDiaSources(True)
-
-    def testLoadDiaSourcesByDiaObjectId(self):
-        """Test that the correct number of diaSources are loaded.
-
-        Also check that they can be properly loaded both by location and
-        ``diaObjectId``.
-        """
-        self._testLoadDiaSources(False)
-
-    def _testLoadDiaSources(self, loadByPixelId):
-        """Test that DiaSources are loaded correctly.
-
-        Parameters
-        ----------
-        loadByPixelId : `bool`
-            Load DiaSources by ``pixelId`` if ``True`` and by ``diaObjectId``
-            if ``False``.
         """
         diaConfig = LoadDiaCatalogsConfig()
-        diaConfig.loadDiaSourcesByPixelId = loadByPixelId
         diaLoader = LoadDiaCatalogsTask(config=diaConfig)
 
-        normPixels = diaLoader._getPixelRanges(self.exposure)
+        region = diaLoader._getRegion(self.exposure)
         diaSources = diaLoader.loadDiaSources(self.diaObjects,
-                                              normPixels,
+                                              region,
                                               self.dateTime,
                                               self.apdb)
         self.assertEqual(len(diaSources), len(self.diaSources))
-
-    def testGetPixelRanges(self):
-        """Test the same pixels are returned for flips/ordering changes in
-        the WCS.
-        """
-        diaConfig = LoadDiaCatalogsConfig()
-        diaConfig.pixelMargin = 300  # overriding to value tests were conditioned on
-        diaConfig.htmMaxRanges = 4
-        diaLoader = LoadDiaCatalogsTask(config=diaConfig)
-
-        # Make two exposures, one with a flipped y axis to get left vs. right
-        # handed.
-        exposure = makeExposure(False, False)
-        exposureFlip = makeExposure(False, True)
-
-        normPixels = diaLoader._getPixelRanges(exposure)
-        flipPixels = diaLoader._getPixelRanges(exposureFlip)
-
-        for normPix, flipPix, testPix in zip(
-                np.sort(np.array(normPixels).flatten()),
-                np.sort(np.array(flipPixels).flatten()),
-                self.ranges):
-            self.assertEqual(normPix, flipPix)
-            self.assertEqual(normPix, testPix)
-            self.assertEqual(flipPix, testPix)
 
     def test_apdbSchema(self):
         """Test that the default DiaSource schema from dax_apdb agrees with the

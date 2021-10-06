@@ -41,8 +41,6 @@ from lsst.ap.association import (
     AssociationTask,
     DiaForcedSourceTask,
     LoadDiaCatalogsTask,
-    make_dia_object_schema,
-    make_dia_source_schema,
     PackageAlertsTask)
 from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
 
@@ -181,9 +179,7 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         dtype=str,
         default="deep",
     )
-    apdb = pexConfig.ConfigurableField(
-        target=daxApdb.Apdb,
-        ConfigClass=daxApdb.ApdbConfig,
+    apdb = daxApdb.ApdbSql.makeField(
         doc="Database connection for storing associated DiaSources and "
             "DiaObjects. Must already be initialized.",
     )
@@ -254,11 +250,7 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
 
     def validate(self):
         pexConfig.Config.validate(self)
-        if self.diaCatalogLoader.htmLevel != \
-           self.diaCalculation.plugins["ap_HTMIndex"].htmLevel:
-            raise ValueError("HTM index level in LoadDiaCatalogsTask must be "
-                             "equal to HTMIndexDiaCalculationPlugin index "
-                             "level.")
+        # TODO: this plugin is not useful, pixelization is handled by Apdb
         if "ap_HTMIndex" not in self.diaCalculation.plugins:
             raise ValueError("DiaPipe requires the ap_HTMIndex plugin "
                              "be enabled for proper insertion into the Apdb.")
@@ -274,9 +266,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
     def __init__(self, initInputs=None, **kwargs):
         super().__init__(**kwargs)
-        self.apdb = self.config.apdb.apply(
-            afw_schemas=dict(DiaObject=make_dia_object_schema(),
-                             DiaSource=make_dia_source_schema()))
+        self.apdb = self.config.apdb.apply()
         self.makeSubtask("diaCatalogLoader")
         self.makeSubtask("associator")
         self.makeSubtask("diaCalculation")
@@ -414,11 +404,11 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diffIm)
 
         # Store DiaSources and updated DiaObjects in the Apdb.
-        self.apdb.storeDiaSources(diaSources)
-        self.apdb.storeDiaObjects(
+        self.apdb.store(
+            exposure.getInfo().getVisitInfo().getDate(),
             diaCalResult.updatedDiaObjects,
-            exposure.visitInfo.date.toPython())
-        self.apdb.storeDiaForcedSources(diaForcedSources)
+            diaSources,
+            diaForcedSources)
 
         if self.config.doPackageAlerts:
             if len(loaderResult.diaForcedSources) > 1:

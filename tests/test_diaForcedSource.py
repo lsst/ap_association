@@ -23,15 +23,14 @@ import numpy as np
 import unittest
 import unittest.mock
 
+import pandas
+
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
-import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
 import lsst.meas.algorithms as measAlg
-from lsst.ap.association import \
-    DiaForcedSourceTask, \
-    make_dia_object_schema
+from lsst.ap.association import DiaForcedSourceTask
 import lsst.utils.tests
 
 
@@ -49,16 +48,19 @@ def create_test_dia_objects(n_points, wcs, startPos=100):
 
     Returns
     -------
-    test_points : `lsst.afw.table.SourceCatalog`
+    test_points : `pandas.DataFrame`
         Catalog of points to test.
     """
-    objects = afwTable.SourceCatalog(make_dia_object_schema())
+    ids = np.arange(n_points, dtype=np.int64)
+    points = [wcs.pixelToSky(startPos + src_idx, startPos + src_idx) for src_idx in ids]
+    ra = np.array([point.getRa().asDegrees() for point in points], dtype=float)
+    decl = np.array([point.getDec().asDegrees() for point in points], dtype=float)
 
-    for src_idx in range(n_points):
-        src = objects.addNew()
-        src['id'] = src_idx
-        src.setCoord(wcs.pixelToSky(startPos + src_idx,
-                                    startPos + src_idx))
+    objects = pandas.DataFrame({
+        "diaObjectId": ids,
+        "ra": ra,
+        "decl": decl
+    })
 
     return objects
 
@@ -151,21 +153,17 @@ class TestDiaForcedSource(unittest.TestCase):
         self.testDiaObjects = create_test_dia_objects(5, self.wcs)
         # Add additional diaObjects that are outside of the above difference
         # and calexp visit images.
-        # xy outside
-        src = self.testDiaObjects.addNew()
-        src['id'] = 10000000
-        src.setCoord(self.wcs.pixelToSky(-100000,
-                                         -100000))
-        # y outside
-        src = self.testDiaObjects.addNew()
-        src['id'] = 10000001
-        src.setCoord(self.wcs.pixelToSky(100,
-                                         -100000))
-        # x outside
-        src = self.testDiaObjects.addNew()
-        src['id'] = 10000002
-        src.setCoord(self.wcs.pixelToSky(-100000,
-                                         100))
+        objects = [
+            (10000000, self.wcs.pixelToSky(-100000, -100000)),  # xy outside
+            (10000001, self.wcs.pixelToSky(100, -100000)),  # y outside
+            (10000002, self.wcs.pixelToSky(-100000, 100)),  # x outside
+        ]
+        extra = pandas.DataFrame({
+            "diaObjectId": np.array([id for id, point in objects], dtype=np.int64),
+            "ra": [point.getRa().asDegrees() for id, point in objects],
+            "decl": [point.getDec().asDegrees() for id, point in objects]
+        })
+        self.testDiaObjects = self.testDiaObjects.append(extra, ignore_index=True)
         # Ids of objects that were "updated" during "ap_association"
         # processing.
         self.updatedTestIds = np.array([1, 2, 3, 4, 10000001], dtype=np.uint64)
@@ -180,9 +178,7 @@ class TestDiaForcedSource(unittest.TestCase):
         """Test that forced source catalogs are successfully created and have
         sensible values.
         """
-        test_objects = self._convert_to_pandas(self.testDiaObjects)
-        test_objects.rename(columns={"id": "diaObjectId"},
-                            inplace=True)
+        test_objects = self.testDiaObjects.copy()
         test_objects.set_index("diaObjectId", inplace=True, drop=False)
         dfs = DiaForcedSourceTask()
         dia_forced_sources = dfs.run(
@@ -207,12 +203,11 @@ class TestDiaForcedSource(unittest.TestCase):
         self.assertEqual(len(dia_forced_sources.columns),
                          self.expected_n_columns)
 
-        for (diaFS_id, diaFS), testObj, dirVal, diffVal, dirVar, diffVar in zip(dia_forced_sources.iterrows(),
-                                                                                self.testDiaObjects,
-                                                                                direct_values,
-                                                                                diff_values,
-                                                                                direct_var,
-                                                                                diff_var):
+        for (diaFS_id, diaFS), dirVal, diffVal, dirVar, diffVar in zip(dia_forced_sources.iterrows(),
+                                                                       direct_values,
+                                                                       diff_values,
+                                                                       direct_var,
+                                                                       diff_var):
             self.assertAlmostEqual(diaFS["psFlux"] / diffVal, 1.)
             self.assertAlmostEqual(diaFS["psFluxErr"] / diffVar, 1.)
 
@@ -220,30 +215,6 @@ class TestDiaForcedSource(unittest.TestCase):
             self.assertAlmostEqual(diaFS["totFluxErr"] / dirVar, 1.)
 
             self.assertEqual(diaFS["ccdVisitId"], self.exposureId)
-
-    def _convert_to_pandas(self, dia_objects):
-        """Convert input afw table to pandas.
-
-        Parameters
-        ----------
-        dia_objects : `lsst.afw.table.SourceCatalog`
-            Catalog to convert
-
-        Returns
-        -------
-        output_catalog : `pandas.DataFrame`
-            Converted catalog
-        """
-        output_catalog = dia_objects.asAstropy().to_pandas()
-        output_catalog.rename(columns={"id": "diaObjectId",
-                                       "coord_ra": "ra",
-                                       "coord_dec": "decl"},
-                              inplace=True)
-
-        output_catalog.loc[:, "ra"] = np.degrees(output_catalog["ra"])
-        output_catalog.loc[:, "decl"] = np.degrees(output_catalog["decl"])
-
-        return output_catalog
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

@@ -220,7 +220,7 @@ class PackageAlertsTask(pipeBase.Task):
             point = image.getWcs().skyToPixel(skyCenter)
             imBBox = image.getBBox()
             if not geom.Box2D(image.getBBox()).contains(point):
-                self.log.warn(
+                self.log.warning(
                     "DiaSource id=%i centroid lies at pixel (%.2f, %.2f) "
                     "which is outside the Exposure with bounding box "
                     "((%i, %i), (%i, %i)). Returning None for cutout..." %
