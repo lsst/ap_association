@@ -84,8 +84,12 @@ funcs:
     # ps_ra_cov not implemented
     # ps_dec_cov not implemented
     # psLnl not implemented
-    # psChi2 not implemented
-    # psNdata not implemented
+    psChi2:
+        functor: Column
+        args: slot_PsfFlux_chi2
+    psNdata:
+        functor: Column
+        args: slot_PsfFlux_npixels
     # trailFlux not implemented
     # trailRa not implemented
     # trailDec not implemented
