@@ -210,7 +210,7 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     doSolarSystemAssociation = pexConfig.Field(
         dtype=bool,
         default=False,
-        doc="",
+        doc="Process SolarSystem objects through the pipeline.",
     )
     solarSystemAssociator = pexConfig.ConfigurableField(
         target=SolarSystemAssociationTask,
@@ -499,19 +499,16 @@ class DiaPipelineTask(pipeBase.PipelineTask):
               unassociated DiaSources. (`pandas.DataFrame`)
             - ``nNewDiaObjects`` : Number of newly created diaObjects.(`int`)
         """
-        newDiaObjectsList = []
-        for idx, diaSource in unAssocDiaSources.iterrows():
-            newDiaObjectsList.append(
-                self._initialize_dia_object(diaSource["diaSourceId"]))
-            unAssocDiaSources.loc[idx, "diaObjectId"] = diaSource["diaSourceId"]
-        if len(newDiaObjectsList) > 0:
-            newDiaObjects = pd.DataFrame(data=newDiaObjectsList)
-        else:
+        if len(unAssocDiaSources) == 0:
             tmpObj = self._initialize_dia_object(0)
-            newDiaObjects = pd.DataFrame(data=newDiaObjectsList,
+            newDiaObjects = pd.DataFrame(data=[],
                                          columns=tmpObj.keys())
+        else:
+            newDiaObjects = unAssocDiaSources["diaSourceId"].apply(
+                self._initialize_dia_object)
+            unAssocDiaSources["diaObjectId"] = unAssocDiaSources["diaSourceId"]
         return pipeBase.Struct(diaSources=unAssocDiaSources,
-                               newDiaObjects=pd.DataFrame(data=newDiaObjects),
+                               newDiaObjects=newDiaObjects,
                                nNewDiaObjects=len(newDiaObjects))
 
     def _initialize_dia_object(self, objId):
@@ -550,7 +547,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                           "flags": 0}
         for f in ["u", "g", "r", "i", "z", "y"]:
             new_dia_object["%sPSFluxNdata" % f] = 0
-        return new_dia_object
+        return pd.Series(data=new_dia_object)
 
     def testDataFrameIndex(self, df):
         """Test the sorted DataFrame index for duplicates.

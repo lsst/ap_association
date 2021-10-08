@@ -57,22 +57,22 @@ class TestDiaPipelineTask(unittest.TestCase):
     def testRun(self):
         """Test running while creating and packaging alerts.
         """
-        self._testRun(True, True)
+        self._testRun(doPackageAlerts=True, doSolarSystemAssociation=True)
 
     def testRunWithSolarSystemAssociation(self):
         """Test running while creating and packaging alerts.
         """
-        self._testRun(False, True)
+        self._testRun(doPackageAlerts=False, doSolarSystemAssociation=True)
 
     def testRunWithAlerts(self):
         """Test running while creating and packaging alerts.
         """
-        self._testRun(True, False)
+        self._testRun(doPackageAlerts=True, doSolarSystemAssociation=False)
 
     def testRunWithoutAlertsOrSolarSystem(self):
         """Test running without creating and packaging alerts.
         """
-        self._testRun(False, False)
+        self._testRun(doPackageAlerts=False, doSolarSystemAssociation=False)
 
     def _testRun(self, doPackageAlerts=False, doSolarSystemAssociation=False):
         """Test the normal workflow of each ap_pipe step.
@@ -120,6 +120,7 @@ class TestDiaPipelineTask(unittest.TestCase):
             with patch('lsst.ap.association.diaPipe.pd.concat',
                        new=concatMock):
                 result = task.run(diaSrc,
+                                  ssObjects,
                                   diffIm,
                                   exposure,
                                   template,
