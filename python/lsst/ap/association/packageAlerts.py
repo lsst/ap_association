@@ -120,6 +120,10 @@ class PackageAlertsTask(pipeBase.Task):
         templatePhotoCalib = template.getPhotoCalib()
         for srcIndex, diaSource in diaSourceCat.iterrows():
             # Get all diaSources for the associated diaObject.
+            # TODO: DM-31992 skip DiaSources associated with Solar System
+            #       Objects for now.
+            if srcIndex[0] == 0:
+                continue
             diaObject = diaObjectCat.loc[srcIndex[0]]
             if diaObject["nDiaSources"] > 1:
                 objSourceHistory = diaSrcHistory.loc[srcIndex[0]]

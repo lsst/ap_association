@@ -91,7 +91,7 @@ def makeDiaObjects(nObjects, exposure):
         newObject = {"ra": coord.getRa().asDegrees(),
                      "decl": coord.getDec().asDegrees(),
                      "radecTai": midPointTaiMJD,
-                     "diaObjectId": idx,
+                     "diaObjectId": idx + 1,
                      "pmParallaxNdata": 0,
                      "nearbyObj1": 0,
                      "nearbyObj2": 0,
@@ -146,7 +146,7 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
                      "ssObjectId": 0,
                      "parentDiaSourceId": 0,
                      "prv_procOrder": 0,
-                     "diaSourceId": idx,
+                     "diaSourceId": idx + 1,
                      "midPointTai": midPointTaiMJD + 1.0 * idx,
                      "filterName": exposure.getFilterLabel().bandLabel,
                      "psNdata": 0,
@@ -183,7 +183,7 @@ def makeDiaForcedSources(nSources, diaObjectIds, exposure):
     for idx in range(nSources):
         objId = diaObjectIds[idx % len(diaObjectIds)]
         # Put together the minimum values for the alert.
-        data.append({"diaForcedSourceId": idx,
+        data.append({"diaForcedSourceId": idx + 1,
                      "ccdVisitId": ccdVisitId + idx,
                      "diaObjectId": objId,
                      "midPointTai": midPointTaiMJD + 1.0 * idx,
@@ -295,10 +295,10 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         diaSourceHistory["programId"] = 0
 
         self.diaSources = diaSourceHistory.loc[
-            [(0, "g", 8), (1, "g", 9)], :]
+            [(1, "g", 9), (2, "g", 10)], :]
         self.diaSources["bboxSize"] = self.cutoutSize
-        self.diaSourceHistory = diaSourceHistory.drop(labels=[(0, "g", 8),
-                                                              (1, "g", 9)])
+        self.diaSourceHistory = diaSourceHistory.drop(labels=[(1, "g", 9),
+                                                              (2, "g", 10)])
 
         self.cutoutWcs = wcs.WCS(naxis=2)
         self.cutoutWcs.wcs.crpix = [self.center[0], self.center[1]]

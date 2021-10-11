@@ -77,9 +77,13 @@ class AssociationTask(pipeBase.Task):
         result : `lsst.pipe.base.Struct`
             Results struct with components.
 
-            - ``"diaSources"`` : Full set of diaSources after matching. Matched
+            - ``"matchedDiaSources"`` : DiaSources that were matched. Matched
               Sources have their diaObjectId updated and set to the id of the
               diaObject they were matched to. (`pandas.DataFrame`)
+            - ``"unAssocDiaSources"`` : DiaSources that were not matched.
+              Unassociated sources have their diaObject set to 0 as they
+              were not associated with any existing DiaObjects.
+              (`pandas.DataFrame`)
             - ``"nUpdatedDiaObjects"`` : Number of DiaObjects that were
               matched to new DiaSources. (`int`)
             - ``"nUnassociatedDiaObjects"`` : Number of DiaObjects that were
@@ -88,14 +92,18 @@ class AssociationTask(pipeBase.Task):
         diaSources = self.check_dia_source_radec(diaSources)
         if len(diaObjects) == 0:
             return pipeBase.Struct(
-                diaSources=diaSources,
+                matchedDiaSources=pd.DataFrame(columns=diaSources.columns),
+                unAssocDiaSources=diaSources,
                 nUpdatedDiaObjects=0,
                 nUnassociatedDiaObjects=0)
 
         matchResult = self.associate_sources(diaObjects, diaSources)
 
+        mask = matchResult.diaSources["diaObjectId"] != 0
+
         return pipeBase.Struct(
-            diaSources=matchResult.diaSources,
+            matchedDiaSources=matchResult.diaSources[mask].reset_index(drop=True),
+            unAssocDiaSources=matchResult.diaSources[~mask].reset_index(drop=True),
             nUpdatedDiaObjects=matchResult.nUpdatedDiaObjects,
             nUnassociatedDiaObjects=matchResult.nUnassociatedDiaObjects)
 
