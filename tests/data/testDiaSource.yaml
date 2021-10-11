@@ -11,9 +11,6 @@ funcs:
     midPointTai:
       functor: Column
       args: midPointTai
-    pixelId:
-      functor: Column
-      args: pixelId
     bboxSize:
         functor: Column
         args: bboxSize

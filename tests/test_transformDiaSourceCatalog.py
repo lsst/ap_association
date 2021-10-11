@@ -100,7 +100,6 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
             self.assertEqual(src["filterName"], self.filterName)
             self.assertEqual(src["midPointTai"],
                              self.date.get(system=dafBase.DateTime.MJD))
-            self.assertEqual(src["pixelId"], 0)
             self.assertEqual(src["diaObjectId"], 0)
 
     def test_run_dia_source_wrong_flags(self):

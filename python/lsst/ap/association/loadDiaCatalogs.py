@@ -145,7 +145,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
     @pipeBase.timeMethod
     def loadDiaSources(self, diaObjects, region, dateTime, apdb):
         """Load DiaSources from the Apdb based on their diaObjectId or
-        pixelId location.
+        location.
 
         Variable used to load sources is set in config.
 
