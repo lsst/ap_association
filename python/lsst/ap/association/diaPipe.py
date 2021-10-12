@@ -249,7 +249,6 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
             "data",
             "apdb-ap-pipe-schema-extra.yaml")
         self.diaCalculation.plugins = ["ap_meanPosition",
-                                       "ap_HTMIndex",
                                        "ap_nDiaSources",
                                        "ap_diaObjectFlag",
                                        "ap_meanFlux",
@@ -265,13 +264,6 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
                                        "ap_stetsonJ",
                                        "ap_meanTotFlux",
                                        "ap_sigmaTotFlux"]
-
-    def validate(self):
-        pexConfig.Config.validate(self)
-        # TODO: this plugin is not useful, pixelization is handled by Apdb
-        if "ap_HTMIndex" not in self.diaCalculation.plugins:
-            raise ValueError("DiaPipe requires the ap_HTMIndex plugin "
-                             "be enabled for proper insertion into the Apdb.")
 
 
 class DiaPipelineTask(pipeBase.PipelineTask):

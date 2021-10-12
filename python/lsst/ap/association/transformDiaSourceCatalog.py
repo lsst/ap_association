@@ -206,7 +206,6 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         diaSourceDf["midPointTai"] = diffIm.getInfo().getVisitInfo().getDate().get(system=DateTime.MJD)
         diaSourceDf["diaObjectId"] = 0
         diaSourceDf["ssObjectId"] = 0
-        diaSourceDf["pixelId"] = 0
         if self.config.doPackFlags:
             # either bitpack the flags
             self.bitPackFlags(diaSourceDf)
