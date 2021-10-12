@@ -197,6 +197,104 @@ class FractionUpdatedDiaObjectsMetricTask(MetadataMetricTask):
                 "unassociatedObjects": ".numUnassociatedDiaObjects"}
 
 
+class NumberSolarSystemObjectsMetricConfig(MetadataMetricConfig):
+    def setDefaults(self):
+        self.connections.package = "ap_association"
+        self.connections.metric = "numTotalSolarSystemObjects"
+
+
+@register("numTotalSolarSystemObjects")
+class NumberSolarSystemObjectsMetricTask(MetadataMetricTask):
+    """Task that computes the number of previously-known DIAObjects that do
+    not have detected DIASources in an image, visit, etc..
+    """
+    _DefaultName = "numTotalSolarSystemObjects"
+    ConfigClass = NumberSolarSystemObjectsMetricConfig
+
+    def makeMeasurement(self, values):
+        """Compute the number of non-updated DIAObjects.
+
+        Parameters
+        ----------
+        values : `dict` [`str`, `int` or `None`]
+            A `dict` representation of the metadata. Each `dict` has the
+            following key:
+
+            ``"unassociatedObjects"``
+                The number of DIAObjects not associated with a DiaSource in
+                this image (`int` or `None`). May be `None` if the image was
+                not successfully associated.
+
+        Returns
+        -------
+        measurement : `lsst.verify.Measurement` or `None`
+            The total number of unassociated objects.
+        """
+        if values["numTotalSolarSystemObjects"] is not None:
+            try:
+                nNew = int(values["numTotalSolarSystemObjects"])
+            except (ValueError, TypeError) as e:
+                raise MetricComputationError("Corrupted value of numTotalSolarSystemObjects") from e
+            else:
+                return Measurement(self.config.metricName, nNew * u.count)
+        else:
+            self.log.info("Nothing to do: no solar system results found.")
+            return None
+
+    @classmethod
+    def getInputMetadataKeys(cls, config):
+        return {"numTotalSolarSystemObjects": ".numTotalSolarSystemObjects"}
+
+
+class NumberAssocitedSolarSystemObjectsMetricConfig(MetadataMetricConfig):
+    def setDefaults(self):
+        self.connections.package = "ap_association"
+        self.connections.metric = "numTotalSolarSystemObjects"
+
+
+@register("numAssociatedSsObjects")
+class NumberAssocitedSolarSystemObjectsMetricTask(MetadataMetricTask):
+    """Task that computes the number of previously-known DIAObjects that do
+    not have detected DIASources in an image, visit, etc..
+    """
+    _DefaultName = "numAssociatedSsObjects"
+    ConfigClass = NumberAssocitedSolarSystemObjectsMetricConfig
+
+    def makeMeasurement(self, values):
+        """Compute the number of non-updated DIAObjects.
+
+        Parameters
+        ----------
+        values : `dict` [`str`, `int` or `None`]
+            A `dict` representation of the metadata. Each `dict` has the
+            following key:
+
+            ``"unassociatedObjects"``
+                The number of DIAObjects not associated with a DiaSource in
+                this image (`int` or `None`). May be `None` if the image was
+                not successfully associated.
+
+        Returns
+        -------
+        measurement : `lsst.verify.Measurement` or `None`
+            The total number of unassociated objects.
+        """
+        if values["numAssociatedSsObjects"] is not None:
+            try:
+                nNew = int(values["numAssociatedSsObjects"])
+            except (ValueError, TypeError) as e:
+                raise MetricComputationError("Corrupted value of numAssociatedSsObjects") from e
+            else:
+                return Measurement(self.config.metricName, nNew * u.count)
+        else:
+            self.log.info("Nothing to do: no solar system results found.")
+            return None
+
+    @classmethod
+    def getInputMetadataKeys(cls, config):
+        return {"numAssociatedSsObjects": ".numAssociatedSsObjects"}
+
+
 class TotalUnassociatedDiaObjectsMetricConfig(ApdbMetricConfig):
     def setDefaults(self):
         self.connections.package = "ap_association"
