@@ -39,13 +39,17 @@ from lsst.ap.association.metrics import \
     NumberNewDiaObjectsMetricTask, \
     NumberUnassociatedDiaObjectsMetricTask, \
     FractionUpdatedDiaObjectsMetricTask, \
+    NumberSolarSystemObjectsMetricTask, \
+    NumberAssocitedSolarSystemObjectsMetricTask, \
     TotalUnassociatedDiaObjectsMetricTask
 
 
-def _makeAssociationMetadata(numUpdated=27, numNew=4, numUnassociated=15):
+def _makeAssociationMetadata(numUpdated=27, numNew=4, numUnassociated=15, numSso=5, numAssocSso=1):
     metadata = PropertySet()
     metadata.add("association.numUpdatedDiaObjects", numUpdated)
     metadata.add("association.numNewDiaObjects", numNew)
+    metadata.add("association.numTotalSolarSystemObjects", numSso)
+    metadata.add("association.numAssociatedSsObjects", numAssocSso)
     metadata.add("association.numUnassociatedDiaObjects", numUnassociated)
     return metadata
 
@@ -197,6 +201,96 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
     def testBadlyTypedKeys(self):
         metadata = _makeAssociationMetadata()
         metadata.set("association.numUnassociatedDiaObjects", "Ultimate Answer")
+
+        with self.assertRaises(MetricComputationError):
+            self.task.run(metadata)
+
+
+class TestNumberSolarSystemObjects(MetadataMetricTestCase):
+
+    @classmethod
+    def makeTask(cls):
+        return NumberSolarSystemObjectsMetricTask()
+
+    def testValid(self):
+        metadata = _makeAssociationMetadata()
+        result = self.task.run(metadata)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+        meas = result.measurement
+
+        self.assertEqual(meas.metric_name, Name(metric="ap_association.numTotalSolarSystemObjects"))
+        self.assertEqual(meas.quantity,
+                         metadata.getAsDouble("association.numTotalSolarSystemObjects") * u.count)
+
+    def testAllUpdated(self):
+        metadata = _makeAssociationMetadata(numSso=0)
+        result = self.task.run(metadata)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+        meas = result.measurement
+
+        self.assertEqual(meas.metric_name, Name(metric="ap_association.numTotalSolarSystemObjects"))
+        self.assertEqual(meas.quantity, 0.0 * u.count)
+
+    def testMissingData(self):
+        result = self.task.run(None)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+        meas = result.measurement
+        self.assertIsNone(meas)
+
+    def testAssociationFailed(self):
+        result = self.task.run(PropertySet())
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+        meas = result.measurement
+        self.assertIsNone(meas)
+
+    def testBadlyTypedKeys(self):
+        metadata = _makeAssociationMetadata()
+        metadata.set("association.numTotalSolarSystemObjects", "Ultimate Answer")
+
+        with self.assertRaises(MetricComputationError):
+            self.task.run(metadata)
+
+
+class TestNumberAssocitedSolarSystemObjects(MetadataMetricTestCase):
+
+    @classmethod
+    def makeTask(cls):
+        return NumberAssocitedSolarSystemObjectsMetricTask()
+
+    def testValid(self):
+        metadata = _makeAssociationMetadata()
+        result = self.task.run(metadata)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+        meas = result.measurement
+
+        self.assertEqual(meas.metric_name, Name(metric="ap_association.numAssociatedSsObjects"))
+        self.assertEqual(meas.quantity,
+                         metadata.getAsDouble("association.numAssociatedSsObjects") * u.count)
+
+    def testAllUpdated(self):
+        metadata = _makeAssociationMetadata(numAssocSso=0)
+        result = self.task.run(metadata)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+        meas = result.measurement
+
+        self.assertEqual(meas.metric_name, Name(metric="ap_association.numAssociatedSsObjects"))
+        self.assertEqual(meas.quantity, 0.0 * u.count)
+
+    def testMissingData(self):
+        result = self.task.run(None)
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+        meas = result.measurement
+        self.assertIsNone(meas)
+
+    def testAssociationFailed(self):
+        result = self.task.run(PropertySet())
+        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+        meas = result.measurement
+        self.assertIsNone(meas)
+
+    def testBadlyTypedKeys(self):
+        metadata = _makeAssociationMetadata()
+        metadata.set("association.numAssociatedSsObjects", "Ultimate Answer")
 
         with self.assertRaises(MetricComputationError):
             self.task.run(metadata)

@@ -23,6 +23,8 @@
 __all__ = ["NumberNewDiaObjectsMetricTask",
            "NumberUnassociatedDiaObjectsMetricTask",
            "FractionUpdatedDiaObjectsMetricTask",
+           "NumberSolarSystemObjectsMetricConfig",
+           "NumberSolarSystemObjectsMetricTask",
            "TotalUnassociatedDiaObjectsMetricTask",
            ]
 
@@ -205,14 +207,15 @@ class NumberSolarSystemObjectsMetricConfig(MetadataMetricConfig):
 
 @register("numTotalSolarSystemObjects")
 class NumberSolarSystemObjectsMetricTask(MetadataMetricTask):
-    """Task that computes the number of previously-known DIAObjects that do
-    not have detected DIASources in an image, visit, etc..
+    """Task that computes the number of SolarSystemObjects that are
+    observable within this detectorVisit.
     """
     _DefaultName = "numTotalSolarSystemObjects"
     ConfigClass = NumberSolarSystemObjectsMetricConfig
 
     def makeMeasurement(self, values):
-        """Compute the number of non-updated DIAObjects.
+        """Compute the total number of SolarSystemObjects within a
+        detectorVisit.
 
         Parameters
         ----------
@@ -228,7 +231,7 @@ class NumberSolarSystemObjectsMetricTask(MetadataMetricTask):
         Returns
         -------
         measurement : `lsst.verify.Measurement` or `None`
-            The total number of unassociated objects.
+            The total number of Solar System objects.
         """
         if values["numTotalSolarSystemObjects"] is not None:
             try:
@@ -249,19 +252,19 @@ class NumberSolarSystemObjectsMetricTask(MetadataMetricTask):
 class NumberAssocitedSolarSystemObjectsMetricConfig(MetadataMetricConfig):
     def setDefaults(self):
         self.connections.package = "ap_association"
-        self.connections.metric = "numTotalSolarSystemObjects"
+        self.connections.metric = "numAssociatedSsObjects"
 
 
 @register("numAssociatedSsObjects")
 class NumberAssocitedSolarSystemObjectsMetricTask(MetadataMetricTask):
-    """Task that computes the number of previously-known DIAObjects that do
-    not have detected DIASources in an image, visit, etc..
+    """Number of SolarSystemObjects that were associated with new DiaSources
+    for this detectorVisit.
     """
     _DefaultName = "numAssociatedSsObjects"
     ConfigClass = NumberAssocitedSolarSystemObjectsMetricConfig
 
     def makeMeasurement(self, values):
-        """Compute the number of non-updated DIAObjects.
+        """Compute the number of associated SolarSystemObjects.
 
         Parameters
         ----------
@@ -277,7 +280,7 @@ class NumberAssocitedSolarSystemObjectsMetricTask(MetadataMetricTask):
         Returns
         -------
         measurement : `lsst.verify.Measurement` or `None`
-            The total number of unassociated objects.
+            The total number of associated SolarSystemObjects.
         """
         if values["numAssociatedSsObjects"] is not None:
             try:
