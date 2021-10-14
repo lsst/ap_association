@@ -156,7 +156,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
             Set of SolarSystemObjects contained within the exposure footprint.
         """
         wcs = exposure.getWcs()
-        padding = max(
+        padding = min(
             int(np.ceil(wcs.getPixelScale().asArcseconds()*marginArcsec)),
             self.config.maxPixelMargin)
         bbox = geom.Box2D(exposure.getBBox())
@@ -164,7 +164,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
 
         mapping = wcs.getTransform().getMapping()
         x, y = mapping.applyInverse(
-            np.array(np.deg2rad(solarSystemObjects[['ra', 'decl']]).T))
+            np.radians(solarSystemObjects[['ra', 'decl']].T.to_numpy()))
         return solarSystemObjects[bbox.contains(x, y)]
 
     def _radec_to_xyz(self, ras, decs):

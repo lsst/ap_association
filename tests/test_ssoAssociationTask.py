@@ -44,10 +44,10 @@ class TestSolarSystemAssociation(unittest.TestCase):
         schema = dataset.makeMinimalSchema()
         schema.addField("base_PixelFlags_flag", type="Flag")
         schema.addField("base_PixelFlags_flag_offimage", type="Flag")
-        exposure, catalog = dataset.realize(
+        self.exposure, catalog = dataset.realize(
             10.0, schema, randomSeed=1234)
         for src in catalog:
-            src.setCoord(exposure.getWcs().pixelToSky(src.getCentroid()))
+            src.setCoord(self.exposure.getWcs().pixelToSky(src.getCentroid()))
 
         # Convert to task required format
         self.testDiaSources = catalog.asAstropy().to_pandas()
@@ -63,12 +63,15 @@ class TestSolarSystemAssociation(unittest.TestCase):
         # Assign them ids starting from 1.
         self.testSsObjects.loc[:, "ssObjectId"] = np.arange(
             1, len(self.testSsObjects) + 1, dtype=int,)
+        self.testSsObjects["Err(arcsec)"] = np.ones(len(self.testSsObjects))
 
     def test_run(self):
         """Test that association and id assignment work as expected.
         """
         ssAssocTask = SolarSystemAssociationTask()
-        results = ssAssocTask.run(self.testDiaSources, self.testSsObjects)
+        results = ssAssocTask.run(self.testDiaSources,
+                                  self.testSsObjects,
+                                  self.exposure)
         self.assertEqual(self.nSources,
                          len(results.ssoAssocDiaSources)
                          + len(results.unAssocDiaSources))
@@ -80,6 +83,29 @@ class TestSolarSystemAssociation(unittest.TestCase):
             self.assertEqual(
                 ssObject["ssObjectId"],
                 results.ssoAssocDiaSources.iloc[idx]["ssObjectId"])
+
+    def test_mask(self):
+        """Test that masking against the CCD bounding box works as expected.
+        """
+        ssAssocTask = SolarSystemAssociationTask()
+        # Test will all inside ccd
+        maskedObjects = ssAssocTask._maskToCcdRegion(self.testSsObjects,
+                                                     self.exposure,
+                                                     1.0)
+        self.assertEqual(len(maskedObjects), len(self.testSsObjects))
+
+        # Add a new SolarSystemObjects outside of the bbox and test that it
+        # is excluded.
+        testObjects = self.testSsObjects.loc[:1].reset_index(drop=True)
+        testObjects.loc[0, "ra"] = 150
+        testObjects.loc[0, "decl"] = 80
+        testObjects.loc[1, "ra"] = 150
+        testObjects.loc[1, "decl"] = -80
+        maskedObjects = ssAssocTask._maskToCcdRegion(
+            self.testSsObjects.append(testObjects),
+            self.exposure,
+            1.0)
+        self.assertEqual(len(maskedObjects), len(self.testSsObjects))
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
