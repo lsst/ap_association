@@ -122,7 +122,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
             ssoVect = self._radec_to_xyz(ssObject["ra"], ssObject["decl"])
 
             # Which DIA Sources fall within r?
-            dist, idx = tree.query(ssoVect, maxRadius)
+            dist, idx = tree.query(ssoVect, distance_upper_bound=maxRadius)
             if np.isfinite(dist[0]):
                 nFound += 1
                 diaSourceCatalog.loc[idx[0], "ssObjectId"] = ssObject["ssObjectId"]
