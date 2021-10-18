@@ -97,7 +97,8 @@ class SolarSystemAssociationTask(pipeBase.Task):
             solarSystemObjects["Err(arcsec)"].max())
         nSolarSystemObjects = len(maskedObjects)
         if nSolarSystemObjects <= 0:
-            self.log.info("No SolarSytemObjects found in CCD bounding box.")
+            self.log.info("No SolarSystemObjects found in detector bounding "
+                          "box.")
             return pipeBase.Struct(
                 ssoAssocDiaSources=pd.DataFrame(columns=diaSourceCatalog.columns),
                 unAssocDiaSources=diaSourceCatalog,
@@ -147,13 +148,13 @@ class SolarSystemAssociationTask(pipeBase.Task):
             Exposure to mask to.
         marginArcsec : `float`
             Maximum possible matching radius to pad onto the exposure bounding
-            box. If great than ``maxPixelMargin``, ``maxPixelMargin`` will
+            box. If greater than ``maxPixelMargin``, ``maxPixelMargin`` will
             be used.
 
         Returns
         -------
         maskedSolarSystemObjects : `pandas.DataFrame`
-            Set of SolarSystemObjects contained within the exposure footprint.
+            Set of SolarSystemObjects contained within the exposure bounds.
         """
         wcs = exposure.getWcs()
         padding = min(

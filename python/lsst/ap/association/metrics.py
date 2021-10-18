@@ -23,8 +23,8 @@
 __all__ = ["NumberNewDiaObjectsMetricTask",
            "NumberUnassociatedDiaObjectsMetricTask",
            "FractionUpdatedDiaObjectsMetricTask",
-           "NumberSolarSystemObjectsMetricConfig",
            "NumberSolarSystemObjectsMetricTask",
+           "NumberAssociatedSolarSystemObjectsMetricTask",
            "TotalUnassociatedDiaObjectsMetricTask",
            ]
 
@@ -249,19 +249,19 @@ class NumberSolarSystemObjectsMetricTask(MetadataMetricTask):
         return {"numTotalSolarSystemObjects": ".numTotalSolarSystemObjects"}
 
 
-class NumberAssocitedSolarSystemObjectsMetricConfig(MetadataMetricConfig):
+class NumberAssociatedSolarSystemObjectsMetricConfig(MetadataMetricConfig):
     def setDefaults(self):
         self.connections.package = "ap_association"
         self.connections.metric = "numAssociatedSsObjects"
 
 
 @register("numAssociatedSsObjects")
-class NumberAssocitedSolarSystemObjectsMetricTask(MetadataMetricTask):
+class NumberAssociatedSolarSystemObjectsMetricTask(MetadataMetricTask):
     """Number of SolarSystemObjects that were associated with new DiaSources
     for this detectorVisit.
     """
     _DefaultName = "numAssociatedSsObjects"
-    ConfigClass = NumberAssocitedSolarSystemObjectsMetricConfig
+    ConfigClass = NumberAssociatedSolarSystemObjectsMetricConfig
 
     def makeMeasurement(self, values):
         """Compute the number of associated SolarSystemObjects.

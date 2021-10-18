@@ -586,7 +586,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         nNewDiaObjects : `int`
             Number of newly created DiaObjects for this ccdVisit.
         nTotalSsObjects : `int`
-            Number of newly SolarSystemObjects within the observable ccd
+            Number of SolarSystemObjects within the observable detector
             area.
         nAssociatedSsObjects : `int`
             Number of successfully associated SolarSystemObjects.

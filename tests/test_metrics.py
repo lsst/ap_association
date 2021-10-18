@@ -40,7 +40,7 @@ from lsst.ap.association.metrics import \
     NumberUnassociatedDiaObjectsMetricTask, \
     FractionUpdatedDiaObjectsMetricTask, \
     NumberSolarSystemObjectsMetricTask, \
-    NumberAssocitedSolarSystemObjectsMetricTask, \
+    NumberAssociatedSolarSystemObjectsMetricTask, \
     TotalUnassociatedDiaObjectsMetricTask
 
 
@@ -251,11 +251,11 @@ class TestNumberSolarSystemObjects(MetadataMetricTestCase):
             self.task.run(metadata)
 
 
-class TestNumberAssocitedSolarSystemObjects(MetadataMetricTestCase):
+class TestNumberAssociatedSolarSystemObjects(MetadataMetricTestCase):
 
     @classmethod
     def makeTask(cls):
-        return NumberAssocitedSolarSystemObjectsMetricTask()
+        return NumberAssociatedSolarSystemObjectsMetricTask()
 
     def testValid(self):
         metadata = _makeAssociationMetadata()
