@@ -23,6 +23,8 @@
 __all__ = ["NumberNewDiaObjectsMetricTask",
            "NumberUnassociatedDiaObjectsMetricTask",
            "FractionUpdatedDiaObjectsMetricTask",
+           "NumberSolarSystemObjectsMetricTask",
+           "NumberAssociatedSolarSystemObjectsMetricTask",
            "TotalUnassociatedDiaObjectsMetricTask",
            ]
 
@@ -195,6 +197,105 @@ class FractionUpdatedDiaObjectsMetricTask(MetadataMetricTask):
     def getInputMetadataKeys(cls, config):
         return {"updatedObjects": ".numUpdatedDiaObjects",
                 "unassociatedObjects": ".numUnassociatedDiaObjects"}
+
+
+class NumberSolarSystemObjectsMetricConfig(MetadataMetricConfig):
+    def setDefaults(self):
+        self.connections.package = "ap_association"
+        self.connections.metric = "numTotalSolarSystemObjects"
+
+
+@register("numTotalSolarSystemObjects")
+class NumberSolarSystemObjectsMetricTask(MetadataMetricTask):
+    """Task that computes the number of SolarSystemObjects that are
+    observable within this detectorVisit.
+    """
+    _DefaultName = "numTotalSolarSystemObjects"
+    ConfigClass = NumberSolarSystemObjectsMetricConfig
+
+    def makeMeasurement(self, values):
+        """Compute the total number of SolarSystemObjects within a
+        detectorVisit.
+
+        Parameters
+        ----------
+        values : `dict` [`str`, `int` or `None`]
+            A `dict` representation of the metadata. Each `dict` has the
+            following key:
+
+            ``"unassociatedObjects"``
+                The number of DIAObjects not associated with a DiaSource in
+                this image (`int` or `None`). May be `None` if the image was
+                not successfully associated.
+
+        Returns
+        -------
+        measurement : `lsst.verify.Measurement` or `None`
+            The total number of Solar System objects.
+        """
+        if values["numTotalSolarSystemObjects"] is not None:
+            try:
+                nNew = int(values["numTotalSolarSystemObjects"])
+            except (ValueError, TypeError) as e:
+                raise MetricComputationError("Corrupted value of numTotalSolarSystemObjects") from e
+            else:
+                return Measurement(self.config.metricName, nNew * u.count)
+        else:
+            self.log.info("Nothing to do: no solar system results found.")
+            return None
+
+    @classmethod
+    def getInputMetadataKeys(cls, config):
+        return {"numTotalSolarSystemObjects": ".numTotalSolarSystemObjects"}
+
+
+class NumberAssociatedSolarSystemObjectsMetricConfig(MetadataMetricConfig):
+    def setDefaults(self):
+        self.connections.package = "ap_association"
+        self.connections.metric = "numAssociatedSsObjects"
+
+
+@register("numAssociatedSsObjects")
+class NumberAssociatedSolarSystemObjectsMetricTask(MetadataMetricTask):
+    """Number of SolarSystemObjects that were associated with new DiaSources
+    for this detectorVisit.
+    """
+    _DefaultName = "numAssociatedSsObjects"
+    ConfigClass = NumberAssociatedSolarSystemObjectsMetricConfig
+
+    def makeMeasurement(self, values):
+        """Compute the number of associated SolarSystemObjects.
+
+        Parameters
+        ----------
+        values : `dict` [`str`, `int` or `None`]
+            A `dict` representation of the metadata. Each `dict` has the
+            following key:
+
+            ``"unassociatedObjects"``
+                The number of DIAObjects not associated with a DiaSource in
+                this image (`int` or `None`). May be `None` if the image was
+                not successfully associated.
+
+        Returns
+        -------
+        measurement : `lsst.verify.Measurement` or `None`
+            The total number of associated SolarSystemObjects.
+        """
+        if values["numAssociatedSsObjects"] is not None:
+            try:
+                nNew = int(values["numAssociatedSsObjects"])
+            except (ValueError, TypeError) as e:
+                raise MetricComputationError("Corrupted value of numAssociatedSsObjects") from e
+            else:
+                return Measurement(self.config.metricName, nNew * u.count)
+        else:
+            self.log.info("Nothing to do: no solar system results found.")
+            return None
+
+    @classmethod
+    def getInputMetadataKeys(cls, config):
+        return {"numAssociatedSsObjects": ".numAssociatedSsObjects"}
 
 
 class TotalUnassociatedDiaObjectsMetricConfig(ApdbMetricConfig):

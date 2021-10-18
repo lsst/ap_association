@@ -351,24 +351,32 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                            loaderResult.diaObjects)
         if self.config.doSolarSystemAssociation:
             ssoAssocResult = self.solarSystemAssociator.run(
-                assocResults.unAssocDiaSources, solarSystemObjectTable)
+                assocResults.unAssocDiaSources,
+                solarSystemObjectTable,
+                diffIm)
             createResults = self.createNewDiaObjects(
                 ssoAssocResult.unAssocDiaSources)
             associatedDiaSources = pd.concat(
                 [assocResults.matchedDiaSources,
                  ssoAssocResult.ssoAssocDiaSources,
                  createResults.diaSources])
+            nTotalSsObjects = ssoAssocResult.nTotalSsObjects
+            nAssociatedSsObjects = ssoAssocResult.nAssociatedSsObjects
         else:
             createResults = self.createNewDiaObjects(
                 assocResults.unAssocDiaSources)
             associatedDiaSources = pd.concat(
                 [assocResults.matchedDiaSources,
                  createResults.diaSources])
+            nTotalSsObjects = 0
+            nAssociatedSsObjects = 0
 
         # Create new DiaObjects from unassociated diaSources.
         self._add_association_meta_data(assocResults.nUpdatedDiaObjects,
                                         assocResults.nUnassociatedDiaObjects,
-                                        createResults.nNewDiaObjects)
+                                        createResults.nNewDiaObjects,
+                                        nTotalSsObjects,
+                                        nAssociatedSsObjects)
         # Index the DiaSource catalog for this visit after all associations
         # have been made.
         updatedDiaObjectIds = associatedDiaSources["diaObjectId"][
@@ -562,7 +570,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
     def _add_association_meta_data(self,
                                    nUpdatedDiaObjects,
                                    nUnassociatedDiaObjects,
-                                   nNewDiaObjects):
+                                   nNewDiaObjects,
+                                   nTotalSsObjects,
+                                   nAssociatedSsObjects):
         """Store summaries of the association step in the task metadata.
 
         Parameters
@@ -575,7 +585,14 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             in this ccdVisit.
         nNewDiaObjects : `int`
             Number of newly created DiaObjects for this ccdVisit.
+        nTotalSsObjects : `int`
+            Number of SolarSystemObjects within the observable detector
+            area.
+        nAssociatedSsObjects : `int`
+            Number of successfully associated SolarSystemObjects.
         """
         self.metadata.add('numUpdatedDiaObjects', nUpdatedDiaObjects)
         self.metadata.add('numUnassociatedDiaObjects', nUnassociatedDiaObjects)
         self.metadata.add('numNewDiaObjects', nNewDiaObjects)
+        self.metadata.add('numTotalSolarSystemObjects', nTotalSsObjects)
+        self.metadata.add('numAssociatedSsObjects', nAssociatedSsObjects)

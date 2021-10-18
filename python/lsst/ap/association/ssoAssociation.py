@@ -24,8 +24,10 @@
 __all__ = ["SolarSystemAssociationConfig", "SolarSystemAssociationTask"]
 
 import numpy as np
+import pandas as pd
 from scipy.spatial import cKDTree
 
+import lsst.geom as geom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 
@@ -39,6 +41,15 @@ class SolarSystemAssociationConfig(pexConfig.Config):
             'match to a SSObject.',
         default=2.0,
     )
+    maxPixelMargin = pexConfig.RangeField(
+        doc="Maximum padding to add to the ccd bounding box before masking "
+            "SolarSystem objects to the ccd footprint. The bounding box will "
+            "be padded by the minimum of this number or the max uncertainty "
+            "of the SolarSystemObjects in pixels.",
+        dtype=int,
+        default=100,
+        min=0,
+    )
 
 
 class SolarSystemAssociationTask(pipeBase.Task):
@@ -51,7 +62,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
     _DefaultName = "ssoAssociation"
 
     @pipeBase.timeMethod
-    def run(self, diaSourceCatalog, solarSystemObjects):
+    def run(self, diaSourceCatalog, solarSystemObjects, exposure):
         """Create a searchable tree of unassociated DiaSources and match
         to the nearest ssoObject.
 
@@ -63,6 +74,9 @@ class SolarSystemAssociationTask(pipeBase.Task):
         solarSystemObjects : `pandas.DataFrame`
             Set of solar system objects that should be within the footprint
             of the current visit.
+        exposure : `lsst.afw.image.ExposureF`
+            Exposure where the DiaSources in ``diaSourceCatalog`` were
+            detected in.
 
         Returns
         -------
@@ -72,7 +86,25 @@ class SolarSystemAssociationTask(pipeBase.Task):
               solar system objects in this visit. (`pandas.DataFrame`)
             - ``unAssocDiaSources`` : Set of DiaSources that were not
               associated with any solar system object. (`pandas.DataFrame`)
+            - ``nTotalSsObjects`` : Total number of SolarSystemObjects
+              contained in the CCD footprint. (`int`)
+            - ``nAssociatedSsObjects`` : Number of SolarSystemObjects
+              that were associated with DiaSources.
         """
+        maskedObjects = self._maskToCcdRegion(
+            solarSystemObjects,
+            exposure,
+            solarSystemObjects["Err(arcsec)"].max())
+        nSolarSystemObjects = len(maskedObjects)
+        if nSolarSystemObjects <= 0:
+            self.log.info("No SolarSystemObjects found in detector bounding "
+                          "box.")
+            return pipeBase.Struct(
+                ssoAssocDiaSources=pd.DataFrame(columns=diaSourceCatalog.columns),
+                unAssocDiaSources=diaSourceCatalog,
+                nTotalSsObjects=0,
+                nAssociatedSsObjects=0)
+        self.log.info(f"Attempting to associate {nSolarSystemObjects}...")
         maxRadius = np.deg2rad(self.config.maxDistArcSeconds / 3600)
 
         # Transform DIA RADEC coordinates to unit sphere xyz for tree building.
@@ -82,22 +114,59 @@ class SolarSystemAssociationTask(pipeBase.Task):
         # Create KDTree of DIA sources
         tree = cKDTree(vectors)
 
+        nFound = 0
         # Query the KDtree for DIA nearest neighbors to SSOs. Currently only
         # picks the DiaSource with the shortest distance. We can do something
         # fancier later.
-        for index, ssObject in solarSystemObjects.iterrows():
+        for index, ssObject in maskedObjects.iterrows():
 
             ssoVect = self._radec_to_xyz(ssObject["ra"], ssObject["decl"])
 
             # Which DIA Sources fall within r?
-            dist, idx = tree.query(ssoVect, maxRadius)
+            dist, idx = tree.query(ssoVect, distance_upper_bound=maxRadius)
             if np.isfinite(dist[0]):
+                nFound += 1
                 diaSourceCatalog.loc[idx[0], "ssObjectId"] = ssObject["ssObjectId"]
 
+        self.log.info(f"Successfully associated {nFound} SolarSystemObjects.")
         assocMask = diaSourceCatalog["ssObjectId"] != 0
         return pipeBase.Struct(
             ssoAssocDiaSources=diaSourceCatalog[assocMask].reset_index(drop=True),
-            unAssocDiaSources=diaSourceCatalog[~assocMask].reset_index(drop=True))
+            unAssocDiaSources=diaSourceCatalog[~assocMask].reset_index(drop=True),
+            nTotalSsObjects=nSolarSystemObjects,
+            nAssociatedSsObjects=nFound)
+
+    def _maskToCcdRegion(self, solarSystemObjects, exposure, marginArcsec):
+        """Mask the input SolarSystemObjects to only those in the exposure
+        bounding box.
+
+        Parameters
+        ----------
+        solarSystemObjects : `pandas.DataFrame`
+            SolarSystemObjects to mask to ``exposure``.
+        exposure : `lsst.afw.image.ExposureF`
+            Exposure to mask to.
+        marginArcsec : `float`
+            Maximum possible matching radius to pad onto the exposure bounding
+            box. If greater than ``maxPixelMargin``, ``maxPixelMargin`` will
+            be used.
+
+        Returns
+        -------
+        maskedSolarSystemObjects : `pandas.DataFrame`
+            Set of SolarSystemObjects contained within the exposure bounds.
+        """
+        wcs = exposure.getWcs()
+        padding = min(
+            int(np.ceil(wcs.getPixelScale().asArcseconds()*marginArcsec)),
+            self.config.maxPixelMargin)
+        bbox = geom.Box2D(exposure.getBBox())
+        bbox.grow(padding)
+
+        mapping = wcs.getTransform().getMapping()
+        x, y = mapping.applyInverse(
+            np.radians(solarSystemObjects[['ra', 'decl']].T.to_numpy()))
+        return solarSystemObjects[bbox.contains(x, y)]
 
     def _radec_to_xyz(self, ras, decs):
         """Convert input ra/dec coordinates to spherical unit-vectors.
