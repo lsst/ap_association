@@ -30,6 +30,7 @@ from scipy.spatial import cKDTree
 import lsst.geom as geom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
+from lsst.utils.timer import timeMethod
 
 
 class SolarSystemAssociationConfig(pexConfig.Config):
@@ -61,7 +62,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
     ConfigClass = SolarSystemAssociationConfig
     _DefaultName = "ssoAssociation"
 
-    @pipeBase.timeMethod
+    @timeMethod
     def run(self, diaSourceCatalog, solarSystemObjects, exposure):
         """Create a searchable tree of unassociated DiaSources and match
         to the nearest ssoObject.

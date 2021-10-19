@@ -35,6 +35,7 @@ import lsst.pipe.base.connectionTypes as connTypes
 from lsst.pipe.tasks.postprocess import TransformCatalogBaseTask, TransformCatalogBaseConfig
 from lsst.pipe.tasks.parquetTable import ParquetTable
 from lsst.pipe.tasks.functors import Column
+from lsst.utils.timer import timeMethod
 
 
 class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
@@ -169,7 +170,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
 
         butlerQC.put(outputs, outputRefs)
 
-    @pipeBase.timeMethod
+    @timeMethod
     def run(self,
             diaSourceCat,
             diffIm,

@@ -35,6 +35,7 @@ import lsst.geom as geom
 import lsst.pex.config as pexConfig
 from lsst.pex.exceptions import InvalidParameterError
 import lsst.pipe.base as pipeBase
+from lsst.utils.timer import timeMethod
 
 
 """Methods for packaging Apdb and Pipelines data into Avro alerts.
@@ -76,7 +77,7 @@ class PackageAlertsTask(pipeBase.Task):
         self.alertSchema = alertPack.Schema.from_file(self.config.schemaFile)
         os.makedirs(self.config.alertWriteLocation, exist_ok=True)
 
-    @pipeBase.timeMethod
+    @timeMethod
     def run(self,
             diaSourceCat,
             diaObjectCat,
