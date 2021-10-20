@@ -31,6 +31,7 @@ from scipy.spatial import cKDTree
 import lsst.geom as geom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
+from lsst.utils.timer import timeMethod
 
 # Enforce an error for unsafe column/array value setting in pandas.
 pd.options.mode.chained_assignment = 'raise'
@@ -59,7 +60,7 @@ class AssociationTask(pipeBase.Task):
     ConfigClass = AssociationConfig
     _DefaultName = "association"
 
-    @pipeBase.timeMethod
+    @timeMethod
     def run(self,
             diaSources,
             diaObjects):
@@ -137,7 +138,7 @@ class AssociationTask(pipeBase.Task):
             dia_sources = dia_sources[~nan_mask]
         return dia_sources
 
-    @pipeBase.timeMethod
+    @timeMethod
     def associate_sources(self, dia_objects, dia_sources):
         """Associate the input DIASources with the catalog of DIAObjects.
 
@@ -170,7 +171,7 @@ class AssociationTask(pipeBase.Task):
 
         return match_result
 
-    @pipeBase.timeMethod
+    @timeMethod
     def score(self, dia_objects, dia_sources, max_dist):
         """Compute a quality score for each dia_source/dia_object pair
         between this catalog of DIAObjects and the input DIASource catalog.
@@ -273,7 +274,7 @@ class AssociationTask(pipeBase.Task):
 
         return vectors
 
-    @pipeBase.timeMethod
+    @timeMethod
     def match(self, dia_objects, dia_sources, score_struct):
         """Match DIAsources to DiaObjects given a score.
 

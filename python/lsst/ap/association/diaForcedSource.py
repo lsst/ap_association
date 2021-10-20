@@ -33,6 +33,7 @@ import lsst.geom as geom
 from lsst.meas.base import ForcedMeasurementTask
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
+from lsst.utils.timer import timeMethod
 
 
 class DiaForcedSourcedConfig(pexConfig.Config):
@@ -87,7 +88,7 @@ class DiaForcedSourceTask(pipeBase.Task):
         self.makeSubtask("forcedMeasurement",
                          refSchema=afwTable.SourceTable.makeMinimalSchema())
 
-    @pipeBase.timeMethod
+    @timeMethod
     def run(self,
             dia_objects,
             updatedDiaObjectIds,

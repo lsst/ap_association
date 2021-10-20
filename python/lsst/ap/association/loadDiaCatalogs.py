@@ -29,6 +29,7 @@ import lsst.geom as geom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.sphgeom as sphgeom
+from lsst.utils.timer import timeMethod
 
 __all__ = ("LoadDiaCatalogsTask", "LoadDiaCatalogsConfig")
 
@@ -54,7 +55,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
     def __init__(self, **kwargs):
         pipeBase.Task.__init__(self, **kwargs)
 
-    @pipeBase.timeMethod
+    @timeMethod
     def run(self, exposure, apdb):
         """Preload all DiaObjects and DiaSources from the Apdb given the
         current exposure.
@@ -108,7 +109,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             diaSources=diaSources,
             diaForcedSources=diaForcedSources)
 
-    @pipeBase.timeMethod
+    @timeMethod
     def loadDiaObjects(self, region, apdb):
         """Load DiaObjects from the Apdb based on their HTM location.
 
@@ -142,7 +143,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
 
         return diaObjects.replace(to_replace=[None], value=np.nan)
 
-    @pipeBase.timeMethod
+    @timeMethod
     def loadDiaSources(self, diaObjects, region, dateTime, apdb):
         """Load DiaSources from the Apdb based on their diaObjectId or
         location.
@@ -192,7 +193,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
 
         return diaSources.replace(to_replace=[None], value=np.nan)
 
-    @pipeBase.timeMethod
+    @timeMethod
     def loadDiaForcedSources(self, diaObjects, region, dateTime, apdb):
         """Load DiaObjects from the Apdb based on their HTM location.
 
@@ -241,7 +242,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
 
         return diaForcedSources.replace(to_replace=[None], value=np.nan)
 
-    @pipeBase.timeMethod
+    @timeMethod
     def _getRegion(self, exposure):
         """Calculate an enveloping region for an exposure.
 

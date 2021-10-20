@@ -39,6 +39,7 @@ from io import StringIO
 from lsst.daf.base import DateTime
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
+from lsst.utils.timer import timeMethod
 
 from lsst.pipe.base import PipelineTask, PipelineTaskConfig, PipelineTaskConnections
 import lsst.pipe.base.connectionTypes as connTypes
@@ -99,7 +100,7 @@ class SkyBotEphemerisQueryTask(PipelineTask):
 
         butlerQC.put(outputs, outputRefs)
 
-    @pipeBase.timeMethod
+    @timeMethod
     def run(self, visitInfos, visit):
         """Parse the information on the current visit and retrieve the
         observable solar system objects from SkyBot.

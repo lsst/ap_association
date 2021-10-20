@@ -36,6 +36,7 @@ from lsst.meas.base import DiaObjectCalculationTask
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
+from lsst.utils.timer import timeMethod
 
 from lsst.ap.association import (
     AssociationTask,
@@ -299,7 +300,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         butlerQC.put(outputs, outputRefs)
 
-    @pipeBase.timeMethod
+    @timeMethod
     def run(self,
             diaSourceTable,
             solarSystemObjectTable,
