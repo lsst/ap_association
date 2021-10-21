@@ -63,6 +63,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
             exposureId=self.expId,
             exposureTime=200.,
             date=self.date)
+        self.exposure.info.id = self.expId
         self.exposure.setDetector(detector)
         self.exposure.getInfo().setVisitInfo(visit)
         self.filterName = 'g'

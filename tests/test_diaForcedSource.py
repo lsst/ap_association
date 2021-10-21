@@ -122,6 +122,7 @@ class TestDiaForcedSource(unittest.TestCase):
             exposureTime=self.exposureTime,
             date=dafBase.DateTime(self.dateTime,
                                   dafBase.DateTime.Timescale.TAI))
+        self.exposure.info.id = self.exposureId
         self.exposure.setDetector(detector)
         self.exposure.getInfo().setVisitInfo(visit)
         self.exposure.setFilterLabel(afwImage.FilterLabel(band='g', physical='g.MP9401'))
@@ -138,6 +139,7 @@ class TestDiaForcedSource(unittest.TestCase):
                               self.imageSize[1]))
         masked_image = afwImage.MaskedImageF(source_image, bbox, afwImage.LOCAL)
         self.diffim = afwImage.makeExposure(masked_image, self.wcs)
+        self.diffim.info.id = self.exposureId
         self.diffim.setDetector(detector)
         self.diffim.getInfo().setVisitInfo(visit)
         self.diffim.setFilterLabel(afwImage.FilterLabel(band='g', physical='g.MP9401'))
