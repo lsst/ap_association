@@ -130,7 +130,7 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
         system=dafBase.DateTime.MJD)
 
     wcs = exposure.getWcs()
-    ccdVisitId = exposure.getInfo().getVisitInfo().getExposureId()
+    ccdVisitId = exposure.info.id
 
     data = []
     for idx, (x, y) in enumerate(zip(rand_x, rand_y)):
@@ -177,7 +177,7 @@ def makeDiaForcedSources(nSources, diaObjectIds, exposure):
     midPointTaiMJD = exposure.getInfo().getVisitInfo().getDate().get(
         system=dafBase.DateTime.MJD)
 
-    ccdVisitId = exposure.getInfo().getVisitInfo().getExposureId()
+    ccdVisitId = exposure.info.id
 
     data = []
     for idx in range(nSources):
@@ -447,7 +447,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                           self.exposure,
                           None)
 
-        ccdVisitId = self.exposure.getInfo().getVisitInfo().getExposureId()
+        ccdVisitId = self.exposure.info.id
         with open(os.path.join(tempdir, f"{ccdVisitId}.avro"), 'rb') as f:
             writer_schema, data_stream = \
                 packageAlerts.alertSchema.retrieve_alerts(f)
