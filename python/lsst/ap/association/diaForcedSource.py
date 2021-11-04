@@ -124,7 +124,7 @@ class DiaForcedSourceTask(pipeBase.Task):
         afw_dia_objects = self._convert_from_pandas(dia_objects)
 
         idFactoryDiff = afwTable.IdFactory.makeSource(
-            diffim.getInfo().getVisitInfo().getExposureId(),
+            diffim.info.id,
             afwTable.IdFactory.computeReservedFromMaxBits(int(expIdBits)))
 
         diffForcedSources = self.forcedMeasurement.generateMeasCat(
@@ -230,7 +230,7 @@ class DiaForcedSourceTask(pipeBase.Task):
         output_catalog["totFluxErr"] = direct_fluxes[:, 1]
 
         visit_info = direct_exp.getInfo().getVisitInfo()
-        ccdVisitId = visit_info.getExposureId()
+        ccdVisitId = direct_exp.info.id
         midPointTaiMJD = visit_info.getDate().get(system=DateTime.MJD)
         output_catalog["ccdVisitId"] = ccdVisitId
         output_catalog["midPointTai"] = midPointTaiMJD

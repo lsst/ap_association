@@ -116,7 +116,7 @@ class PackageAlertsTask(pipeBase.Task):
         alerts = []
         self._patchDiaSources(diaSourceCat)
         self._patchDiaSources(diaSrcHistory)
-        ccdVisitId = diffIm.getInfo().getVisitInfo().getExposureId()
+        ccdVisitId = diffIm.info.id
         diffImPhotoCalib = diffIm.getPhotoCalib()
         templatePhotoCalib = template.getPhotoCalib()
         for srcIndex, diaSource in diaSourceCat.iterrows():
