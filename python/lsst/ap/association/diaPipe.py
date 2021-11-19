@@ -455,7 +455,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                     loaderResult.diaForcedSources,
                     sort=True)
             if self.testDataFrameIndex(diaForcedSources):
-                self.log.warn(
+                self.log.warning(
                     "Duplicate DiaForcedSources created after merge with "
                     "history and new sources. This may cause downstream "
                     "problems. Dropping duplicates.")

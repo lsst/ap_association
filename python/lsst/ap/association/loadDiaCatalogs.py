@@ -135,7 +135,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
 
         diaObjects.set_index("diaObjectId", drop=False, inplace=True)
         if diaObjects.index.has_duplicates:
-            self.log.warn(
+            self.log.warning(
                 "Duplicate DiaObjects loaded from the Apdb. This may cause "
                 "downstream pipeline issues. Dropping duplicated rows")
             # Drop duplicates via index and keep the first appearance.
@@ -181,7 +181,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
                              drop=False,
                              inplace=True)
         if diaSources.index.has_duplicates:
-            self.log.warn(
+            self.log.warning(
                 "Duplicate DiaSources loaded from the Apdb. This may cause "
                 "downstream pipeline issues. Dropping duplicated rows")
             # Drop duplicates via index and keep the first appearance. Reset
@@ -229,7 +229,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
                                    drop=False,
                                    inplace=True)
         if diaForcedSources.index.has_duplicates:
-            self.log.warn(
+            self.log.warning(
                 "Duplicate DiaForcedSources loaded from the Apdb. This may "
                 "cause downstream pipeline issues. Dropping duplicated rows.")
             # Drop duplicates via index and keep the first appearance. Reset
