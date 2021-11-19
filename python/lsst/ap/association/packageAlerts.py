@@ -228,9 +228,9 @@ class PackageAlertsTask(pipeBase.Task):
                 self.log.warning(
                     "DiaSource id=%i centroid lies at pixel (%.2f, %.2f) "
                     "which is outside the Exposure with bounding box "
-                    "((%i, %i), (%i, %i)). Returning None for cutout..." %
-                    (srcId, point.x, point.y,
-                     imBBox.minX, imBBox.maxX, imBBox.minY, imBBox.maxY))
+                    "((%i, %i), (%i, %i)). Returning None for cutout...",
+                    srcId, point.x, point.y,
+                    imBBox.minX, imBBox.maxX, imBBox.minY, imBBox.maxY)
             else:
                 raise InvalidParameterError(
                     "Failed to retrieve cutout from image for DiaSource with "
