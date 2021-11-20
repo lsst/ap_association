@@ -105,7 +105,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
                 unAssocDiaSources=diaSourceCatalog,
                 nTotalSsObjects=0,
                 nAssociatedSsObjects=0)
-        self.log.info(f"Attempting to associate {nSolarSystemObjects}...")
+        self.log.info("Attempting to associate %d...", nSolarSystemObjects)
         maxRadius = np.deg2rad(self.config.maxDistArcSeconds / 3600)
 
         # Transform DIA RADEC coordinates to unit sphere xyz for tree building.
@@ -129,7 +129,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
                 nFound += 1
                 diaSourceCatalog.loc[idx[0], "ssObjectId"] = ssObject["ssObjectId"]
 
-        self.log.info(f"Successfully associated {nFound} SolarSystemObjects.")
+        self.log.info("Successfully associated %d SolarSystemObjects.", nFound)
         assocMask = diaSourceCatalog["ssObjectId"] != 0
         return pipeBase.Struct(
             ssoAssocDiaSources=diaSourceCatalog[assocMask].reset_index(drop=True),

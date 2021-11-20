@@ -210,7 +210,7 @@ class SkyBotEphemerisQueryTask(PipelineTask):
             return pd.DataFrame()
 
         nFound = len(dfSSO)
-        self.log.info(f"{nFound} Solar System Objects in visit")
+        self.log.info("%d Solar System Objects in visit", nFound)
 
         return dfSSO
 
