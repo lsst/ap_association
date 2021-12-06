@@ -25,8 +25,9 @@ import pandas as pd
 
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
-import lsst.pipe.base as pipeBase
+from lsst.pipe.base.testUtils import assertValidOutput
 import lsst.utils.tests
+import lsst.utils.timer
 from unittest.mock import patch, Mock, MagicMock, DEFAULT
 
 from lsst.ap.association import DiaPipelineTask
@@ -96,7 +97,6 @@ class TestDiaPipelineTask(unittest.TestCase):
         # appropriately.
         subtasksToMock = [
             "diaCatalogLoader",
-            "associator",
             "diaCalculation",
             "diaForcedSource",
         ]
@@ -105,20 +105,37 @@ class TestDiaPipelineTask(unittest.TestCase):
         else:
             self.assertFalse(hasattr(task, "alertPackager"))
 
-        if doSolarSystemAssociation:
-            subtasksToMock.append("solarSystemAssociator")
-        else:
+        if not doSolarSystemAssociation:
             self.assertFalse(hasattr(task, "solarSystemAssociator"))
+
+        def concatMock(data):
+            return MagicMock(spec=pd.DataFrame)
+
+        # Mock out the run() methods of these two Tasks to ensure they
+        # return data in the correct form.
+        @lsst.utils.timer.timeMethod
+        def solarSystemAssociator_run(self, unAssocDiaSources, solarSystemObjectTable, diffIm):
+            return lsst.pipe.base.Struct(nTotalSsObjects=42,
+                                         nAssociatedSsObjects=30,
+                                         ssoAssocDiaSources=MagicMock(spec=pd.DataFrame()),
+                                         unAssocDiaSources=MagicMock(spec=pd.DataFrame()))
+
+        @lsst.utils.timer.timeMethod
+        def associator_run(self, table, diaObjects):
+            return lsst.pipe.base.Struct(nUpdatedDiaObjects=2, nUnassociatedDiaObjects=3,
+                                         matchedDiaSources=MagicMock(spec=pd.DataFrame()),
+                                         unAssocDiaSources=MagicMock(spec=pd.DataFrame()))
 
         # apdb isn't a subtask, but still needs to be mocked out for correct
         # execution in the test environment.
-        def concatMock(data):
-            return MagicMock(spec=pd.DataFrame)
         with patch.multiple(
             task, **{task: DEFAULT for task in subtasksToMock + ["apdb"]}
         ):
-            with patch('lsst.ap.association.diaPipe.pd.concat',
-                       new=concatMock):
+            with patch('lsst.ap.association.diaPipe.pd.concat', new=concatMock), \
+                patch('lsst.ap.association.association.AssociationTask.run', new=associator_run), \
+                patch('lsst.ap.association.ssoAssociation.SolarSystemAssociationTask.run',
+                      new=solarSystemAssociator_run):
+
                 result = task.run(diaSrc,
                                   ssObjects,
                                   diffIm,
@@ -128,8 +145,19 @@ class TestDiaPipelineTask(unittest.TestCase):
                                   "g")
                 for subtaskName in subtasksToMock:
                     getattr(task, subtaskName).run.assert_called_once()
-                pipeBase.testUtils.assertValidOutput(task, result)
+                assertValidOutput(task, result)
                 self.assertEqual(result.apdbMarker.db_url, "sqlite://")
+                meta = task.getFullMetadata()
+                # Check that the expected metadata has been set.
+                self.assertEqual(meta["diaPipe.numUpdatedDiaObjects"], 2)
+                self.assertEqual(meta["diaPipe.numUnassociatedDiaObjects"], 3)
+                # and that associators ran once or not at all.
+                self.assertEqual(len(meta.getArray("diaPipe:associator.associator_runEndUtc")), 1)
+                if doSolarSystemAssociation:
+                    self.assertEqual(len(meta.getArray("diaPipe:solarSystemAssociator."
+                                                       "solarSystemAssociator_runEndUtc")), 1)
+                else:
+                    self.assertNotIn("diaPipe:solarSystemAssociator", meta)
 
     def test_createDiaObjects(self):
         """Test that creating new DiaObjects works as expected.
