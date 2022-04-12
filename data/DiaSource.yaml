@@ -90,7 +90,13 @@ funcs:
     psNdata:
         functor: Column
         args: slot_PsfFlux_npixels
-    # trailFlux not implemented
+    trailFlux:
+        functor: LocalNanojansky
+        args:
+            - ext_trailedSources_Naive_flux
+            - slot_ApFlux_instFluxErr  # Place holder; arg not actually used
+            - base_LocalPhotoCalib
+            - base_LocalPhotoCalibErr
     trailRa:
         functor: Column
         args: ext_trailedSources_Naive_ra
