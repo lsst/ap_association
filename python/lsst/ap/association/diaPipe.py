@@ -28,7 +28,6 @@ images at the updated locations of DiaObjects.
 Currently loads directly from the Apdb rather than pre-loading.
 """
 
-import os
 import pandas as pd
 
 import lsst.dax.apdb as daxApdb
@@ -245,10 +244,6 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     def setDefaults(self):
         self.apdb.dia_object_index = "baseline"
         self.apdb.dia_object_columns = []
-        self.apdb.extra_schema_file = os.path.join(
-            "${AP_ASSOCIATION_DIR}",
-            "data",
-            "apdb-ap-pipe-schema-extra.yaml")
         self.diaCalculation.plugins = ["ap_meanPosition",
                                        "ap_nDiaSources",
                                        "ap_diaObjectFlag",

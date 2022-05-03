@@ -31,7 +31,7 @@ import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 from lsst.ap.association import LoadDiaCatalogsTask, LoadDiaCatalogsConfig
 import lsst.daf.base as dafBase
-from lsst.dax.apdb import ApdbSql, ApdbSqlConfig
+from lsst.dax.apdb import ApdbSql, ApdbSqlConfig, ApdbTables
 import lsst.geom as geom
 from lsst.utils import getPackageDir
 import lsst.utils.tests
@@ -153,7 +153,8 @@ def makeDiaObjects(nObjects, exposure):
                      "pmParallaxNdata": 0,
                      "nearbyObj1": 0,
                      "nearbyObj2": 0,
-                     "nearbyObj3": 0}
+                     "nearbyObj3": 0,
+                     "nDiaSources": 1}
         for f in ["u", "g", "r", "i", "z", "y"]:
             newObject["%sPSFluxNdata" % f] = 0
         data.append(newObject)
@@ -195,7 +196,10 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
                      "decl": coord.getDec().asDegrees(),
                      "diaObjectId": objId,
                      "diaSourceId": idx,
-                     "midPointTai": midPointTaiMJD})
+                     "midPointTai": midPointTaiMJD,
+                     "ccdVisitId": 0,
+                     "x": 0.5,
+                     "y": 0.5})
 
     return pd.DataFrame(data=data)
 
@@ -245,10 +249,6 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         self.apdbConfig.db_url = "sqlite:///" + self.db_file
         self.apdbConfig.dia_object_index = "baseline"
         self.apdbConfig.dia_object_columns = []
-        self.apdbConfig.schema_file = _data_file_name(
-            "apdb-schema.yaml", "dax_apdb")
-        self.apdbConfig.extra_schema_file = _data_file_name(
-            "apdb-ap-pipe-schema-extra.yaml", "ap_association")
 
         self.apdb = ApdbSql(config=self.apdbConfig)
         self.apdb.makeSchema()
@@ -331,14 +331,10 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         """Test that the default DiaSource schema from dax_apdb agrees with the
         column names defined here in ap_association/data/DiaSource.yaml.
         """
+        tableDef = self.apdb.tableDef(ApdbTables.DiaSource)
+        apdbSchemaColumns = [column.name for column in tableDef.columns]
+
         functorFile = _data_file_name("DiaSource.yaml", "ap_association")
-        apdbSchemaFile = _data_file_name("apdb-schema.yaml", "dax_apdb")
-        with open(apdbSchemaFile) as yaml_stream:
-            table_list = list(yaml.safe_load_all(yaml_stream))
-            for table in table_list:
-                if table['table'] == 'DiaSource':
-                    apdbSchemaColumns = [column['name'] for column in table['columns']]
-                    break
         with open(functorFile) as yaml_stream:
             diaSourceFunctor = yaml.safe_load_all(yaml_stream)
             for functor in diaSourceFunctor:

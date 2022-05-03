@@ -221,10 +221,6 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
     apdbConfig.db_url = "sqlite:///" + tmpFile.name
     apdbConfig.dia_object_index = "baseline"
     apdbConfig.dia_object_columns = []
-    apdbConfig.schema_file = _data_file_name(
-        "apdb-schema.yaml", "dax_apdb")
-    apdbConfig.extra_schema_file = _data_file_name(
-        "apdb-ap-pipe-schema-extra.yaml", "ap_association")
 
     apdb = ApdbSql(config=apdbConfig)
     apdb.makeSchema()
