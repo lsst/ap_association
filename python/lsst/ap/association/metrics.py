@@ -223,10 +223,11 @@ class NumberSolarSystemObjectsMetricTask(MetadataMetricTask):
             A `dict` representation of the metadata. Each `dict` has the
             following key:
 
-            ``"unassociatedObjects"``
-                The number of DIAObjects not associated with a DiaSource in
-                this image (`int` or `None`). May be `None` if the image was
-                not successfully associated.
+            ``"numTotalSolarSystemObjects"``
+                The number of SolarSystemObjects within the observable detector
+                area (`int` or `None`). May be `None` if solar system
+                association was not attempted or the image was not
+                successfully associated.
 
         Returns
         -------
@@ -272,10 +273,10 @@ class NumberAssociatedSolarSystemObjectsMetricTask(MetadataMetricTask):
             A `dict` representation of the metadata. Each `dict` has the
             following key:
 
-            ``"unassociatedObjects"``
-                The number of DIAObjects not associated with a DiaSource in
-                this image (`int` or `None`). May be `None` if the image was
-                not successfully associated.
+            ``"numAssociatedSsObjects"``
+                The number of successfully associated SolarSystem Objects
+                (`int` or `None`). May be `None` if solar system association
+                was not attempted or the image was not successfully associated.
 
         Returns
         -------
