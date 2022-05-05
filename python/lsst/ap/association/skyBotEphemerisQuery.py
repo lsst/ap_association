@@ -119,9 +119,49 @@ class SkyBotEphemerisQueryTask(PipelineTask):
             Results struct with components:
 
             - ``ssObjects``: `pandas.DataFrame`
-                DataFrame containing name, RA/DEC position, position
-                uncertainty, and unique Id of on sky of Solar System Objects in
-                field of view as retrieved by SkyBot.
+                DataFrame containing Solar System Objects in field of view as
+                retrieved by SkyBot. The columns are as follows; for more
+                details see
+                https://ssp.imcce.fr/webservices/skybot/api/conesearch/#output-results
+
+                ``"Num"``
+                    object number (`int`, optional)
+                ``"Name"``
+                    object name (`str`)
+                ``"RA(h)"``
+                    RA in HMS (`str`)
+                ``"DE(deg)"``
+                    DEC in DMS (`str`)
+                ``"Class"``
+                    Minor planet classification (`str`)
+                ``"Mv"``
+                    visual magnitude (`float`)
+                ``"Err(arcsec)"``
+                    position error (`float`)
+                ``"d(arcsec)"``
+                    distance from exposure boresight (`float`)?
+                ``"dRA(arcsec/h)"``
+                    proper motion in RA (`float`)
+                ``"dDEC(arcsec/h)"``
+                    proper motion in DEC (`float`)
+                ``"Dg(ua)"``
+                    geocentric distance (`float`)
+                ``"Dh(ua)"``
+                    heliocentric distance (`float`)
+                ``"Phase(deg)"``
+                    phase angle (`float`)
+                ``"SunElong(deg)"``
+                    solar elongation (`float`)
+                ``"ra"``
+                    RA in decimal degrees (`float`)
+                ``"decl"``
+                    DEC in decimal degrees (`float`)
+                ``"ssObjectId"``
+                    unique minor planet ID for internal use (`int`). Shared
+                    across catalogs; the pair ``(ssObjectId, visitId)`` is
+                    globally unique.
+                ``"visitId"``
+                    a copy of ``visit`` (`int`)
         """
         # Grab the visitInfo from the raw to get the information needed on the
         # full visit.
