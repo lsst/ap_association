@@ -81,12 +81,12 @@ class DiaPipelineConnections(
         storageClass="ExposureF",
         dimensions=("instrument", "visit", "detector"),
     )
-    warpedExposure = connTypes.Input(
+    template = connTypes.Input(
         doc="Warped template used to create `subtractedExposure`. Not PSF "
             "matched.",
         dimensions=("instrument", "visit", "detector"),
         storageClass="ExposureF",
-        name="{fakesType}{coaddName}Diff_warpedExp",
+        name="{fakesType}{coaddName}Diff_templateExp",
     )
     apdbMarker = connTypes.Output(
         doc="Marker dataset storing the configuration of the Apdb for each "
@@ -301,7 +301,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             solarSystemObjectTable,
             diffIm,
             exposure,
-            warpedExposure,
+            template,
             ccdExposureIdBits,
             band):
         """Process DiaSources and DiaObjects.
@@ -321,7 +321,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         exposure : `lsst.afw.image.ExposureF`
             Calibrated exposure differenced with a template to create
             ``diffIm``.
-        warpedExposure : `lsst.afw.image.ExposureF`
+        template : `lsst.afw.image.ExposureF`
             Template exposure used to create diffIm.
         ccdExposureIdBits : `int`
             Number of bits used for a unique ``ccdVisitId``.
@@ -469,7 +469,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                    loaderResult.diaSources,
                                    diaForcedSources,
                                    diffIm,
-                                   warpedExposure,
+                                   template,
                                    ccdExposureIdBits)
 
         return pipeBase.Struct(apdbMarker=self.config.apdb.value,
