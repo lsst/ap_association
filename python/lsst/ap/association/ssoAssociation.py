@@ -161,7 +161,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
         """
         wcs = exposure.getWcs()
         padding = min(
-            int(np.ceil(wcs.getPixelScale().asArcseconds()*marginArcsec)),
+            int(np.ceil(marginArcsec / wcs.getPixelScale().asArcseconds())),
             self.config.maxPixelMargin)
         bbox = geom.Box2D(exposure.getBBox())
         bbox.grow(padding)
