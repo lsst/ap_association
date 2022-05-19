@@ -26,13 +26,44 @@ import pandas as pd
 import unittest
 
 import lsst.ap.association.skyBotEphemerisQuery as ephQ
+import lsst.daf.base as dafBase
 import lsst.geom as geom
+import lsst.afw.image as afwImage
 import lsst.pipe.base as pipeBase
 from lsst.utils import getPackageDir
 import lsst.utils.tests
 
 
+class MockDeferredDatasetHandle:
+    """A container that allows passing objects to methods that expect a
+    DeferredDatasetHandle.
+    """
+
+    def __init__(self, object):
+        self._internal = object
+
+    def get(self, *args, **kwargs):
+        return self._internal
+
+
 class TestSkyBotEphemerisQuery(unittest.TestCase):
+
+    def setUp(self):
+        super().setUp()
+
+        # Explicit date calculation to avoid errors from misuse of time libraries.
+        mjd = 57071.0
+        self.utc_jd = mjd + 2_400_000.5 - 35.0 / (24.0 * 60.0 * 60.0)
+
+        self.visitId = 42
+        self.visitInfo = afwImage.VisitInfo(
+            # Incomplete VisitInfo; Python constructor allows any value to
+            # be defaulted.
+            exposureTime=30.0,
+            darkTime=3.0,
+            date=dafBase.DateTime(mjd, system=dafBase.DateTime.MJD),
+            boresightRaDec=geom.SpherePoint(0.0, 0.0, geom.degrees),
+        )
 
     def test_skyBotConeSearch(self):
         """Test that our parsing of SkyBot return data succeeds and produces
@@ -52,7 +83,9 @@ class TestSkyBotEphemerisQuery(unittest.TestCase):
         with patch('lsst.ap.association.skyBotEphemerisQuery.requests.request',
                    new=requestReplace):
             ephTask = ephQ.SkyBotEphemerisQueryTask()
-            testOut = ephTask._skybotConeSearch(geom.SpherePoint(0, 0, geom.degrees), 57071, 1.7)
+            testOut = ephTask._skybotConeSearch(self.visitInfo.boresightRaDec,
+                                                self.visitInfo.date.get(),
+                                                1.7)
         testData = pd.read_parquet(
             os.path.join(getPackageDir("ap_association"),
                          "tests",
@@ -61,6 +94,18 @@ class TestSkyBotEphemerisQuery(unittest.TestCase):
         )
         self.assertEqual(len(testData), len(testOut))
         self.assertTrue(np.all(np.equal(testData["ssObjectId"], testData["ssObjectId"])))
+
+    def test_skybotRun(self):
+        """Test that the correct upload is requested.
+        """
+        task = ephQ.SkyBotEphemerisQueryTask()
+        with patch.object(task, '_skybotConeSearch') as mockSearch:
+            task.run([MockDeferredDatasetHandle(self.visitInfo)], self.visitId)
+            mockSearch.assert_called_once()
+            self.assertEqual(len(mockSearch.call_args.args), 3)
+            self.assertEqual(mockSearch.call_args.args[0], self.visitInfo.boresightRaDec)
+            self.assertAlmostEqual(mockSearch.call_args.args[1], self.utc_jd)
+            self.assertAlmostEqual(mockSearch.call_args.args[2], task.config.queryRadiusDegrees)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

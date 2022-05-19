@@ -170,8 +170,8 @@ class SkyBotEphemerisQueryTask(PipelineTask):
         visitInfo = visitInfos[0].get(
             datasetType=self.config.connections.visitInfos)
 
-        # Midpoint time of the exposure in MJD
-        expMidPointEPOCH = visitInfo.date.get(system=DateTime.JD)
+        # Midpoint time of the exposure in JD
+        expMidPointEPOCH = visitInfo.date.get(system=DateTime.JD, scale=DateTime.UTC)
 
         # Boresight of the exposure on sky.
         expCenter = visitInfo.boresightRaDec
@@ -198,7 +198,7 @@ class SkyBotEphemerisQueryTask(PipelineTask):
         expCenter : `lsst.geom.SpherePoint`
             Center of Exposure RADEC [deg]
         epochJD : `float`
-            Mid point time of exposure [EPOCH].
+            Mid point JD of exposure, in UTC [EPOCH].
         queryRadius : `float`
             Radius of the cone search in degrees.
 
