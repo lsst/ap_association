@@ -93,7 +93,7 @@ class TestSkyBotEphemerisQuery(unittest.TestCase):
                          "testSSObjects.parq")
         )
         self.assertEqual(len(testData), len(testOut))
-        self.assertTrue(np.all(np.equal(testData["ssObjectId"], testData["ssObjectId"])))
+        self.assertTrue(np.all(np.equal(testOut["ssObjectId"], testData["ssObjectId"])))
 
     def test_skybotRun(self):
         """Test that the correct upload is requested.
