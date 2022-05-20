@@ -26,8 +26,8 @@ __all__ = ["SolarSystemAssociationConfig", "SolarSystemAssociationTask"]
 import numpy as np
 import pandas as pd
 from scipy.spatial import cKDTree
+from astropy import units as u
 
-import lsst.geom as geom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 from lsst.utils.timer import timeMethod
@@ -163,13 +163,11 @@ class SolarSystemAssociationTask(pipeBase.Task):
         padding = min(
             int(np.ceil(marginArcsec / wcs.getPixelScale().asArcseconds())),
             self.config.maxPixelMargin)
-        bbox = geom.Box2D(exposure.getBBox())
-        bbox.grow(padding)
 
-        mapping = wcs.getTransform().getMapping()
-        x, y = mapping.applyInverse(
-            np.radians(solarSystemObjects[['ra', 'decl']].T.to_numpy()))
-        return solarSystemObjects[bbox.contains(x, y)]
+        return solarSystemObjects[exposure.containsSkyCoords(
+            solarSystemObjects['ra'].to_numpy() * u.degree,
+            solarSystemObjects['decl'].to_numpy() * u.degree,
+            padding)]
 
     def _radec_to_xyz(self, ras, decs):
         """Convert input ra/dec coordinates to spherical unit-vectors.
