@@ -20,6 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import numpy as np
+import pandas as pd
 import unittest
 
 from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
@@ -119,7 +120,7 @@ class TestSolarSystemAssociation(unittest.TestCase):
         testObjects.loc[2, "ra"] = 44.91215199831453
         testObjects.loc[2, "decl"] = 45.001331943391406
         maskedObjects = ssAssocTask._maskToCcdRegion(
-            self.testSsObjects.append(testObjects),
+            pd.concat([self.testSsObjects, testObjects]),
             self.exposure,
             1.0)
         self.assertEqual(len(maskedObjects), len(self.testSsObjects))
