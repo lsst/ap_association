@@ -20,10 +20,13 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import numpy as np
+import pandas as pd
 import unittest
 
 from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
+import astshim as ast
 import lsst.geom as geom
+import lsst.afw.geom as afwGeom
 import lsst.meas.base.tests as measTests
 import lsst.utils.tests
 
@@ -48,6 +51,17 @@ class TestSolarSystemAssociation(unittest.TestCase):
             10.0, schema, randomSeed=1234)
         for src in catalog:
             src.setCoord(self.exposure.getWcs().pixelToSky(src.getCentroid()))
+        # Non-invertible WCS to test robustness to distortions.
+        # Coefficients transform (x - 1e-7*x^3 -> x, y -> y); see docs for PolyMap.
+        pixelCoeffs = np.array([[-1.0e-7, 1, 3, 0],
+                                [1.0, 1, 1, 0],
+                                [1.0, 2, 0, 1],
+                                ])
+        self.exposure.setWcs(afwGeom.makeModifiedWcs(
+            afwGeom.TransformPoint2ToPoint2(ast.PolyMap(pixelCoeffs, 2, options="IterInverse=1")),
+            self.exposure.wcs,
+            modifyActualPixels=False
+        ))
 
         # Convert to task required format
         self.testDiaSources = catalog.asAstropy().to_pandas()
@@ -96,13 +110,17 @@ class TestSolarSystemAssociation(unittest.TestCase):
 
         # Add a new SolarSystemObjects outside of the bbox and test that it
         # is excluded.
-        testObjects = self.testSsObjects.loc[:1].reset_index(drop=True)
+        testObjects = self.testSsObjects.loc[:2].reset_index(drop=True)
         testObjects.loc[0, "ra"] = 150
         testObjects.loc[0, "decl"] = 80
         testObjects.loc[1, "ra"] = 150
         testObjects.loc[1, "decl"] = -80
+        # Coordinates are chosen so that the inverse WCS erroneously maps them
+        # to inside the box (to (74.5, 600.6) instead of around (1745, 600.6)).
+        testObjects.loc[2, "ra"] = 44.91215199831453
+        testObjects.loc[2, "decl"] = 45.001331943391406
         maskedObjects = ssAssocTask._maskToCcdRegion(
-            self.testSsObjects.append(testObjects),
+            pd.concat([self.testSsObjects, testObjects]),
             self.exposure,
             1.0)
         self.assertEqual(len(maskedObjects), len(self.testSsObjects))

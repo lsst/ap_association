@@ -226,9 +226,9 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
     apdb.makeSchema()
 
     wholeSky = Box.full()
-    diaObjects = apdb.getDiaObjects(wholeSky).append(objects)
-    diaSources = apdb.getDiaSources(wholeSky, [], dateTime).append(sources)
-    diaForcedSources = apdb.getDiaForcedSources(wholeSky, [], dateTime).append(forcedSources)
+    diaObjects = pd.concat([apdb.getDiaObjects(wholeSky), objects])
+    diaSources = pd.concat([apdb.getDiaSources(wholeSky, [], dateTime), sources])
+    diaForcedSources = pd.concat([apdb.getDiaForcedSources(wholeSky, [], dateTime), forcedSources])
 
     apdb.store(dateTime, diaObjects, diaSources, diaForcedSources)
 

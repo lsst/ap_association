@@ -20,6 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import numpy as np
+import pandas as pd
 import unittest
 import unittest.mock
 
@@ -165,7 +166,7 @@ class TestDiaForcedSource(unittest.TestCase):
             "ra": [point.getRa().asDegrees() for id, point in objects],
             "decl": [point.getDec().asDegrees() for id, point in objects]
         })
-        self.testDiaObjects = self.testDiaObjects.append(extra, ignore_index=True)
+        self.testDiaObjects = pd.concat([self.testDiaObjects, extra], ignore_index=True)
         # Ids of objects that were "updated" during "ap_association"
         # processing.
         self.updatedTestIds = np.array([1, 2, 3, 4, 10000001], dtype=np.uint64)
