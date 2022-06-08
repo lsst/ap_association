@@ -126,7 +126,7 @@ class TestDiaForcedSource(unittest.TestCase):
         self.exposure.info.id = self.exposureId
         self.exposure.setDetector(detector)
         self.exposure.getInfo().setVisitInfo(visit)
-        self.exposure.setFilterLabel(afwImage.FilterLabel(band='g', physical='g.MP9401'))
+        self.exposure.setFilter(afwImage.FilterLabel(band='g', physical='g.MP9401'))
         self.exposure.setPhotoCalib(afwImage.PhotoCalib(self.calibration, self.calibrationErr))
 
         # Difference Image
@@ -143,7 +143,7 @@ class TestDiaForcedSource(unittest.TestCase):
         self.diffim.info.id = self.exposureId
         self.diffim.setDetector(detector)
         self.diffim.getInfo().setVisitInfo(visit)
-        self.diffim.setFilterLabel(afwImage.FilterLabel(band='g', physical='g.MP9401'))
+        self.diffim.setFilter(afwImage.FilterLabel(band='g', physical='g.MP9401'))
         self.diffim.setPhotoCalib(afwImage.PhotoCalib(self.calibration, self.calibrationErr))
 
         self.expIdBits = 16

@@ -148,7 +148,7 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
                      "prv_procOrder": 0,
                      "diaSourceId": idx + 1,
                      "midPointTai": midPointTaiMJD + 1.0 * idx,
-                     "filterName": exposure.getFilterLabel().bandLabel,
+                     "filterName": exposure.getFilter().bandLabel,
                      "psNdata": 0,
                      "trailNdata": 0,
                      "dipNdata": 0,
@@ -187,7 +187,7 @@ def makeDiaForcedSources(nSources, diaObjectIds, exposure):
                      "ccdVisitId": ccdVisitId + idx,
                      "diaObjectId": objId,
                      "midPointTai": midPointTaiMJD + 1.0 * idx,
-                     "filterName": exposure.getFilterLabel().bandLabel,
+                     "filterName": exposure.getFilter().bandLabel,
                      "flags": 0})
 
     return pd.DataFrame(data=data)
@@ -272,7 +272,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         self.exposure.info.id = 1234
         self.exposure.getInfo().setVisitInfo(visit)
 
-        self.exposure.setFilterLabel(afwImage.FilterLabel(band='g', physical="g.MP9401"))
+        self.exposure.setFilter(afwImage.FilterLabel(band='g', physical="g.MP9401"))
 
         diaObjects = makeDiaObjects(2, self.exposure)
         diaSourceHistory = makeDiaSources(10,

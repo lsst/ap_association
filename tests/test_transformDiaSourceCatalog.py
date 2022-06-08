@@ -67,7 +67,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         self.exposure.setDetector(detector)
         self.exposure.getInfo().setVisitInfo(visit)
         self.filterName = 'g'
-        self.exposure.setFilterLabel(afwImage.FilterLabel(band=self.filterName, physical='g.MP9401'))
+        self.exposure.setFilter(afwImage.FilterLabel(band=self.filterName, physical='g.MP9401'))
         scale = 2
         scaleErr = 1
         self.photoCalib = afwImage.PhotoCalib(scale, scaleErr)

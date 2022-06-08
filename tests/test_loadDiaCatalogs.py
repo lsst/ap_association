@@ -114,7 +114,7 @@ def makeExposure(flipX=False, flipY=False):
     exposure.info.id = 1234
     exposure.setDetector(detector)
     exposure.getInfo().setVisitInfo(visit)
-    exposure.setFilterLabel(afwImage.FilterLabel(band='g'))
+    exposure.setFilter(afwImage.FilterLabel(band='g'))
 
     return exposure
 
