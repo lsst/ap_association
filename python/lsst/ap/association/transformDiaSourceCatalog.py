@@ -41,8 +41,6 @@ from lsst.utils.timer import timeMethod
 class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
                                            dimensions=("instrument", "visit", "detector"),
                                            defaultTemplates={"coaddName": "deep", "fakesType": ""}):
-    """Butler connections for TransformDiaSourceCatalogTask.
-    """
     diaSourceSchema = connTypes.InitInput(
         doc="Schema for DIASource catalog output by ImageDifference.",
         storageClass="SourceCatalog",
@@ -70,8 +68,6 @@ class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
 
 class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
                                       pipelineConnections=TransformDiaSourceCatalogConnections):
-    """
-    """
     flagMap = pexConfig.Field(
         dtype=str,
         doc="Yaml file specifying SciencePipelines flag fields to bit packs.",
@@ -107,14 +103,14 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
 
 
 class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
-    """Apply Science DataModel-ification on the DiaSource afw table.
+    """Transform a DiaSource catalog by calibrating and renaming columns to
+    produce a table ready to insert into the Apdb.
 
-    This task calibrates and renames columns in the DiaSource catalog
-    to ready the catalog for insertion into the Apdb.
-
-    This is a Gen3 Butler only task. It will not run in Gen2.
+    Parameters
+    ----------
+    initInputs : `dict`
+        Must contain ``diaSourceSchema`` as the schema for the input catalog.
     """
-
     ConfigClass = TransformDiaSourceCatalogConfig
     _DefaultName = "transformDiaSourceCatalog"
     RunnerClass = pipeBase.ButlerInitializedTaskRunner
@@ -184,6 +180,16 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
 
         Parameters
         ----------
+        diaSourceCat : `lsst.afw.table.SourceCatalog`
+            Catalog of sources measured on the difference image.
+        diffIm : `lsst.afw.image.Exposure`
+            Result of subtracting template and science images.
+        band : `str`
+            Filter band of the science image.
+        ccdVisitId : `int`
+            Identifier for this detector+visit.
+        funcs : `lsst.pipe.tasks.functors.Functors`
+            Functors to apply to the catalog's columns.
 
         Returns
         -------
@@ -227,9 +233,8 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         )
 
     def addUnpackedFlagFunctors(self):
-        """Add Column functor for each of the flags
-
-        to the internal functor dictionary
+        """Add Column functor for each of the flags to the internal functor
+        dictionary.
         """
         for flag in self.bit_pack_columns[0]['bitList']:
             flagName = flag['name']
