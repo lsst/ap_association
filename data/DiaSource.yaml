@@ -63,10 +63,8 @@ funcs:
             - base_LocalPhotoCalib
             - base_LocalPhotoCalibErr
     snr:
-        functor: Ratio
-        args:
-            - slot_ApFlux_instFlux
-            - slot_ApFlux_instFluxErr
+        functor: Column
+        args: snr
     psFlux:
         functor: LocalNanojansky
         args:
