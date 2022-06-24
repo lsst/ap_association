@@ -17,6 +17,9 @@ funcs:
     filterName:
         functor: Column
         args: filterName
+    snr:
+        functor: Column
+        args: snr
     flags:
         functor: Column
         args: flags

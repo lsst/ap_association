@@ -22,6 +22,8 @@
 import os
 import unittest
 
+import numpy as np
+
 from lsst.ap.association.transformDiaSourceCatalog import (TransformDiaSourceCatalogConfig,
                                                            TransformDiaSourceCatalogTask)
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
@@ -37,16 +39,17 @@ from lsst.ap.association.transformDiaSourceCatalog import UnpackApdbFlags
 
 
 class TestTransformDiaSourceCatalogTask(unittest.TestCase):
-
     def setUp(self):
-        nSources = 10
+        self.nSources = 10
         self.bboxSize = 18
         self.xyLoc = 100
         self.bbox = geom.Box2I(geom.Point2I(0, 0),
                                geom.Extent2I(1024, 1153))
         dataset = measTests.TestDataset(self.bbox)
-        for srcIdx in range(nSources):
+        for srcIdx in range(self.nSources-1):
             dataset.addSource(100000.0, geom.Point2D(self.xyLoc, self.xyLoc))
+        # Ensure the last source has no peak `significance` field.
+        dataset.addSource(100000.0, geom.Point2D(self.xyLoc, self.xyLoc), setPeakSignificance=False)
         schema = dataset.makeMinimalSchema()
         schema.addField("base_PixelFlags_flag", type="Flag")
         schema.addField("base_PixelFlags_flag_offimage", type="Flag")
@@ -95,13 +98,16 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
                                    ccdVisitId=self.expId)
 
         self.assertEqual(len(result.diaSourceTable), len(self.inputCatalog))
-        for idx, src in result.diaSourceTable.iterrows():
-            self.assertEqual(src["bboxSize"], self.bboxSize)
-            self.assertEqual(src["ccdVisitId"], self.expId)
-            self.assertEqual(src["filterName"], self.filterName)
-            self.assertEqual(src["midPointTai"],
-                             self.date.get(system=dafBase.DateTime.MJD))
-            self.assertEqual(src["diaObjectId"], 0)
+        np.testing.assert_array_equal(result.diaSourceTable["bboxSize"], [self.bboxSize]*self.nSources)
+        np.testing.assert_array_equal(result.diaSourceTable["ccdVisitId"], [self.expId]*self.nSources)
+        np.testing.assert_array_equal(result.diaSourceTable["filterName"], [self.filterName]*self.nSources)
+        np.testing.assert_array_equal(result.diaSourceTable["midPointTai"],
+                                      [self.date.get(system=dafBase.DateTime.MJD)]*self.nSources)
+        np.testing.assert_array_equal(result.diaSourceTable["diaObjectId"], [0]*self.nSources)
+        # The final snr value should be NaN because it doesn't have a peak significance field.
+        expect_snr = [397.887353515625]*9
+        expect_snr.append(np.nan)
+        self.assertTrue(np.array_equal(result.diaSourceTable["snr"], expect_snr, equal_nan=True))
 
     def test_run_dia_source_wrong_flags(self):
         """Test that the proper errors are thrown when requesting flag columns

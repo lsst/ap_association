@@ -208,6 +208,22 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         if self.config.doRemoveSkySources:
             diaSourceDf = diaSourceDf[~diaSourceDf["sky_source"]]
         diaSourceDf["bboxSize"] = self.computeBBoxSizes(diaSourceCat)
+
+        def getSignificance():
+            """Return the significance value of the first peak in each source
+            footprint."""
+            size = len(diaSourceDf)
+            result = np.full(size, np.nan)
+            for i in range(size):
+                record = diaSourceCat[i]
+                if self.config.doRemoveSkySources and record["sky_source"]:
+                    continue
+                peaks = record.getFootprint().peaks
+                if "significance" in peaks.schema:
+                    result[i] = peaks[0]["significance"]
+            return result
+
+        diaSourceDf["snr"] = getSignificance()
         diaSourceDf["ccdVisitId"] = ccdVisitId
         diaSourceDf["filterName"] = band
         diaSourceDf["midPointTai"] = diffIm.getInfo().getVisitInfo().getDate().get(system=DateTime.MJD)
