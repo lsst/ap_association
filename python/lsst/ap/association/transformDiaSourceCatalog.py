@@ -205,7 +205,6 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             ccdVisitId)
 
         diaSourceDf = diaSourceCat.asAstropy().to_pandas()
-        diaSourceDf["bboxSize"] = self.computeBBoxSizes(diaSourceCat)
 
         def getSignificance():
             """Return the significance value of the first peak in each source
@@ -226,6 +225,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         if self.config.doRemoveSkySources:
             diaSourceDf = diaSourceDf[~diaSourceDf["sky_source"]]
 
+        diaSourceDf["bboxSize"] = self.computeBBoxSizes(diaSourceCat)
         diaSourceDf["ccdVisitId"] = ccdVisitId
         diaSourceDf["filterName"] = band
         diaSourceDf["midPointTai"] = diffIm.getInfo().getVisitInfo().getDate().get(system=DateTime.MJD)
