@@ -76,22 +76,20 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         self.photoCalib = afwImage.PhotoCalib(scale, scaleErr)
         self.exposure.setPhotoCalib(self.photoCalib)
 
+        self.config = TransformDiaSourceCatalogConfig()
+        self.config.flagMap = os.path.join(getPackageDir("ap_association"),
+                                           "tests", "data", "test-flag-map.yaml")
+        self.config.functorFile = os.path.join(getPackageDir("ap_association"),
+                                               "tests",
+                                               "data",
+                                               "testDiaSource.yaml")
+
     def test_run(self):
         """Test output dataFrame is created and values are correctly inserted
         from the exposure.
         """
-        transConfig = TransformDiaSourceCatalogConfig()
-        transConfig.flagMap = os.path.join(
-            getPackageDir("ap_association"),
-            "tests",
-            "data",
-            "test-flag-map.yaml")
-        transConfig.functorFile = os.path.join(getPackageDir("ap_association"),
-                                               "tests",
-                                               "data",
-                                               "testDiaSource.yaml")
         transformTask = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
-                                                      config=transConfig)
+                                                      config=self.config)
         result = transformTask.run(self.inputCatalog,
                                    self.exposure,
                                    self.filterName,
@@ -119,14 +117,8 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
     def test_computeBBoxSize(self):
         """Test the values created for diaSourceBBox.
         """
-        transConfig = TransformDiaSourceCatalogConfig()
-        transConfig.flagMap = os.path.join(
-            getPackageDir("ap_association"),
-            "tests",
-            "data",
-            "test-flag-map.yaml")
         transform = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
-                                                  config=transConfig)
+                                                  config=self.config)
         bboxArray = transform.computeBBoxSizes(self.inputCatalog)
 
         # Default in catalog is 18.
@@ -135,18 +127,8 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
     def test_bit_unpacker(self):
         """Test that the integer bit packer is functioning correctly.
         """
-        transConfig = TransformDiaSourceCatalogConfig()
-        transConfig.flagMap = os.path.join(
-            getPackageDir("ap_association"),
-            "tests",
-            "data",
-            "test-flag-map.yaml")
-        transConfig.functorFile = os.path.join(getPackageDir("ap_association"),
-                                               "tests",
-                                               "data",
-                                               "testDiaSource.yaml")
         transform = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
-                                                  config=transConfig)
+                                                  config=self.config)
         for idx, obj in enumerate(self.inputCatalog):
             if idx in [1, 3, 5]:
                 obj.set("base_PixelFlags_flag", 1)
@@ -157,7 +139,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
                                       self.filterName,
                                       ccdVisitId=self.expId).diaSourceTable
 
-        unpacker = UnpackApdbFlags(transConfig.flagMap, "DiaSource")
+        unpacker = UnpackApdbFlags(self.config.flagMap, "DiaSource")
         flag_values = unpacker.unpack(outputCatalog["flags"], "flags")
 
         for idx, flag in enumerate(flag_values):
