@@ -147,9 +147,11 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
     def test_computeBBoxSize(self):
         transform = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
                                                   config=self.config)
-        bboxArray = transform.computeBBoxSizes(self.inputCatalog)
+        boxSizes = transform.computeBBoxSizes(self.inputCatalog)
 
-        self.assertEqual(bboxArray[0], self.bboxSize)
+        for size in boxSizes:
+            self.assertEqual(size, self.bboxSize)
+        self.assertEqual(len(boxSizes), self.nSources)
 
     def test_bit_unpacker(self):
         """Test that the integer bit packer is functioning correctly.
