@@ -23,3 +23,9 @@ funcs:
     flags:
         functor: Column
         args: flags
+    x:
+        functor: Column
+        args: slot_Centroid_x
+    y:
+        functor: Column
+        args: slot_Centroid_y
