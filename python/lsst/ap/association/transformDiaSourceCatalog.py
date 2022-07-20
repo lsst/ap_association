@@ -282,7 +282,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             footprintBBox = record.getFootprint().getBBox()
             # Compute twice the size of the largest dimension of the footprint
             # bounding box. This is the largest footprint we should need to cover
-            # the complete DiaSource assuming the centroid is withing the bounding
+            # the complete DiaSource assuming the centroid is within the bounding
             # box.
             maxSize = 2 * np.max([footprintBBox.getWidth(),
                                   footprintBBox.getHeight()])
