@@ -41,6 +41,8 @@ from lsst.ap.association.transformDiaSourceCatalog import UnpackApdbFlags
 class TestTransformDiaSourceCatalogTask(unittest.TestCase):
     def setUp(self):
         self.nSources = 10
+        # Default PSF size (psfDim in makeEmptyExposure) in TestDataset results
+        # in an 18 pixel wide source box.
         self.bboxSize = 18
         self.xyLoc = 100
         self.bbox = geom.Box2I(geom.Point2I(0, 0),
@@ -54,8 +56,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         schema.addField("base_PixelFlags_flag", type="Flag")
         schema.addField("base_PixelFlags_flag_offimage", type="Flag")
         self.exposure, self.inputCatalog = dataset.realize(10.0, schema, randomSeed=1234)
-        # Create schemas for use in initializing the TransformDiaSourceCatalog
-        # task.
+        # Create schemas for use in initializing the TransformDiaSourceCatalog task.
         self.initInputs = {"diaSourceSchema": Struct(schema=schema)}
         self.initInputsBadFlags = {"diaSourceSchema": Struct(schema=dataset.makeMinimalSchema())}
 
@@ -115,13 +116,10 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
             TransformDiaSourceCatalogTask(initInputs=self.initInputsBadFlags)
 
     def test_computeBBoxSize(self):
-        """Test the values created for diaSourceBBox.
-        """
         transform = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
                                                   config=self.config)
         bboxArray = transform.computeBBoxSizes(self.inputCatalog)
 
-        # Default in catalog is 18.
         self.assertEqual(bboxArray[0], self.bboxSize)
 
     def test_bit_unpacker(self):
