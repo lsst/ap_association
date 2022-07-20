@@ -106,7 +106,8 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         # The final snr value should be NaN because it doesn't have a peak significance field.
         expect_snr = [397.887353515625]*9
         expect_snr.append(np.nan)
-        self.assertTrue(np.array_equal(result.diaSourceTable["snr"], expect_snr, equal_nan=True))
+        # Have to use allclose because assert_array_equal doesn't support equal_nan.
+        np.testing.assert_allclose(result.diaSourceTable["snr"], expect_snr, equal_nan=True, rtol=0)
 
     def test_run_dia_source_wrong_flags(self):
         """Test that the proper errors are thrown when requesting flag columns
