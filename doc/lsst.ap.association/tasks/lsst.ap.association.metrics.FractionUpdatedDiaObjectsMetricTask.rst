@@ -32,8 +32,7 @@ Input datasets
 --------------
 
 :lsst-config-field:`~lsst.verify.tasks.metadataMetricTask.MetadataMetricConfig.metadata`
-    The metadata of the top-level command-line task (e.g., ``ProcessCcdTask``, ``ApPipeTask``) being instrumented.
-    Because the metadata produced by each top-level task is a different Butler dataset type, this dataset **must** be explicitly configured when running ``FractionUpdatedDiaObjectsMetricTask`` or a :lsst-task:`~lsst.verify.gen2tasks.MetricsControllerTask` that contains it.
+    The metadata of the top-level pipeline task (e.g., ``CharacterizeImageTask``, ``DiaPipeTask``) being instrumented.
 
 .. _lsst.ap.association.metrics.FractionUpdatedDiaObjectsMetricTask-subtasks:
 

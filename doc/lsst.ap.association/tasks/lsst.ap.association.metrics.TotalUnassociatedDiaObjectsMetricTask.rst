@@ -32,7 +32,6 @@ Input datasets
 :lsst-config-field:`~lsst.verify.tasks.apdbMetricTask.ApdbMetricConfig.dbInfo`
     The Butler dataset from which the database connection can be initialized.
     The type must match the input required by the :lsst-config-field:`~lsst.verify.tasks.apdbMetricTask.ApdbMetricConfig.dbLoader` subtask (default: the top-level science task's config).
-    If the input is a config, its name **must** be explicitly configured when running ``TotalUnassociatedDiaObjectsMetricTask`` or a :lsst-task:`~lsst.verify.gen2tasks.MetricsControllerTask` that contains it.
 
 .. _lsst.ap.association.metrics.TotalUnassociatedDiaObjectsMetricTask-subtasks:
 
