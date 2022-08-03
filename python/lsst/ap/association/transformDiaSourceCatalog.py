@@ -205,26 +205,11 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             ccdVisitId)
 
         diaSourceDf = diaSourceCat.asAstropy().to_pandas()
-
-        def getSignificance():
-            """Return the significance value of the first peak in each source
-            footprint."""
-            size = len(diaSourceDf)
-            result = np.full(size, np.nan)
-            for i in range(size):
-                record = diaSourceCat[i]
-                if self.config.doRemoveSkySources and record["sky_source"]:
-                    continue
-                peaks = record.getFootprint().peaks
-                if "significance" in peaks.schema:
-                    result[i] = peaks[0]["significance"]
-            return result
-
-        diaSourceDf["snr"] = getSignificance()
-
         if self.config.doRemoveSkySources:
             diaSourceDf = diaSourceDf[~diaSourceDf["sky_source"]]
+            diaSourceCat = diaSourceCat[~diaSourceCat["sky_source"]]
 
+        diaSourceDf["snr"] = getSignificance(diaSourceCat)
         diaSourceDf["bboxSize"] = self.computeBBoxSizes(diaSourceCat)
         diaSourceDf["ccdVisitId"] = ccdVisitId
         diaSourceDf["filterName"] = band
@@ -271,18 +256,15 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
 
         Returns
         -------
-        outputBBoxSizes : `list` of `float`
+        outputBBoxSizes : `np.ndarray`, (N,)
             Array of bbox sizes.
         """
-        outputBBoxSizes = []
-        for record in inputCatalog:
-            if self.config.doRemoveSkySources:
-                if record["sky_source"]:
-                    continue
+        outputBBoxSizes = np.empty(len(inputCatalog))
+        for i, record in enumerate(inputCatalog):
             footprintBBox = record.getFootprint().getBBox()
             # Compute twice the size of the largest dimension of the footprint
             # bounding box. This is the largest footprint we should need to cover
-            # the complete DiaSource assuming the centroid is withing the bounding
+            # the complete DiaSource assuming the centroid is within the bounding
             # box.
             maxSize = 2 * np.max([footprintBBox.getWidth(),
                                   footprintBBox.getHeight()])
@@ -295,7 +277,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
                                             footprintBBox.minY - recY]))))
             if bboxSize > maxSize:
                 bboxSize = maxSize
-            outputBBoxSizes.append(bboxSize)
+            outputBBoxSizes[i] = bboxSize
 
         return outputBBoxSizes
 
@@ -372,3 +354,25 @@ class UnpackApdbFlags:
             output_flags[bit_name] = masked_bits
 
         return output_flags
+
+
+def getSignificance(catalog):
+    """Return the significance value of the first peak in each source
+    footprint, or NaN for peaks without a significance field.
+
+    Parameters
+    ----------
+    catalog : `lsst.afw.table.SourceCatalog`
+        Catalog to process.
+
+    Returns
+    -------
+    significance : `np.ndarray`, (N,)
+        Signficance of the first peak in each source footprint.
+    """
+    result = np.full(len(catalog), np.nan)
+    for i, record in enumerate(catalog):
+        peaks = record.getFootprint().peaks
+        if "significance" in peaks.schema:
+            result[i] = peaks[0]["significance"]
+    return result

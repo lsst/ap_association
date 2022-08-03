@@ -40,22 +40,27 @@ from lsst.ap.association.transformDiaSourceCatalog import UnpackApdbFlags
 
 class TestTransformDiaSourceCatalogTask(unittest.TestCase):
     def setUp(self):
+        # The first source will be a sky source.
         self.nSources = 10
+        # Default PSF size (psfDim in makeEmptyExposure) in TestDataset results
+        # in an 18 pixel wide source box.
         self.bboxSize = 18
-        self.xyLoc = 100
+        self.yLoc = 100
         self.bbox = geom.Box2I(geom.Point2I(0, 0),
                                geom.Extent2I(1024, 1153))
         dataset = measTests.TestDataset(self.bbox)
         for srcIdx in range(self.nSources-1):
-            dataset.addSource(100000.0, geom.Point2D(self.xyLoc, self.xyLoc))
+            # Place sources at (index, yLoc), so we can distinguish them later.
+            dataset.addSource(100000.0, geom.Point2D(srcIdx, self.yLoc))
         # Ensure the last source has no peak `significance` field.
-        dataset.addSource(100000.0, geom.Point2D(self.xyLoc, self.xyLoc), setPeakSignificance=False)
+        dataset.addSource(100000.0, geom.Point2D(srcIdx+1, self.yLoc), setPeakSignificance=False)
         schema = dataset.makeMinimalSchema()
         schema.addField("base_PixelFlags_flag", type="Flag")
         schema.addField("base_PixelFlags_flag_offimage", type="Flag")
+        schema.addField("sky_source", type="Flag", doc="Sky objects.")
         self.exposure, self.inputCatalog = dataset.realize(10.0, schema, randomSeed=1234)
-        # Create schemas for use in initializing the TransformDiaSourceCatalog
-        # task.
+        self.inputCatalog[0]['sky_source'] = True
+        # Create schemas for use in initializing the TransformDiaSourceCatalog task.
         self.initInputs = {"diaSourceSchema": Struct(schema=schema)}
         self.initInputsBadFlags = {"diaSourceSchema": Struct(schema=dataset.makeMinimalSchema())}
 
@@ -76,22 +81,20 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         self.photoCalib = afwImage.PhotoCalib(scale, scaleErr)
         self.exposure.setPhotoCalib(self.photoCalib)
 
+        self.config = TransformDiaSourceCatalogConfig()
+        self.config.flagMap = os.path.join(getPackageDir("ap_association"),
+                                           "tests", "data", "test-flag-map.yaml")
+        self.config.functorFile = os.path.join(getPackageDir("ap_association"),
+                                               "tests",
+                                               "data",
+                                               "testDiaSource.yaml")
+
     def test_run(self):
         """Test output dataFrame is created and values are correctly inserted
         from the exposure.
         """
-        transConfig = TransformDiaSourceCatalogConfig()
-        transConfig.flagMap = os.path.join(
-            getPackageDir("ap_association"),
-            "tests",
-            "data",
-            "test-flag-map.yaml")
-        transConfig.functorFile = os.path.join(getPackageDir("ap_association"),
-                                               "tests",
-                                               "data",
-                                               "testDiaSource.yaml")
         transformTask = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
-                                                      config=transConfig)
+                                                      config=self.config)
         result = transformTask.run(self.inputCatalog,
                                    self.exposure,
                                    self.filterName,
@@ -104,10 +107,35 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         np.testing.assert_array_equal(result.diaSourceTable["midPointTai"],
                                       [self.date.get(system=dafBase.DateTime.MJD)]*self.nSources)
         np.testing.assert_array_equal(result.diaSourceTable["diaObjectId"], [0]*self.nSources)
+        np.testing.assert_array_equal(result.diaSourceTable["x"], np.arange(self.nSources))
         # The final snr value should be NaN because it doesn't have a peak significance field.
         expect_snr = [397.887353515625]*9
         expect_snr.append(np.nan)
-        self.assertTrue(np.array_equal(result.diaSourceTable["snr"], expect_snr, equal_nan=True))
+        # Have to use allclose because assert_array_equal doesn't support equal_nan.
+        np.testing.assert_allclose(result.diaSourceTable["snr"], expect_snr, equal_nan=True, rtol=0)
+
+    def test_run_doSkySources(self):
+        """Test that we get the correct output with doSkySources=True; the one
+        sky source should be missing, but the other records should be the same.
+
+        We only test the fields here that could be different, not the ones that
+        are the same for all sources.
+        """
+        # Make the sky source have a different significance value, to distinguish it.
+        self.inputCatalog[0].getFootprint().updatePeakSignificance(5.0)
+
+        self.config.doRemoveSkySources = True
+        task = TransformDiaSourceCatalogTask(initInputs=self.initInputs, config=self.config)
+        result = task.run(self.inputCatalog, self.exposure, self.filterName, ccdVisitId=self.expId)
+
+        self.assertEqual(len(result.diaSourceTable), self.nSources-1)
+        # 0th source was removed, so x positions of the remaining sources are at x=1,2,3...
+        np.testing.assert_array_equal(result.diaSourceTable["x"], np.arange(self.nSources-1)+1)
+        # The final snr value should be NaN because it doesn't have a peak significance field.
+        expect_snr = [397.887353515625]*8
+        expect_snr.append(np.nan)
+        # Have to use allclose because assert_array_equal doesn't support equal_nan.
+        np.testing.assert_allclose(result.diaSourceTable["snr"], expect_snr, equal_nan=True, rtol=0)
 
     def test_run_dia_source_wrong_flags(self):
         """Test that the proper errors are thrown when requesting flag columns
@@ -117,36 +145,19 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
             TransformDiaSourceCatalogTask(initInputs=self.initInputsBadFlags)
 
     def test_computeBBoxSize(self):
-        """Test the values created for diaSourceBBox.
-        """
-        transConfig = TransformDiaSourceCatalogConfig()
-        transConfig.flagMap = os.path.join(
-            getPackageDir("ap_association"),
-            "tests",
-            "data",
-            "test-flag-map.yaml")
         transform = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
-                                                  config=transConfig)
-        bboxArray = transform.computeBBoxSizes(self.inputCatalog)
+                                                  config=self.config)
+        boxSizes = transform.computeBBoxSizes(self.inputCatalog)
 
-        # Default in catalog is 18.
-        self.assertEqual(bboxArray[0], self.bboxSize)
+        for size in boxSizes:
+            self.assertEqual(size, self.bboxSize)
+        self.assertEqual(len(boxSizes), self.nSources)
 
     def test_bit_unpacker(self):
         """Test that the integer bit packer is functioning correctly.
         """
-        transConfig = TransformDiaSourceCatalogConfig()
-        transConfig.flagMap = os.path.join(
-            getPackageDir("ap_association"),
-            "tests",
-            "data",
-            "test-flag-map.yaml")
-        transConfig.functorFile = os.path.join(getPackageDir("ap_association"),
-                                               "tests",
-                                               "data",
-                                               "testDiaSource.yaml")
         transform = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
-                                                  config=transConfig)
+                                                  config=self.config)
         for idx, obj in enumerate(self.inputCatalog):
             if idx in [1, 3, 5]:
                 obj.set("base_PixelFlags_flag", 1)
@@ -157,7 +168,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
                                       self.filterName,
                                       ccdVisitId=self.expId).diaSourceTable
 
-        unpacker = UnpackApdbFlags(transConfig.flagMap, "DiaSource")
+        unpacker = UnpackApdbFlags(self.config.flagMap, "DiaSource")
         flag_values = unpacker.unpack(outputCatalog["flags"], "flags")
 
         for idx, flag in enumerate(flag_values):
