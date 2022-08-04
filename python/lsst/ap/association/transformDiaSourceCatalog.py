@@ -259,7 +259,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         outputBBoxSizes : `np.ndarray`, (N,)
             Array of bbox sizes.
         """
-        outputBBoxSizes = np.empty(len(inputCatalog))
+        outputBBoxSizes = np.zeros(len(inputCatalog), dtype=int)
         for i, record in enumerate(inputCatalog):
             footprintBBox = record.getFootprint().getBBox()
             # Compute twice the size of the largest dimension of the footprint
