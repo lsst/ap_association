@@ -268,7 +268,6 @@ class DiaPipelineTask(pipeBase.PipelineTask):
     """
     ConfigClass = DiaPipelineConfig
     _DefaultName = "diaPipe"
-    RunnerClass = pipeBase.ButlerInitializedTaskRunner
 
     def __init__(self, initInputs=None, **kwargs):
         super().__init__(**kwargs)
