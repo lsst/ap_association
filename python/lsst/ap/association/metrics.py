@@ -32,7 +32,6 @@ __all__ = ["NumberNewDiaObjectsMetricTask",
 import astropy.units as u
 
 from lsst.verify import Measurement
-from lsst.verify.gen2tasks import register
 from lsst.verify.tasks import MetadataMetricTask, MetadataMetricConfig, \
     ApdbMetricTask, ApdbMetricConfig, MetricComputationError
 
@@ -43,7 +42,6 @@ class NumberNewDiaObjectsMetricConfig(MetadataMetricConfig):
         self.connections.metric = "numNewDiaObjects"
 
 
-@register("numNewDiaObjects")
 class NumberNewDiaObjectsMetricTask(MetadataMetricTask):
     """Task that computes the number of DIASources that create new DIAObjects
     in an image, visit, etc..
@@ -92,7 +90,6 @@ class NumberUnassociatedDiaObjectsMetricConfig(MetadataMetricConfig):
         self.connections.metric = "numUnassociatedDiaObjects"
 
 
-@register("numUnassociatedDiaObjects")
 class NumberUnassociatedDiaObjectsMetricTask(MetadataMetricTask):
     """Task that computes the number of previously-known DIAObjects that do
     not have detected DIASources in an image, visit, etc..
@@ -141,7 +138,6 @@ class FractionUpdatedDiaObjectsMetricConfig(MetadataMetricConfig):
         self.connections.metric = "fracUpdatedDiaObjects"
 
 
-@register("fracUpdatedDiaObjects")
 class FractionUpdatedDiaObjectsMetricTask(MetadataMetricTask):
     """Task that computes the fraction of previously created DIAObjects that
     have a new association in this image, visit, etc..
@@ -205,7 +201,6 @@ class NumberSolarSystemObjectsMetricConfig(MetadataMetricConfig):
         self.connections.metric = "numTotalSolarSystemObjects"
 
 
-@register("numTotalSolarSystemObjects")
 class NumberSolarSystemObjectsMetricTask(MetadataMetricTask):
     """Task that computes the number of SolarSystemObjects that are
     observable within this detectorVisit.
@@ -256,7 +251,6 @@ class NumberAssociatedSolarSystemObjectsMetricConfig(MetadataMetricConfig):
         self.connections.metric = "numAssociatedSsObjects"
 
 
-@register("numAssociatedSsObjects")
 class NumberAssociatedSolarSystemObjectsMetricTask(MetadataMetricTask):
     """Number of SolarSystemObjects that were associated with new DiaSources
     for this detectorVisit.
@@ -305,7 +299,6 @@ class TotalUnassociatedDiaObjectsMetricConfig(ApdbMetricConfig):
         self.connections.metric = "totalUnassociatedDiaObjects"
 
 
-@register("totalUnassociatedDiaObjects")
 class TotalUnassociatedDiaObjectsMetricTask(ApdbMetricTask):
     """Task that computes the number of DIAObjects with only one
     associated DIASource.
