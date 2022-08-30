@@ -383,8 +383,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                        inplace=True)
 
         # Append new DiaObjects and DiaSources to their previous history.
-        diaObjects = loaderResult.diaObjects.append(
-            createResults.newDiaObjects.set_index("diaObjectId", drop=False),
+        diaObjects = pd.concat(
+            [loaderResult.diaObjects,
+             createResults.newDiaObjects.set_index("diaObjectId", drop=False)],
             sort=True)
         if self.testDataFrameIndex(diaObjects):
             raise RuntimeError(
@@ -393,8 +394,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 "Apdb. If this was not the case then there was an unexpected "
                 "failure in Association while matching and creating new "
                 "DiaObjects and should be reported. Exiting.")
-        mergedDiaSourceHistory = loaderResult.diaSources.append(
-            associatedDiaSources,
+        mergedDiaSourceHistory = pd.concat(
+            [loaderResult.diaSources, associatedDiaSources],
             sort=True)
         # Test for DiaSource duplication first. If duplicates are found,
         # this likely means this is duplicate data being processed and sent
@@ -445,8 +446,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         if self.config.doPackageAlerts:
             if len(loaderResult.diaForcedSources) > 1:
-                diaForcedSources = diaForcedSources.append(
-                    loaderResult.diaForcedSources,
+                diaForcedSources = pd.concat(
+                    [diaForcedSources, loaderResult.diaForcedSources],
                     sort=True)
             if self.testDataFrameIndex(diaForcedSources):
                 self.log.warning(
