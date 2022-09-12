@@ -97,7 +97,7 @@ class DiaPipelineConnections(
     )
     associatedDiaSources = connTypes.Output(
         doc="Optional output storing the DiaSource catalog after matching, "
-            "calibration, and standardization for insertation into the Apdb.",
+            "calibration, and standardization for insertion into the Apdb.",
         name="{fakesType}{coaddName}Diff_assocDiaSrc",
         storageClass="DataFrame",
         dimensions=("instrument", "visit", "detector"),
@@ -420,12 +420,12 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             raise RuntimeError(
                 "Duplicate DiaObjects (loaded + updated) created after "
                 "DiaCalculation. This is unexpected behavior and should be "
-                "reported. Existing.")
+                "reported. Exiting.")
         if self.testDataFrameIndex(diaCalResult.updatedDiaObjects):
             raise RuntimeError(
                 "Duplicate DiaObjects (updated) created after "
                 "DiaCalculation. This is unexpected behavior and should be "
-                "reported. Existing.")
+                "reported. Exiting.")
 
         # Force photometer on the Difference and Calibrated exposures using
         # the new and updated DiaObject locations.
