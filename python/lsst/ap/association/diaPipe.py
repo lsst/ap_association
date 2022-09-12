@@ -102,12 +102,26 @@ class DiaPipelineConnections(
         storageClass="DataFrame",
         dimensions=("instrument", "visit", "detector"),
     )
+    diaForcedSources = connTypes.Output(
+        doc="Optional output storing the forced sources computed at the diaObject positions.",
+        name="{fakesType}{coaddName}Diff_diaForcedSrc",
+        storageClass="DataFrame",
+        dimensions=("instrument", "visit", "detector"),
+    )
+    diaObjects = connTypes.Output(
+        doc="Optional output storing the updated diaObjects associated to these sources.",
+        name="{fakesType}{coaddName}Diff_diaObject",
+        storageClass="DataFrame",
+        dimensions=("instrument", "visit", "detector"),
+    )
 
     def __init__(self, *, config=None):
         super().__init__(config=config)
 
         if not config.doWriteAssociatedSources:
             self.outputs.remove("associatedDiaSources")
+            self.outputs.remove("diaForcedSources")
+            self.outputs.remove("diaObjects")
         if not config.doSolarSystemAssociation:
             self.inputs.remove("solarSystemObjectTable")
 
@@ -238,7 +252,8 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     doWriteAssociatedSources = pexConfig.Field(
         dtype=bool,
         default=False,
-        doc="Write out associated and SDMed DiaSources.",
+        doc="Write out associated DiaSources, DiaForcedSources, and DiaObjects, "
+            "formatted following the Science Data Model.",
     )
 
     def setDefaults(self):
@@ -473,7 +488,10 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                    ccdExposureIdBits)
 
         return pipeBase.Struct(apdbMarker=self.config.apdb.value,
-                               associatedDiaSources=associatedDiaSources,)
+                               associatedDiaSources=associatedDiaSources,
+                               diaForcedSources=diaForcedSources,
+                               diaObjects=diaObjects,
+                               )
 
     def createNewDiaObjects(self, unAssocDiaSources):
         """Loop through the set of DiaSources and create new DiaObjects
