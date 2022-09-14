@@ -78,10 +78,16 @@ class TestNewDiaObjects(MetadataMetricTestCase):
         self.assertEqual(meas.quantity, 0.0 * u.count)
 
     def testAssociationFailed(self):
-        result = self.task.run(PropertySet())
-        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
-        meas = result.measurement
-        self.assertIsNone(meas)
+        try:
+            result = self.task.run(PropertySet())
+        except lsst.pipe.base.NoWorkFound:
+            # Correct behavior
+            pass
+        else:
+            # Alternative correct behavior
+            lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+            meas = result.measurement
+            self.assertIsNone(meas)
 
     def testBadlyTypedKeys(self):
         metadata = _makeAssociationMetadata()
@@ -117,10 +123,16 @@ class TestUnassociatedDiaObjects(MetadataMetricTestCase):
         self.assertEqual(meas.quantity, 0.0 * u.count)
 
     def testAssociationFailed(self):
-        result = self.task.run(PropertySet())
-        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
-        meas = result.measurement
-        self.assertIsNone(meas)
+        try:
+            result = self.task.run(PropertySet())
+        except lsst.pipe.base.NoWorkFound:
+            # Correct behavior
+            pass
+        else:
+            # Alternative correct behavior
+            lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+            meas = result.measurement
+            self.assertIsNone(meas)
 
     def testBadlyTypedKeys(self):
         metadata = _makeAssociationMetadata()
@@ -167,18 +179,28 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
 
     def testNoObjects(self):
         metadata = _makeAssociationMetadata(numUpdated=0, numUnassociated=0)
-        result = self.task.run(metadata)
-        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
-        meas = result.measurement
-
-        self.assertIsNone(meas)
-
+        try:
+            result = self.task.run(metadata)
+        except lsst.pipe.base.NoWorkFound:
+            # Correct behavior
+            pass
+        else:
+            # Alternative correct behavior
+            lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+            meas = result.measurement
+            self.assertIsNone(meas)
 
     def testAssociationFailed(self):
-        result = self.task.run(PropertySet())
-        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
-        meas = result.measurement
-        self.assertIsNone(meas)
+        try:
+            result = self.task.run(PropertySet())
+        except lsst.pipe.base.NoWorkFound:
+            # Correct behavior
+            pass
+        else:
+            # Alternative correct behavior
+            lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+            meas = result.measurement
+            self.assertIsNone(meas)
 
     def testBadlyTypedKeys(self):
         metadata = _makeAssociationMetadata()
@@ -214,10 +236,16 @@ class TestNumberSolarSystemObjects(MetadataMetricTestCase):
         self.assertEqual(meas.quantity, 0.0 * u.count)
 
     def testAssociationFailed(self):
-        result = self.task.run(PropertySet())
-        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
-        meas = result.measurement
-        self.assertIsNone(meas)
+        try:
+            result = self.task.run(PropertySet())
+        except lsst.pipe.base.NoWorkFound:
+            # Correct behavior
+            pass
+        else:
+            # Alternative correct behavior
+            lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+            meas = result.measurement
+            self.assertIsNone(meas)
 
     def testBadlyTypedKeys(self):
         metadata = _makeAssociationMetadata()
@@ -253,10 +281,16 @@ class TestNumberAssociatedSolarSystemObjects(MetadataMetricTestCase):
         self.assertEqual(meas.quantity, 0.0 * u.count)
 
     def testAssociationFailed(self):
-        result = self.task.run(PropertySet())
-        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
-        meas = result.measurement
-        self.assertIsNone(meas)
+        try:
+            result = self.task.run(PropertySet())
+        except lsst.pipe.base.NoWorkFound:
+            # Correct behavior
+            pass
+        else:
+            # Alternative correct behavior
+            lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+            meas = result.measurement
+            self.assertIsNone(meas)
 
     def testBadlyTypedKeys(self):
         metadata = _makeAssociationMetadata()
