@@ -31,6 +31,7 @@ __all__ = ["NumberNewDiaObjectsMetricTask",
 
 import astropy.units as u
 
+from lsst.pipe.base import NoWorkFound
 from lsst.verify import Measurement
 from lsst.verify.tasks import MetadataMetricTask, MetadataMetricConfig, \
     ApdbMetricTask, ApdbMetricConfig, MetricComputationError
@@ -76,8 +77,7 @@ class NumberNewDiaObjectsMetricTask(MetadataMetricTask):
             else:
                 return Measurement(self.config.metricName, nNew * u.count)
         else:
-            self.log.info("Nothing to do: no association results found.")
-            return None
+            raise NoWorkFound("Nothing to do: no association results found.")
 
     @classmethod
     def getInputMetadataKeys(cls, config):
@@ -124,8 +124,7 @@ class NumberUnassociatedDiaObjectsMetricTask(MetadataMetricTask):
             else:
                 return Measurement(self.config.metricName, nNew * u.count)
         else:
-            self.log.info("Nothing to do: no association results found.")
-            return None
+            raise NoWorkFound("Nothing to do: no association results found.")
 
     @classmethod
     def getInputMetadataKeys(cls, config):
@@ -186,8 +185,7 @@ class FractionUpdatedDiaObjectsMetricTask(MetadataMetricTask):
                     fraction = nUpdated / (nUpdated + nUnassociated)
                     return Measurement(self.config.metricName, fraction * u.dimensionless_unscaled)
         else:
-            self.log.info("Nothing to do: no association results found.")
-            return None
+            raise NoWorkFound("Nothing to do: no association results found.")
 
     @classmethod
     def getInputMetadataKeys(cls, config):
@@ -237,8 +235,7 @@ class NumberSolarSystemObjectsMetricTask(MetadataMetricTask):
             else:
                 return Measurement(self.config.metricName, nNew * u.count)
         else:
-            self.log.info("Nothing to do: no solar system results found.")
-            return None
+            raise NoWorkFound("Nothing to do: no solar system results found.")
 
     @classmethod
     def getInputMetadataKeys(cls, config):
@@ -285,8 +282,7 @@ class NumberAssociatedSolarSystemObjectsMetricTask(MetadataMetricTask):
             else:
                 return Measurement(self.config.metricName, nNew * u.count)
         else:
-            self.log.info("Nothing to do: no solar system results found.")
-            return None
+            raise NoWorkFound("Nothing to do: no solar system results found.")
 
     @classmethod
     def getInputMetadataKeys(cls, config):
