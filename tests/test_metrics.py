@@ -77,17 +77,17 @@ class TestNewDiaObjects(MetadataMetricTestCase):
         self.assertEqual(meas.metric_name, Name(metric="ap_association.numNewDiaObjects"))
         self.assertEqual(meas.quantity, 0.0 * u.count)
 
-    def testMissingData(self):
-        result = self.task.run(None)
-        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
-        meas = result.measurement
-        self.assertIsNone(meas)
-
     def testAssociationFailed(self):
-        result = self.task.run(PropertySet())
-        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
-        meas = result.measurement
-        self.assertIsNone(meas)
+        try:
+            result = self.task.run(PropertySet())
+        except lsst.pipe.base.NoWorkFound:
+            # Correct behavior
+            pass
+        else:
+            # Alternative correct behavior
+            lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+            meas = result.measurement
+            self.assertIsNone(meas)
 
     def testBadlyTypedKeys(self):
         metadata = _makeAssociationMetadata()
@@ -122,17 +122,17 @@ class TestUnassociatedDiaObjects(MetadataMetricTestCase):
         self.assertEqual(meas.metric_name, Name(metric="ap_association.numUnassociatedDiaObjects"))
         self.assertEqual(meas.quantity, 0.0 * u.count)
 
-    def testMissingData(self):
-        result = self.task.run(None)
-        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
-        meas = result.measurement
-        self.assertIsNone(meas)
-
     def testAssociationFailed(self):
-        result = self.task.run(PropertySet())
-        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
-        meas = result.measurement
-        self.assertIsNone(meas)
+        try:
+            result = self.task.run(PropertySet())
+        except lsst.pipe.base.NoWorkFound:
+            # Correct behavior
+            pass
+        else:
+            # Alternative correct behavior
+            lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+            meas = result.measurement
+            self.assertIsNone(meas)
 
     def testBadlyTypedKeys(self):
         metadata = _makeAssociationMetadata()
@@ -179,23 +179,28 @@ class TestFracUpdatedDiaObjects(MetadataMetricTestCase):
 
     def testNoObjects(self):
         metadata = _makeAssociationMetadata(numUpdated=0, numUnassociated=0)
-        result = self.task.run(metadata)
-        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
-        meas = result.measurement
-
-        self.assertIsNone(meas)
-
-    def testMissingData(self):
-        result = self.task.run(None)
-        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
-        meas = result.measurement
-        self.assertIsNone(meas)
+        try:
+            result = self.task.run(metadata)
+        except lsst.pipe.base.NoWorkFound:
+            # Correct behavior
+            pass
+        else:
+            # Alternative correct behavior
+            lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+            meas = result.measurement
+            self.assertIsNone(meas)
 
     def testAssociationFailed(self):
-        result = self.task.run(PropertySet())
-        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
-        meas = result.measurement
-        self.assertIsNone(meas)
+        try:
+            result = self.task.run(PropertySet())
+        except lsst.pipe.base.NoWorkFound:
+            # Correct behavior
+            pass
+        else:
+            # Alternative correct behavior
+            lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+            meas = result.measurement
+            self.assertIsNone(meas)
 
     def testBadlyTypedKeys(self):
         metadata = _makeAssociationMetadata()
@@ -230,17 +235,17 @@ class TestNumberSolarSystemObjects(MetadataMetricTestCase):
         self.assertEqual(meas.metric_name, Name(metric="ap_association.numTotalSolarSystemObjects"))
         self.assertEqual(meas.quantity, 0.0 * u.count)
 
-    def testMissingData(self):
-        result = self.task.run(None)
-        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
-        meas = result.measurement
-        self.assertIsNone(meas)
-
     def testAssociationFailed(self):
-        result = self.task.run(PropertySet())
-        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
-        meas = result.measurement
-        self.assertIsNone(meas)
+        try:
+            result = self.task.run(PropertySet())
+        except lsst.pipe.base.NoWorkFound:
+            # Correct behavior
+            pass
+        else:
+            # Alternative correct behavior
+            lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+            meas = result.measurement
+            self.assertIsNone(meas)
 
     def testBadlyTypedKeys(self):
         metadata = _makeAssociationMetadata()
@@ -275,17 +280,17 @@ class TestNumberAssociatedSolarSystemObjects(MetadataMetricTestCase):
         self.assertEqual(meas.metric_name, Name(metric="ap_association.numAssociatedSsObjects"))
         self.assertEqual(meas.quantity, 0.0 * u.count)
 
-    def testMissingData(self):
-        result = self.task.run(None)
-        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
-        meas = result.measurement
-        self.assertIsNone(meas)
-
     def testAssociationFailed(self):
-        result = self.task.run(PropertySet())
-        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
-        meas = result.measurement
-        self.assertIsNone(meas)
+        try:
+            result = self.task.run(PropertySet())
+        except lsst.pipe.base.NoWorkFound:
+            # Correct behavior
+            pass
+        else:
+            # Alternative correct behavior
+            lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
+            meas = result.measurement
+            self.assertIsNone(meas)
 
     def testBadlyTypedKeys(self):
         metadata = _makeAssociationMetadata()
@@ -349,12 +354,6 @@ class TestTotalUnassociatedObjects(ApdbMetricTestCase):
 
         self.assertEqual(meas.metric_name, Name(metric="ap_association.totalUnassociatedDiaObjects"))
         self.assertEqual(meas.quantity, 0.0 * u.count)
-
-    def testMissingData(self):
-        result = self.task.run(None)
-        lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
-        meas = result.measurement
-        self.assertIsNone(meas)
 
     def testFineGrainedMetric(self):
         with self.assertRaises(ValueError):
