@@ -108,7 +108,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         if not doSolarSystemAssociation:
             self.assertFalse(hasattr(task, "solarSystemAssociator"))
 
-        def concatMock(data):
+        def concatMock(_data, **_kwargs):
             return MagicMock(spec=pd.DataFrame)
 
         # Mock out the run() methods of these two Tasks to ensure they
