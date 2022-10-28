@@ -97,8 +97,20 @@ class DiaPipelineConnections(
     )
     associatedDiaSources = connTypes.Output(
         doc="Optional output storing the DiaSource catalog after matching, "
-            "calibration, and standardization for insertation into the Apdb.",
+            "calibration, and standardization for insertion into the Apdb.",
         name="{fakesType}{coaddName}Diff_assocDiaSrc",
+        storageClass="DataFrame",
+        dimensions=("instrument", "visit", "detector"),
+    )
+    diaForcedSources = connTypes.Output(
+        doc="Optional output storing the forced sources computed at the diaObject positions.",
+        name="{fakesType}{coaddName}Diff_diaForcedSrc",
+        storageClass="DataFrame",
+        dimensions=("instrument", "visit", "detector"),
+    )
+    diaObjects = connTypes.Output(
+        doc="Optional output storing the updated diaObjects associated to these sources.",
+        name="{fakesType}{coaddName}Diff_diaObject",
         storageClass="DataFrame",
         dimensions=("instrument", "visit", "detector"),
     )
@@ -108,6 +120,8 @@ class DiaPipelineConnections(
 
         if not config.doWriteAssociatedSources:
             self.outputs.remove("associatedDiaSources")
+            self.outputs.remove("diaForcedSources")
+            self.outputs.remove("diaObjects")
         if not config.doSolarSystemAssociation:
             self.inputs.remove("solarSystemObjectTable")
 
@@ -238,7 +252,8 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     doWriteAssociatedSources = pexConfig.Field(
         dtype=bool,
         default=False,
-        doc="Write out associated and SDMed DiaSources.",
+        doc="Write out associated DiaSources, DiaForcedSources, and DiaObjects, "
+            "formatted following the Science Data Model.",
     )
 
     def setDefaults(self):
@@ -420,12 +435,12 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             raise RuntimeError(
                 "Duplicate DiaObjects (loaded + updated) created after "
                 "DiaCalculation. This is unexpected behavior and should be "
-                "reported. Existing.")
+                "reported. Exiting.")
         if self.testDataFrameIndex(diaCalResult.updatedDiaObjects):
             raise RuntimeError(
                 "Duplicate DiaObjects (updated) created after "
                 "DiaCalculation. This is unexpected behavior and should be "
-                "reported. Existing.")
+                "reported. Exiting.")
 
         # Force photometer on the Difference and Calibrated exposures using
         # the new and updated DiaObject locations.
@@ -473,7 +488,10 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                    ccdExposureIdBits)
 
         return pipeBase.Struct(apdbMarker=self.config.apdb.value,
-                               associatedDiaSources=associatedDiaSources,)
+                               associatedDiaSources=associatedDiaSources,
+                               diaForcedSources=diaForcedSources,
+                               diaObjects=diaObjects,
+                               )
 
     def createNewDiaObjects(self, unAssocDiaSources):
         """Loop through the set of DiaSources and create new DiaObjects
