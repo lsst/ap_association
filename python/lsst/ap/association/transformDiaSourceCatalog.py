@@ -58,12 +58,23 @@ class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
         storageClass="ExposureF",
         dimensions=("instrument", "visit", "detector"),
     )
+    spuriousness = connTypes.Input(
+        doc="Spuriousness (e.g. real/bogus) classificiation of diaSourceCat sources (optional).",
+        name="{fakesType}{coaddName}RealBogusSources",
+        storageClass="Catalog",
+        dimensions=("instrument", "visit", "detector"),
+    )
     diaSourceTable = connTypes.Output(
         doc=".",
         name="{fakesType}{coaddName}Diff_diaSrcTable",
         storageClass="DataFrame",
         dimensions=("instrument", "visit", "detector"),
     )
+
+    def __init__(self, *, config=None):
+        super().__init__(config=config)
+        if not self.config.doIncludeSpuriousness:
+            self.inputs.remove("spuriousness")
 
 
 class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
@@ -94,6 +105,12 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
         doc="Do pack the flags into one integer column named 'flags'."
             "If False, instead produce one boolean column per flag."
     )
+    doIncludeSpuriousness = pexConfig.Field(
+        dtype=bool,
+        default=False,
+        doc="Include the spuriousness (e.g. real/bogus) classifications in the output."
+    )
+
     idGenerator = DetectorVisitIdGeneratorConfig.make_field()
 
     def setDefaults(self):
@@ -170,7 +187,8 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             diaSourceCat,
             diffIm,
             band,
-            ccdVisitId):
+            ccdVisitId,
+            spuriousness=None):
         """Convert input catalog to ParquetTable/Pandas and run functors.
 
         Additionally, add new columns for stripping information from the
@@ -186,6 +204,9 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             Filter band of the science image.
         ccdVisitId : `int`
             Identifier for this detector+visit.
+        spuriousness : `lsst.afw.table.SourceCatalog`
+            Spuriousness (e.g. real/bogus) scores, row-matched to
+            ``diaSourceCat``.
 
         Returns
         -------
@@ -212,6 +233,11 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         diaSourceDf["midPointTai"] = diffIm.getInfo().getVisitInfo().getDate().get(system=DateTime.MJD)
         diaSourceDf["diaObjectId"] = 0
         diaSourceDf["ssObjectId"] = 0
+        diaSourceDf["spuriousness"] = np.nan
+        if self.config.doIncludeSpuriousness:
+            # TODO: do we need to test that the spuriousness table is row-matched
+            # on id with diaSourceCat? Currently, we're just trusting that that is true.
+            diaSourceDf["spuriousness"] = spuriousness["score"]
 
         if self.config.doPackFlags:
             # either bitpack the flags
