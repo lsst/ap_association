@@ -355,6 +355,33 @@ class UnpackApdbFlags:
 
         return output_flags
 
+    def makeFlagBitMask(self, flagNames, columnName='flags'):
+        """Return a bitmask corresponding to the supplied flag names.
+
+        Parameters:
+        ----------
+        flagNames : `list` of `str`
+            flag names to include in the bitmask.
+        columnName : `str`, optional
+            name of bitpacked flag column (default `'flags'`)
+
+        Returns
+        -------
+        bitmask : `np.unit64`
+            Bitmask corresponding to the supplied flag names given the loaded configuration.
+        """
+
+        bitmask = np.uint64(0)
+
+        for outputFlag in self.bit_pack_columns:
+            if outputFlag['columnName'] == columnName:
+                bitList = outputFlag['bitList']
+                for bit in bitList:
+                    if bit['name'] in flagNames:
+                        bitmask += np.uint64(2**bit['bit'])
+
+        return bitmask
+
 
 def getSignificance(catalog):
     """Return the significance value of the first peak in each source
