@@ -356,22 +356,27 @@ class UnpackApdbFlags:
         return output_flags
 
     def flagExists(self, flagName, columnName='flags'):
-        """Check if named flag is in bitpacked flag set.
+        """Check if named flag is in the bitpacked flag set.
 
         Parameters:
         ----------
         flagName : `str`
-            Flag name.
+            Flag name to search for.
         columnName : `str`, optional
-            Name of bitpacked flag column.
+            Name of bitpacked flag column to search in.
 
         Returns
         -------
         flagExists : `bool`
             `True` if `flagName` is present in `columnName`.
+
+        Raises
+        ------
+        ValueError
+            Raised if `columnName` is not defined.
         """
         if columnName not in self.output_flag_columns:
-            raise ValueError(f'column {columnName} not in flag map')
+            raise ValueError(f'column {columnName} not in flag map: {self.output_flag_columns}')
 
         return flagName in [c[0] for c in self.output_flag_columns[columnName]]
 
@@ -389,6 +394,11 @@ class UnpackApdbFlags:
         -------
         bitmask : `np.unit64`
             Bitmask corresponding to the supplied flag names given the loaded configuration.
+
+        Raises
+        ------
+        ValueError
+            Raised if a flag in `flagName` is not included in `columnName`.
         """
         bitmask = np.uint64(0)
 
