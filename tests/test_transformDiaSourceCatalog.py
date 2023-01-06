@@ -182,6 +182,29 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
             else:
                 self.assertFalse(flag['base_PixelFlags_flag_offimage'])
 
+    def test_flag_existence_check(self):
+        unpacker = UnpackApdbFlags(self.config.flagMap, "DiaSource")
+
+        self.assertTrue(unpacker.flagExists('base_PixelFlags_flag'))
+        self.assertFalse(unpacker.flagExists(''))
+        with self.assertRaisesRegex(ValueError, 'column doesNotExist not in flag map'):
+            unpacker.flagExists('base_PixelFlags_flag', columnName='doesNotExist')
+
+    def test_flag_bitmask(self):
+        """Test that we get the expected bitmask back from supplied flag names.
+        """
+        unpacker = UnpackApdbFlags(self.config.flagMap, "DiaSource")
+
+        with self.assertRaisesRegex(ValueError, "flag '' not included"):
+            unpacker.makeFlagBitMask([''])
+        with self.assertRaisesRegex(ValueError, 'column doesNotExist not in flag map'):
+            unpacker.makeFlagBitMask(['base_PixelFlags_flag'], columnName='doesNotExist')
+        self.assertEqual(unpacker.makeFlagBitMask(['base_PixelFlags_flag']), np.uint64(1))
+        self.assertEqual(unpacker.makeFlagBitMask(['base_PixelFlags_flag_offimage']), np.uint64(2))
+        self.assertEqual(unpacker.makeFlagBitMask(['base_PixelFlags_flag',
+                                                   'base_PixelFlags_flag_offimage']),
+                         np.uint64(3))
+
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass
