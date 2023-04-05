@@ -138,7 +138,8 @@ class DiaForcedSourceTask(pipeBase.Task):
         directForcedSources = self.forcedMeasurement.generateMeasCat(
             exposure,
             afw_dia_objects,
-            exposure.getWcs())
+            exposure.getWcs(),
+            idFactory=idFactoryDiff)
         self.forcedMeasurement.run(
             directForcedSources, exposure, afw_dia_objects, exposure.getWcs())
 
