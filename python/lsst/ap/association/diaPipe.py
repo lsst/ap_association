@@ -31,7 +31,7 @@ Currently loads directly from the Apdb rather than pre-loading.
 import pandas as pd
 
 import lsst.dax.apdb as daxApdb
-from lsst.meas.base import DiaObjectCalculationTask
+from lsst.meas.base import DetectorVisitIdGeneratorConfig, DiaObjectCalculationTask
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
@@ -255,6 +255,7 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         doc="Write out associated DiaSources, DiaForcedSources, and DiaObjects, "
             "formatted following the Science Data Model.",
     )
+    idGenerator = DetectorVisitIdGeneratorConfig.make_field()
 
     def setDefaults(self):
         self.apdb.dia_object_index = "baseline"
@@ -298,9 +299,10 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
-        expId, expBits = butlerQC.quantum.dataId.pack("visit_detector",
-                                                      returnMaxBits=True)
-        inputs["ccdExposureIdBits"] = expBits
+        inputs["idGenerator"] = self.config.idGenerator.apply(butlerQC.quantum.dataId)
+        # Need to set ccdExposureIdBits (now deprecated) to None and pass it,
+        # since there are non-optional positional arguments after it.
+        inputs["ccdExposureIdBits"] = None
         inputs["band"] = butlerQC.quantum.dataId["band"]
         if not self.config.doSolarSystemAssociation:
             inputs["solarSystemObjectTable"] = None
@@ -316,8 +318,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diffIm,
             exposure,
             template,
-            ccdExposureIdBits,
-            band):
+            ccdExposureIdBits,  # TODO: remove on DM-38687.
+            band,
+            idGenerator=None):
         """Process DiaSources and DiaObjects.
 
         Load previous DiaObjects and their DiaSource history. Calibrate the
@@ -338,9 +341,16 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         template : `lsst.afw.image.ExposureF`
             Template exposure used to create diffIm.
         ccdExposureIdBits : `int`
-            Number of bits used for a unique ``ccdVisitId``.
+            Number of bits used for a unique ``ccdVisitId``.  Deprecated in
+            favor of ``idGenerator``, and ignored if that is present.  Pass
+            `None` explicitly to avoid a deprecation warning (a default is
+            impossible given that later positional arguments are not
+            defaulted).
         band : `str`
             The band in which the new DiaSources were detected.
+        idGenerator : `lsst.meas.base.IdGenerator`, optional
+            Object that generates source IDs and random number generator seeds.
+            Will be required after ``ccdExposureIdBits`` is removed.
 
         Returns
         -------
@@ -447,9 +457,13 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         diaForcedSources = self.diaForcedSource.run(
             diaCalResult.diaObjectCat,
             diaCalResult.updatedDiaObjects.loc[:, "diaObjectId"].to_numpy(),
+            # Passing a ccdExposureIdBits here that isn't None will make
+            # diaForcedSource emit a deprecation warning, so we don't have to
+            # emit our own.
             ccdExposureIdBits,
             exposure,
-            diffIm)
+            diffIm,
+            idGenerator=idGenerator)
 
         # Store DiaSources, updated DiaObjects, and DiaForcedSources in the
         # Apdb.
@@ -484,8 +498,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                    loaderResult.diaSources,
                                    diaForcedSources,
                                    diffIm,
-                                   template,
-                                   ccdExposureIdBits)
+                                   template)
 
         return pipeBase.Struct(apdbMarker=self.config.apdb.value,
                                associatedDiaSources=associatedDiaSources,
