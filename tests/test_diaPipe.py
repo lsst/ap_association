@@ -164,7 +164,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         """
         nSources = 5
         diaSources = pd.DataFrame(data=[
-            {"ra": 0.04*idx, "decl": 0.04*idx,
+            {"ra": 0.04*idx, "dec": 0.04*idx,
              "diaSourceId": idx + 1 + nSources, "diaObjectId": 0,
              "ssObjectId": 0}
             for idx in range(nSources)])

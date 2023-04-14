@@ -402,7 +402,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         updatedDiaObjectIds = associatedDiaSources["diaObjectId"][
             associatedDiaSources["diaObjectId"] != 0].to_numpy()
         associatedDiaSources.set_index(["diaObjectId",
-                                        "filterName",
+                                        "band",
                                         "diaSourceId"],
                                        drop=False,
                                        inplace=True)
@@ -562,7 +562,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 Id of the a nearbyObject in the Object table (`int`).
             ``nearbyObj3``
                 Id of the a nearbyObject in the Object table (`int`).
-            ``?PSFluxData``
+            ``?_psfFluxNdata``
                 Number of data points used to calculate point source flux
                 summary statistics in each bandpass (`int`).
         """
@@ -573,7 +573,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                           "nearbyObj3": 0,
                           "flags": 0}
         for f in ["u", "g", "r", "i", "z", "y"]:
-            new_dia_object["%sPSFluxNdata" % f] = 0
+            new_dia_object["%s_psfFluxNdata" % f] = 0
         return pd.Series(data=new_dia_object)
 
     def testDataFrameIndex(self, df):

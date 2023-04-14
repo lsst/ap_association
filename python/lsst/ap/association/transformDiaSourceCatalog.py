@@ -227,11 +227,12 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             diaSourceDf = diaSourceDf[~diaSourceDf["sky_source"]]
             diaSourceCat = diaSourceCat[~diaSourceCat["sky_source"]]
 
+        diaSourceDf["time_processed"] = DateTime.now().toPython()
         diaSourceDf["snr"] = getSignificance(diaSourceCat)
         diaSourceDf["bboxSize"] = self.computeBBoxSizes(diaSourceCat)
         diaSourceDf["ccdVisitId"] = ccdVisitId
-        diaSourceDf["filterName"] = band
-        diaSourceDf["midPointTai"] = diffIm.getInfo().getVisitInfo().getDate().get(system=DateTime.MJD)
+        diaSourceDf["band"] = band
+        diaSourceDf["midpointMjdTai"] = diffIm.getInfo().getVisitInfo().getDate().get(system=DateTime.MJD)
         diaSourceDf["diaObjectId"] = 0
         diaSourceDf["ssObjectId"] = 0
 

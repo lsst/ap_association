@@ -77,7 +77,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
               the ``diaObjectId`` column. (`pandas.DataFrame`)
             - ``diaSources`` : Complete set of DiaSources covering the input
               exposure padded by ``pixelMargin``. DataFrame is indexed by
-              ``diaObjectId``, ``filterName``, ``diaSourceId`` columns.
+              ``diaObjectId``, ``band``, ``diaSourceId`` columns.
               (`pandas.DataFrame`)
         """
         visiInfo = exposure.getInfo().getVisitInfo()
@@ -172,12 +172,12 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             # If no area is specified return an empty DataFrame with the
             # the column used for indexing later in AssociationTask.
             diaSources = pd.DataFrame(columns=["diaObjectId",
-                                               "filterName",
+                                               "band",
                                                "diaSourceId"])
         else:
             diaSources = apdb.getDiaSources(region, diaObjects.loc[:, "diaObjectId"], dateTime)
 
-        diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
+        diaSources.set_index(["diaObjectId", "band", "diaSourceId"],
                              drop=False,
                              inplace=True)
         if diaSources.index.has_duplicates:
@@ -187,7 +187,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             # Drop duplicates via index and keep the first appearance. Reset
             # due to the index shape being slight different thatn expected.
             diaSources = diaSources.groupby(diaSources.index).first().reset_index(drop=True)
-            diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
+            diaSources.set_index(["diaObjectId", "band", "diaSourceId"],
                                  drop=False,
                                  inplace=True)
 

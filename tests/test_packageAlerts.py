@@ -60,7 +60,7 @@ def makeDiaObjects(nObjects, exposure):
     rand_x = np.random.uniform(bbox.getMinX(), bbox.getMaxX(), size=nObjects)
     rand_y = np.random.uniform(bbox.getMinY(), bbox.getMaxY(), size=nObjects)
 
-    midPointTaiMJD = exposure.getInfo().getVisitInfo().getDate().get(
+    midPointMjd = exposure.getInfo().getVisitInfo().getDate().get(
         system=dafBase.DateTime.MJD)
 
     wcs = exposure.getWcs()
@@ -69,8 +69,8 @@ def makeDiaObjects(nObjects, exposure):
     for idx, (x, y) in enumerate(zip(rand_x, rand_y)):
         coord = wcs.pixelToSky(x, y)
         newObject = {"ra": coord.getRa().asDegrees(),
-                     "decl": coord.getDec().asDegrees(),
-                     "radecTai": midPointTaiMJD,
+                     "dec": coord.getDec().asDegrees(),
+                     "radecEpoch": midPointMjd,
                      "diaObjectId": idx + 1,
                      "pmParallaxNdata": 0,
                      "nearbyObj1": 0,
@@ -79,7 +79,7 @@ def makeDiaObjects(nObjects, exposure):
                      "flags": 1,
                      "nDiaSources": 5}
         for f in ["u", "g", "r", "i", "z", "y"]:
-            newObject["%sPSFluxNdata" % f] = 0
+            newObject["%s_psfFluxNdata" % f] = 0
         data.append(newObject)
 
     return pd.DataFrame(data=data)
@@ -106,7 +106,7 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
     rand_x = np.random.uniform(bbox.getMinX(), bbox.getMaxX(), size=nSources)
     rand_y = np.random.uniform(bbox.getMinY(), bbox.getMaxY(), size=nSources)
 
-    midPointTaiMJD = exposure.getInfo().getVisitInfo().getDate().get(
+    midPointMjd = exposure.getInfo().getVisitInfo().getDate().get(
         system=dafBase.DateTime.MJD)
 
     wcs = exposure.getWcs()
@@ -118,7 +118,7 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
         objId = diaObjectIds[idx % len(diaObjectIds)]
         # Put together the minimum values for the alert.
         data.append({"ra": coord.getRa().asDegrees(),
-                     "decl": coord.getDec().asDegrees(),
+                     "dec": coord.getDec().asDegrees(),
                      "x": x,
                      "y": y,
                      "ccdVisitId": ccdVisitId,
@@ -127,11 +127,11 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
                      "parentDiaSourceId": 0,
                      "prv_procOrder": 0,
                      "diaSourceId": idx + 1,
-                     "midPointTai": midPointTaiMJD + 1.0 * idx,
-                     "filterName": exposure.getFilter().bandLabel,
-                     "psNdata": 0,
+                     "midPointMjd": midPointMjd + 1.0 * idx,
+                     "band": exposure.getFilter().bandLabel,
+                     "psfNdata": 0,
                      "trailNdata": 0,
-                     "dipNdata": 0,
+                     "dipoleNdata": 0,
                      "flags": 1})
 
     return pd.DataFrame(data=data)
@@ -154,7 +154,7 @@ def makeDiaForcedSources(nSources, diaObjectIds, exposure):
     diaSources : `pandas.DataFrame`
         DiaSources generated across the exposure.
     """
-    midPointTaiMJD = exposure.getInfo().getVisitInfo().getDate().get(
+    midPointMjd = exposure.getInfo().getVisitInfo().getDate().get(
         system=dafBase.DateTime.MJD)
 
     ccdVisitId = exposure.info.id
@@ -166,8 +166,8 @@ def makeDiaForcedSources(nSources, diaObjectIds, exposure):
         data.append({"diaForcedSourceId": idx + 1,
                      "ccdVisitId": ccdVisitId + idx,
                      "diaObjectId": objId,
-                     "midPointTai": midPointTaiMJD + 1.0 * idx,
-                     "filterName": exposure.getFilter().bandLabel,
+                     "midPointMjd": midPointMjd + 1.0 * idx,
+                     "band": exposure.getFilter().bandLabel,
                      "flags": 0})
 
     return pd.DataFrame(data=data)
@@ -218,7 +218,7 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
         wholeSky, np.unique(diaObjects["diaObjectId"]), dateTime)
 
     diaObjects.set_index("diaObjectId", drop=False, inplace=True)
-    diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
+    diaSources.set_index(["diaObjectId", "band", "diaSourceId"],
                          drop=False,
                          inplace=True)
     diaForcedSources.set_index(["diaObjectId"], drop=False, inplace=True)
@@ -375,7 +375,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
 
         for srcIdx, diaSource in self.diaSources.iterrows():
             sphPoint = geom.SpherePoint(diaSource["ra"],
-                                        diaSource["decl"],
+                                        diaSource["dec"],
                                         geom.degrees)
             cutout = self.exposure.getCutout(sphPoint,
                                              geom.Extent2I(self.cutoutSize,
@@ -441,7 +441,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                 else:
                     self.assertEqual(value, self.diaSources.iloc[idx][key])
             sphPoint = geom.SpherePoint(alert["diaSource"]["ra"],
-                                        alert["diaSource"]["decl"],
+                                        alert["diaSource"]["dec"],
                                         geom.degrees)
             cutout = self.exposure.getCutout(sphPoint,
                                              geom.Extent2I(self.cutoutSize,

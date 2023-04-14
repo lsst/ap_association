@@ -112,7 +112,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
 
         # Transform DIA RADEC coordinates to unit sphere xyz for tree building.
         vectors = self._radec_to_xyz(diaSourceCatalog["ra"],
-                                     diaSourceCatalog["decl"])
+                                     diaSourceCatalog["dec"])
 
         # Create KDTree of DIA sources
         tree = cKDTree(vectors)
@@ -123,7 +123,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
         # fancier later.
         for index, ssObject in maskedObjects.iterrows():
 
-            ssoVect = self._radec_to_xyz(ssObject["ra"], ssObject["decl"])
+            ssoVect = self._radec_to_xyz(ssObject["ra"], ssObject["dec"])
 
             # Which DIA Sources fall within r?
             dist, idx = tree.query(ssoVect, distance_upper_bound=maxRadius)
@@ -166,7 +166,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
 
         return solarSystemObjects[exposure.containsSkyCoords(
             solarSystemObjects['ra'].to_numpy() * u.degree,
-            solarSystemObjects['decl'].to_numpy() * u.degree,
+            solarSystemObjects['dec'].to_numpy() * u.degree,
             padding)]
 
     def _radec_to_xyz(self, ras, decs):

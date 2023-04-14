@@ -66,10 +66,10 @@ class TestSolarSystemAssociation(unittest.TestCase):
         # Convert to task required format
         self.testDiaSources = catalog.asAstropy().to_pandas()
         self.testDiaSources.rename(columns={"coord_ra": "ra",
-                                            "coord_dec": "decl"},
+                                            "coord_dec": "dec"},
                                    inplace=True,)
         self.testDiaSources.loc[:, "ra"] = np.rad2deg(self.testDiaSources["ra"])
-        self.testDiaSources.loc[:, "decl"] = np.rad2deg(self.testDiaSources["decl"])
+        self.testDiaSources.loc[:, "dec"] = np.rad2deg(self.testDiaSources["dec"])
         self.testDiaSources["ssObjectId"] = 0
 
         # Grab a subset to treat as solar system objects
@@ -112,13 +112,13 @@ class TestSolarSystemAssociation(unittest.TestCase):
         # is excluded.
         testObjects = self.testSsObjects.loc[:2].reset_index(drop=True)
         testObjects.loc[0, "ra"] = 150
-        testObjects.loc[0, "decl"] = 80
+        testObjects.loc[0, "dec"] = 80
         testObjects.loc[1, "ra"] = 150
-        testObjects.loc[1, "decl"] = -80
+        testObjects.loc[1, "dec"] = -80
         # Coordinates are chosen so that the inverse WCS erroneously maps them
         # to inside the box (to (74.5, 600.6) instead of around (1745, 600.6)).
         testObjects.loc[2, "ra"] = 44.91215199831453
-        testObjects.loc[2, "decl"] = 45.001331943391406
+        testObjects.loc[2, "dec"] = 45.001331943391406
         maskedObjects = ssAssocTask._maskToCcdRegion(
             pd.concat([self.testSsObjects, testObjects]),
             self.exposure,

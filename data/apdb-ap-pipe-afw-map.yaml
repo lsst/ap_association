@@ -6,10 +6,10 @@
 DiaObject:
   diaObjectId: id
   ra: coord_ra
-  decl: coord_dec
+  dec: coord_dec
 
 DiaSource:
   diaSourceId: id
   parentDiaSourceId: parent
   ra: coord_ra
-  decl: coord_dec
+  dec: coord_dec

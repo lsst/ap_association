@@ -96,14 +96,14 @@ class PackageAlertsTask(pipeBase.Task):
         ----------
         diaSourceCat : `pandas.DataFrame`
             New DiaSources to package. DataFrame should be indexed on
-            ``["diaObjectId", "filterName", "diaSourceId"]``
+            ``["diaObjectId", "band", "diaSourceId"]``
         diaObjectCat : `pandas.DataFrame`
             New and updated DiaObjects matched to the new DiaSources. DataFrame
             is indexed on ``["diaObjectId"]``
         diaSrcHistory : `pandas.DataFrame`
             12 month history of DiaSources matched to the DiaObjects. Excludes
             the newest DiaSource and is indexed on
-            ``["diaObjectId", "filterName", "diaSourceId"]``
+            ``["diaObjectId", "band", "diaSourceId"]``
         diaForcedSources : `pandas.DataFrame`
             12 month history of DiaForcedSources matched to the DiaObjects.
             ``["diaObjectId"]``
@@ -138,7 +138,7 @@ class PackageAlertsTask(pipeBase.Task):
                 objSourceHistory = None
             objDiaForcedSources = diaForcedSources.loc[srcIndex[0]]
             sphPoint = geom.SpherePoint(diaSource["ra"],
-                                        diaSource["decl"],
+                                        diaSource["dec"],
                                         geom.degrees)
 
             cutoutExtent = self.createDiaSourceExtent(diaSource["bboxSize"])

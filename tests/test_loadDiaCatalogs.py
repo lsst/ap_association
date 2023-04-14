@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import datetime
 import os
 import numpy as np
 import pandas as pd
@@ -138,7 +139,7 @@ def makeDiaObjects(nObjects, exposure):
     rand_x = np.random.uniform(bbox.getMinX(), bbox.getMaxX(), size=nObjects)
     rand_y = np.random.uniform(bbox.getMinY(), bbox.getMaxY(), size=nObjects)
 
-    midPointTaiMJD = exposure.getInfo().getVisitInfo().getDate().get(
+    midPointMjd = exposure.getInfo().getVisitInfo().getDate().get(
         system=dafBase.DateTime.MJD)
 
     wcs = exposure.getWcs()
@@ -147,8 +148,8 @@ def makeDiaObjects(nObjects, exposure):
     for idx, (x, y) in enumerate(zip(rand_x, rand_y)):
         coord = wcs.pixelToSky(x, y)
         newObject = {"ra": coord.getRa().asDegrees(),
-                     "decl": coord.getDec().asDegrees(),
-                     "radecTai": midPointTaiMJD,
+                     "dec": coord.getDec().asDegrees(),
+                     "radecEpoch": midPointMjd,
                      "diaObjectId": idx,
                      "pmParallaxNdata": 0,
                      "nearbyObj1": 0,
@@ -156,7 +157,7 @@ def makeDiaObjects(nObjects, exposure):
                      "nearbyObj3": 0,
                      "nDiaSources": 1}
         for f in ["u", "g", "r", "i", "z", "y"]:
-            newObject["%sPSFluxNdata" % f] = 0
+            newObject["%s_psfFluxNdata" % f] = 0
         data.append(newObject)
 
     return pd.DataFrame(data=data)
@@ -184,7 +185,7 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
     rand_y = np.random.uniform(bbox.getMinY(), bbox.getMaxY(), size=nSources)
     rand_ids = diaObjectIds[np.random.randint(len(diaObjectIds), size=nSources)]
 
-    midPointTaiMJD = exposure.getInfo().getVisitInfo().getDate().get(
+    midPointMjd = exposure.getInfo().getVisitInfo().getDate().get(
         system=dafBase.DateTime.MJD)
 
     wcs = exposure.getWcs()
@@ -193,11 +194,12 @@ def makeDiaSources(nSources, diaObjectIds, exposure):
     for idx, (x, y, objId) in enumerate(zip(rand_x, rand_y, rand_ids)):
         coord = wcs.pixelToSky(x, y)
         data.append({"ra": coord.getRa().asDegrees(),
-                     "decl": coord.getDec().asDegrees(),
+                     "dec": coord.getDec().asDegrees(),
                      "diaObjectId": objId,
                      "diaSourceId": idx,
-                     "midPointTai": midPointTaiMJD,
+                     "midPointMjd": midPointMjd,
                      "ccdVisitId": 0,
+                     "time_processed": datetime.datetime.now(),
                      "x": 0.5,
                      "y": 0.5})
 
@@ -224,7 +226,7 @@ def makeDiaForcedSources(nForcedSources, diaObjectIds, exposure):
     rand_ids = diaObjectIds[
         np.random.randint(len(diaObjectIds), size=nForcedSources)]
 
-    midPointTaiMJD = exposure.getInfo().getVisitInfo().getDate().get(
+    midPointMjd = exposure.getInfo().getVisitInfo().getDate().get(
         system=dafBase.DateTime.MJD)
 
     data = []
@@ -232,7 +234,7 @@ def makeDiaForcedSources(nForcedSources, diaObjectIds, exposure):
         data.append({"diaObjectId": objId,
                      "diaForcedSourceId": idx,
                      "ccdVisitId": idx,
-                     "midPointTai": midPointTaiMJD})
+                     "midPointMjd": midPointMjd})
 
     return pd.DataFrame(data=data)
 
@@ -273,7 +275,7 @@ class TestLoadDiaCatalogs(unittest.TestCase):
 
         # These columns are not in the DPDD, yet do appear in DiaSource.yaml.
         # We don't need to check them against the default APDB schema.
-        self.ignoreColumns = ["filterName", "bboxSize", "isDipole"]
+        self.ignoreColumns = ["band", "bboxSize", "isDipole"]
 
     def tearDown(self):
         os.close(self.db_file_fd)
