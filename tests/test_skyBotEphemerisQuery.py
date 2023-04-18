@@ -30,8 +30,9 @@ import lsst.daf.base as dafBase
 import lsst.geom as geom
 import lsst.afw.image as afwImage
 import lsst.pipe.base as pipeBase
-from lsst.utils import getPackageDir
 import lsst.utils.tests
+
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class TestSkyBotEphemerisQuery(unittest.TestCase):
@@ -61,8 +62,7 @@ class TestSkyBotEphemerisQuery(unittest.TestCase):
             """Junk wrapper for replacing the external internal call with an
             internel data load.
             """
-            with open(os.path.join(getPackageDir("ap_association"),
-                                   "tests",
+            with open(os.path.join(TESTDIR,
                                    "data",
                                    "testSSObjects.txt"),
                       "r") as f:
@@ -75,8 +75,7 @@ class TestSkyBotEphemerisQuery(unittest.TestCase):
                                                 self.visitInfo.date.get(),
                                                 1.7)
         testData = pd.read_parquet(
-            os.path.join(getPackageDir("ap_association"),
-                         "tests",
+            os.path.join(TESTDIR,
                          "data",
                          "testSSObjects.parq")
         )
