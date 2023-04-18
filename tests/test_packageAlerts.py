@@ -38,27 +38,7 @@ from lsst.dax.apdb import ApdbSql, ApdbSqlConfig
 import lsst.geom as geom
 import lsst.meas.base.tests
 from lsst.sphgeom import Box
-from lsst.utils import getPackageDir
 import lsst.utils.tests
-
-
-def _data_file_name(basename, module_name):
-    """Return path name of a data file.
-
-    Parameters
-    ----------
-    basename : `str`
-        Name of the file to add to the path string.
-    module_name : `str`
-        Name of lsst stack package environment variable.
-
-    Returns
-    -------
-    data_file_path : `str`
-       Full path of the file to load from the "data" directory in a given
-       repository.
-    """
-    return os.path.join(getPackageDir(module_name), "data", basename)
 
 
 def makeDiaObjects(nObjects, exposure):
