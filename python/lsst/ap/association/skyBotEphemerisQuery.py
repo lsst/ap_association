@@ -167,8 +167,7 @@ class SkyBotEphemerisQueryTask(PipelineTask):
         """
         # Grab the visitInfo from the raw to get the information needed on the
         # full visit.
-        visitInfo = visitInfos[0].get(
-            datasetType=self.config.connections.visitInfos)
+        visitInfo = visitInfos[0].get()
 
         # Midpoint time of the exposure in JD
         expMidPointEPOCH = visitInfo.date.get(system=DateTime.JD, scale=DateTime.UTC)
