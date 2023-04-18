@@ -34,18 +34,6 @@ from lsst.utils import getPackageDir
 import lsst.utils.tests
 
 
-class MockDeferredDatasetHandle:
-    """A container that allows passing objects to methods that expect a
-    DeferredDatasetHandle.
-    """
-
-    def __init__(self, object):
-        self._internal = object
-
-    def get(self, *args, **kwargs):
-        return self._internal
-
-
 class TestSkyBotEphemerisQuery(unittest.TestCase):
 
     def setUp(self):
@@ -100,7 +88,7 @@ class TestSkyBotEphemerisQuery(unittest.TestCase):
         """
         task = ephQ.SkyBotEphemerisQueryTask()
         with patch.object(task, '_skybotConeSearch') as mockSearch:
-            task.run([MockDeferredDatasetHandle(self.visitInfo)], self.visitId)
+            task.run([pipeBase.InMemoryDatasetHandle(self.visitInfo)], self.visitId)
             mockSearch.assert_called_once()
             self.assertEqual(len(mockSearch.call_args.args), 3)
             self.assertEqual(mockSearch.call_args.args[0], self.visitInfo.boresightRaDec)
