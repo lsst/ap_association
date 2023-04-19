@@ -33,7 +33,6 @@ import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
 from lsst.pipe.tasks.postprocess import TransformCatalogBaseTask, TransformCatalogBaseConfig
-from lsst.pipe.tasks.parquetTable import ParquetTable
 from lsst.pipe.tasks.functors import Column
 from lsst.utils.timer import timeMethod
 
@@ -227,7 +226,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
                 del self.funcs.funcDict['flags']
 
         df = self.transform(band,
-                            ParquetTable(dataFrame=diaSourceDf),
+                            diaSourceDf,
                             self.funcs,
                             dataId=None).df
 
