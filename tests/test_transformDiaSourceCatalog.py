@@ -32,10 +32,11 @@ import lsst.afw.image as afwImage
 import lsst.geom as geom
 import lsst.meas.base.tests as measTests
 from lsst.pipe.base import Struct
-from lsst.utils import getPackageDir
 import lsst.utils.tests
 
 from lsst.ap.association.transformDiaSourceCatalog import UnpackApdbFlags
+
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class TestTransformDiaSourceCatalogTask(unittest.TestCase):
@@ -82,10 +83,8 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         self.exposure.setPhotoCalib(self.photoCalib)
 
         self.config = TransformDiaSourceCatalogConfig()
-        self.config.flagMap = os.path.join(getPackageDir("ap_association"),
-                                           "tests", "data", "test-flag-map.yaml")
-        self.config.functorFile = os.path.join(getPackageDir("ap_association"),
-                                               "tests",
+        self.config.flagMap = os.path.join(TESTDIR, "data", "test-flag-map.yaml")
+        self.config.functorFile = os.path.join(TESTDIR,
                                                "data",
                                                "testDiaSource.yaml")
 

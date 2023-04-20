@@ -30,20 +30,9 @@ import lsst.daf.base as dafBase
 import lsst.geom as geom
 import lsst.afw.image as afwImage
 import lsst.pipe.base as pipeBase
-from lsst.utils import getPackageDir
 import lsst.utils.tests
 
-
-class MockDeferredDatasetHandle:
-    """A container that allows passing objects to methods that expect a
-    DeferredDatasetHandle.
-    """
-
-    def __init__(self, object):
-        self._internal = object
-
-    def get(self, *args, **kwargs):
-        return self._internal
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class TestSkyBotEphemerisQuery(unittest.TestCase):
@@ -73,8 +62,7 @@ class TestSkyBotEphemerisQuery(unittest.TestCase):
             """Junk wrapper for replacing the external internal call with an
             internel data load.
             """
-            with open(os.path.join(getPackageDir("ap_association"),
-                                   "tests",
+            with open(os.path.join(TESTDIR,
                                    "data",
                                    "testSSObjects.txt"),
                       "r") as f:
@@ -87,8 +75,7 @@ class TestSkyBotEphemerisQuery(unittest.TestCase):
                                                 self.visitInfo.date.get(),
                                                 1.7)
         testData = pd.read_parquet(
-            os.path.join(getPackageDir("ap_association"),
-                         "tests",
+            os.path.join(TESTDIR,
                          "data",
                          "testSSObjects.parq")
         )
@@ -100,7 +87,7 @@ class TestSkyBotEphemerisQuery(unittest.TestCase):
         """
         task = ephQ.SkyBotEphemerisQueryTask()
         with patch.object(task, '_skybotConeSearch') as mockSearch:
-            task.run([MockDeferredDatasetHandle(self.visitInfo)], self.visitId)
+            task.run([pipeBase.InMemoryDatasetHandle(self.visitInfo)], self.visitId)
             mockSearch.assert_called_once()
             self.assertEqual(len(mockSearch.call_args.args), 3)
             self.assertEqual(mockSearch.call_args.args[0], self.visitInfo.boresightRaDec)
