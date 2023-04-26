@@ -170,8 +170,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             diaSourceCat,
             diffIm,
             band,
-            ccdVisitId,
-            funcs=None):
+            ccdVisitId):
         """Convert input catalog to ParquetTable/Pandas and run functors.
 
         Additionally, add new columns for stripping information from the
@@ -187,8 +186,6 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             Filter band of the science image.
         ccdVisitId : `int`
             Identifier for this detector+visit.
-        funcs : `lsst.pipe.tasks.functors.Functors`, optional
-            Functors to apply to the catalog's columns.
 
         Returns
         -------
