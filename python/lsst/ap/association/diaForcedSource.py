@@ -25,6 +25,7 @@ locations.
 
 __all__ = ["DiaForcedSourceTask", "DiaForcedSourcedConfig"]
 
+import warnings
 import numpy as np
 
 import lsst.afw.table as afwTable
@@ -92,9 +93,10 @@ class DiaForcedSourceTask(pipeBase.Task):
     def run(self,
             dia_objects,
             updatedDiaObjectIds,
-            expIdBits,
+            expIdBits,  # TODO: remove on DM-38687.
             exposure,
-            diffim):
+            diffim,
+            idGenerator=None):
         """Measure forced sources on the direct and difference images.
 
         Parameters
@@ -108,11 +110,17 @@ class DiaForcedSourceTask(pipeBase.Task):
             Used to assure that the pipeline includes all diaObjects that were
             updated in case one falls on the edge of the CCD.
         expIdBits : `int`
-            Bit length of the exposure id.
+            Bit length of the exposure id.  Deprecated in favor of
+            ``idGenerator``, and ignored if that is present.  Pass `None`
+            explicitly to avoid a deprecation warning (a default is impossible
+            given that later positional arguments are not defaulted).
         exposure : `lsst.afw.image.Exposure`
             Direct image exposure.
         diffim : `lsst.afw.image.Exposure`
             Difference image.
+        idGenerator : `lsst.meas.base.IdGenerator`, optional
+            Object that generates source IDs and random number generator seeds.
+            Will be required after ``expIdBits`` is removed.
 
         Returns
         -------
@@ -123,9 +131,18 @@ class DiaForcedSourceTask(pipeBase.Task):
 
         afw_dia_objects = self._convert_from_pandas(dia_objects)
 
-        idFactoryDiff = afwTable.IdFactory.makeSource(
-            diffim.info.id,
-            afwTable.IdFactory.computeReservedFromMaxBits(int(expIdBits)))
+        if expIdBits is not None:
+            warnings.warn(
+                "'expIdBits' argument is deprecated in favor of 'idGenerator'; will be removed after v27.",
+                category=FutureWarning,
+            )
+
+        if idGenerator is None:
+            idFactoryDiff = afwTable.IdFactory.makeSource(
+                diffim.info.id,
+                afwTable.IdFactory.computeReservedFromMaxBits(int(expIdBits)))
+        else:
+            idFactoryDiff = idGenerator.make_table_id_factory()
 
         diffForcedSources = self.forcedMeasurement.generateMeasCat(
             diffim,
@@ -138,7 +155,8 @@ class DiaForcedSourceTask(pipeBase.Task):
         directForcedSources = self.forcedMeasurement.generateMeasCat(
             exposure,
             afw_dia_objects,
-            exposure.getWcs())
+            exposure.getWcs(),
+            idFactory=idFactoryDiff)
         self.forcedMeasurement.run(
             directForcedSources, exposure, afw_dia_objects, exposure.getWcs())
 

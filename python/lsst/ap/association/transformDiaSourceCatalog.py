@@ -32,6 +32,7 @@ from lsst.daf.base import DateTime
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
+from lsst.meas.base import DetectorVisitIdGeneratorConfig
 from lsst.pipe.tasks.postprocess import TransformCatalogBaseTask, TransformCatalogBaseConfig
 from lsst.pipe.tasks.functors import Column
 from lsst.utils.timer import timeMethod
@@ -93,6 +94,7 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
         doc="Do pack the flags into one integer column named 'flags'."
             "If False, instead produce one boolean column per flag."
     )
+    idGenerator = DetectorVisitIdGeneratorConfig.make_field()
 
     def setDefaults(self):
         super().setDefaults()
@@ -155,9 +157,8 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
-        expId, expBits = butlerQC.quantum.dataId.pack("visit_detector",
-                                                      returnMaxBits=True)
-        inputs["ccdVisitId"] = expId
+        idGenerator = self.config.idGenerator.apply(butlerQC.quantum.dataId)
+        inputs["ccdVisitId"] = idGenerator.catalog_id
         inputs["band"] = butlerQC.quantum.dataId["band"]
 
         outputs = self.run(**inputs)
@@ -169,8 +170,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             diaSourceCat,
             diffIm,
             band,
-            ccdVisitId,
-            funcs=None):
+            ccdVisitId):
         """Convert input catalog to ParquetTable/Pandas and run functors.
 
         Additionally, add new columns for stripping information from the
@@ -186,8 +186,6 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             Filter band of the science image.
         ccdVisitId : `int`
             Identifier for this detector+visit.
-        funcs : `lsst.pipe.tasks.functors.Functors`
-            Functors to apply to the catalog's columns.
 
         Returns
         -------
