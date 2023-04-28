@@ -83,7 +83,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
             date=self.date)
         self.exposure.info.id = self.expId
         self.exposure.setDetector(detector)
-        self.exposure.getInfo().setVisitInfo(visit)
+        self.exposure.info.setVisitInfo(visit)
         self.band = 'g'
         self.exposure.setFilter(afwImage.FilterLabel(band=self.band, physical='g.MP9401'))
         scale = 2

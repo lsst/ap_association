@@ -112,7 +112,7 @@ def makeExposure(flipX=False, flipY=False):
                               dafBase.DateTime.Timescale.TAI))
     exposure.info.id = 1234
     exposure.setDetector(detector)
-    exposure.getInfo().setVisitInfo(visit)
+    exposure.info.setVisitInfo(visit)
     exposure.setFilter(afwImage.FilterLabel(band='g'))
 
     return exposure
@@ -146,7 +146,7 @@ class TestLoadDiaCatalogs(unittest.TestCase):
             self.diaObjects["diaObjectId"].to_numpy(),
             self.exposure)
 
-        self.dateTime = self.exposure.getInfo().getVisitInfo().getDate()
+        self.dateTime = self.exposure.visitInfo.date
         self.apdb.store(self.dateTime,
                         self.diaObjects,
                         self.diaSources,

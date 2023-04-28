@@ -125,7 +125,7 @@ class TestDiaForcedSource(unittest.TestCase):
                                   dafBase.DateTime.Timescale.TAI))
         self.exposure.info.id = self.exposureId
         self.exposure.setDetector(detector)
-        self.exposure.getInfo().setVisitInfo(visit)
+        self.exposure.info.setVisitInfo(visit)
         self.exposure.setFilter(afwImage.FilterLabel(band='g', physical='g.MP9401'))
         self.exposure.setPhotoCalib(afwImage.PhotoCalib(self.calibration, self.calibrationErr))
 
@@ -142,7 +142,7 @@ class TestDiaForcedSource(unittest.TestCase):
         self.diffim = afwImage.makeExposure(masked_image, self.wcs)
         self.diffim.info.id = self.exposureId
         self.diffim.setDetector(detector)
-        self.diffim.getInfo().setVisitInfo(visit)
+        self.diffim.info.setVisitInfo(visit)
         self.diffim.setFilter(afwImage.FilterLabel(band='g', physical='g.MP9401'))
         self.diffim.setPhotoCalib(afwImage.PhotoCalib(self.calibration, self.calibrationErr))
 

@@ -119,7 +119,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             date=dafBase.DateTime("2014-05-13T17:00:00.000000000",
                                   dafBase.DateTime.Timescale.TAI))
         self.exposure.info.id = 1234
-        self.exposure.getInfo().setVisitInfo(visit)
+        self.exposure.info.setVisitInfo(visit)
 
         self.exposure.setFilter(afwImage.FilterLabel(band='g', physical="g.MP9401"))
 
@@ -134,7 +134,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             diaObjects,
             diaSourceHistory,
             diaForcedSources,
-            self.exposure.getInfo().getVisitInfo().getDate())
+            self.exposure.visitInfo.date)
         self.diaObjects.replace(to_replace=[None], value=np.nan, inplace=True)
         diaSourceHistory.replace(to_replace=[None], value=np.nan, inplace=True)
         self.diaForcedSources.replace(to_replace=[None], value=np.nan, inplace=True)

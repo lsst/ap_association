@@ -232,7 +232,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         diaSourceDf["bboxSize"] = self.computeBBoxSizes(diaSourceCat)
         diaSourceDf["ccdVisitId"] = ccdVisitId
         diaSourceDf["band"] = band
-        diaSourceDf["midpointMjdTai"] = diffIm.getInfo().getVisitInfo().getDate().get(system=DateTime.MJD)
+        diaSourceDf["midpointMjdTai"] = diffIm.visitInfo.date.get(system=DateTime.MJD)
         diaSourceDf["diaObjectId"] = 0
         diaSourceDf["ssObjectId"] = 0
 

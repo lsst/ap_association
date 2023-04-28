@@ -468,7 +468,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Store DiaSources, updated DiaObjects, and DiaForcedSources in the
         # Apdb.
         self.apdb.store(
-            exposure.getInfo().getVisitInfo().getDate(),
+            exposure.visitInfo.date,
             diaCalResult.updatedDiaObjects,
             associatedDiaSources,
             diaForcedSources)

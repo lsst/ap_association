@@ -247,9 +247,9 @@ class DiaForcedSourceTask(pipeBase.Task):
         output_catalog["scienceFlux"] = direct_fluxes[:, 0]
         output_catalog["scienceFluxErr"] = direct_fluxes[:, 1]
 
-        visit_info = direct_exp.getInfo().getVisitInfo()
+        visit_info = direct_exp.visitInfo
         ccdVisitId = direct_exp.info.id
-        midpointMjdTai = visit_info.getDate().get(system=DateTime.MJD)
+        midpointMjdTai = visit_info.date.get(system=DateTime.MJD)
         output_catalog["ccdVisitId"] = ccdVisitId
         output_catalog["midpointMjdTai"] = midpointMjdTai
         output_catalog["band"] = diff_exp.getFilter().bandLabel
