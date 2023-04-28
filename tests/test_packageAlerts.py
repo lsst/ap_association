@@ -39,138 +39,7 @@ import lsst.geom as geom
 import lsst.meas.base.tests
 from lsst.sphgeom import Box
 import lsst.utils.tests
-
-
-def makeDiaObjects(nObjects, exposure):
-    """Make a test set of DiaObjects.
-
-    Parameters
-    ----------
-    nObjects : `int`
-        Number of objects to create.
-    exposure : `lsst.afw.image.Exposure`
-        Exposure to create objects over.
-
-    Returns
-    -------
-    diaObjects : `pandas.DataFrame`
-        DiaObjects generated across the exposure.
-    """
-    bbox = geom.Box2D(exposure.getBBox())
-    rand_x = np.random.uniform(bbox.getMinX(), bbox.getMaxX(), size=nObjects)
-    rand_y = np.random.uniform(bbox.getMinY(), bbox.getMaxY(), size=nObjects)
-
-    midPointMjd = exposure.getInfo().getVisitInfo().getDate().get(
-        system=dafBase.DateTime.MJD)
-
-    wcs = exposure.getWcs()
-
-    data = []
-    for idx, (x, y) in enumerate(zip(rand_x, rand_y)):
-        coord = wcs.pixelToSky(x, y)
-        newObject = {"ra": coord.getRa().asDegrees(),
-                     "dec": coord.getDec().asDegrees(),
-                     "radecEpoch": midPointMjd,
-                     "diaObjectId": idx + 1,
-                     "pmParallaxNdata": 0,
-                     "nearbyObj1": 0,
-                     "nearbyObj2": 0,
-                     "nearbyObj3": 0,
-                     "flags": 1,
-                     "nDiaSources": 5}
-        for f in ["u", "g", "r", "i", "z", "y"]:
-            newObject["%s_psfFluxNdata" % f] = 0
-        data.append(newObject)
-
-    return pd.DataFrame(data=data)
-
-
-def makeDiaSources(nSources, diaObjectIds, exposure):
-    """Make a test set of DiaSources.
-
-    Parameters
-    ----------
-    nSources : `int`
-        Number of sources to create.
-    diaObjectIds : `numpy.ndarray`
-        Integer Ids of diaobjects to "associate" with the DiaSources.
-    exposure : `lsst.afw.image.Exposure`
-        Exposure to create sources over.
-
-    Returns
-    -------
-    diaSources : `pandas.DataFrame`
-        DiaSources generated across the exposure.
-    """
-    bbox = geom.Box2D(exposure.getBBox())
-    rand_x = np.random.uniform(bbox.getMinX(), bbox.getMaxX(), size=nSources)
-    rand_y = np.random.uniform(bbox.getMinY(), bbox.getMaxY(), size=nSources)
-
-    midPointMjd = exposure.getInfo().getVisitInfo().getDate().get(
-        system=dafBase.DateTime.MJD)
-
-    wcs = exposure.getWcs()
-    ccdVisitId = exposure.info.id
-
-    data = []
-    for idx, (x, y) in enumerate(zip(rand_x, rand_y)):
-        coord = wcs.pixelToSky(x, y)
-        objId = diaObjectIds[idx % len(diaObjectIds)]
-        # Put together the minimum values for the alert.
-        data.append({"ra": coord.getRa().asDegrees(),
-                     "dec": coord.getDec().asDegrees(),
-                     "x": x,
-                     "y": y,
-                     "ccdVisitId": ccdVisitId,
-                     "diaObjectId": objId,
-                     "ssObjectId": 0,
-                     "parentDiaSourceId": 0,
-                     "prv_procOrder": 0,
-                     "diaSourceId": idx + 1,
-                     "midPointMjd": midPointMjd + 1.0 * idx,
-                     "band": exposure.getFilter().bandLabel,
-                     "psfNdata": 0,
-                     "trailNdata": 0,
-                     "dipoleNdata": 0,
-                     "flags": 1})
-
-    return pd.DataFrame(data=data)
-
-
-def makeDiaForcedSources(nSources, diaObjectIds, exposure):
-    """Make a test set of DiaSources.
-
-    Parameters
-    ----------
-    nSources : `int`
-        Number of sources to create.
-    diaObjectIds : `numpy.ndarray`
-        Integer Ids of diaobjects to "associate" with the DiaSources.
-    exposure : `lsst.afw.image.Exposure`
-        Exposure to create sources over.
-
-    Returns
-    -------
-    diaSources : `pandas.DataFrame`
-        DiaSources generated across the exposure.
-    """
-    midPointMjd = exposure.getInfo().getVisitInfo().getDate().get(
-        system=dafBase.DateTime.MJD)
-
-    ccdVisitId = exposure.info.id
-
-    data = []
-    for idx in range(nSources):
-        objId = diaObjectIds[idx % len(diaObjectIds)]
-        # Put together the minimum values for the alert.
-        data.append({"diaForcedSourceId": idx + 1,
-                     "ccdVisitId": ccdVisitId + idx,
-                     "diaObjectId": objId,
-                     "midPointMjd": midPointMjd + 1.0 * idx,
-                     "band": exposure.getFilter().bandLabel,
-                     "flags": 0})
-
-    return pd.DataFrame(data=data)
+import utils_tests
 
 
 def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
@@ -254,13 +123,13 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
 
         self.exposure.setFilter(afwImage.FilterLabel(band='g', physical="g.MP9401"))
 
-        diaObjects = makeDiaObjects(2, self.exposure)
-        diaSourceHistory = makeDiaSources(10,
-                                          diaObjects["diaObjectId"],
-                                          self.exposure)
-        diaForcedSources = makeDiaForcedSources(10,
-                                                diaObjects["diaObjectId"],
-                                                self.exposure)
+        diaObjects = utils_tests.makeDiaObjects(2, self.exposure)
+        diaSourceHistory = utils_tests.makeDiaSources(10,
+                                                      diaObjects["diaObjectId"],
+                                                      self.exposure)
+        diaForcedSources = utils_tests.makeDiaForcedSources(10,
+                                                            diaObjects["diaObjectId"],
+                                                            self.exposure)
         self.diaObjects, diaSourceHistory, self.diaForcedSources = _roundTripThroughApdb(
             diaObjects,
             diaSourceHistory,
