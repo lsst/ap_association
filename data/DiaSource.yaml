@@ -25,6 +25,10 @@ funcs:
     bboxSize:
         functor: Column
         args: bboxSize
+    # TODO: is this one really necessary here?
+    time_processed:  # filled in automatically
+        functor: Column
+        args: time_processed
     flags:
         functor: Column
         args: flags
