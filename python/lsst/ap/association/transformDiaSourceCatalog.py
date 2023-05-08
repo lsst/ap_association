@@ -222,11 +222,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             ccdVisitId)
 
         diaSourceDf = diaSourceCat.asAstropy().to_pandas()
-        spuriousnessDf = spuriousness.asAstropy().to_pandas()
         if self.config.doRemoveSkySources:
-            # rbClassifier processes sky_sources anyhow
-            if self.config.doIncludeSpuriousness:
-                spuriousnessDf = spuriousnessDf[~diaSourceDf["sky_source"]]
             diaSourceDf = diaSourceDf[~diaSourceDf["sky_source"]]
             diaSourceCat = diaSourceCat[~diaSourceCat["sky_source"]]
 
@@ -239,6 +235,10 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         diaSourceDf["ssObjectId"] = 0
         diaSourceDf["spuriousness"] = np.nan
         if self.config.doIncludeSpuriousness:
+            spuriousnessDf = spuriousness.asAstropy().to_pandas()
+            if self.config.doRemoveSkySources:
+                # rbClassifier processes sky_sources anyhow
+                spuriousnessDf = spuriousnessDf[~diaSourceDf["sky_source"]]
             # TODO: do we need to test that the spuriousness table is row-matched
             # on id with diaSourceCat? Currently, we're just trusting that that is true.
             diaSourceDf["spuriousness"] = spuriousnessDf["score"]
