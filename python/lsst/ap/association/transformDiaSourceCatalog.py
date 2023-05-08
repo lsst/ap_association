@@ -239,9 +239,11 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             if self.config.doRemoveSkySources:
                 # rbClassifier processes sky_sources anyhow
                 spuriousnessDf = spuriousnessDf[~diaSourceDf["sky_source"]]
-            # TODO: do we need to test that the spuriousness table is row-matched
-            # on id with diaSourceCat? Currently, we're just trusting that that is true.
+            # This uses the pandas index to match scores with diaSources
+            # but it will silently fill with NaNs if they don't match.
             diaSourceDf["spuriousness"] = spuriousnessDf["score"]
+            if np.sum(diaSourceDf["spuriousness"].isna()) == len(diaSourceDf):
+                self.log.warning("Spuriousness identifiers did not match diaSourceIds")
 
         if self.config.doPackFlags:
             # either bitpack the flags

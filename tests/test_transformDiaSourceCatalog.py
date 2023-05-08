@@ -134,9 +134,6 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         self.assertEqual(len(result.diaSourceTable), len(self.inputCatalog))
         np.testing.assert_array_equal(result.diaSourceTable["spuriousness"], self.spuriousness["score"])
 
-        # TODO: do we need to test that the spuriousness table is row-matched
-        # on id with diaSourceCat? Currently, we're just trusting that that is true.
-
     def test_run_doSkySources(self):
         """Test that we get the correct output with doSkySources=True; the one
         sky source should be missing, but the other records should be the same.
