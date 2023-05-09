@@ -65,6 +65,15 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         self.initInputs = {"diaSourceSchema": Struct(schema=schema)}
         self.initInputsBadFlags = {"diaSourceSchema": Struct(schema=dataset.makeMinimalSchema())}
 
+        # Separate real/bogus score table, indexed on the above catalog ids.
+        spuriousnessSchema = lsst.afw.table.Schema()
+        spuriousnessSchema.addField(self.inputCatalog.schema["id"].asField())
+        spuriousnessSchema.addField("score", doc="real/bogus score of this source", type=float)
+        self.spuriousness = lsst.afw.table.BaseCatalog(spuriousnessSchema)
+        self.spuriousness.resize(len(self.inputCatalog))
+        self.spuriousness["id"] = self.inputCatalog["id"]
+        self.spuriousness["score"] = np.random.random(len(self.inputCatalog))
+
         self.expId = 4321
         self.date = dafBase.DateTime(nsecs=1400000000 * 10**9)
         detector = DetectorWrapper(id=23, bbox=self.exposure.getBBox()).detector
@@ -112,6 +121,18 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         expect_snr.append(np.nan)
         # Have to use allclose because assert_array_equal doesn't support equal_nan.
         np.testing.assert_allclose(result.diaSourceTable["snr"], expect_snr, equal_nan=True, rtol=0)
+
+    def test_run_with_spuriousness(self):
+        self.config.doIncludeSpuriousness = True
+        transformTask = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
+                                                      config=self.config)
+        result = transformTask.run(self.inputCatalog,
+                                   self.exposure,
+                                   self.filterName,
+                                   spuriousness=self.spuriousness,
+                                   ccdVisitId=self.expId)
+        self.assertEqual(len(result.diaSourceTable), len(self.inputCatalog))
+        np.testing.assert_array_equal(result.diaSourceTable["spuriousness"], self.spuriousness["score"])
 
     def test_run_doSkySources(self):
         """Test that we get the correct output with doSkySources=True; the one

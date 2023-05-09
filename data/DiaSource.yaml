@@ -247,4 +247,6 @@ funcs:
             - base_LocalWcs_CDMatrix_2_1
             - base_LocalWcs_CDMatrix_2_2
     # extendedness not implemented
-    # spuriousness not implemented
+    spuriousness:
+        functor: Column
+        args: spuriousness
