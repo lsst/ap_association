@@ -27,6 +27,7 @@ __all__ = ("TransformDiaSourceCatalogConnections",
 import numpy as np
 import os
 import yaml
+import pandas as pd
 
 from lsst.daf.base import DateTime
 import lsst.pex.config as pexConfig
@@ -233,17 +234,18 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         diaSourceDf["midPointTai"] = diffIm.getInfo().getVisitInfo().getDate().get(system=DateTime.MJD)
         diaSourceDf["diaObjectId"] = 0
         diaSourceDf["ssObjectId"] = 0
-        diaSourceDf["spuriousness"] = np.nan
+
         if self.config.doIncludeSpuriousness:
             spuriousnessDf = spuriousness.asAstropy().to_pandas()
-            if self.config.doRemoveSkySources:
-                # rbClassifier processes sky_sources anyhow
-                spuriousnessDf = spuriousnessDf[~diaSourceDf["sky_source"]]
             # This uses the pandas index to match scores with diaSources
             # but it will silently fill with NaNs if they don't match.
-            diaSourceDf["spuriousness"] = spuriousnessDf["score"]
+            diaSourceDf = pd.merge(diaSourceDf, spuriousnessDf,
+                                   how="left", on="id", validate="1:1")
+            diaSourceDf = diaSourceDf.rename(columns={"score": "spuriousness"})
             if np.sum(diaSourceDf["spuriousness"].isna()) == len(diaSourceDf):
                 self.log.warning("Spuriousness identifiers did not match diaSourceIds")
+        else:
+            diaSourceDf["spuriousness"] = np.nan
 
         if self.config.doPackFlags:
             # either bitpack the flags
