@@ -245,7 +245,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             if np.sum(diaSourceDf["spuriousness"].isna()) == len(diaSourceDf):
                 self.log.warning("Spuriousness identifiers did not match diaSourceIds")
         else:
-            diaSourceDf["spuriousness"] = np.nan
+            diaSourceDf["spuriousness"] = np.float32(np.nan)
 
         if self.config.doPackFlags:
             # either bitpack the flags
