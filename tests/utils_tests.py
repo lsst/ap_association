@@ -115,7 +115,6 @@ def makeDiaSources(nSources, diaObjectIds, exposure, randomizeObjects=False):
                      "diaObjectId": objId,
                      "ssObjectId": 0,
                      "parentDiaSourceId": 0,
-                     "prv_procOrder": 0,
                      "diaSourceId": idx + 1,
                      "midpointMjdTai": midpointMjdTai + 1.0 * idx,
                      "band": exposure.getFilter().bandLabel,
