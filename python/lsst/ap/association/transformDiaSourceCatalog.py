@@ -59,8 +59,8 @@ class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
         storageClass="ExposureF",
         dimensions=("instrument", "visit", "detector"),
     )
-    spuriousness = connTypes.Input(
-        doc="Spuriousness (e.g. real/bogus) classificiation of diaSourceCat sources (optional).",
+    reliability = connTypes.Input(
+        doc="Reliability (e.g. real/bogus) classificiation of diaSourceCat sources (optional).",
         name="{fakesType}{coaddName}RealBogusSources",
         storageClass="Catalog",
         dimensions=("instrument", "visit", "detector"),
@@ -74,8 +74,8 @@ class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
 
     def __init__(self, *, config=None):
         super().__init__(config=config)
-        if not self.config.doIncludeSpuriousness:
-            self.inputs.remove("spuriousness")
+        if not self.config.doIncludeReliability:
+            self.inputs.remove("reliability")
 
 
 class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
@@ -106,10 +106,10 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
         doc="Do pack the flags into one integer column named 'flags'."
             "If False, instead produce one boolean column per flag."
     )
-    doIncludeSpuriousness = pexConfig.Field(
+    doIncludeReliability = pexConfig.Field(
         dtype=bool,
         default=False,
-        doc="Include the spuriousness (e.g. real/bogus) classifications in the output."
+        doc="Include the reliability (e.g. real/bogus) classifications in the output."
     )
 
     idGenerator = DetectorVisitIdGeneratorConfig.make_field()
@@ -189,7 +189,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             diffIm,
             band,
             ccdVisitId,
-            spuriousness=None):
+            reliability=None):
         """Convert input catalog to ParquetTable/Pandas and run functors.
 
         Additionally, add new columns for stripping information from the
@@ -205,8 +205,8 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             Filter band of the science image.
         ccdVisitId : `int`
             Identifier for this detector+visit.
-        spuriousness : `lsst.afw.table.SourceCatalog`
-            Spuriousness (e.g. real/bogus) scores, row-matched to
+        reliability : `lsst.afw.table.SourceCatalog`
+            Reliability (e.g. real/bogus) scores, row-matched to
             ``diaSourceCat``.
 
         Returns
@@ -236,17 +236,17 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         diaSourceDf["diaObjectId"] = 0
         diaSourceDf["ssObjectId"] = 0
 
-        if self.config.doIncludeSpuriousness:
-            spuriousnessDf = spuriousness.asAstropy().to_pandas()
+        if self.config.doIncludeReliability:
+            reliabilityDf = reliability.asAstropy().to_pandas()
             # This uses the pandas index to match scores with diaSources
             # but it will silently fill with NaNs if they don't match.
-            diaSourceDf = pd.merge(diaSourceDf, spuriousnessDf,
+            diaSourceDf = pd.merge(diaSourceDf, reliabilityDf,
                                    how="left", on="id", validate="1:1")
-            diaSourceDf = diaSourceDf.rename(columns={"score": "spuriousness"})
-            if np.sum(diaSourceDf["spuriousness"].isna()) == len(diaSourceDf):
-                self.log.warning("Spuriousness identifiers did not match diaSourceIds")
+            diaSourceDf = diaSourceDf.rename(columns={"score": "reliability"})
+            if np.sum(diaSourceDf["reliability"].isna()) == len(diaSourceDf):
+                self.log.warning("Reliability identifiers did not match diaSourceIds")
         else:
-            diaSourceDf["spuriousness"] = np.float32(np.nan)
+            diaSourceDf["reliability"] = np.float32(np.nan)
 
         if self.config.doPackFlags:
             # either bitpack the flags

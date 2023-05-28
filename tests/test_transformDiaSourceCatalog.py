@@ -66,13 +66,13 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         self.initInputsBadFlags = {"diaSourceSchema": Struct(schema=dataset.makeMinimalSchema())}
 
         # Separate real/bogus score table, indexed on the above catalog ids.
-        spuriousnessSchema = lsst.afw.table.Schema()
-        spuriousnessSchema.addField(self.inputCatalog.schema["id"].asField())
-        spuriousnessSchema.addField("score", doc="real/bogus score of this source", type=float)
-        self.spuriousness = lsst.afw.table.BaseCatalog(spuriousnessSchema)
-        self.spuriousness.resize(len(self.inputCatalog))
-        self.spuriousness["id"] = self.inputCatalog["id"]
-        self.spuriousness["score"] = np.random.random(len(self.inputCatalog))
+        reliabilitySchema = lsst.afw.table.Schema()
+        reliabilitySchema.addField(self.inputCatalog.schema["id"].asField())
+        reliabilitySchema.addField("score", doc="real/bogus score of this source", type=float)
+        self.reliability = lsst.afw.table.BaseCatalog(reliabilitySchema)
+        self.reliability.resize(len(self.inputCatalog))
+        self.reliability["id"] = self.inputCatalog["id"]
+        self.reliability["score"] = np.random.random(len(self.inputCatalog))
 
         self.expId = 4321
         self.date = dafBase.DateTime(nsecs=1400000000 * 10**9)
@@ -122,17 +122,17 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         # Have to use allclose because assert_array_equal doesn't support equal_nan.
         np.testing.assert_allclose(result.diaSourceTable["snr"], expect_snr, equal_nan=True, rtol=0)
 
-    def test_run_with_spuriousness(self):
-        self.config.doIncludeSpuriousness = True
+    def test_run_with_reliability(self):
+        self.config.doIncludeReliability = True
         transformTask = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
                                                       config=self.config)
         result = transformTask.run(self.inputCatalog,
                                    self.exposure,
                                    self.band,
-                                   spuriousness=self.spuriousness,
+                                   reliability=self.reliability,
                                    ccdVisitId=self.expId)
         self.assertEqual(len(result.diaSourceTable), len(self.inputCatalog))
-        np.testing.assert_array_equal(result.diaSourceTable["spuriousness"], self.spuriousness["score"])
+        np.testing.assert_array_equal(result.diaSourceTable["reliability"], self.reliability["score"])
 
     def test_run_doSkySources(self):
         """Test that we get the correct output with doSkySources=True; the one
