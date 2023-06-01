@@ -29,6 +29,6 @@ funcs:
     y:
         functor: Column
         args: slot_Centroid_y
-    spuriousness:
+    reliability:
         functor: Column
-        args: spuriousness
+        args: reliability
