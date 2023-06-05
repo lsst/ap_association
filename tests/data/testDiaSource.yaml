@@ -8,15 +8,15 @@ funcs:
     diaObjectId:
       functor: Column
       args: diaObjectId
-    midPointTai:
+    midpointMjdTai:
       functor: Column
-      args: midPointTai
+      args: midpointMjdTai
     bboxSize:
         functor: Column
         args: bboxSize
-    filterName:
+    band:
         functor: Column
-        args: filterName
+        args: band
     snr:
         functor: Column
         args: snr
@@ -29,6 +29,6 @@ funcs:
     y:
         functor: Column
         args: slot_Centroid_y
-    spuriousness:
+    reliability:
         functor: Column
-        args: spuriousness
+        args: reliability

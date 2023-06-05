@@ -39,138 +39,7 @@ import lsst.geom as geom
 import lsst.meas.base.tests
 from lsst.sphgeom import Box
 import lsst.utils.tests
-
-
-def makeDiaObjects(nObjects, exposure):
-    """Make a test set of DiaObjects.
-
-    Parameters
-    ----------
-    nObjects : `int`
-        Number of objects to create.
-    exposure : `lsst.afw.image.Exposure`
-        Exposure to create objects over.
-
-    Returns
-    -------
-    diaObjects : `pandas.DataFrame`
-        DiaObjects generated across the exposure.
-    """
-    bbox = geom.Box2D(exposure.getBBox())
-    rand_x = np.random.uniform(bbox.getMinX(), bbox.getMaxX(), size=nObjects)
-    rand_y = np.random.uniform(bbox.getMinY(), bbox.getMaxY(), size=nObjects)
-
-    midPointTaiMJD = exposure.getInfo().getVisitInfo().getDate().get(
-        system=dafBase.DateTime.MJD)
-
-    wcs = exposure.getWcs()
-
-    data = []
-    for idx, (x, y) in enumerate(zip(rand_x, rand_y)):
-        coord = wcs.pixelToSky(x, y)
-        newObject = {"ra": coord.getRa().asDegrees(),
-                     "decl": coord.getDec().asDegrees(),
-                     "radecTai": midPointTaiMJD,
-                     "diaObjectId": idx + 1,
-                     "pmParallaxNdata": 0,
-                     "nearbyObj1": 0,
-                     "nearbyObj2": 0,
-                     "nearbyObj3": 0,
-                     "flags": 1,
-                     "nDiaSources": 5}
-        for f in ["u", "g", "r", "i", "z", "y"]:
-            newObject["%sPSFluxNdata" % f] = 0
-        data.append(newObject)
-
-    return pd.DataFrame(data=data)
-
-
-def makeDiaSources(nSources, diaObjectIds, exposure):
-    """Make a test set of DiaSources.
-
-    Parameters
-    ----------
-    nSources : `int`
-        Number of sources to create.
-    diaObjectIds : `numpy.ndarray`
-        Integer Ids of diaobjects to "associate" with the DiaSources.
-    exposure : `lsst.afw.image.Exposure`
-        Exposure to create sources over.
-
-    Returns
-    -------
-    diaSources : `pandas.DataFrame`
-        DiaSources generated across the exposure.
-    """
-    bbox = geom.Box2D(exposure.getBBox())
-    rand_x = np.random.uniform(bbox.getMinX(), bbox.getMaxX(), size=nSources)
-    rand_y = np.random.uniform(bbox.getMinY(), bbox.getMaxY(), size=nSources)
-
-    midPointTaiMJD = exposure.getInfo().getVisitInfo().getDate().get(
-        system=dafBase.DateTime.MJD)
-
-    wcs = exposure.getWcs()
-    ccdVisitId = exposure.info.id
-
-    data = []
-    for idx, (x, y) in enumerate(zip(rand_x, rand_y)):
-        coord = wcs.pixelToSky(x, y)
-        objId = diaObjectIds[idx % len(diaObjectIds)]
-        # Put together the minimum values for the alert.
-        data.append({"ra": coord.getRa().asDegrees(),
-                     "decl": coord.getDec().asDegrees(),
-                     "x": x,
-                     "y": y,
-                     "ccdVisitId": ccdVisitId,
-                     "diaObjectId": objId,
-                     "ssObjectId": 0,
-                     "parentDiaSourceId": 0,
-                     "prv_procOrder": 0,
-                     "diaSourceId": idx + 1,
-                     "midPointTai": midPointTaiMJD + 1.0 * idx,
-                     "filterName": exposure.getFilter().bandLabel,
-                     "psNdata": 0,
-                     "trailNdata": 0,
-                     "dipNdata": 0,
-                     "flags": 1})
-
-    return pd.DataFrame(data=data)
-
-
-def makeDiaForcedSources(nSources, diaObjectIds, exposure):
-    """Make a test set of DiaSources.
-
-    Parameters
-    ----------
-    nSources : `int`
-        Number of sources to create.
-    diaObjectIds : `numpy.ndarray`
-        Integer Ids of diaobjects to "associate" with the DiaSources.
-    exposure : `lsst.afw.image.Exposure`
-        Exposure to create sources over.
-
-    Returns
-    -------
-    diaSources : `pandas.DataFrame`
-        DiaSources generated across the exposure.
-    """
-    midPointTaiMJD = exposure.getInfo().getVisitInfo().getDate().get(
-        system=dafBase.DateTime.MJD)
-
-    ccdVisitId = exposure.info.id
-
-    data = []
-    for idx in range(nSources):
-        objId = diaObjectIds[idx % len(diaObjectIds)]
-        # Put together the minimum values for the alert.
-        data.append({"diaForcedSourceId": idx + 1,
-                     "ccdVisitId": ccdVisitId + idx,
-                     "diaObjectId": objId,
-                     "midPointTai": midPointTaiMJD + 1.0 * idx,
-                     "filterName": exposure.getFilter().bandLabel,
-                     "flags": 0})
-
-    return pd.DataFrame(data=data)
+import utils_tests
 
 
 def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
@@ -218,7 +87,7 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
         wholeSky, np.unique(diaObjects["diaObjectId"]), dateTime)
 
     diaObjects.set_index("diaObjectId", drop=False, inplace=True)
-    diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
+    diaSources.set_index(["diaObjectId", "band", "diaSourceId"],
                          drop=False,
                          inplace=True)
     diaForcedSources.set_index(["diaObjectId"], drop=False, inplace=True)
@@ -250,22 +119,22 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             date=dafBase.DateTime("2014-05-13T17:00:00.000000000",
                                   dafBase.DateTime.Timescale.TAI))
         self.exposure.info.id = 1234
-        self.exposure.getInfo().setVisitInfo(visit)
+        self.exposure.info.setVisitInfo(visit)
 
         self.exposure.setFilter(afwImage.FilterLabel(band='g', physical="g.MP9401"))
 
-        diaObjects = makeDiaObjects(2, self.exposure)
-        diaSourceHistory = makeDiaSources(10,
-                                          diaObjects["diaObjectId"],
-                                          self.exposure)
-        diaForcedSources = makeDiaForcedSources(10,
-                                                diaObjects["diaObjectId"],
-                                                self.exposure)
+        diaObjects = utils_tests.makeDiaObjects(2, self.exposure)
+        diaSourceHistory = utils_tests.makeDiaSources(10,
+                                                      diaObjects["diaObjectId"],
+                                                      self.exposure)
+        diaForcedSources = utils_tests.makeDiaForcedSources(10,
+                                                            diaObjects["diaObjectId"],
+                                                            self.exposure)
         self.diaObjects, diaSourceHistory, self.diaForcedSources = _roundTripThroughApdb(
             diaObjects,
             diaSourceHistory,
             diaForcedSources,
-            self.exposure.getInfo().getVisitInfo().getDate())
+            self.exposure.visitInfo.date)
         self.diaObjects.replace(to_replace=[None], value=np.nan, inplace=True)
         diaSourceHistory.replace(to_replace=[None], value=np.nan, inplace=True)
         self.diaForcedSources.replace(to_replace=[None], value=np.nan, inplace=True)
@@ -375,7 +244,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
 
         for srcIdx, diaSource in self.diaSources.iterrows():
             sphPoint = geom.SpherePoint(diaSource["ra"],
-                                        diaSource["decl"],
+                                        diaSource["dec"],
                                         geom.degrees)
             cutout = self.exposure.getCutout(sphPoint,
                                              geom.Extent2I(self.cutoutSize,
@@ -441,7 +310,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                 else:
                     self.assertEqual(value, self.diaSources.iloc[idx][key])
             sphPoint = geom.SpherePoint(alert["diaSource"]["ra"],
-                                        alert["diaSource"]["decl"],
+                                        alert["diaSource"]["dec"],
                                         geom.degrees)
             cutout = self.exposure.getCutout(sphPoint,
                                              geom.Extent2I(self.cutoutSize,

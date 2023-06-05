@@ -198,7 +198,7 @@ class DiaForcedSourceTask(pipeBase.Task):
             outputRecord.setId(obj_id)
             outputRecord.setCoord(
                 geom.SpherePoint(df_row["ra"],
-                                 df_row["decl"],
+                                 df_row["dec"],
                                  geom.degrees))
         return outputCatalog
 
@@ -236,23 +236,24 @@ class DiaForcedSourceTask(pipeBase.Task):
 
         output_catalog = diff_sources.asAstropy().to_pandas()
         output_catalog.rename(columns={"id": "diaForcedSourceId",
-                                       "slot_PsfFlux_instFlux": "psFlux",
-                                       "slot_PsfFlux_instFluxErr": "psFluxErr",
+                                       "slot_PsfFlux_instFlux": "psfFlux",
+                                       "slot_PsfFlux_instFluxErr": "psfFluxErr",
                                        "slot_Centroid_x": "x",
                                        "slot_Centroid_y": "y"},
                               inplace=True)
-        output_catalog.loc[:, "psFlux"] = diff_fluxes[:, 0]
-        output_catalog.loc[:, "psFluxErr"] = diff_fluxes[:, 1]
+        output_catalog.loc[:, "psfFlux"] = diff_fluxes[:, 0]
+        output_catalog.loc[:, "psfFluxErr"] = diff_fluxes[:, 1]
 
-        output_catalog["totFlux"] = direct_fluxes[:, 0]
-        output_catalog["totFluxErr"] = direct_fluxes[:, 1]
+        output_catalog["scienceFlux"] = direct_fluxes[:, 0]
+        output_catalog["scienceFluxErr"] = direct_fluxes[:, 1]
 
-        visit_info = direct_exp.getInfo().getVisitInfo()
+        visit_info = direct_exp.visitInfo
         ccdVisitId = direct_exp.info.id
-        midPointTaiMJD = visit_info.getDate().get(system=DateTime.MJD)
+        midpointMjdTai = visit_info.date.get(system=DateTime.MJD)
         output_catalog["ccdVisitId"] = ccdVisitId
-        output_catalog["midPointTai"] = midPointTaiMJD
-        output_catalog["filterName"] = diff_exp.getFilter().bandLabel
+        output_catalog["midpointMjdTai"] = midpointMjdTai
+        output_catalog["band"] = diff_exp.getFilter().bandLabel
+        output_catalog["time_processed"] = DateTime.now().toPython()
 
         # Drop superfluous columns from output DataFrame.
         output_catalog.drop(columns=self.config.dropColumns, inplace=True)

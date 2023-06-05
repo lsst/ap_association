@@ -127,7 +127,7 @@ class AssociationTask(pipeBase.Task):
             RA/DEC.
         """
         nan_mask = (dia_sources.loc[:, "ra"].isnull()
-                    | dia_sources.loc[:, "decl"].isnull())
+                    | dia_sources.loc[:, "dec"].isnull())
         if np.any(nan_mask):
             nan_idxs = np.argwhere(nan_mask.to_numpy()).flatten()
             for nan_idx in nan_idxs:
@@ -264,7 +264,7 @@ class AssociationTask(pipeBase.Task):
             Output unit-vectors
         """
         ras = np.radians(catalog["ra"])
-        decs = np.radians(catalog["decl"])
+        decs = np.radians(catalog["dec"])
         vectors = np.empty((len(ras), 3))
 
         sin_dec = np.sin(np.pi / 2 - decs)

@@ -7,9 +7,9 @@ funcs:
     ccdVisitId:
         functor: Column
         args: ccdVisitId
-    filterName:
+    band:
         functor: Column
-        args: filterName
+        args: band
     diaObjectId:
         functor: Column
         args: diaObjectId
@@ -19,22 +19,26 @@ funcs:
     parentDiaSourceId:
         functor: Column
         args: parent
-    midPointTai:
+    midpointMjdTai:
         functor: Column
-        args: midPointTai
+        args: midpointMjdTai
     bboxSize:
         functor: Column
         args: bboxSize
+    # TODO: is this one really necessary here?
+    time_processed:  # filled in automatically
+        functor: Column
+        args: time_processed
     flags:
         functor: Column
         args: flags
     ra:
         functor: RAColumn
     # raErr: not available yet DM-15180
-    decl:
+    dec:
         functor: DecColumn
-    # declErr: not available yet DM-15180
-    # ra_decl_Cov: not available yet
+    # decErr: not available yet DM-15180
+    # ra_dec_Cov: not available yet
     x:
         functor: Column
         args: slot_Centroid_x
@@ -65,27 +69,27 @@ funcs:
     snr:
         functor: Column
         args: snr
-    psFlux:
+    psfFlux:
         functor: LocalNanojansky
         args:
             - slot_PsfFlux_instFlux
             - slot_PsfFlux_instFluxErr
             - base_LocalPhotoCalib
             - base_LocalPhotoCalibErr
-    psFluxErr:
+    psfFluxErr:
         functor: LocalNanojanskyErr
         args:
             - slot_PsfFlux_instFlux
             - slot_PsfFlux_instFluxErr
             - base_LocalPhotoCalib
             - base_LocalPhotoCalibErr
-    # ps_ra_cov not implemented
-    # ps_dec_cov not implemented
-    # psLnl not implemented
-    psChi2:
+    # psfFlux_psfRa_cov not implemented
+    # psfFlux_psfDec_cov not implemented
+    # psfLnl not implemented
+    psfChi2:
         functor: Column
         args: slot_PsfFlux_chi2
-    psNdata:
+    psfNdata:
         functor: Column
         args: slot_PsfFlux_npixels
     trailFlux:
@@ -98,7 +102,7 @@ funcs:
     trailRa:
         functor: Column
         args: ext_trailedSources_Naive_ra
-    trailDecl:
+    trailDec:
         functor: Column
         args: ext_trailedSources_Naive_dec
     trailLength:
@@ -116,7 +120,7 @@ funcs:
     # trailLnL not implemented
     # trailChi2 not implemented
     # trailNdata not implemented
-    dipMeanFlux:
+    dipoleMeanFlux:
         functor: LocalDipoleMeanFlux
         args:
             - ip_diffim_NaiveDipoleFlux_pos_instFlux
@@ -125,7 +129,7 @@ funcs:
             - ip_diffim_NaiveDipoleFlux_neg_instFluxErr
             - base_LocalPhotoCalib
             - base_LocalPhotoCalibErr
-    dipMeanFluxErr:
+    dipoleMeanFluxErr:
         functor: LocalDipoleMeanFluxErr
         args:
             - ip_diffim_NaiveDipoleFlux_pos_instFlux
@@ -134,7 +138,7 @@ funcs:
             - ip_diffim_NaiveDipoleFlux_neg_instFluxErr
             - base_LocalPhotoCalib
             - base_LocalPhotoCalibErr
-    dipFluxDiff:
+    dipoleFluxDiff:
         functor: LocalDipoleDiffFlux
         args:
             - ip_diffim_NaiveDipoleFlux_pos_instFlux
@@ -143,7 +147,7 @@ funcs:
             - ip_diffim_NaiveDipoleFlux_neg_instFluxErr
             - base_LocalPhotoCalib
             - base_LocalPhotoCalibErr
-    dipFluxDiffErr:
+    dipoleFluxDiffErr:
         functor: LocalDipoleDiffFluxErr
         args:
             - ip_diffim_NaiveDipoleFlux_pos_instFlux
@@ -152,11 +156,11 @@ funcs:
             - ip_diffim_NaiveDipoleFlux_neg_instFluxErr
             - base_LocalPhotoCalib
             - base_LocalPhotoCalibErr
-    # dipRa not implemented
-    # dipDec not implemented
+    # dipoleRa not implemented
+    # dipoleDec not implemented
     #    (this may be redundant with RA/DEC as the default centroid is the
     #     dip model, defaulting to SdssCentroid on Dip-Fit failure.)
-    dipLength:
+    dipoleLength:
         functor: ConvertPixelToArcseconds
         args:
             - ip_diffim_DipoleFit_separation
@@ -164,34 +168,34 @@ funcs:
             - base_LocalWcs_CDMatrix_1_2
             - base_LocalWcs_CDMatrix_2_1
             - base_LocalWcs_CDMatrix_2_2
-    dipAngle:
+    dipoleAngle:
         functor: Column
         args: ip_diffim_DipoleFit_orientation
-    # dipCov not implemented
-    # dipLnl not implemented
-    dipChi2:
+    # dipoleCov not implemented
+    # dipoleLnl not implemented
+    dipoleChi2:
         functor: Column
         args: ip_diffim_DipoleFit_chi2dof
     isDipole:
         functor: Column
         args: ip_diffim_DipoleFit_flag_classification
-    # dipNdata not implemented
-    totFlux:
+    # dipoleNdata not implemented
+    scienceFlux:
         functor: LocalNanojansky
         args:
             - ip_diffim_forced_PsfFlux_instFlux
             - ip_diffim_forced_PsfFlux_instFluxErr
             - base_LocalPhotoCalib
             - base_LocalPhotoCalibErr
-    totFluxErr:
+    scienceFluxErr:
         functor: LocalNanojanskyErr
         args:
             - ip_diffim_forced_PsfFlux_instFlux
             - ip_diffim_forced_PsfFlux_instFluxErr
             - base_LocalPhotoCalib
             - base_LocalPhotoCalibErr
-    # diffFlux not implemented and likely dropped due to no snaps.
-    # diffFluxErr not implemented and likely dropped due to no snaps.
+    # snapDiffFlux not implemented and likely dropped due to no snaps.
+    # snapDiffFluxErr not implemented and likely dropped due to no snaps.
     # fpBkgd not measured yet. DM-
     # fpBkgdErr not measured yet. DM-
 
@@ -247,6 +251,6 @@ funcs:
             - base_LocalWcs_CDMatrix_2_1
             - base_LocalWcs_CDMatrix_2_2
     # extendedness not implemented
-    spuriousness:
+    reliability:
         functor: Column
-        args: spuriousness
+        args: reliability

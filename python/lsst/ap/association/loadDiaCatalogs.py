@@ -77,13 +77,12 @@ class LoadDiaCatalogsTask(pipeBase.Task):
               the ``diaObjectId`` column. (`pandas.DataFrame`)
             - ``diaSources`` : Complete set of DiaSources covering the input
               exposure padded by ``pixelMargin``. DataFrame is indexed by
-              ``diaObjectId``, ``filterName``, ``diaSourceId`` columns.
+              ``diaObjectId``, ``band``, ``diaSourceId`` columns.
               (`pandas.DataFrame`)
         """
-        visiInfo = exposure.getInfo().getVisitInfo()
         region = self._getRegion(exposure)
 
-        # This is the first database query
+        # This is the first database query.
         try:
             diaObjects = self.loadDiaObjects(region, apdb)
         except (OperationalError, ProgrammingError) as e:
@@ -92,17 +91,11 @@ class LoadDiaCatalogsTask(pipeBase.Task):
                 "make_apdb.py first? If you did, some other error occurred "
                 "during database access of the DiaObject table.") from e
 
-        dateTime = visiInfo.getDate()
+        dateTime = exposure.visitInfo.date
 
-        diaSources = self.loadDiaSources(diaObjects,
-                                         region,
-                                         dateTime,
-                                         apdb)
+        diaSources = self.loadDiaSources(diaObjects, region, dateTime, apdb)
 
-        diaForcedSources = self.loadDiaForcedSources(diaObjects,
-                                                     region,
-                                                     dateTime,
-                                                     apdb)
+        diaForcedSources = self.loadDiaForcedSources(diaObjects, region, dateTime, apdb)
 
         return pipeBase.Struct(
             diaObjects=diaObjects,
@@ -172,12 +165,12 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             # If no area is specified return an empty DataFrame with the
             # the column used for indexing later in AssociationTask.
             diaSources = pd.DataFrame(columns=["diaObjectId",
-                                               "filterName",
+                                               "band",
                                                "diaSourceId"])
         else:
             diaSources = apdb.getDiaSources(region, diaObjects.loc[:, "diaObjectId"], dateTime)
 
-        diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
+        diaSources.set_index(["diaObjectId", "band", "diaSourceId"],
                              drop=False,
                              inplace=True)
         if diaSources.index.has_duplicates:
@@ -187,7 +180,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             # Drop duplicates via index and keep the first appearance. Reset
             # due to the index shape being slight different thatn expected.
             diaSources = diaSources.groupby(diaSources.index).first().reset_index(drop=True)
-            diaSources.set_index(["diaObjectId", "filterName", "diaSourceId"],
+            diaSources.set_index(["diaObjectId", "band", "diaSourceId"],
                                  drop=False,
                                  inplace=True)
 
@@ -233,7 +226,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
                 "Duplicate DiaForcedSources loaded from the Apdb. This may "
                 "cause downstream pipeline issues. Dropping duplicated rows.")
             # Drop duplicates via index and keep the first appearance. Reset
-            # due to the index shape being slight different thatn expected.
+            # due to the index shape being slightly different than expected.
             diaForcedSources = diaForcedSources.groupby(diaForcedSources.index).first()
             diaForcedSources.reset_index(drop=True, inplace=True)
             diaForcedSources.set_index(["diaObjectId", "diaForcedSourceId"],

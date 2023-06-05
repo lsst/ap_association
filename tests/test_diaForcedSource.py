@@ -55,12 +55,12 @@ def create_test_dia_objects(n_points, wcs, startPos=100):
     ids = np.arange(n_points, dtype=np.int64)
     points = [wcs.pixelToSky(startPos + src_idx, startPos + src_idx) for src_idx in ids]
     ra = np.array([point.getRa().asDegrees() for point in points], dtype=float)
-    decl = np.array([point.getDec().asDegrees() for point in points], dtype=float)
+    dec = np.array([point.getDec().asDegrees() for point in points], dtype=float)
 
     objects = pandas.DataFrame({
         "diaObjectId": ids,
         "ra": ra,
-        "decl": decl
+        "dec": dec
     })
 
     return objects
@@ -125,7 +125,7 @@ class TestDiaForcedSource(unittest.TestCase):
                                   dafBase.DateTime.Timescale.TAI))
         self.exposure.info.id = self.exposureId
         self.exposure.setDetector(detector)
-        self.exposure.getInfo().setVisitInfo(visit)
+        self.exposure.info.setVisitInfo(visit)
         self.exposure.setFilter(afwImage.FilterLabel(band='g', physical='g.MP9401'))
         self.exposure.setPhotoCalib(afwImage.PhotoCalib(self.calibration, self.calibrationErr))
 
@@ -142,7 +142,7 @@ class TestDiaForcedSource(unittest.TestCase):
         self.diffim = afwImage.makeExposure(masked_image, self.wcs)
         self.diffim.info.id = self.exposureId
         self.diffim.setDetector(detector)
-        self.diffim.getInfo().setVisitInfo(visit)
+        self.diffim.info.setVisitInfo(visit)
         self.diffim.setFilter(afwImage.FilterLabel(band='g', physical='g.MP9401'))
         self.diffim.setPhotoCalib(afwImage.PhotoCalib(self.calibration, self.calibrationErr))
 
@@ -164,7 +164,7 @@ class TestDiaForcedSource(unittest.TestCase):
         extra = pandas.DataFrame({
             "diaObjectId": np.array([id for id, point in objects], dtype=np.int64),
             "ra": [point.getRa().asDegrees() for id, point in objects],
-            "decl": [point.getDec().asDegrees() for id, point in objects]
+            "dec": [point.getDec().asDegrees() for id, point in objects]
         })
         self.testDiaObjects = pd.concat([self.testDiaObjects, extra], ignore_index=True)
         # Ids of objects that were "updated" during "ap_association"
@@ -175,7 +175,7 @@ class TestDiaForcedSource(unittest.TestCase):
         # above list of ids.
         self.expectedDiaForcedSources = 6
 
-        self.expected_n_columns = 11
+        self.expected_n_columns = 12
 
     def testRun(self):
         """Test that forced source catalogs are successfully created and have
@@ -211,11 +211,11 @@ class TestDiaForcedSource(unittest.TestCase):
                                                                        diff_values,
                                                                        direct_var,
                                                                        diff_var):
-            self.assertAlmostEqual(diaFS["psFlux"] / diffVal, 1.)
-            self.assertAlmostEqual(diaFS["psFluxErr"] / diffVar, 1.)
+            self.assertAlmostEqual(diaFS["psfFlux"] / diffVal, 1.)
+            self.assertAlmostEqual(diaFS["psfFluxErr"] / diffVar, 1.)
 
-            self.assertAlmostEqual(diaFS["totFlux"] / dirVal, 1.)
-            self.assertAlmostEqual(diaFS["totFluxErr"] / dirVar, 1.)
+            self.assertAlmostEqual(diaFS["scienceFlux"] / dirVal, 1.)
+            self.assertAlmostEqual(diaFS["scienceFluxErr"] / dirVar, 1.)
 
             self.assertEqual(diaFS["ccdVisitId"], self.exposureId)
 

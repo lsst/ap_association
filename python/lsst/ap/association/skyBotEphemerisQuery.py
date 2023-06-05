@@ -156,7 +156,7 @@ class SkyBotEphemerisQueryTask(PipelineTask):
                     solar elongation (`float`)
                 ``"ra"``
                     RA in decimal degrees (`float`)
-                ``"decl"``
+                ``"dec"``
                     DEC in decimal degrees (`float`)
                 ``"ssObjectId"``
                     unique minor planet ID for internal use (`int`). Shared
@@ -234,7 +234,7 @@ class SkyBotEphemerisQueryTask(PipelineTask):
             dfSSO.rename(columns=coldict, inplace=True)
             # Data returned in hourangle format.
             dfSSO["ra"] = Angle(dfSSO["RA(h)"], unit=u.hourangle).deg
-            dfSSO["decl"] = Angle(dfSSO["DE(deg)"], unit=u.deg).deg
+            dfSSO["dec"] = Angle(dfSSO["DE(deg)"], unit=u.deg).deg
             # SkyBot returns a string name for the object. To store the id in
             # the Apdb we convert this string to an int by hashing the object
             # name. This is a stop gap until such a time as the Rubin

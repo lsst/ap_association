@@ -66,13 +66,13 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         self.initInputsBadFlags = {"diaSourceSchema": Struct(schema=dataset.makeMinimalSchema())}
 
         # Separate real/bogus score table, indexed on the above catalog ids.
-        spuriousnessSchema = lsst.afw.table.Schema()
-        spuriousnessSchema.addField(self.inputCatalog.schema["id"].asField())
-        spuriousnessSchema.addField("score", doc="real/bogus score of this source", type=float)
-        self.spuriousness = lsst.afw.table.BaseCatalog(spuriousnessSchema)
-        self.spuriousness.resize(len(self.inputCatalog))
-        self.spuriousness["id"] = self.inputCatalog["id"]
-        self.spuriousness["score"] = np.random.random(len(self.inputCatalog))
+        reliabilitySchema = lsst.afw.table.Schema()
+        reliabilitySchema.addField(self.inputCatalog.schema["id"].asField())
+        reliabilitySchema.addField("score", doc="real/bogus score of this source", type=float)
+        self.reliability = lsst.afw.table.BaseCatalog(reliabilitySchema)
+        self.reliability.resize(len(self.inputCatalog))
+        self.reliability["id"] = self.inputCatalog["id"]
+        self.reliability["score"] = np.random.random(len(self.inputCatalog))
 
         self.expId = 4321
         self.date = dafBase.DateTime(nsecs=1400000000 * 10**9)
@@ -83,9 +83,9 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
             date=self.date)
         self.exposure.info.id = self.expId
         self.exposure.setDetector(detector)
-        self.exposure.getInfo().setVisitInfo(visit)
-        self.filterName = 'g'
-        self.exposure.setFilter(afwImage.FilterLabel(band=self.filterName, physical='g.MP9401'))
+        self.exposure.info.setVisitInfo(visit)
+        self.band = 'g'
+        self.exposure.setFilter(afwImage.FilterLabel(band=self.band, physical='g.MP9401'))
         scale = 2
         scaleErr = 1
         self.photoCalib = afwImage.PhotoCalib(scale, scaleErr)
@@ -105,14 +105,14 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
                                                       config=self.config)
         result = transformTask.run(self.inputCatalog,
                                    self.exposure,
-                                   self.filterName,
+                                   self.band,
                                    ccdVisitId=self.expId)
 
         self.assertEqual(len(result.diaSourceTable), len(self.inputCatalog))
         np.testing.assert_array_equal(result.diaSourceTable["bboxSize"], [self.bboxSize]*self.nSources)
         np.testing.assert_array_equal(result.diaSourceTable["ccdVisitId"], [self.expId]*self.nSources)
-        np.testing.assert_array_equal(result.diaSourceTable["filterName"], [self.filterName]*self.nSources)
-        np.testing.assert_array_equal(result.diaSourceTable["midPointTai"],
+        np.testing.assert_array_equal(result.diaSourceTable["band"], [self.band]*self.nSources)
+        np.testing.assert_array_equal(result.diaSourceTable["midpointMjdTai"],
                                       [self.date.get(system=dafBase.DateTime.MJD)]*self.nSources)
         np.testing.assert_array_equal(result.diaSourceTable["diaObjectId"], [0]*self.nSources)
         np.testing.assert_array_equal(result.diaSourceTable["x"], np.arange(self.nSources))
@@ -122,17 +122,17 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         # Have to use allclose because assert_array_equal doesn't support equal_nan.
         np.testing.assert_allclose(result.diaSourceTable["snr"], expect_snr, equal_nan=True, rtol=0)
 
-    def test_run_with_spuriousness(self):
-        self.config.doIncludeSpuriousness = True
+    def test_run_with_reliability(self):
+        self.config.doIncludeReliability = True
         transformTask = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
                                                       config=self.config)
         result = transformTask.run(self.inputCatalog,
                                    self.exposure,
-                                   self.filterName,
-                                   spuriousness=self.spuriousness,
+                                   self.band,
+                                   reliability=self.reliability,
                                    ccdVisitId=self.expId)
         self.assertEqual(len(result.diaSourceTable), len(self.inputCatalog))
-        np.testing.assert_array_equal(result.diaSourceTable["spuriousness"], self.spuriousness["score"])
+        np.testing.assert_array_equal(result.diaSourceTable["reliability"], self.reliability["score"])
 
     def test_run_doSkySources(self):
         """Test that we get the correct output with doSkySources=True; the one
@@ -146,7 +146,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
 
         self.config.doRemoveSkySources = True
         task = TransformDiaSourceCatalogTask(initInputs=self.initInputs, config=self.config)
-        result = task.run(self.inputCatalog, self.exposure, self.filterName, ccdVisitId=self.expId)
+        result = task.run(self.inputCatalog, self.exposure, self.band, ccdVisitId=self.expId)
 
         self.assertEqual(len(result.diaSourceTable), self.nSources-1)
         # 0th source was removed, so x positions of the remaining sources are at x=1,2,3...
@@ -185,7 +185,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
                 obj.set("base_PixelFlags_flag_offimage", 1)
         outputCatalog = transform.run(self.inputCatalog,
                                       self.exposure,
-                                      self.filterName,
+                                      self.band,
                                       ccdVisitId=self.expId).diaSourceTable
 
         unpacker = UnpackApdbFlags(self.config.flagMap, "DiaSource")

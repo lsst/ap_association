@@ -21,7 +21,6 @@
 
 import os
 import numpy as np
-import pandas as pd
 import tempfile
 import unittest
 import yaml
@@ -32,9 +31,9 @@ import lsst.afw.image as afwImage
 from lsst.ap.association import LoadDiaCatalogsTask, LoadDiaCatalogsConfig
 import lsst.daf.base as dafBase
 from lsst.dax.apdb import ApdbSql, ApdbSqlConfig, ApdbTables
-import lsst.geom as geom
 from lsst.utils import getPackageDir
 import lsst.utils.tests
+import utils_tests
 
 
 def _data_file_name(basename, module_name):
@@ -113,128 +112,10 @@ def makeExposure(flipX=False, flipY=False):
                               dafBase.DateTime.Timescale.TAI))
     exposure.info.id = 1234
     exposure.setDetector(detector)
-    exposure.getInfo().setVisitInfo(visit)
+    exposure.info.setVisitInfo(visit)
     exposure.setFilter(afwImage.FilterLabel(band='g'))
 
     return exposure
-
-
-def makeDiaObjects(nObjects, exposure):
-    """Make a test set of DiaObjects.
-
-    Parameters
-    ----------
-    nObjects : `int`
-        Number of objects to create.
-    exposure : `lsst.afw.image.Exposure`
-        Exposure to create objects over.
-
-    Returns
-    -------
-    diaObjects : `pandas.DataFrame`
-        DiaObjects generated across the exposure.
-    """
-    bbox = geom.Box2D(exposure.getBBox())
-    rand_x = np.random.uniform(bbox.getMinX(), bbox.getMaxX(), size=nObjects)
-    rand_y = np.random.uniform(bbox.getMinY(), bbox.getMaxY(), size=nObjects)
-
-    midPointTaiMJD = exposure.getInfo().getVisitInfo().getDate().get(
-        system=dafBase.DateTime.MJD)
-
-    wcs = exposure.getWcs()
-
-    data = []
-    for idx, (x, y) in enumerate(zip(rand_x, rand_y)):
-        coord = wcs.pixelToSky(x, y)
-        newObject = {"ra": coord.getRa().asDegrees(),
-                     "decl": coord.getDec().asDegrees(),
-                     "radecTai": midPointTaiMJD,
-                     "diaObjectId": idx,
-                     "pmParallaxNdata": 0,
-                     "nearbyObj1": 0,
-                     "nearbyObj2": 0,
-                     "nearbyObj3": 0,
-                     "nDiaSources": 1}
-        for f in ["u", "g", "r", "i", "z", "y"]:
-            newObject["%sPSFluxNdata" % f] = 0
-        data.append(newObject)
-
-    return pd.DataFrame(data=data)
-
-
-def makeDiaSources(nSources, diaObjectIds, exposure):
-    """Make a test set of DiaSources.
-
-    Parameters
-    ----------
-    nSources : `int`
-        Number of sources to create.
-    diaObjectIds : `numpy.ndarray`
-        Integer Ids of diaobjects to "associate" with the DiaSources.
-    exposure : `lsst.afw.image.Exposure`
-        Exposure to create sources over.
-
-    Returns
-    -------
-    diaSources : `pandas.DataFrame`
-        DiaSources generated across the exposure.
-    """
-    bbox = geom.Box2D(exposure.getBBox())
-    rand_x = np.random.uniform(bbox.getMinX(), bbox.getMaxX(), size=nSources)
-    rand_y = np.random.uniform(bbox.getMinY(), bbox.getMaxY(), size=nSources)
-    rand_ids = diaObjectIds[np.random.randint(len(diaObjectIds), size=nSources)]
-
-    midPointTaiMJD = exposure.getInfo().getVisitInfo().getDate().get(
-        system=dafBase.DateTime.MJD)
-
-    wcs = exposure.getWcs()
-
-    data = []
-    for idx, (x, y, objId) in enumerate(zip(rand_x, rand_y, rand_ids)):
-        coord = wcs.pixelToSky(x, y)
-        data.append({"ra": coord.getRa().asDegrees(),
-                     "decl": coord.getDec().asDegrees(),
-                     "diaObjectId": objId,
-                     "diaSourceId": idx,
-                     "midPointTai": midPointTaiMJD,
-                     "ccdVisitId": 0,
-                     "x": 0.5,
-                     "y": 0.5})
-
-    return pd.DataFrame(data=data)
-
-
-def makeDiaForcedSources(nForcedSources, diaObjectIds, exposure):
-    """Make a test set of DiaForcedSources.
-
-    Parameters
-    ----------
-    nForcedSources : `int`
-        Number of sources to create.
-    diaObjectIds : `numpy.ndarray`
-        Integer Ids of diaobjects to "associate" with the DiaSources.
-    exposure : `lsst.afw.image.Exposure`
-        Exposure to create sources over.
-
-    Returns
-    -------
-    diaForcedSources : `pandas.DataFrame`
-        DiaForcedSources generated across the exposure.
-    """
-    rand_ids = diaObjectIds[
-        np.random.randint(len(diaObjectIds), size=nForcedSources)]
-
-    midPointTaiMJD = exposure.getInfo().getVisitInfo().getDate().get(
-        system=dafBase.DateTime.MJD)
-
-    data = []
-    for idx, objId in enumerate(rand_ids):
-        data.append({"diaObjectId": objId,
-                     "diaForcedSourceId": idx,
-                     "ccdVisitId": idx,
-                     "midPointTai": midPointTaiMJD})
-
-    return pd.DataFrame(data=data)
 
 
 class TestLoadDiaCatalogs(unittest.TestCase):
@@ -255,17 +136,17 @@ class TestLoadDiaCatalogs(unittest.TestCase):
 
         self.exposure = makeExposure(False, False)
 
-        self.diaObjects = makeDiaObjects(20, self.exposure)
-        self.diaSources = makeDiaSources(
+        self.diaObjects = utils_tests.makeDiaObjects(20, self.exposure)
+        self.diaSources = utils_tests.makeDiaSources(
             100,
             self.diaObjects["diaObjectId"].to_numpy(),
             self.exposure)
-        self.diaForcedSources = makeDiaForcedSources(
+        self.diaForcedSources = utils_tests.makeDiaForcedSources(
             200,
             self.diaObjects["diaObjectId"].to_numpy(),
             self.exposure)
 
-        self.dateTime = self.exposure.getInfo().getVisitInfo().getDate()
+        self.dateTime = self.exposure.visitInfo.date
         self.apdb.store(self.dateTime,
                         self.diaObjects,
                         self.diaSources,
@@ -273,7 +154,7 @@ class TestLoadDiaCatalogs(unittest.TestCase):
 
         # These columns are not in the DPDD, yet do appear in DiaSource.yaml.
         # We don't need to check them against the default APDB schema.
-        self.ignoreColumns = ["filterName", "bboxSize", "isDipole"]
+        self.ignoreColumns = ["band", "bboxSize", "isDipole"]
 
     def tearDown(self):
         os.close(self.db_file_fd)

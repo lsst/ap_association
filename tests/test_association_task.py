@@ -38,19 +38,19 @@ class TestAssociationTask(unittest.TestCase):
         self.nObjects = 5
         scatter = 0.1/3600
         self.diaObjects = pd.DataFrame(data=[
-            {"ra": 0.04*(idx + 1), "decl": 0.04*(idx + 1),
+            {"ra": 0.04*(idx + 1), "dec": 0.04*(idx + 1),
              "diaObjectId": idx + 1}
             for idx in range(self.nObjects)])
         self.diaObjects.set_index("diaObjectId", drop=False, inplace=True)
         self.nSources = 5
         self.diaSources = pd.DataFrame(data=[
             {"ra": 0.04*idx + scatter*rng.uniform(-1, 1),
-             "decl": 0.04*idx + scatter*rng.uniform(-1, 1),
+             "dec": 0.04*idx + scatter*rng.uniform(-1, 1),
              "diaSourceId": idx + 1 + self.nObjects, "diaObjectId": 0}
             for idx in range(self.nSources)])
         self.diaSourceZeroScatter = pd.DataFrame(data=[
             {"ra": 0.04*idx,
-             "decl": 0.04*idx,
+             "dec": 0.04*idx,
              "diaSourceId": idx + 1 + self.nObjects, "diaObjectId": 0}
             for idx in range(self.nSources)])
 
@@ -81,7 +81,7 @@ class TestAssociationTask(unittest.TestCase):
         assocTask = AssociationTask()
         results = assocTask.run(
             self.diaSources,
-            pd.DataFrame(columns=["ra", "decl", "diaObjectId"]))
+            pd.DataFrame(columns=["ra", "dec", "diaObjectId"]))
         self.assertEqual(results.nUpdatedDiaObjects, 0)
         self.assertEqual(results.nUnassociatedDiaObjects, 0)
         self.assertEqual(len(results.matchedDiaSources), 0)
@@ -129,9 +129,9 @@ class TestAssociationTask(unittest.TestCase):
         """Test removing DiaSources with NaN locations.
         """
         self.diaSources.loc[2, "ra"] = np.nan
-        self.diaSources.loc[3, "decl"] = np.nan
+        self.diaSources.loc[3, "dec"] = np.nan
         self.diaSources.loc[4, "ra"] = np.nan
-        self.diaSources.loc[4, "decl"] = np.nan
+        self.diaSources.loc[4, "dec"] = np.nan
         assoc_task = AssociationTask()
         out_dia_sources = assoc_task.check_dia_source_radec(self.diaSources)
         self.assertEqual(len(out_dia_sources), len(self.diaSources) - 3)
