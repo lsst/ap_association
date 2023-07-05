@@ -106,7 +106,6 @@ def makeExposure(flipX=False, flipY=False):
         afwImage.makeMaskedImageFromArrays(np.ones((1024, 1153))), wcs)
     detector = DetectorWrapper(id=23, bbox=exposure.getBBox()).detector
     visit = afwImage.VisitInfo(
-        exposureId=1234,
         exposureTime=200.,
         date=dafBase.DateTime("2014-05-13T17:00:00.000000000",
                               dafBase.DateTime.Timescale.TAI))

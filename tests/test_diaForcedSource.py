@@ -119,7 +119,6 @@ class TestDiaForcedSource(unittest.TestCase):
         detector = DetectorWrapper(
             id=23, bbox=self.exposure.getBBox()).detector
         visit = afwImage.VisitInfo(
-            exposureId=self.exposureId,
             exposureTime=self.exposureTime,
             date=dafBase.DateTime(self.dateTime,
                                   dafBase.DateTime.Timescale.TAI))
