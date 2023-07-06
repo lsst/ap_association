@@ -78,7 +78,6 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         self.date = dafBase.DateTime(nsecs=1400000000 * 10**9)
         detector = DetectorWrapper(id=23, bbox=self.exposure.getBBox()).detector
         visit = afwImage.VisitInfo(
-            exposureId=self.expId,
             exposureTime=200.,
             date=self.date)
         self.exposure.info.id = self.expId

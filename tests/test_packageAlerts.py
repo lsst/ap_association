@@ -114,7 +114,6 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         self.exposure.setDetector(detector)
 
         visit = afwImage.VisitInfo(
-            exposureId=1234,
             exposureTime=200.,
             date=dafBase.DateTime("2014-05-13T17:00:00.000000000",
                                   dafBase.DateTime.Timescale.TAI))
