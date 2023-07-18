@@ -86,7 +86,8 @@ class PackageAlertsTask(pipeBase.Task):
             diaForcedSources,
             diffIm,
             template,
-            ccdExposureIdBits=None):
+            ccdExposureIdBits=None,  # TODO: remove (including docs) on DM-38687.
+            ):
         """Package DiaSources/Object and exposure data into Avro alerts.
 
         Writes Avro alerts to a location determined by the
