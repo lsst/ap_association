@@ -133,7 +133,7 @@ class DiaForcedSourceTask(pipeBase.Task):
 
         if expIdBits is not None:
             warnings.warn(
-                "'expIdBits' argument is deprecated in favor of 'idGenerator'; will be removed after v27.",
+                "'expIdBits' argument is deprecated in favor of 'idGenerator'; will be removed after v26.",
                 category=FutureWarning,
             )
 

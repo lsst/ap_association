@@ -112,11 +112,11 @@ class PackageAlertsTask(pipeBase.Task):
         template : `lsst.afw.image.ExposureF` or `None`
             Template image used to create the ``diffIm``.
         ccdExposureIdBits : `int`, optional
-            Unused.  Deprecated and will be removed after v27.
+            Unused.  Deprecated and will be removed after v26.
         """
         if ccdExposureIdBits is not None:
             warnings.warn(
-                "The 'ccdExposureIdBits' argument is deprecated and unused; it will be removed after v27.",
+                "The 'ccdExposureIdBits' argument is deprecated and unused; it will be removed after v26.",
                 category=FutureWarning,
             )
         alerts = []
