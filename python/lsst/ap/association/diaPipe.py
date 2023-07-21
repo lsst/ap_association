@@ -342,10 +342,10 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             Template exposure used to create diffIm.
         ccdExposureIdBits : `int`
             Number of bits used for a unique ``ccdVisitId``.  Deprecated in
-            favor of ``idGenerator``, and ignored if that is present.  Pass
-            `None` explicitly to avoid a deprecation warning (a default is
-            impossible given that later positional arguments are not
-            defaulted).
+            favor of ``idGenerator``, and ignored if that is present (will be
+            removed after v26).  Pass `None` explicitly to avoid a deprecation
+            warning (a default is impossible given that later positional
+            arguments are not defaulted).
         band : `str`
             The band in which the new DiaSources were detected.
         idGenerator : `lsst.meas.base.IdGenerator`, optional
