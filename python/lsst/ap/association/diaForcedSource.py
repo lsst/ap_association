@@ -135,6 +135,7 @@ class DiaForcedSourceTask(pipeBase.Task):
             warnings.warn(
                 "'expIdBits' argument is deprecated in favor of 'idGenerator'; will be removed after v26.",
                 category=FutureWarning,
+                stacklevel=3,  # Caller + timeMethod
             )
 
         if idGenerator is None:

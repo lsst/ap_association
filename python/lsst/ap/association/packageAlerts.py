@@ -119,6 +119,7 @@ class PackageAlertsTask(pipeBase.Task):
             warnings.warn(
                 "The 'ccdExposureIdBits' argument is deprecated and unused; it will be removed after v26.",
                 category=FutureWarning,
+                stacklevel=3,  # Caller + timeMethod
             )
         alerts = []
         self._patchDiaSources(diaSourceCat)
