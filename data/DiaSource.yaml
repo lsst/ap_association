@@ -179,7 +179,9 @@ funcs:
     isDipole:
         functor: Column
         args: ip_diffim_DipoleFit_flag_classification
-    # dipoleNdata not implemented
+    dipoleNdata:
+        functor: Column
+        args: ip_diffim_DipoleFit_nData
     scienceFlux:
         functor: LocalNanojansky
         args:
