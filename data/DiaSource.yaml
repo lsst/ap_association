@@ -34,11 +34,14 @@ funcs:
         args: flags
     ra:
         functor: RAColumn
-    # raErr: not available yet DM-15180
     dec:
         functor: DecColumn
-    # decErr: not available yet DM-15180
-    # ra_dec_Cov: not available yet
+    raErr:
+        functor: RAErrColumn
+    decErr:
+        functor: DecErrColumn
+    ra_dec_Cov:
+        functor: RADecCovColumn
     x:
         functor: Column
         args: slot_Centroid_x
