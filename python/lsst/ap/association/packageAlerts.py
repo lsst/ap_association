@@ -48,8 +48,8 @@ class PackageAlertsConfig(pexConfig.Config):
     """
     schemaFile = pexConfig.Field(
         dtype=str,
-        doc="Schema definition file for the avro alerts.",
-        default=alertPack.get_path_to_latest_schema()
+        doc="Schema definition file URI for the avro alerts.",
+        default=str(alertPack.get_uri_to_latest_schema())
     )
     minCutoutSize = pexConfig.RangeField(
         dtype=int,
@@ -75,7 +75,7 @@ class PackageAlertsTask(pipeBase.Task):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.alertSchema = alertPack.Schema.from_file(self.config.schemaFile)
+        self.alertSchema = alertPack.Schema.from_uri(self.config.schemaFile)
         os.makedirs(self.config.alertWriteLocation, exist_ok=True)
 
     @timeMethod
