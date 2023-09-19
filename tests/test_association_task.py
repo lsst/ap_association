@@ -68,14 +68,8 @@ class TestAssociationTask(unittest.TestCase):
         self.assertEqual(len(results.matchedDiaSources),
                          len(self.diaObjects) - 1)
         self.assertEqual(len(results.unAssocDiaSources), 1)
-        for test_obj_id, expected_obj_id in zip(
-                results.matchedDiaSources["diaObjectId"].to_numpy(),
-                [1, 2, 3, 4]):
-            self.assertEqual(test_obj_id, expected_obj_id)
-        for test_obj_id, expected_obj_id in zip(
-                results.unAssocDiaSources["diaObjectId"].to_numpy(),
-                [0]):
-            self.assertEqual(test_obj_id, expected_obj_id)
+        np.testing.assert_array_equal(results.matchedDiaSources["diaObjectId"].values, [1, 2, 3, 4])
+        np.testing.assert_array_equal(results.unAssocDiaSources["diaObjectId"].values, [0])
 
     def test_run_trailed_sources(self):
         """Test the full task by associating a set of diaSources to
@@ -119,6 +113,7 @@ class TestAssociationTask(unittest.TestCase):
                 assoc_result.diaSources["diaObjectId"].to_numpy(),
                 [0, 1, 2, 3, 4]):
             self.assertEqual(test_obj_id, expected_obj_id)
+        np.testing.assert_array_equal(assoc_result.diaSources["diaObjectId"].values, [0, 1, 2, 3, 4])
 
     def test_score_and_match(self):
         """Test association between a set of sources and an existing
