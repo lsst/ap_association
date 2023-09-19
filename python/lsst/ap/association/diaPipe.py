@@ -28,6 +28,10 @@ images at the updated locations of DiaObjects.
 Currently loads directly from the Apdb rather than pre-loading.
 """
 
+__all__ = ("DiaPipelineConfig",
+           "DiaPipelineTask",
+           "DiaPipelineConnections")
+
 import pandas as pd
 
 import lsst.dax.apdb as daxApdb
@@ -43,10 +47,6 @@ from lsst.ap.association import (
     LoadDiaCatalogsTask,
     PackageAlertsTask)
 from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
-
-__all__ = ("DiaPipelineConfig",
-           "DiaPipelineTask",
-           "DiaPipelineConnections")
 
 
 class DiaPipelineConnections(
@@ -367,8 +367,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         loaderResult = self.diaCatalogLoader.run(diffIm, self.apdb)
 
         # Associate new DiaSources with existing DiaObjects.
-        assocResults = self.associator.run(diaSourceTable,
-                                           loaderResult.diaObjects)
+        assocResults = self.associator.run(diaSourceTable, loaderResult.diaObjects,
+                                           exposure_time=diffIm.getInfo().getVisitInfo().getExposureTime())
         if self.config.doSolarSystemAssociation:
             ssoAssocResult = self.solarSystemAssociator.run(
                 assocResults.unAssocDiaSources,

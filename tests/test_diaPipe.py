@@ -121,7 +121,7 @@ class TestDiaPipelineTask(unittest.TestCase):
                                          unAssocDiaSources=MagicMock(spec=pd.DataFrame()))
 
         @lsst.utils.timer.timeMethod
-        def associator_run(self, table, diaObjects):
+        def associator_run(self, table, diaObjects, exposure_time=None):
             return lsst.pipe.base.Struct(nUpdatedDiaObjects=2, nUnassociatedDiaObjects=3,
                                          matchedDiaSources=MagicMock(spec=pd.DataFrame()),
                                          unAssocDiaSources=MagicMock(spec=pd.DataFrame()))

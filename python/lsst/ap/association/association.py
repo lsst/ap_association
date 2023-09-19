@@ -32,6 +32,7 @@ import lsst.geom as geom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 from lsst.utils.timer import timeMethod
+from .trailedSourceFilter import TrailedSourceFilterTask
 
 # Enforce an error for unsafe column/array value setting in pandas.
 pd.options.mode.chained_assignment = 'raise'
@@ -40,11 +41,25 @@ pd.options.mode.chained_assignment = 'raise'
 class AssociationConfig(pexConfig.Config):
     """Config class for AssociationTask.
     """
+
     maxDistArcSeconds = pexConfig.Field(
         dtype=float,
-        doc='Maximum distance in arcseconds to test for a DIASource to be a '
-        'match to a DIAObject.',
+        doc="Maximum distance in arcseconds to test for a DIASource to be a "
+        "match to a DIAObject.",
         default=1.0,
+    )
+
+    trailedSourceFilter = pexConfig.ConfigurableField(
+        target=TrailedSourceFilterTask,
+        doc="Subtask to remove long trailed sources based on catalog source "
+            "morphological measurements.",
+    )
+
+    doTrailedSourceFilter = pexConfig.Field(
+        doc="Run traildeSourceFilter to remove long trailed sources from "
+            "output catalog.",
+        dtype=bool,
+        default=True,
     )
 
 
@@ -60,10 +75,16 @@ class AssociationTask(pipeBase.Task):
     ConfigClass = AssociationConfig
     _DefaultName = "association"
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.config.doTrailedSourceFilter:
+            self.makeSubtask("trailedSourceFilter")
+
     @timeMethod
     def run(self,
             diaSources,
-            diaObjects):
+            diaObjects,
+            exposure_time=None):
         """Associate the new DiaSources with existing DiaObjects.
 
         Parameters
@@ -72,6 +93,8 @@ class AssociationTask(pipeBase.Task):
             New DIASources to be associated with existing DIAObjects.
         diaObjects : `pandas.DataFrame`
             Existing diaObjects from the Apdb.
+        exposure_time : `float`, optional
+            Exposure time from difference image.
 
         Returns
         -------
@@ -98,7 +121,16 @@ class AssociationTask(pipeBase.Task):
                 nUpdatedDiaObjects=0,
                 nUnassociatedDiaObjects=0)
 
-        matchResult = self.associate_sources(diaObjects, diaSources)
+        if self.config.doTrailedSourceFilter:
+            diaTrailedResult = self.trailedSourceFilter.run(diaSources, exposure_time)
+            matchResult = self.associate_sources(diaObjects, diaTrailedResult.diaSources)
+
+            self.log.warning("%i DIASources exceed maxTrailLength, dropping "
+                             "from source catalog."
+                             % len(diaTrailedResult.trailedDiaSources))
+
+        else:
+            matchResult = self.associate_sources(diaObjects, diaSources)
 
         mask = matchResult.diaSources["diaObjectId"] != 0
 
