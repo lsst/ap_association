@@ -22,7 +22,6 @@
 import numpy as np
 import pandas as pd
 import unittest
-
 import lsst.geom as geom
 import lsst.utils.tests
 
@@ -46,34 +45,48 @@ class TestAssociationTask(unittest.TestCase):
         self.diaSources = pd.DataFrame(data=[
             {"ra": 0.04*idx + scatter*rng.uniform(-1, 1),
              "dec": 0.04*idx + scatter*rng.uniform(-1, 1),
-             "diaSourceId": idx + 1 + self.nObjects, "diaObjectId": 0}
+             "diaSourceId": idx + 1 + self.nObjects, "diaObjectId": 0, "trailLength": 5.5*idx}
             for idx in range(self.nSources)])
         self.diaSourceZeroScatter = pd.DataFrame(data=[
             {"ra": 0.04*idx,
              "dec": 0.04*idx,
-             "diaSourceId": idx + 1 + self.nObjects, "diaObjectId": 0}
+             "diaSourceId": idx + 1 + self.nObjects, "diaObjectId": 0, "trailLength": 5.5*idx}
             for idx in range(self.nSources)])
+        self.exposure_time = 30.0
 
     def test_run(self):
         """Test the full task by associating a set of diaSources to
         existing diaObjects.
         """
-        assocTask = AssociationTask()
-        results = assocTask.run(self.diaSources, self.diaObjects)
+        config = AssociationTask.ConfigClass()
+        config.doTrailedSourceFilter = False
+        assocTask = AssociationTask(config=config)
+        results = assocTask.run(self.diaSources, self.diaObjects, exposure_time=self.exposure_time)
 
         self.assertEqual(results.nUpdatedDiaObjects, len(self.diaObjects) - 1)
         self.assertEqual(results.nUnassociatedDiaObjects, 1)
         self.assertEqual(len(results.matchedDiaSources),
                          len(self.diaObjects) - 1)
         self.assertEqual(len(results.unAssocDiaSources), 1)
-        for test_obj_id, expected_obj_id in zip(
-                results.matchedDiaSources["diaObjectId"].to_numpy(),
-                [1, 2, 3, 4]):
-            self.assertEqual(test_obj_id, expected_obj_id)
-        for test_obj_id, expected_obj_id in zip(
-                results.unAssocDiaSources["diaObjectId"].to_numpy(),
-                [0]):
-            self.assertEqual(test_obj_id, expected_obj_id)
+        np.testing.assert_array_equal(results.matchedDiaSources["diaObjectId"].values, [1, 2, 3, 4])
+        np.testing.assert_array_equal(results.unAssocDiaSources["diaObjectId"].values, [0])
+
+    def test_run_trailed_sources(self):
+        """Test the full task by associating a set of diaSources to
+        existing diaObjects when trailed sources are filtered.
+
+        This should filter out two of the five sources based on trail length,
+        leaving one unassociated diaSource and two associated diaSources.
+        """
+        assocTask = AssociationTask()
+        results = assocTask.run(self.diaSources, self.diaObjects, exposure_time=self.exposure_time)
+
+        self.assertEqual(results.nUpdatedDiaObjects, len(self.diaObjects) - 3)
+        self.assertEqual(results.nUnassociatedDiaObjects, 3)
+        self.assertEqual(len(results.matchedDiaSources), len(self.diaObjects) - 3)
+        self.assertEqual(len(results.unAssocDiaSources), 1)
+        np.testing.assert_array_equal(results.matchedDiaSources["diaObjectId"].values, [1, 2])
+        np.testing.assert_array_equal(results.unAssocDiaSources["diaObjectId"].values, [0])
 
     def test_run_no_existing_objects(self):
         """Test the run method with a completely empty database.
@@ -81,7 +94,8 @@ class TestAssociationTask(unittest.TestCase):
         assocTask = AssociationTask()
         results = assocTask.run(
             self.diaSources,
-            pd.DataFrame(columns=["ra", "dec", "diaObjectId"]))
+            pd.DataFrame(columns=["ra", "dec", "diaObjectId", "trailLength"]),
+            exposure_time=self.exposure_time)
         self.assertEqual(results.nUpdatedDiaObjects, 0)
         self.assertEqual(results.nUnassociatedDiaObjects, 0)
         self.assertEqual(len(results.matchedDiaSources), 0)
@@ -99,6 +113,7 @@ class TestAssociationTask(unittest.TestCase):
                 assoc_result.diaSources["diaObjectId"].to_numpy(),
                 [0, 1, 2, 3, 4]):
             self.assertEqual(test_obj_id, expected_obj_id)
+        np.testing.assert_array_equal(assoc_result.diaSources["diaObjectId"].values, [0, 1, 2, 3, 4])
 
     def test_score_and_match(self):
         """Test association between a set of sources and an existing
