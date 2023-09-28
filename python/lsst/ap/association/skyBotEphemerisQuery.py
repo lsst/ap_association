@@ -126,43 +126,43 @@ class SkyBotEphemerisQueryTask(PipelineTask):
                 details see
                 https://ssp.imcce.fr/webservices/skybot/api/conesearch/#output-results
 
-                ``"Num"``
+                ``Num``
                     object number (`int`, optional)
-                ``"Name"``
+                ``Name``
                     object name (`str`)
-                ``"RA(h)"``
+                ``RA(h)``
                     RA in HMS (`str`)
-                ``"DE(deg)"``
+                ``DE(deg)``
                     DEC in DMS (`str`)
-                ``"Class"``
+                ``Class``
                     Minor planet classification (`str`)
-                ``"Mv"``
+                ``Mv``
                     visual magnitude (`float`)
-                ``"Err(arcsec)"``
+                ``Err(arcsec)``
                     position error (`float`)
-                ``"d(arcsec)"``
+                ``d(arcsec)``
                     distance from exposure boresight (`float`)?
-                ``"dRA(arcsec/h)"``
+                ``dRA(arcsec/h)``
                     proper motion in RA (`float`)
-                ``"dDEC(arcsec/h)"``
+                ``dDEC(arcsec/h)``
                     proper motion in DEC (`float`)
-                ``"Dg(ua)"``
+                ``Dg(ua)``
                     geocentric distance (`float`)
-                ``"Dh(ua)"``
+                ``Dh(ua)``
                     heliocentric distance (`float`)
-                ``"Phase(deg)"``
+                ``Phase(deg)``
                     phase angle (`float`)
-                ``"SunElong(deg)"``
+                ``SunElong(deg)``
                     solar elongation (`float`)
-                ``"ra"``
+                ``ra``
                     RA in decimal degrees (`float`)
-                ``"dec"``
+                ``dec``
                     DEC in decimal degrees (`float`)
-                ``"ssObjectId"``
+                ``ssObjectId``
                     unique minor planet ID for internal use (`int`). Shared
                     across catalogs; the pair ``(ssObjectId, visitId)`` is
                     globally unique.
-                ``"visitId"``
+                ``visitId``
                     a copy of ``visit`` (`int`)
         """
         # Grab the visitInfo from the raw to get the information needed on the

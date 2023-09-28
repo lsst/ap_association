@@ -1,3 +1,24 @@
+# This file is part of ap_association.
+#
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import unittest
 from lsst.ap.association import TrailedSourceFilterTask
 import numpy as np
@@ -40,13 +61,13 @@ class TestTrailedSourceFilterTask(unittest.TestCase):
     def test_run_short_max_trail(self):
         """Run trailedSourceFilterTask with aggressive trail length cutoff
 
-        With a maxTrailLength config of 0.01 arcseconds/second and an
+        With a max_trail_length config of 0.01 arcseconds/second and an
         exposure of 30 seconds,the max trail length is 0.3 arcseconds. Only the
         source with a trail of 0 stays in the catalog and the rest are filtered
         out and put into results.trailedSources.
         """
         config = TrailedSourceFilterTask.ConfigClass()
-        config.maxTrailLength = 0.01
+        config.max_trail_length = 0.01
         trailedSourceFilterTask = TrailedSourceFilterTask(config=config)
         results = trailedSourceFilterTask.run(self.diaSources, self.exposure_time)
 
@@ -58,13 +79,13 @@ class TestTrailedSourceFilterTask(unittest.TestCase):
         """Run trailedSourceFilterTask with a long trail length so that
         every source in the catalog is in the final diaSource catalog.
 
-        With a maxTrailLength config of 10 arcseconds/second and an
+        With a max_trail_length config of 10 arcseconds/second and an
         exposure of 30 seconds,the max trail length is 300 arcseconds. All
         sources in the initial catalog should be in the final diaSource
         catalog.
         """
         config = TrailedSourceFilterTask.ConfigClass()
-        config.maxTrailLength = 10.00
+        config.max_trail_length = 10.00
         trailedSourceFilterTask = TrailedSourceFilterTask(config=config)
         results = trailedSourceFilterTask.run(self.diaSources, self.exposure_time)
 

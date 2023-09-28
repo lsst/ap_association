@@ -101,16 +101,16 @@ class AssociationTask(pipeBase.Task):
         result : `lsst.pipe.base.Struct`
             Results struct with components.
 
-            - ``"matchedDiaSources"`` : DiaSources that were matched. Matched
+            - ``matchedDiaSources`` : DiaSources that were matched. Matched
               Sources have their diaObjectId updated and set to the id of the
               diaObject they were matched to. (`pandas.DataFrame`)
-            - ``"unAssocDiaSources"`` : DiaSources that were not matched.
+            - ``unAssocDiaSources`` : DiaSources that were not matched.
               Unassociated sources have their diaObject set to 0 as they
               were not associated with any existing DiaObjects.
               (`pandas.DataFrame`)
-            - ``"nUpdatedDiaObjects"`` : Number of DiaObjects that were
+            - ``nUpdatedDiaObjects`` : Number of DiaObjects that were
               matched to new DiaSources. (`int`)
-            - ``"nUnassociatedDiaObjects"`` : Number of DiaObjects that were
+            - ``nUnassociatedDiaObjects`` : Number of DiaObjects that were
               not matched a new DiaSource. (`int`)
         """
         diaSources = self.check_dia_source_radec(diaSources)
@@ -125,9 +125,8 @@ class AssociationTask(pipeBase.Task):
             diaTrailedResult = self.trailedSourceFilter.run(diaSources, exposure_time)
             matchResult = self.associate_sources(diaObjects, diaTrailedResult.diaSources)
 
-            self.log.warning("%i DIASources exceed maxTrailLength, dropping "
-                             "from source catalog."
-                             % len(diaTrailedResult.trailedDiaSources))
+            self.log.info("%i DIASources exceed max_trail_length, dropping "
+                          "from source catalog." % len(diaTrailedResult.trailedDiaSources))
 
         else:
             matchResult = self.associate_sources(diaObjects, diaSources)
@@ -189,11 +188,11 @@ class AssociationTask(pipeBase.Task):
         result : `lsst.pipe.base.Struct`
             Results struct with components.
 
-            - ``"diaSources"`` : Full set of diaSources both matched and not.
+            - ``diaSources`` : Full set of diaSources both matched and not.
               (`pandas.DataFrame`)
-            - ``"nUpdatedDiaObjects"`` : Number of DiaObjects that were
+            - ``nUpdatedDiaObjects`` : Number of DiaObjects that were
               associated. (`int`)
-            - ``"nUnassociatedDiaObjects"`` : Number of DiaObjects that were
+            - ``nUnassociatedDiaObjects`` : Number of DiaObjects that were
               not matched a new DiaSource. (`int`)
         """
         scores = self.score(
@@ -228,11 +227,11 @@ class AssociationTask(pipeBase.Task):
         result : `lsst.pipe.base.Struct`
             Results struct with components:
 
-            - ``"scores"``: array of floats of match quality updated DIAObjects
+            - ``scores``: array of floats of match quality updated DIAObjects
                 (array-like of `float`).
-            - ``"obj_idxs"``: indexes of the matched DIAObjects in the catalog.
+            - ``obj_idxs``: indexes of the matched DIAObjects in the catalog.
                 (array-like of `int`)
-            - ``"obj_ids"``: array of floats of match quality updated DIAObjects
+            - ``obj_ids``: array of floats of match quality updated DIAObjects
                 (array-like of `int`).
 
             Default values for these arrays are

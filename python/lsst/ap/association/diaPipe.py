@@ -368,7 +368,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         # Associate new DiaSources with existing DiaObjects.
         assocResults = self.associator.run(diaSourceTable, loaderResult.diaObjects,
-                                           exposure_time=diffIm.getInfo().getVisitInfo().getExposureTime())
+                                           exposure_time=diffIm.visitInfo.exposureTime)
         if self.config.doSolarSystemAssociation:
             ssoAssocResult = self.solarSystemAssociator.run(
                 assocResults.unAssocDiaSources,
