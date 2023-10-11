@@ -88,3 +88,6 @@ columns:
     - name: slot_Shape_flag_parent_source
       bit: 26
       doc: parent source, ignored; only valid for HsmShape
+    - name: ext_trailedSources_Naive_flag_edge
+      bit: 27
+      doc: source is trailed and extends off chip

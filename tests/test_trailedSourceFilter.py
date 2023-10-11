@@ -20,10 +20,14 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import unittest
-from lsst.ap.association import TrailedSourceFilterTask
+import os
 import numpy as np
 import pandas as pd
+
 import lsst.utils.tests
+import lsst.utils as utils
+from lsst.ap.association import TrailedSourceFilterTask
+from lsst.ap.association.transformDiaSourceCatalog import UnpackApdbFlags
 
 
 class TestTrailedSourceFilterTask(unittest.TestCase):
@@ -40,9 +44,20 @@ class TestTrailedSourceFilterTask(unittest.TestCase):
         self.diaSources = pd.DataFrame(data=[
             {"ra": 0.04*idx + scatter*rng.uniform(-1, 1),
              "dec": 0.04*idx + scatter*rng.uniform(-1, 1),
-             "diaSourceId": idx, "diaObjectId": 0, "trailLength": 5.5*idx}
+             "diaSourceId": idx, "diaObjectId": 0, "trailLength": 5.5*idx,
+             "flags": 0}
             for idx in range(self.nSources)])
         self.exposure_time = 30.0
+
+        # For use only with testing the edge flag`
+        self.edgeDiaSources = pd.DataFrame(data=[
+            {"ra": 0.04*idx + scatter*rng.uniform(-1, 1),
+             "dec": 0.04*idx + scatter*rng.uniform(-1, 1),
+             "diaSourceId": idx, "diaObjectId": 0, "trailLength": 0,
+             "flags": 0}
+            for idx in range(self.nSources)])
+
+        self.edgeDiaSources.loc[[1, 4], 'flags'] = np.power(2, 27)
 
     def test_run(self):
         """Run trailedSourceFilterTask with the default max distance.
@@ -52,6 +67,7 @@ class TestTrailedSourceFilterTask(unittest.TestCase):
         filtered out of the final results and put into results.trailedSources.
         """
         trailedSourceFilterTask = TrailedSourceFilterTask()
+
         results = trailedSourceFilterTask.run(self.diaSources, self.exposure_time)
 
         self.assertEqual(len(results.diaSources), 3)
@@ -94,14 +110,42 @@ class TestTrailedSourceFilterTask(unittest.TestCase):
         np.testing.assert_array_equal(results.diaSources["diaSourceId"].values, [0, 1, 2, 3, 4])
         np.testing.assert_array_equal(results.trailedDiaSources["diaSourceId"].values, [])
 
+    def test_run_edge(self):
+        """Run trailedSourceFilterTask with the default max distance.
+        filtered out of the final results and put into results.trailedSources.
+        """
+        trailedSourceFilterTask = TrailedSourceFilterTask()
+
+        results = trailedSourceFilterTask.run(self.edgeDiaSources, self.exposure_time)
+
+        self.assertEqual(len(results.diaSources), 3)
+        np.testing.assert_array_equal(results.diaSources['diaSourceId'].values, [0, 2, 3])
+        np.testing.assert_array_equal(results.trailedDiaSources['diaSourceId'].values, [1, 4])
+
     def test_check_dia_source_trail(self):
         """Test the source trail mask filter.
 
         Test that the mask filter returns the expected mask array.
         """
         trailedSourceFilterTask = TrailedSourceFilterTask()
-        mask = trailedSourceFilterTask._check_dia_source_trail(self.diaSources, self.exposure_time)
+        flag_map = os.path.join(utils.getPackageDir("ap_association"), "data/association-flag-map.yaml")
+        unpacker = UnpackApdbFlags(flag_map, "DiaSource")
+        flags = unpacker.unpack(self.diaSources["flags"], "flags")
+        mask = trailedSourceFilterTask._check_dia_source_trail(self.diaSources, self.exposure_time,
+                                                               flags)
+
         np.testing.assert_array_equal(mask, [False, False, False, True, True])
+
+        flags = unpacker.unpack(self.edgeDiaSources["flags"], "flags")
+        mask = trailedSourceFilterTask._check_dia_source_trail(self.edgeDiaSources, self.exposure_time,
+                                                               flags)
+        np.testing.assert_array_equal(mask, [False, True, False, False, True])
+
+        # Mixing the flags from edgeDiaSources and diaSources means the mask
+        # will be set using both criteria
+        mask = trailedSourceFilterTask._check_dia_source_trail(self.diaSources, self.exposure_time,
+                                                               flags)
+        np.testing.assert_array_equal(mask, [False, True, False, True, True])
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
