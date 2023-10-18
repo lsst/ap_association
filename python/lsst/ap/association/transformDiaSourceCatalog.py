@@ -142,10 +142,9 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         self.inputSchema = initInputs['diaSourceSchema'].schema
         self._create_bit_pack_mappings()
 
-        if not self.config.doPackFlags:
-            # get the flag rename rules
-            with open(os.path.expandvars(self.config.flagRenameMap)) as yaml_stream:
-                self.rename_rules = list(yaml.safe_load_all(yaml_stream))
+        # Get the flag rename rules.
+        with open(os.path.expandvars(self.config.flagRenameMap)) as yaml_stream:
+            self.rename_rules = list(yaml.safe_load_all(yaml_stream))
 
     def _create_bit_pack_mappings(self):
         """Setup all flag bit packings.
@@ -249,12 +248,12 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             diaSourceDf["reliability"] = np.float32(np.nan)
 
         if self.config.doPackFlags:
-            # either bitpack the flags
             self.bitPackFlags(diaSourceDf)
-        else:
-            # or add the individual flag functors
-            self.addUnpackedFlagFunctors()
-            # and remove the packed flag functor
+
+        # Also add the individual flag functors.
+        self.addUnpackedFlagFunctors()
+        if not self.config.doPackFlags:
+            # Remove the packed flag functor.
             if 'flags' in self.funcs.funcDict:
                 del self.funcs.funcDict['flags']
 
