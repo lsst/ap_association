@@ -21,9 +21,14 @@
 
 __all__ = ("TrailedSourceFilterTask", "TrailedSourceFilterConfig")
 
+import os
+import numpy as np
+
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 from lsst.utils.timer import timeMethod
+from lsst.ap.association.transformDiaSourceCatalog import UnpackApdbFlags
+import lsst.utils as utils
 
 
 class TrailedSourceFilterConfig(pexConfig.Config):
@@ -72,24 +77,30 @@ class TrailedSourceFilterTask(pipeBase.Task):
         result : `lsst.pipe.base.Struct`
             Results struct with components.
 
-            - ``dia_sources`` : DIASource table that is free from unwanted
+            - ``diaSources`` : DIASource table that is free from unwanted
              trailed sources. (`pandas.DataFrame`)
 
-            - ``trailed_dia_sources`` : DIASources that have trails which
-            exceed max_trail_length/second*exposure_time.
+            - ``longTrailedDiaSources`` : DIASources that have trails which
+            exceed max_trail_length/second*exposure_time (seconds).
             (`pandas.DataFrame`)
         """
-        trail_mask = self._check_dia_source_trail(dia_sources, exposure_time)
+
+        flag_map = os.path.join(utils.getPackageDir("ap_association"), "data/association-flag-map.yaml")
+        unpacker = UnpackApdbFlags(flag_map, "DiaSource")
+        flags = unpacker.unpack(dia_sources["flags"], "flags")
+
+        trail_mask = self._check_dia_source_trail(dia_sources, exposure_time, flags)
 
         return pipeBase.Struct(
             diaSources=dia_sources[~trail_mask].reset_index(drop=True),
-            trailedDiaSources=dia_sources[trail_mask].reset_index(drop=True))
+            longTrailedDiaSources=dia_sources[trail_mask].reset_index(drop=True))
 
-    def _check_dia_source_trail(self, dia_sources, exposure_time):
+    def _check_dia_source_trail(self, dia_sources, exposure_time, flags):
         """Find DiaSources that have long trails.
 
         Return a mask of sources with lengths greater than
-        ``config.max_trail_length``  multiplied by the exposure time.
+        ``config.max_trail_length``  multiplied by the exposure time in seconds
+        or have ext_trailedSources_Naive_flag_edge set.
 
         Parameters
         ----------
@@ -97,14 +108,18 @@ class TrailedSourceFilterTask(pipeBase.Task):
             Input DIASources to check for trail lengths.
         exposure_time : `float`
             Exposure time from difference image.
+        flags : 'numpy.ndArray'
+            Boolean array of flags from the DIASources.
 
         Returns
         -------
         trail_mask : `pandas.DataFrame`
             Boolean mask for DIASources which are greater than the
-            cutoff length.
+            cutoff length and have the edge flag set.
         """
         trail_mask = (dia_sources.loc[:, "trailLength"].values[:]
                       >= (self.config.max_trail_length*exposure_time))
+
+        trail_mask[np.where(flags['ext_trailedSources_Naive_flag_edge'])] = True
 
         return trail_mask

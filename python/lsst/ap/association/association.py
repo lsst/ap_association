@@ -112,24 +112,32 @@ class AssociationTask(pipeBase.Task):
               matched to new DiaSources. (`int`)
             - ``nUnassociatedDiaObjects`` : Number of DiaObjects that were
               not matched a new DiaSource. (`int`)
+            - ``longTrailedSources`` : DiaSources which have trail lengths
+              greater than max_trail_length/second*exposure_time.
+              (`pandas.DataFrame``)
         """
         diaSources = self.check_dia_source_radec(diaSources)
+
+        if self.config.doTrailedSourceFilter:
+            diaTrailedResult = self.trailedSourceFilter.run(diaSources, exposure_time)
+            diaSources = diaTrailedResult.diaSources
+            longTrailedSources = diaTrailedResult.longTrailedDiaSources
+
+            self.log.info("%i DiaSources exceed max_trail_length, dropping from source "
+                          "catalog." % len(diaTrailedResult.longTrailedDiaSources))
+            self.metadata.add("num_filtered", len(diaTrailedResult.longTrailedDiaSources))
+        else:
+            longTrailedSources = pd.DataFrame(columns=diaSources.columns)
+
         if len(diaObjects) == 0:
             return pipeBase.Struct(
                 matchedDiaSources=pd.DataFrame(columns=diaSources.columns),
                 unAssocDiaSources=diaSources,
                 nUpdatedDiaObjects=0,
-                nUnassociatedDiaObjects=0)
+                nUnassociatedDiaObjects=0,
+                longTrailedSources=longTrailedSources)
 
-        if self.config.doTrailedSourceFilter:
-            diaTrailedResult = self.trailedSourceFilter.run(diaSources, exposure_time)
-            matchResult = self.associate_sources(diaObjects, diaTrailedResult.diaSources)
-
-            self.log.info("%i DIASources exceed max_trail_length, dropping "
-                          "from source catalog." % len(diaTrailedResult.trailedDiaSources))
-
-        else:
-            matchResult = self.associate_sources(diaObjects, diaSources)
+        matchResult = self.associate_sources(diaObjects, diaSources)
 
         mask = matchResult.diaSources["diaObjectId"] != 0
 
@@ -137,7 +145,8 @@ class AssociationTask(pipeBase.Task):
             matchedDiaSources=matchResult.diaSources[mask].reset_index(drop=True),
             unAssocDiaSources=matchResult.diaSources[~mask].reset_index(drop=True),
             nUpdatedDiaObjects=matchResult.nUpdatedDiaObjects,
-            nUnassociatedDiaObjects=matchResult.nUnassociatedDiaObjects)
+            nUnassociatedDiaObjects=matchResult.nUnassociatedDiaObjects,
+            longTrailedSources=longTrailedSources)
 
     def check_dia_source_radec(self, dia_sources):
         """Check that all DiaSources have non-NaN values for RA/DEC.

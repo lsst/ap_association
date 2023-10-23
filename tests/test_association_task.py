@@ -22,9 +22,9 @@
 import numpy as np
 import pandas as pd
 import unittest
+
 import lsst.geom as geom
 import lsst.utils.tests
-
 from lsst.ap.association import AssociationTask
 
 
@@ -45,12 +45,14 @@ class TestAssociationTask(unittest.TestCase):
         self.diaSources = pd.DataFrame(data=[
             {"ra": 0.04*idx + scatter*rng.uniform(-1, 1),
              "dec": 0.04*idx + scatter*rng.uniform(-1, 1),
-             "diaSourceId": idx + 1 + self.nObjects, "diaObjectId": 0, "trailLength": 5.5*idx}
+             "diaSourceId": idx + 1 + self.nObjects, "diaObjectId": 0, "trailLength": 5.5*idx,
+             "flags": 0}
             for idx in range(self.nSources)])
         self.diaSourceZeroScatter = pd.DataFrame(data=[
             {"ra": 0.04*idx,
              "dec": 0.04*idx,
-             "diaSourceId": idx + 1 + self.nObjects, "diaObjectId": 0, "trailLength": 5.5*idx}
+             "diaSourceId": idx + 1 + self.nObjects, "diaObjectId": 0, "trailLength": 5.5*idx,
+             "flags": 0}
             for idx in range(self.nSources)])
         self.exposure_time = 30.0
 
