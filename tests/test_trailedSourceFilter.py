@@ -49,7 +49,7 @@ class TestTrailedSourceFilterTask(unittest.TestCase):
             for idx in range(self.nSources)])
         self.exposure_time = 30.0
 
-        # For use only with testing the edge flag`
+        # For use only with testing the edge flag
         self.edgeDiaSources = pd.DataFrame(data=[
             {"ra": 0.04*idx + scatter*rng.uniform(-1, 1),
              "dec": 0.04*idx + scatter*rng.uniform(-1, 1),
@@ -72,7 +72,7 @@ class TestTrailedSourceFilterTask(unittest.TestCase):
 
         self.assertEqual(len(results.diaSources), 3)
         np.testing.assert_array_equal(results.diaSources['diaSourceId'].values, [0, 1, 2])
-        np.testing.assert_array_equal(results.trailedDiaSources['diaSourceId'].values, [3, 4])
+        np.testing.assert_array_equal(results.longTrailedDiaSources['diaSourceId'].values, [3, 4])
 
     def test_run_short_max_trail(self):
         """Run trailedSourceFilterTask with aggressive trail length cutoff
@@ -89,7 +89,7 @@ class TestTrailedSourceFilterTask(unittest.TestCase):
 
         self.assertEqual(len(results.diaSources), 1)
         np.testing.assert_array_equal(results.diaSources['diaSourceId'].values, [0])
-        np.testing.assert_array_equal(results.trailedDiaSources['diaSourceId'].values, [1, 2, 3, 4])
+        np.testing.assert_array_equal(results.longTrailedDiaSources['diaSourceId'].values, [1, 2, 3, 4])
 
     def test_run_no_trails(self):
         """Run trailedSourceFilterTask with a long trail length so that
@@ -106,9 +106,9 @@ class TestTrailedSourceFilterTask(unittest.TestCase):
         results = trailedSourceFilterTask.run(self.diaSources, self.exposure_time)
 
         self.assertEqual(len(results.diaSources), 5)
-        self.assertEqual(len(results.trailedDiaSources), 0)
+        self.assertEqual(len(results.longTrailedDiaSources), 0)
         np.testing.assert_array_equal(results.diaSources["diaSourceId"].values, [0, 1, 2, 3, 4])
-        np.testing.assert_array_equal(results.trailedDiaSources["diaSourceId"].values, [])
+        np.testing.assert_array_equal(results.longTrailedDiaSources["diaSourceId"].values, [])
 
     def test_run_edge(self):
         """Run trailedSourceFilterTask with the default max distance.
@@ -120,32 +120,33 @@ class TestTrailedSourceFilterTask(unittest.TestCase):
 
         self.assertEqual(len(results.diaSources), 3)
         np.testing.assert_array_equal(results.diaSources['diaSourceId'].values, [0, 2, 3])
-        np.testing.assert_array_equal(results.trailedDiaSources['diaSourceId'].values, [1, 4])
+        np.testing.assert_array_equal(results.longTrailedDiaSources['diaSourceId'].values, [1, 4])
 
     def test_check_dia_source_trail(self):
-        """Test the source trail mask filter.
+        """Test that the DiaSource trail checker is correctly identifying
+        long trails
 
-        Test that the mask filter returns the expected mask array.
+        Test that the trail source mask filter returns the expected mask array.
         """
         trailedSourceFilterTask = TrailedSourceFilterTask()
         flag_map = os.path.join(utils.getPackageDir("ap_association"), "data/association-flag-map.yaml")
         unpacker = UnpackApdbFlags(flag_map, "DiaSource")
         flags = unpacker.unpack(self.diaSources["flags"], "flags")
-        mask = trailedSourceFilterTask._check_dia_source_trail(self.diaSources, self.exposure_time,
-                                                               flags)
+        trailed_source_mask = trailedSourceFilterTask._check_dia_source_trail(self.diaSources,
+                                                                              self.exposure_time, flags)
 
-        np.testing.assert_array_equal(mask, [False, False, False, True, True])
+        np.testing.assert_array_equal(trailed_source_mask, [False, False, False, True, True])
 
         flags = unpacker.unpack(self.edgeDiaSources["flags"], "flags")
-        mask = trailedSourceFilterTask._check_dia_source_trail(self.edgeDiaSources, self.exposure_time,
-                                                               flags)
-        np.testing.assert_array_equal(mask, [False, True, False, False, True])
+        trailed_source_mask = trailedSourceFilterTask._check_dia_source_trail(self.edgeDiaSources,
+                                                                              self.exposure_time, flags)
+        np.testing.assert_array_equal(trailed_source_mask, [False, True, False, False, True])
 
         # Mixing the flags from edgeDiaSources and diaSources means the mask
-        # will be set using both criteria
-        mask = trailedSourceFilterTask._check_dia_source_trail(self.diaSources, self.exposure_time,
-                                                               flags)
-        np.testing.assert_array_equal(mask, [False, True, False, True, True])
+        # will be set using both criteria.
+        trailed_source_mask = trailedSourceFilterTask._check_dia_source_trail(self.diaSources,
+                                                                              self.exposure_time, flags)
+        np.testing.assert_array_equal(trailed_source_mask, [False, True, False, True, True])
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

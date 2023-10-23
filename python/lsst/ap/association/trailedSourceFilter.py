@@ -77,11 +77,11 @@ class TrailedSourceFilterTask(pipeBase.Task):
         result : `lsst.pipe.base.Struct`
             Results struct with components.
 
-            - ``dia_sources`` : DIASource table that is free from unwanted
+            - ``diaSources`` : DIASource table that is free from unwanted
              trailed sources. (`pandas.DataFrame`)
 
-            - ``trailed_dia_sources`` : DIASources that have trails which
-            exceed max_trail_length/second*exposure_time.
+            - ``longTrailedDiaSources`` : DIASources that have trails which
+            exceed max_trail_length/second*exposure_time (seconds).
             (`pandas.DataFrame`)
         """
 
@@ -93,14 +93,14 @@ class TrailedSourceFilterTask(pipeBase.Task):
 
         return pipeBase.Struct(
             diaSources=dia_sources[~trail_mask].reset_index(drop=True),
-            trailedDiaSources=dia_sources[trail_mask].reset_index(drop=True))
+            longTrailedDiaSources=dia_sources[trail_mask].reset_index(drop=True))
 
     def _check_dia_source_trail(self, dia_sources, exposure_time, flags):
         """Find DiaSources that have long trails.
 
         Return a mask of sources with lengths greater than
-        ``config.max_trail_length``  multiplied by the exposure time and
-        have ext_trailedSources_Naive_flag_edge set.
+        ``config.max_trail_length``  multiplied by the exposure time in seconds
+        or have ext_trailedSources_Naive_flag_edge set.
 
         Parameters
         ----------
