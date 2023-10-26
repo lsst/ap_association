@@ -124,7 +124,8 @@ class TestDiaPipelineTask(unittest.TestCase):
         def associator_run(self, table, diaObjects, exposure_time=None):
             return lsst.pipe.base.Struct(nUpdatedDiaObjects=2, nUnassociatedDiaObjects=3,
                                          matchedDiaSources=MagicMock(spec=pd.DataFrame()),
-                                         unAssocDiaSources=MagicMock(spec=pd.DataFrame()))
+                                         unAssocDiaSources=MagicMock(spec=pd.DataFrame()),
+                                         longTrailedSources=None)
 
         # apdb isn't a subtask, but still needs to be mocked out for correct
         # execution in the test environment.

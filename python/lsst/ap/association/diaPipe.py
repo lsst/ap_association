@@ -114,6 +114,12 @@ class DiaPipelineConnections(
         storageClass="DataFrame",
         dimensions=("instrument", "visit", "detector"),
     )
+    longTrailedSources = pipeBase.connectionTypes.Output(
+        doc="Optional output temporarily storing long trailed diaSources.",
+        dimensions=("instrument", "visit", "detector"),
+        storageClass="DataFrame",
+        name="{fakesType}{coaddName}Diff_longTrailedSrc",
+    )
 
     def __init__(self, *, config=None):
         super().__init__(config=config)
@@ -124,6 +130,8 @@ class DiaPipelineConnections(
             self.outputs.remove("diaObjects")
         if not config.doSolarSystemAssociation:
             self.inputs.remove("solarSystemObjectTable")
+        if not config.associator.doTrailedSourceFilter:
+            self.outputs.remove("longTrailedSources")
 
     def adjustQuantum(self, inputs, outputs, label, dataId):
         """Override to make adjustments to `lsst.daf.butler.DatasetRef` objects
@@ -369,6 +377,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Associate new DiaSources with existing DiaObjects.
         assocResults = self.associator.run(diaSourceTable, loaderResult.diaObjects,
                                            exposure_time=diffIm.visitInfo.exposureTime)
+
         if self.config.doSolarSystemAssociation:
             ssoAssocResult = self.solarSystemAssociator.run(
                 assocResults.unAssocDiaSources,
@@ -504,6 +513,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                associatedDiaSources=associatedDiaSources,
                                diaForcedSources=diaForcedSources,
                                diaObjects=diaObjects,
+                               longTrailedSources=assocResults.longTrailedSources
                                )
 
     def createNewDiaObjects(self, unAssocDiaSources):
