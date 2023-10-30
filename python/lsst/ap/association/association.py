@@ -118,16 +118,7 @@ class AssociationTask(pipeBase.Task):
         """
         diaSources = self.check_dia_source_radec(diaSources)
 
-        if self.config.doTrailedSourceFilter:
-            diaTrailedResult = self.trailedSourceFilter.run(diaSources, exposure_time)
-            diaSources = diaTrailedResult.diaSources
-            longTrailedSources = diaTrailedResult.longTrailedDiaSources
-
-            self.log.info("%i DiaSources exceed max_trail_length, dropping from source "
-                          "catalog." % len(diaTrailedResult.longTrailedDiaSources))
-            self.metadata.add("num_filtered", len(diaTrailedResult.longTrailedDiaSources))
-        else:
-            longTrailedSources = pd.DataFrame(columns=diaSources.columns)
+        longTrailedSources = pd.DataFrame(columns=diaSources.columns)
 
         if len(diaObjects) == 0:
             return pipeBase.Struct(
