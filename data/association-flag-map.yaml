@@ -91,3 +91,9 @@ columns:
     - name: ext_trailedSources_Naive_flag_edge
       bit: 27
       doc: source is trailed and extends off chip
+    - name: base_PixelFlags_flag_streak
+      bit: 28
+      doc: Streak in the Source footprint
+    - name: base_PixelFlags_flag_streakCenter
+      bit: 29
+      doc: Streak in the Source center

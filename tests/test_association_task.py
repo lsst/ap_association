@@ -61,7 +61,6 @@ class TestAssociationTask(unittest.TestCase):
         existing diaObjects.
         """
         config = AssociationTask.ConfigClass()
-        config.doTrailedSourceFilter = False
         assocTask = AssociationTask(config=config)
         results = assocTask.run(self.diaSources, self.diaObjects, exposure_time=self.exposure_time)
 

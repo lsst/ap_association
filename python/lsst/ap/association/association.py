@@ -32,7 +32,6 @@ import lsst.geom as geom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 from lsst.utils.timer import timeMethod
-from .trailedSourceFilter import TrailedSourceFilterTask
 
 # Enforce an error for unsafe column/array value setting in pandas.
 pd.options.mode.chained_assignment = 'raise'
@@ -47,19 +46,6 @@ class AssociationConfig(pexConfig.Config):
         doc="Maximum distance in arcseconds to test for a DIASource to be a "
         "match to a DIAObject.",
         default=1.0,
-    )
-
-    trailedSourceFilter = pexConfig.ConfigurableField(
-        target=TrailedSourceFilterTask,
-        doc="Subtask to remove long trailed sources based on catalog source "
-            "morphological measurements.",
-    )
-
-    doTrailedSourceFilter = pexConfig.Field(
-        doc="Run traildeSourceFilter to remove long trailed sources from "
-            "output catalog.",
-        dtype=bool,
-        default=True,
     )
 
 
@@ -77,8 +63,6 @@ class AssociationTask(pipeBase.Task):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if self.config.doTrailedSourceFilter:
-            self.makeSubtask("trailedSourceFilter")
 
     @timeMethod
     def run(self,
@@ -118,15 +102,12 @@ class AssociationTask(pipeBase.Task):
         """
         diaSources = self.check_dia_source_radec(diaSources)
 
-        longTrailedSources = pd.DataFrame(columns=diaSources.columns)
-
         if len(diaObjects) == 0:
             return pipeBase.Struct(
                 matchedDiaSources=pd.DataFrame(columns=diaSources.columns),
                 unAssocDiaSources=diaSources,
                 nUpdatedDiaObjects=0,
-                nUnassociatedDiaObjects=0,
-                longTrailedSources=longTrailedSources)
+                nUnassociatedDiaObjects=0)
 
         matchResult = self.associate_sources(diaObjects, diaSources)
 
@@ -136,8 +117,7 @@ class AssociationTask(pipeBase.Task):
             matchedDiaSources=matchResult.diaSources[mask].reset_index(drop=True),
             unAssocDiaSources=matchResult.diaSources[~mask].reset_index(drop=True),
             nUpdatedDiaObjects=matchResult.nUpdatedDiaObjects,
-            nUnassociatedDiaObjects=matchResult.nUnassociatedDiaObjects,
-            longTrailedSources=longTrailedSources)
+            nUnassociatedDiaObjects=matchResult.nUnassociatedDiaObjects)
 
     def check_dia_source_radec(self, dia_sources):
         """Check that all DiaSources have non-NaN values for RA/DEC.
