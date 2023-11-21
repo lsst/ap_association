@@ -34,6 +34,7 @@ __all__ = ("DiaPipelineConfig",
 
 import pandas as pd
 
+from lsst.daf.base import DateTime
 import lsst.dax.apdb as daxApdb
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, DiaObjectCalculationTask
 import lsst.pex.config as pexConfig
@@ -477,7 +478,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Store DiaSources, updated DiaObjects, and DiaForcedSources in the
         # Apdb.
         self.apdb.store(
-            exposure.visitInfo.date,
+            DateTime.now(),
             diaCalResult.updatedDiaObjects,
             associatedDiaSources,
             diaForcedSources)
