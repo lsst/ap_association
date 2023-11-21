@@ -326,8 +326,10 @@ class TotalUnassociatedDiaObjectsMetricTask(ApdbMetricTask):
         ValueError
             Raised if outputDataId is not empty
         """
-        # All data ID types define keys()
-        if outputDataId.keys() - {'instrument'}:
+        # DataCoordinate objects are not mappings, so they don't have keys(),
+        # but their .required attribute is a mapping.
+        mapping = getattr(outputDataId, "required", outputDataId)
+        if mapping.keys() - {'instrument'}:
             raise ValueError("%s must not be associated with specific data IDs (gave %s)."
                              % (self.config.metricName, outputDataId))
 
