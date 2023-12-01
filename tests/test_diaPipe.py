@@ -26,6 +26,7 @@ import pandas as pd
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
 from lsst.pipe.base.testUtils import assertValidOutput
+from utils_tests import makeExposure, makeDiaObjects
 import lsst.utils.tests
 import lsst.utils.timer
 from unittest.mock import patch, Mock, MagicMock, DEFAULT
@@ -180,6 +181,49 @@ class TestDiaPipelineTask(unittest.TestCase):
         self.assertTrue(np.all(np.equal(
             result.newDiaObjects["diaObjectId"].to_numpy(),
             result.diaSources["diaSourceId"].to_numpy())))
+
+    def test_purgeDiaObjects(self):
+        """Remove diaOjects that are outside an image's bounding box.
+        """
+
+        config = self._makeDefaultConfig(doPackageAlerts=False)
+        task = DiaPipelineTask(config=config)
+        exposure = makeExposure(False, False)
+        nObj0 = 20
+
+        # Create diaObjects
+        diaObjects = makeDiaObjects(nObj0, exposure)
+        # Shrink the bounding box so that some of the diaObjects will be outside
+        bbox = exposure.getBBox()
+        size = np.minimum(bbox.getHeight(), bbox.getWidth())
+        bbox.grow(-size//4)
+
+        def check_diaObjects(bbox, wcs, diaObjects):
+            raVals = diaObjects.ra.to_numpy()
+            decVals = diaObjects.dec.to_numpy()
+            xVals, yVals = exposure.getWcs().skyToPixelArray(raVals, decVals, degrees=True)
+            selector = bbox.contains(xVals, yVals)
+            return selector
+
+        selector0 = check_diaObjects(bbox, exposure.getWcs(), diaObjects)
+        nIn0 = np.count_nonzero(selector0)
+        nOut0 = np.count_nonzero(~selector0)
+        self.assertEqual(nObj0, nIn0 + nOut0)
+
+        diaObjects1 = task.purgeDiaObjects(bbox, exposure.getWcs(), diaObjects)
+        selector1 = check_diaObjects(bbox, exposure.getWcs(), diaObjects1)
+        nIn1 = np.count_nonzero(selector1)
+        nOut1 = np.count_nonzero(~selector1)
+        nObj1 = len(diaObjects1)
+        self.assertEqual(nObj1, nIn0)
+        # Verify that not all diaObjects were removed
+        self.assertGreater(nObj1, 0)
+        # Check that some diaObjects were removed
+        self.assertLess(nObj1, nObj0)
+        # Verify that no objects outside the bounding box remain
+        self.assertEqual(nOut1, 0)
+        # Verify that no objects inside the bounding box were removed
+        self.assertEqual(nIn1, nIn0)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
