@@ -197,21 +197,29 @@ class TestDiaPipelineTask(unittest.TestCase):
         bbox = exposure.getBBox()
         size = np.minimum(bbox.getHeight(), bbox.getWidth())
         bbox.grow(-size//4)
+        exposureCut = exposure[bbox]
+        sizeCut = np.minimum(bbox.getHeight(), bbox.getWidth())
+        buffer = 10
+        bbox.grow(buffer)
 
         def check_diaObjects(bbox, wcs, diaObjects):
             raVals = diaObjects.ra.to_numpy()
             decVals = diaObjects.dec.to_numpy()
-            xVals, yVals = exposure.getWcs().skyToPixelArray(raVals, decVals, degrees=True)
+            xVals, yVals = wcs.skyToPixelArray(raVals, decVals, degrees=True)
             selector = bbox.contains(xVals, yVals)
             return selector
 
-        selector0 = check_diaObjects(bbox, exposure.getWcs(), diaObjects)
+        selector0 = check_diaObjects(bbox, exposureCut.getWcs(), diaObjects)
         nIn0 = np.count_nonzero(selector0)
         nOut0 = np.count_nonzero(~selector0)
         self.assertEqual(nObj0, nIn0 + nOut0)
 
-        diaObjects1 = task.purgeDiaObjects(bbox, exposure.getWcs(), diaObjects)
-        selector1 = check_diaObjects(bbox, exposure.getWcs(), diaObjects1)
+        diaObjects1 = task.purgeDiaObjects(exposureCut.getBBox(), exposureCut.getWcs(), diaObjects,
+                                           buffer=buffer)
+        # Verify that the bounding box was not changed
+        sizeCheck = np.minimum(exposureCut.getBBox().getHeight(), exposureCut.getBBox().getWidth())
+        self.assertEqual(sizeCut, sizeCheck)
+        selector1 = check_diaObjects(bbox, exposureCut.getWcs(), diaObjects1)
         nIn1 = np.count_nonzero(selector1)
         nOut1 = np.count_nonzero(~selector1)
         nObj1 = len(diaObjects1)

@@ -265,6 +265,13 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         doc="Write out associated DiaSources, DiaForcedSources, and DiaObjects, "
             "formatted following the Science Data Model.",
     )
+    imagePixelMargin = pexConfig.RangeField(
+        dtype=int,
+        default=10,
+        min=0,
+        doc="Pad the image by this many pixels before removing off-image "
+            "diaObjects for association.",
+    )
     idGenerator = DetectorVisitIdGeneratorConfig.make_field()
 
     def setDefaults(self):
@@ -376,7 +383,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Load the DiaObjects and DiaSource history.
         loaderResult = self.diaCatalogLoader.run(diffIm, self.apdb)
         if len(loaderResult.diaObjects) > 0:
-            diaObjects = self.purgeDiaObjects(diffIm.getBBox(), diffIm.getWcs(), loaderResult.diaObjects)
+            diaObjects = self.purgeDiaObjects(diffIm.getBBox(), diffIm.getWcs(), loaderResult.diaObjects,
+                                              buffer=self.config.imagePixelMargin)
         else:
             diaObjects = loaderResult.diaObjects
 
@@ -640,7 +648,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         self.metadata.add('numTotalSolarSystemObjects', nTotalSsObjects)
         self.metadata.add('numAssociatedSsObjects', nAssociatedSsObjects)
 
-    def purgeDiaObjects(self, bbox, wcs, diaObjCat):
+    def purgeDiaObjects(self, bbox, wcs, diaObjCat, buffer=0):
         """Drop diaObjects that are outside the exposure bounding box.
 
         Parameters
@@ -650,9 +658,18 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         wcs : `lsst.afw.geom.SkyWcs`
             Coordinate system definition (wcs) for the exposure.
         diaObjCat : `pandas.DataFrame`
-            DiaObjects loaded from the Apdb, which will be modified in place.
+            DiaObjects loaded from the Apdb.
+        buffer : `int`, optional
+            Width, in pixels, to pad the exposure bounding box.
+
+        Returns
+        -------
+        diaObjCat : `pandas.DataFrame`
+            DiaObjects loaded from the Apdb, restricted to the exposure
+            bounding box.
         """
         try:
+            bbox.grow(buffer)
             raVals = diaObjCat.ra.to_numpy()
             decVals = diaObjCat.dec.to_numpy()
             xVals, yVals = wcs.skyToPixelArray(raVals, decVals, degrees=True)
