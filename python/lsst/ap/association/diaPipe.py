@@ -32,6 +32,7 @@ __all__ = ("DiaPipelineConfig",
            "DiaPipelineTask",
            "DiaPipelineConnections")
 
+import numpy as np
 import pandas as pd
 
 from lsst.daf.base import DateTime
@@ -264,6 +265,13 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         doc="Write out associated DiaSources, DiaForcedSources, and DiaObjects, "
             "formatted following the Science Data Model.",
     )
+    imagePixelMargin = pexConfig.RangeField(
+        dtype=int,
+        default=10,
+        min=0,
+        doc="Pad the image by this many pixels before removing off-image "
+            "diaObjects for association.",
+    )
     idGenerator = DetectorVisitIdGeneratorConfig.make_field()
 
     def setDefaults(self):
@@ -374,9 +382,14 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         """
         # Load the DiaObjects and DiaSource history.
         loaderResult = self.diaCatalogLoader.run(diffIm, self.apdb)
+        if len(loaderResult.diaObjects) > 0:
+            diaObjects = self.purgeDiaObjects(diffIm.getBBox(), diffIm.getWcs(), loaderResult.diaObjects,
+                                              buffer=self.config.imagePixelMargin)
+        else:
+            diaObjects = loaderResult.diaObjects
 
         # Associate new DiaSources with existing DiaObjects.
-        assocResults = self.associator.run(diaSourceTable, loaderResult.diaObjects,
+        assocResults = self.associator.run(diaSourceTable, diaObjects,
                                            exposure_time=diffIm.visitInfo.exposureTime)
 
         if self.config.doSolarSystemAssociation:
@@ -419,7 +432,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         # Append new DiaObjects and DiaSources to their previous history.
         diaObjects = pd.concat(
-            [loaderResult.diaObjects,
+            [diaObjects,
              createResults.newDiaObjects.set_index("diaObjectId", drop=False)],
             sort=True)
         if self.testDataFrameIndex(diaObjects):
@@ -634,3 +647,38 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         self.metadata.add('numNewDiaObjects', nNewDiaObjects)
         self.metadata.add('numTotalSolarSystemObjects', nTotalSsObjects)
         self.metadata.add('numAssociatedSsObjects', nAssociatedSsObjects)
+
+    def purgeDiaObjects(self, bbox, wcs, diaObjCat, buffer=0):
+        """Drop diaObjects that are outside the exposure bounding box.
+
+        Parameters
+        ----------
+        bbox : `lsst.geom.Box2I`
+            Bounding box of the exposure.
+        wcs : `lsst.afw.geom.SkyWcs`
+            Coordinate system definition (wcs) for the exposure.
+        diaObjCat : `pandas.DataFrame`
+            DiaObjects loaded from the Apdb.
+        buffer : `int`, optional
+            Width, in pixels, to pad the exposure bounding box.
+
+        Returns
+        -------
+        diaObjCat : `pandas.DataFrame`
+            DiaObjects loaded from the Apdb, restricted to the exposure
+            bounding box.
+        """
+        try:
+            bbox.grow(buffer)
+            raVals = diaObjCat.ra.to_numpy()
+            decVals = diaObjCat.dec.to_numpy()
+            xVals, yVals = wcs.skyToPixelArray(raVals, decVals, degrees=True)
+            selector = bbox.contains(xVals, yVals)
+            nPurged = np.sum(~selector)
+            if nPurged > 0:
+                diaObjCat = diaObjCat[selector].copy()
+                self.log.info(f"Dropped {nPurged} diaObjects that were outside the bbox "
+                              f"leaving {len(diaObjCat)} in the catalog")
+        except Exception as e:
+            self.log.warning("Error attempting to check diaObject history: %s", e)
+        return diaObjCat

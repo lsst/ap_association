@@ -25,15 +25,11 @@ import tempfile
 import unittest
 import yaml
 
-from lsst.afw.cameraGeom.testUtils import DetectorWrapper
-import lsst.afw.geom as afwGeom
-import lsst.afw.image as afwImage
 from lsst.ap.association import LoadDiaCatalogsTask, LoadDiaCatalogsConfig
-import lsst.daf.base as dafBase
 from lsst.dax.apdb import ApdbSql, ApdbSqlConfig, ApdbTables
 from lsst.utils import getPackageDir
 import lsst.utils.tests
-import utils_tests
+from utils_tests import makeExposure, makeDiaObjects, makeDiaSources, makeDiaForcedSources
 
 
 def _data_file_name(basename, module_name):
@@ -55,68 +51,6 @@ def _data_file_name(basename, module_name):
     return os.path.join(getPackageDir(module_name), "data", basename)
 
 
-def makeExposure(flipX=False, flipY=False):
-    """Create an exposure and flip the x or y (or both) coordinates.
-
-    Returns bounding boxes that are right or left handed around the bounding
-    polygon.
-
-    Parameters
-    ----------
-    flipX : `bool`
-        Flip the x coordinate in the WCS.
-    flipY : `bool`
-        Flip the y coordinate in the WCS.
-
-    Returns
-    -------
-    exposure : `lsst.afw.image.Exposure`
-        Exposure with a valid bounding box and wcs.
-    """
-    metadata = dafBase.PropertySet()
-
-    metadata.set("SIMPLE", "T")
-    metadata.set("BITPIX", -32)
-    metadata.set("NAXIS", 2)
-    metadata.set("NAXIS1", 1024)
-    metadata.set("NAXIS2", 1153)
-    metadata.set("RADECSYS", 'FK5')
-    metadata.set("EQUINOX", 2000.)
-
-    metadata.setDouble("CRVAL1", 215.604025685476)
-    metadata.setDouble("CRVAL2", 53.1595451514076)
-    metadata.setDouble("CRPIX1", 1109.99981456774)
-    metadata.setDouble("CRPIX2", 560.018167811613)
-    metadata.set("CTYPE1", 'RA---SIN')
-    metadata.set("CTYPE2", 'DEC--SIN')
-
-    xFlip = 1
-    if flipX:
-        xFlip = -1
-    yFlip = 1
-    if flipY:
-        yFlip = -1
-    metadata.setDouble("CD1_1", xFlip * 5.10808596133527E-05)
-    metadata.setDouble("CD1_2", yFlip * 1.85579539217196E-07)
-    metadata.setDouble("CD2_2", yFlip * -5.10281493481982E-05)
-    metadata.setDouble("CD2_1", xFlip * -8.27440751733828E-07)
-
-    wcs = afwGeom.makeSkyWcs(metadata)
-    exposure = afwImage.makeExposure(
-        afwImage.makeMaskedImageFromArrays(np.ones((1024, 1153))), wcs)
-    detector = DetectorWrapper(id=23, bbox=exposure.getBBox()).detector
-    visit = afwImage.VisitInfo(
-        exposureTime=200.,
-        date=dafBase.DateTime("2014-05-13T17:00:00.000000000",
-                              dafBase.DateTime.Timescale.TAI))
-    exposure.info.id = 1234
-    exposure.setDetector(detector)
-    exposure.info.setVisitInfo(visit)
-    exposure.setFilter(afwImage.FilterLabel(band='g'))
-
-    return exposure
-
-
 class TestLoadDiaCatalogs(unittest.TestCase):
 
     def setUp(self):
@@ -135,12 +69,12 @@ class TestLoadDiaCatalogs(unittest.TestCase):
 
         self.exposure = makeExposure(False, False)
 
-        self.diaObjects = utils_tests.makeDiaObjects(20, self.exposure)
-        self.diaSources = utils_tests.makeDiaSources(
+        self.diaObjects = makeDiaObjects(20, self.exposure)
+        self.diaSources = makeDiaSources(
             100,
             self.diaObjects["diaObjectId"].to_numpy(),
             self.exposure)
-        self.diaForcedSources = utils_tests.makeDiaForcedSources(
+        self.diaForcedSources = makeDiaForcedSources(
             200,
             self.diaObjects["diaObjectId"].to_numpy(),
             self.exposure)
