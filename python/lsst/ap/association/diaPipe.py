@@ -445,6 +445,21 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 "Apdb. If this was not the case then there was an unexpected "
                 "failure in Association while matching and creating new "
                 "DiaObjects and should be reported. Exiting.")
+
+        # We need to coerce the types of loaderResult.diaSources
+        # to be the same as associatedDiaSources, thanks to pandas
+        # datetime issues (DM-41100). And we may as well coerce
+        # all the columns to ensure consistency for future compatibility.
+        for name, dtype in associatedDiaSources.dtypes.items():
+            if name in loaderResult.diaSources.columns and loaderResult.diaSources[name].dtype != dtype:
+                self.log.debug(
+                    "Coercing loaderResult.diaSources column %s from %s to %s",
+                    name,
+                    str(loaderResult.diaSources[name].dtype),
+                    str(dtype),
+                )
+                loaderResult.diaSources[name] = loaderResult.diaSources[name].astype(dtype)
+
         mergedDiaSourceHistory = pd.concat(
             [loaderResult.diaSources, associatedDiaSources],
             sort=True)
