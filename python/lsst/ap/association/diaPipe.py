@@ -399,18 +399,23 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 diffIm)
             createResults = self.createNewDiaObjects(
                 ssoAssocResult.unAssocDiaSources)
-            associatedDiaSources = pd.concat(
-                [assocResults.matchedDiaSources,
-                 ssoAssocResult.ssoAssocDiaSources,
-                 createResults.diaSources])
+            toAssociate = []
+            if len(assocResults.matchedDiaSources) > 0:
+                toAssociate.append(assocResults.matchedDiaSources)
+            if len(ssoAssocResult.ssoAssocDiaSources) > 0:
+                toAssociate.append(ssoAssocResult.ssoAssocDiaSources)
+            toAssociate.append(createResults.diaSources)
+            associatedDiaSources = pd.concat(toAssociate)
             nTotalSsObjects = ssoAssocResult.nTotalSsObjects
             nAssociatedSsObjects = ssoAssocResult.nAssociatedSsObjects
         else:
             createResults = self.createNewDiaObjects(
                 assocResults.unAssocDiaSources)
-            associatedDiaSources = pd.concat(
-                [assocResults.matchedDiaSources,
-                 createResults.diaSources])
+            toAssociate = []
+            if len(assocResults.matchedDiaSources) > 0:
+                toAssociate.append(assocResults.matchedDiaSources)
+            toAssociate.append(createResults.diaSources)
+            associatedDiaSources = pd.concat(toAssociate)
             nTotalSsObjects = 0
             nAssociatedSsObjects = 0
 
@@ -442,9 +447,28 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 "Apdb. If this was not the case then there was an unexpected "
                 "failure in Association while matching and creating new "
                 "DiaObjects and should be reported. Exiting.")
-        mergedDiaSourceHistory = pd.concat(
-            [loaderResult.diaSources, associatedDiaSources],
-            sort=True)
+
+        if len(loaderResult.diaSources) > 0:
+            # We need to coerce the types of loaderResult.diaSources
+            # to be the same as associatedDiaSources, thanks to pandas
+            # datetime issues (DM-41100). And we may as well coerce
+            # all the columns to ensure consistency for future compatibility.
+            for name, dtype in associatedDiaSources.dtypes.items():
+                if name in loaderResult.diaSources.columns and loaderResult.diaSources[name].dtype != dtype:
+                    self.log.debug(
+                        "Coercing loaderResult.diaSources column %s from %s to %s",
+                        name,
+                        str(loaderResult.diaSources[name].dtype),
+                        str(dtype),
+                    )
+                    loaderResult.diaSources[name] = loaderResult.diaSources[name].astype(dtype)
+
+            mergedDiaSourceHistory = pd.concat(
+                [loaderResult.diaSources, associatedDiaSources],
+                sort=True)
+        else:
+            mergedDiaSourceHistory = pd.concat([associatedDiaSources], sort=True)
+
         # Test for DiaSource duplication first. If duplicates are found,
         # this likely means this is duplicate data being processed and sent
         # to the Apdb.
@@ -498,6 +522,22 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         if self.config.doPackageAlerts:
             if len(loaderResult.diaForcedSources) > 1:
+                # We need to coerce the types of loaderResult.diaForcedSources
+                # to be the same as associatedDiaSources, thanks to pandas
+                # datetime issues (DM-41100). And we may as well coerce
+                # all the columns to ensure consistency for future compatibility.
+                for name, dtype in diaForcedSources.dtypes.items():
+                    if name in loaderResult.diaForcedSources.columns and \
+                       loaderResult.diaForcedSources[name].dtype != dtype:
+                        self.log.debug(
+                            "Coercing loaderResult.diaForcedSources column %s from %s to %s",
+                            name,
+                            str(loaderResult.diaForcedSources[name].dtype),
+                            str(dtype),
+                        )
+                        loaderResult.diaForcedSources[name] = (
+                            loaderResult.diaForcedSources[name].astype(dtype)
+                        )
                 diaForcedSources = pd.concat(
                     [diaForcedSources, loaderResult.diaForcedSources],
                     sort=True)
