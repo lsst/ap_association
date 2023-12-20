@@ -411,9 +411,11 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         else:
             createResults = self.createNewDiaObjects(
                 assocResults.unAssocDiaSources)
-            associatedDiaSources = pd.concat(
-                [assocResults.matchedDiaSources,
-                 createResults.diaSources])
+            toAssociate = []
+            if len(assocResults.matchedDiaSources) > 0:
+                toAssociate.append(assocResults.matchedDiaSources)
+            toAssociate.append(createResults.diaSources)
+            associatedDiaSources = pd.concat(toAssociate)
             nTotalSsObjects = 0
             nAssociatedSsObjects = 0
 
