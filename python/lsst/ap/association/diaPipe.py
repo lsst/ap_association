@@ -522,6 +522,22 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         if self.config.doPackageAlerts:
             if len(loaderResult.diaForcedSources) > 1:
+                # We need to coerce the types of loaderResult.diaForcedSources
+                # to be the same as associatedDiaSources, thanks to pandas
+                # datetime issues (DM-41100). And we may as well coerce
+                # all the columns to ensure consistency for future compatibility.
+                for name, dtype in diaForcedSources.dtypes.items():
+                    if name in loaderResult.diaForcedSources.columns and \
+                       loaderResult.diaForcedSources[name].dtype != dtype:
+                        self.log.debug(
+                            "Coercing loaderResult.diaForcedSources column %s from %s to %s",
+                            name,
+                            str(loaderResult.diaForcedSources[name].dtype),
+                            str(dtype),
+                        )
+                        loaderResult.diaForcedSources[name] = (
+                            loaderResult.diaForcedSources[name].astype(dtype)
+                        )
                 diaForcedSources = pd.concat(
                     [diaForcedSources, loaderResult.diaForcedSources],
                     sort=True)
