@@ -399,10 +399,13 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 diffIm)
             createResults = self.createNewDiaObjects(
                 ssoAssocResult.unAssocDiaSources)
-            associatedDiaSources = pd.concat(
-                [assocResults.matchedDiaSources,
-                 ssoAssocResult.ssoAssocDiaSources,
-                 createResults.diaSources])
+            toAssociate = []
+            if len(assocResults.matchedDiaSources) > 0:
+                toAssociate.append(assocResults.matchedDiaSources)
+            if len(ssoAssocResult.ssoAssocDiaSources) > 0:
+                toAssociate.append(ssoAssocResult.ssoAssocDiaSources)
+            toAssociate.append(createResults.diaSources)
+            associatedDiaSources = pd.concat(toAssociate)
             nTotalSsObjects = ssoAssocResult.nTotalSsObjects
             nAssociatedSsObjects = ssoAssocResult.nAssociatedSsObjects
         else:
