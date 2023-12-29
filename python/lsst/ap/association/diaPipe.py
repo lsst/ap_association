@@ -317,9 +317,6 @@ class DiaPipelineTask(pipeBase.PipelineTask):
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
         inputs["idGenerator"] = self.config.idGenerator.apply(butlerQC.quantum.dataId)
-        # Need to set ccdExposureIdBits (now deprecated) to None and pass it,
-        # since there are non-optional positional arguments after it.
-        inputs["ccdExposureIdBits"] = None
         inputs["band"] = butlerQC.quantum.dataId["band"]
         if not self.config.doSolarSystemAssociation:
             inputs["solarSystemObjectTable"] = None
@@ -335,9 +332,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diffIm,
             exposure,
             template,
-            ccdExposureIdBits,  # TODO: remove on DM-38687.
             band,
-            idGenerator=None):
+            idGenerator):
         """Process DiaSources and DiaObjects.
 
         Load previous DiaObjects and their DiaSource history. Calibrate the
@@ -357,17 +353,10 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             ``diffIm``.
         template : `lsst.afw.image.ExposureF`
             Template exposure used to create diffIm.
-        ccdExposureIdBits : `int`
-            Number of bits used for a unique ``ccdVisitId``.  Deprecated in
-            favor of ``idGenerator``, and ignored if that is present (will be
-            removed after v26).  Pass `None` explicitly to avoid a deprecation
-            warning (a default is impossible given that later positional
-            arguments are not defaulted).
         band : `str`
             The band in which the new DiaSources were detected.
-        idGenerator : `lsst.meas.base.IdGenerator`, optional
+        idGenerator : `lsst.meas.base.IdGenerator`
             Object that generates source IDs and random number generator seeds.
-            Will be required after ``ccdExposureIdBits`` is removed.
 
         Returns
         -------
@@ -504,10 +493,6 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         diaForcedSources = self.diaForcedSource.run(
             diaCalResult.diaObjectCat,
             diaCalResult.updatedDiaObjects.loc[:, "diaObjectId"].to_numpy(),
-            # Passing a ccdExposureIdBits here that isn't None will make
-            # diaForcedSource emit a deprecation warning, so we don't have to
-            # emit our own.
-            ccdExposureIdBits,
             exposure,
             diffIm,
             idGenerator=idGenerator)

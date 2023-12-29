@@ -32,6 +32,7 @@ import lsst.afw.image as afwImage
 import lsst.daf.base as dafBase
 import lsst.meas.algorithms as measAlg
 from lsst.ap.association import DiaForcedSourceTask
+from lsst.meas.base import IdGenerator
 import lsst.utils.tests
 
 
@@ -145,8 +146,6 @@ class TestDiaForcedSource(unittest.TestCase):
         self.diffim.setFilter(afwImage.FilterLabel(band='g', physical='g.MP9401'))
         self.diffim.setPhotoCalib(afwImage.PhotoCalib(self.calibration, self.calibrationErr))
 
-        self.expIdBits = 16
-
         FWHM = 5
         psf = measAlg.DoubleGaussianPsf(15, 15, FWHM/(2*np.sqrt(2*np.log(2))))
         self.exposure.setPsf(psf)
@@ -184,7 +183,7 @@ class TestDiaForcedSource(unittest.TestCase):
         test_objects.set_index("diaObjectId", inplace=True, drop=False)
         dfs = DiaForcedSourceTask()
         dia_forced_sources = dfs.run(
-            test_objects, self.updatedTestIds, self.expIdBits, self.exposure, self.diffim)
+            test_objects, self.updatedTestIds, self.exposure, self.diffim, IdGenerator())
 
         direct_values = [199854.48417094944, 160097.40719241602,
                          82299.17897267535, 27148.604434624354,

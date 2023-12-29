@@ -23,7 +23,6 @@ __all__ = ("PackageAlertsConfig", "PackageAlertsTask")
 
 import io
 import os
-import warnings
 
 from astropy import wcs
 import astropy.units as u
@@ -86,7 +85,6 @@ class PackageAlertsTask(pipeBase.Task):
             diaForcedSources,
             diffIm,
             template,
-            ccdExposureIdBits=None,  # TODO: remove (including docs) on DM-38687.
             ):
         """Package DiaSources/Object and exposure data into Avro alerts.
 
@@ -112,15 +110,7 @@ class PackageAlertsTask(pipeBase.Task):
             Difference image the sources in ``diaSourceCat`` were detected in.
         template : `lsst.afw.image.ExposureF` or `None`
             Template image used to create the ``diffIm``.
-        ccdExposureIdBits : `int`, optional
-            Unused.  Deprecated and will be removed after v26.
         """
-        if ccdExposureIdBits is not None:
-            warnings.warn(
-                "The 'ccdExposureIdBits' argument is deprecated and unused; it will be removed after v26.",
-                category=FutureWarning,
-                stacklevel=3,  # Caller + timeMethod
-            )
         alerts = []
         self._patchDiaSources(diaSourceCat)
         self._patchDiaSources(diaSrcHistory)
