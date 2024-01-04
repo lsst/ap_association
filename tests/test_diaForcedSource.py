@@ -173,7 +173,7 @@ class TestDiaForcedSource(unittest.TestCase):
         # above list of ids.
         self.expectedDiaForcedSources = 6
 
-        self.expected_n_columns = 12
+        self.expected_n_columns = 13
 
     def testRun(self):
         """Test that forced source catalogs are successfully created and have
