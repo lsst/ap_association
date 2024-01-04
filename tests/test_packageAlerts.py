@@ -288,8 +288,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                           self.diaSourceHistory,
                           self.diaForcedSources,
                           self.exposure,
-                          self.exposure,
-                          None)
+                          self.exposure)
 
         ccdVisitId = self.exposure.info.id
         with open(os.path.join(tempdir, f"{ccdVisitId}.avro"), 'rb') as f:
