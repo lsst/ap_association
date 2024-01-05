@@ -235,6 +235,8 @@ class DiaForcedSourceTask(pipeBase.Task):
         output_catalog["midpointMjdTai"] = midpointMjdTai
         output_catalog["band"] = diff_exp.getFilter().bandLabel
         output_catalog["time_processed"] = DateTime.now().toPython()
+        # TODO: propagate actual flags (DM-42355)
+        output_catalog["flags"] = 0
 
         # Drop superfluous columns from output DataFrame.
         output_catalog.drop(columns=self.config.dropColumns, inplace=True)
