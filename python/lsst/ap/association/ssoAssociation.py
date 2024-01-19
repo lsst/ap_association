@@ -121,15 +121,15 @@ class SolarSystemAssociationTask(pipeBase.Task):
         # Query the KDtree for DIA nearest neighbors to SSOs. Currently only
         # picks the DiaSource with the shortest distance. We can do something
         # fancier later.
+        diaSourceCatalog["ssObjectId"] = 0
         for index, ssObject in maskedObjects.iterrows():
 
             ssoVect = self._radec_to_xyz(ssObject["ra"], ssObject["dec"])
-
             # Which DIA Sources fall within r?
             dist, idx = tree.query(ssoVect, distance_upper_bound=maxRadius)
             if np.isfinite(dist[0]):
                 nFound += 1
-                diaSourceCatalog.loc[idx[0], "ssObjectId"] = ssObject["ssObjectId"]
+                diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "ssObjectId"] = ssObject["ssObjectId"]
 
         self.log.info("Successfully associated %d SolarSystemObjects.", nFound)
         assocMask = diaSourceCatalog["ssObjectId"] != 0
@@ -159,6 +159,8 @@ class SolarSystemAssociationTask(pipeBase.Task):
         maskedSolarSystemObjects : `pandas.DataFrame`
             Set of SolarSystemObjects contained within the exposure bounds.
         """
+        if len(solarSystemObjects) == 0:
+            return solarSystemObjects
         wcs = exposure.getWcs()
         padding = min(
             int(np.ceil(marginArcsec / wcs.getPixelScale(exposure.getBBox().getCenter()).asArcseconds())),

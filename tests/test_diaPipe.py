@@ -203,7 +203,7 @@ class TestDiaPipelineTask(unittest.TestCase):
                   side_effect=solarSystemAssociator_run) as ssRun:
 
             result = task.run(diaSrc,
-                              ssObjects,
+                              None,
                               diffIm,
                               exposure,
                               template,
@@ -211,7 +211,8 @@ class TestDiaPipelineTask(unittest.TestCase):
                               self.diaSources,
                               self.diaForcedSources,
                               "g",
-                              IdGenerator())
+                              IdGenerator(),
+                              solarSystemObjectTable=ssObjects)
             for subtaskName in subtasksToMock:
                 getattr(task, subtaskName).run.assert_called_once()
             assertValidOutput(task, result)
