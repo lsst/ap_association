@@ -34,7 +34,7 @@ from lsst.ap.association import PackageAlertsConfig, PackageAlertsTask
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.image as afwImage
 import lsst.daf.base as dafBase
-from lsst.dax.apdb import ApdbSql, ApdbSqlConfig
+from lsst.dax.apdb import Apdb, ApdbSql, ApdbSqlConfig
 import lsst.geom as geom
 import lsst.meas.base.tests
 from lsst.sphgeom import Box
@@ -71,8 +71,8 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
     apdbConfig.dia_object_index = "baseline"
     apdbConfig.dia_object_columns = []
 
+    Apdb.makeSchema(apdbConfig)
     apdb = ApdbSql(config=apdbConfig)
-    apdb.makeSchema()
 
     wholeSky = Box.full()
     diaObjects = pd.concat([apdb.getDiaObjects(wholeSky), objects])

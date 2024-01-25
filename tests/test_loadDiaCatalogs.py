@@ -26,7 +26,7 @@ import unittest
 import yaml
 
 from lsst.ap.association import LoadDiaCatalogsTask, LoadDiaCatalogsConfig
-from lsst.dax.apdb import ApdbSql, ApdbSqlConfig, ApdbTables
+from lsst.dax.apdb import Apdb, ApdbSql, ApdbSqlConfig, ApdbTables
 from lsst.utils import getPackageDir
 import lsst.utils.tests
 from utils_tests import makeExposure, makeDiaObjects, makeDiaSources, makeDiaForcedSources
@@ -64,8 +64,8 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         self.apdbConfig.dia_object_index = "baseline"
         self.apdbConfig.dia_object_columns = []
 
+        Apdb.makeSchema(self.apdbConfig)
         self.apdb = ApdbSql(config=self.apdbConfig)
-        self.apdb.makeSchema()
 
         self.exposure = makeExposure(False, False)
 
