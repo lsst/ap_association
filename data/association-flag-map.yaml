@@ -97,3 +97,15 @@ columns:
     - name: base_PixelFlags_flag_streakCenter
       bit: 29
       doc: Streak in the Source center
+    - name: base_PixelFlags_flag_injected
+      bit: 30
+      doc: Fake source injection in source footprint
+    - name: base_PixelFlags_flag_injectedCenter
+      bit: 31
+      doc: Fake source injection center in source footprint
+    - name: base_PixelFlags_flag_injected_template
+      bit: 32
+      doc: Fake source template injection in source footprint
+    - name: base_PixelFlags_flag_injected_templateCenter
+      bit: 33
+      doc: Fake source template injection center in source footprint
