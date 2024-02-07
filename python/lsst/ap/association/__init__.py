@@ -19,11 +19,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from .version import *
-from .trailedSourceFilter import *
 from .association import *
 from .diaForcedSource import *
+from .filterDiaSourceCatalog import *
 from .loadDiaCatalogs import *
 from .packageAlerts import *
 from .diaPipe import *
+from .trailedSourceFilter import *
 from .transformDiaSourceCatalog import *
+from .version import *

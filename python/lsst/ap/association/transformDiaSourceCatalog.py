@@ -49,7 +49,7 @@ class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
     )
     diaSourceCat = connTypes.Input(
         doc="Catalog of DiaSources produced during image differencing.",
-        name="{fakesType}{coaddName}Diff_diaSrc",
+        name="{fakesType}{coaddName}Diff_candidateDiaSrc",
         storageClass="SourceCatalog",
         dimensions=("instrument", "visit", "detector"),
     )
