@@ -123,14 +123,16 @@ def mock_alert(alert_id):
             "band": 'g',
             "ra": 12.5,
             "dec": -16.9,
-            "x": 15.7,
-            "y": 89.8,
-            "apFlux": 54.85,
-            "apFluxErr": 70.0,
-            "snr": 6.7,
-            "psfFlux": 700.0,
-            "psfFluxErr": 90.0,
-            "flags": 0,
+            # These types are 32-bit floats in the avro schema, so we have to
+            # make them that type here, so that they round trip appropriately.
+            "x": np.float32(15.7),
+            "y": np.float32(89.8),
+            "apFlux": np.float32(54.85),
+            "apFluxErr": np.float32(70.0),
+            "snr": np.float32(6.7),
+            "psfFlux": np.float32(700.0),
+            "psfFluxErr": np.float32(90.0),
+            "flags": 12345,
         }
     }
 
@@ -527,8 +529,9 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                               self.exposure,
                               self.exposure)
 
-    def test_serialize_alert_round_trip(self, **kwargs):
-
+    def test_serialize_alert_round_trip(self):
+        """Test that values in the alert packet exactly round trip.
+        """
         ConfigClass = PackageAlertsConfig()
         packageAlerts = PackageAlertsTask(config=ConfigClass)
 
@@ -537,7 +540,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         deserialized = PackageAlertsTask._deserialize_alert(packageAlerts, serialized)
 
         for field in alert['diaSource']:
-            self.assertAlmostEqual(alert['diaSource'][field], deserialized['diaSource'][field], places=5)
+            self.assertEqual(alert['diaSource'][field], deserialized['diaSource'][field])
         self.assertEqual(1, deserialized["alertId"])
 
 
