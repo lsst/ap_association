@@ -34,6 +34,7 @@ __all__ = ("DiaPipelineConfig",
 
 import numpy as np
 import pandas as pd
+import logging
 
 from lsst.daf.base import DateTime
 import lsst.dax.apdb as daxApdb
@@ -49,6 +50,9 @@ from lsst.ap.association import (
     LoadDiaCatalogsTask,
     PackageAlertsTask)
 from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
+
+_log = logging.getLogger("lsst." + __name__)
+_log.setLevel(logging.DEBUG)
 
 
 class DiaPipelineConnections(
@@ -541,12 +545,16 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                     ["diaObjectId", "diaForcedSourceId"],
                     drop=False,
                     inplace=True)
-            self.alertPackager.run(associatedDiaSources,
-                                   diaCalResult.diaObjectCat,
-                                   loaderResult.diaSources,
-                                   diaForcedSources,
-                                   diffIm,
-                                   template)
+            try:
+                self.alertPackager.run(associatedDiaSources,
+                                       diaCalResult.diaObjectCat,
+                                       loaderResult.diaSources,
+                                       diaForcedSources,
+                                       diffIm,
+                                       template)
+            except ValueError as err:
+                # Continue processing even if alert sending fails
+                _log.error(err)
 
         return pipeBase.Struct(apdbMarker=self.config.apdb.value,
                                associatedDiaSources=associatedDiaSources,
