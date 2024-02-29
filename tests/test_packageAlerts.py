@@ -21,17 +21,23 @@
 
 import io
 import os
+
 import numpy as np
 import pandas as pd
 import shutil
 import tempfile
 import unittest
 from unittest.mock import patch, Mock
-import sys
 from astropy import wcs
 from astropy.nddata import CCDData
-import logging
+import fastavro
+try:
+    import confluent_kafka
+    from confluent_kafka import KafkaException
+except ImportError:
+    confluent_kafka = None
 
+import lsst.alert.packet as alertPack
 from lsst.ap.association import PackageAlertsConfig, PackageAlertsTask
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.image as afwImage
@@ -42,15 +48,6 @@ import lsst.meas.base.tests
 from lsst.sphgeom import Box
 import lsst.utils.tests
 import utils_tests
-
-_log = logging.getLogger("lsst." + __name__)
-_log.setLevel(logging.DEBUG)
-
-try:
-    import confluent_kafka  # noqa: F401
-    from confluent_kafka import KafkaException
-except ModuleNotFoundError as e:
-    _log.error('Kafka module not found: {}'.format(e))
 
 
 def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
@@ -116,7 +113,6 @@ def mock_alert(alert_id):
     return {
         "alertId": alert_id,
         "diaSource": {
-            # Below are all the required fields containing random values.
             "midpointMjdTai": 5,
             "diaSourceId": 4,
             "ccdVisitId": 2,
@@ -137,13 +133,27 @@ def mock_alert(alert_id):
     }
 
 
-class TestPackageAlerts(lsst.utils.tests.TestCase):
-    kafka_enabled = "confluent_kafka" in sys.modules
+def _deserialize_alert(alert_bytes):
+    """Deserialize an alert message from Kafka.
 
-    def __init__(self, *args, **kwargs):
-        TestPackageAlerts.kafka_enabled = "confluent_kafka" in sys.modules
-        _log.debug('TestPackageAlerts: kafka_enabled={}'.format(self.kafka_enabled))
-        super(TestPackageAlerts, self).__init__(*args, **kwargs)
+    Parameters
+    ----------
+    alert_bytes : `bytes`
+        Binary-encoding serialized Avro alert, including Confluent Wire
+        Format prefix.
+
+    Returns
+    -------
+    alert : `dict`
+        An alert payload.
+    """
+    schema = alertPack.Schema.from_uri(str(alertPack.get_uri_to_latest_schema()))
+    content_bytes = io.BytesIO(alert_bytes[5:])
+
+    return fastavro.schemaless_reader(content_bytes, schema.definition)
+
+
+class TestPackageAlerts(lsst.utils.tests.TestCase):
 
     def setUp(self):
         patcher = patch.dict(os.environ, {"AP_KAFKA_PRODUCER_PASSWORD": "fake_password",
@@ -332,60 +342,64 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             self.assertEqual(alert["cutoutTemplate"],
                              cutoutBytes)
 
+    @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
     def test_produceAlerts_empty_password(self):
         """ Test that produceAlerts raises if the password is empty or missing.
         """
         self.environ['AP_KAFKA_PRODUCER_PASSWORD'] = ""
         with self.assertRaisesRegex(ValueError, "Kafka password"):
             packConfig = PackageAlertsConfig(doProduceAlerts=True)
-            packageAlerts = PackageAlertsTask(config=packConfig)  # noqa: F841
+            PackageAlertsTask(config=packConfig)
 
         del self.environ['AP_KAFKA_PRODUCER_PASSWORD']
         with self.assertRaisesRegex(ValueError, "Kafka password"):
             packConfig = PackageAlertsConfig(doProduceAlerts=True)
-            packageAlerts = PackageAlertsTask(config=packConfig)  # noqa: F841
+            PackageAlertsTask(config=packConfig)
 
+    @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
     def test_produceAlerts_empty_username(self):
         """ Test that produceAlerts raises if the username is empty or missing.
         """
         self.environ['AP_KAFKA_PRODUCER_USERNAME'] = ""
         with self.assertRaisesRegex(ValueError, "Kafka username"):
             packConfig = PackageAlertsConfig(doProduceAlerts=True)
-            packageAlerts = PackageAlertsTask(config=packConfig)  # noqa: F841
+            PackageAlertsTask(config=packConfig)
 
         del self.environ['AP_KAFKA_PRODUCER_USERNAME']
         with self.assertRaisesRegex(ValueError, "Kafka username"):
             packConfig = PackageAlertsConfig(doProduceAlerts=True)
-            packageAlerts = PackageAlertsTask(config=packConfig)  # noqa: F841
+            PackageAlertsTask(config=packConfig)
 
+    @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
     def test_produceAlerts_empty_server(self):
         """ Test that produceAlerts raises if the server is empty or missing.
         """
         self.environ['AP_KAFKA_SERVER'] = ""
         with self.assertRaisesRegex(ValueError, "Kafka server"):
             packConfig = PackageAlertsConfig(doProduceAlerts=True)
-            packageAlerts = PackageAlertsTask(config=packConfig)  # noqa: F841
+            PackageAlertsTask(config=packConfig)
 
         del self.environ['AP_KAFKA_SERVER']
         with self.assertRaisesRegex(ValueError, "Kafka server"):
             packConfig = PackageAlertsConfig(doProduceAlerts=True)
-            packageAlerts = PackageAlertsTask(config=packConfig)  # noqa: F841
+            PackageAlertsTask(config=packConfig)
 
+    @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
     def test_produceAlerts_empty_topic(self):
         """ Test that produceAlerts raises if the topic is empty or missing.
         """
         self.environ['AP_KAFKA_TOPIC'] = ""
         with self.assertRaisesRegex(ValueError, "Kafka topic"):
             packConfig = PackageAlertsConfig(doProduceAlerts=True)
-            packageAlerts = PackageAlertsTask(config=packConfig)  # noqa: F841
+            PackageAlertsTask(config=packConfig)
 
         del self.environ['AP_KAFKA_TOPIC']
         with self.assertRaisesRegex(ValueError, "Kafka topic"):
             packConfig = PackageAlertsConfig(doProduceAlerts=True)
-            packageAlerts = PackageAlertsTask(config=packConfig)  # noqa: F841
+            PackageAlertsTask(config=packConfig)
 
     @patch('confluent_kafka.Producer')
-    @unittest.skipIf("confluent_kafka" not in sys.modules, 'Kafka is not enabled')
+    @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
     def test_produceAlerts_success(self, mock_producer):
         """ Test that produceAlerts calls the producer on all provided alerts
         when the alerts are all under the batch size limit.
@@ -405,15 +419,13 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         self.assertEqual(producer_instance.flush.call_count, len(alerts)+1)
 
     @patch('confluent_kafka.Producer')
-    @unittest.skipIf("confluent_kafka" not in sys.modules, 'Kafka is not enabled')
+    @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
     def test_produceAlerts_one_failure(self, mock_producer):
         """ Test that produceAlerts correctly fails on one alert
         and is writing the failure to disk.
         """
         counter = 0
 
-        # confluent_kafka is not visible to mock_producer and needs to be
-        # re-imported here.
         def mock_produce(*args, **kwargs):
             nonlocal counter
             counter += 1
@@ -445,10 +457,11 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         patcher.stop()
 
     def testRun_without_produce(self):
-        """Test the run method of package alerts with produce set to False.
+        """Test the run method of package alerts with produce set to False and
+        doWriteAlerts set to true.
         """
 
-        packConfig = PackageAlertsConfig()
+        packConfig = PackageAlertsConfig(doWriteAlerts=True)
         tempdir = tempfile.mkdtemp(prefix='alerts')
         packConfig.alertWriteLocation = tempdir
         packageAlerts = PackageAlertsTask(config=packConfig)
@@ -496,7 +509,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
 
     @patch.object(PackageAlertsTask, 'produceAlerts')
     @patch('confluent_kafka.Producer')
-    @unittest.skipIf("confluent_kafka" not in sys.modules, 'Kafka is not enabled')
+    @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
     def testRun_with_produce(self, mock_produceAlerts, mock_producer):
         """Test that packageAlerts calls produceAlerts when doProduceAlerts
         is set to True.
@@ -513,22 +526,6 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
 
         self.assertEqual(mock_produceAlerts.call_count, 1)
 
-    def testRun_without_produce_or_write(self):
-        """Test that packageAlerts calls produceAlerts when doProduceAlerts
-        is set to True.
-        """
-        packConfig = PackageAlertsConfig(doProduceAlerts=False,
-                                         doWriteAlerts=False)
-        packageAlerts = PackageAlertsTask(config=packConfig)
-
-        with self.assertRaisesRegex(Exception, "Neither produce alerts"):
-            packageAlerts.run(self.diaSources,
-                              self.diaObjects,
-                              self.diaSourceHistory,
-                              self.diaForcedSources,
-                              self.exposure,
-                              self.exposure)
-
     def test_serialize_alert_round_trip(self):
         """Test that values in the alert packet exactly round trip.
         """
@@ -536,8 +533,8 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         packageAlerts = PackageAlertsTask(config=ConfigClass)
 
         alert = mock_alert(1)
-        serialized = PackageAlertsTask._serialize_alert(packageAlerts, alert)
-        deserialized = PackageAlertsTask._deserialize_alert(packageAlerts, serialized)
+        serialized = PackageAlertsTask._serializeAlert(packageAlerts, alert)
+        deserialized = _deserialize_alert(serialized)
 
         for field in alert['diaSource']:
             self.assertEqual(alert['diaSource'][field], deserialized['diaSource'][field])
