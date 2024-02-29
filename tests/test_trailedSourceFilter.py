@@ -57,7 +57,7 @@ class TestTrailedSourceFilterTask(unittest.TestCase):
              "flags": 0}
             for idx in range(self.nSources)])
 
-        self.edgeDiaSources.loc[[1, 4], 'flags'] = np.power(2, 27)
+        self.edgeDiaSources.loc[[1, 4], 'flags'] = np.power(2, 27) + np.power(2, 36)
 
     def test_run(self):
         """Run trailedSourceFilterTask with the default max distance.
@@ -116,6 +116,7 @@ class TestTrailedSourceFilterTask(unittest.TestCase):
         """
         trailedSourceFilterTask = TrailedSourceFilterTask()
 
+        results = trailedSourceFilterTask.run(self.edgeDiaSources, self.exposure_time)
         results = trailedSourceFilterTask.run(self.edgeDiaSources, self.exposure_time)
 
         self.assertEqual(len(results.diaSources), 3)

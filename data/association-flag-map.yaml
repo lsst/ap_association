@@ -90,7 +90,7 @@ columns:
       doc: parent source, ignored; only valid for HsmShape
     - name: ext_trailedSources_Naive_flag_edge
       bit: 27
-      doc: source is trailed and extends off chip
+      doc: Trail beginning or end falls on edge pixels or extends off image
     - name: base_PixelFlags_flag_streak
       bit: 28
       doc: Streak in the Source footprint
@@ -109,3 +109,12 @@ columns:
     - name: base_PixelFlags_flag_injected_templateCenter
       bit: 33
       doc: Fake source template injection center in source footprint
+    - name: ext_trailedSources_Naive_flag_off_image
+      bit: 34
+      doc: Trail extends off image
+    - name: ext_trailedSources_Naive_flag_nan
+      bit: 35
+      doc: Trail start or end pixels contain nan
+    - name: ext_trailedSources_Naive_flag_suspect_long_trail
+      bit: 36
+      doc: Trail longer than three psf radii
