@@ -21,15 +21,23 @@
 
 import io
 import os
+
 import numpy as np
 import pandas as pd
 import shutil
 import tempfile
 import unittest
-
+from unittest.mock import patch, Mock
 from astropy import wcs
 from astropy.nddata import CCDData
+import fastavro
+try:
+    import confluent_kafka
+    from confluent_kafka import KafkaException
+except ImportError:
+    confluent_kafka = None
 
+import lsst.alert.packet as alertPack
 from lsst.ap.association import PackageAlertsConfig, PackageAlertsTask
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.image as afwImage
@@ -76,13 +84,17 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
 
     wholeSky = Box.full()
     diaObjects = pd.concat([apdb.getDiaObjects(wholeSky), objects])
-    diaSources = pd.concat([apdb.getDiaSources(wholeSky, [], dateTime), sources])
-    diaForcedSources = pd.concat([apdb.getDiaForcedSources(wholeSky, [], dateTime), forcedSources])
+    diaSources = pd.concat(
+        [apdb.getDiaSources(wholeSky, [], dateTime), sources])
+    diaForcedSources = pd.concat(
+        [apdb.getDiaForcedSources(wholeSky, [], dateTime), forcedSources])
 
     apdb.store(dateTime, diaObjects, diaSources, diaForcedSources)
 
     diaObjects = apdb.getDiaObjects(wholeSky)
-    diaSources = apdb.getDiaSources(wholeSky, np.unique(diaObjects["diaObjectId"]), dateTime)
+    diaSources = apdb.getDiaSources(wholeSky,
+                                    np.unique(diaObjects["diaObjectId"]),
+                                    dateTime)
     diaForcedSources = apdb.getDiaForcedSources(
         wholeSky, np.unique(diaObjects["diaObjectId"]), dateTime)
 
@@ -95,9 +107,61 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
     return (diaObjects, diaSources, diaForcedSources)
 
 
+def mock_alert(alert_id):
+    """Generate a minimal mock alert.
+    """
+    return {
+        "alertId": alert_id,
+        "diaSource": {
+            "midpointMjdTai": 5,
+            "diaSourceId": 4,
+            "ccdVisitId": 2,
+            "band": 'g',
+            "ra": 12.5,
+            "dec": -16.9,
+            # These types are 32-bit floats in the avro schema, so we have to
+            # make them that type here, so that they round trip appropriately.
+            "x": np.float32(15.7),
+            "y": np.float32(89.8),
+            "apFlux": np.float32(54.85),
+            "apFluxErr": np.float32(70.0),
+            "snr": np.float32(6.7),
+            "psfFlux": np.float32(700.0),
+            "psfFluxErr": np.float32(90.0),
+            "flags": 12345,
+        }
+    }
+
+
+def _deserialize_alert(alert_bytes):
+    """Deserialize an alert message from Kafka.
+
+    Parameters
+    ----------
+    alert_bytes : `bytes`
+        Binary-encoding serialized Avro alert, including Confluent Wire
+        Format prefix.
+
+    Returns
+    -------
+    alert : `dict`
+        An alert payload.
+    """
+    schema = alertPack.Schema.from_uri(str(alertPack.get_uri_to_latest_schema()))
+    content_bytes = io.BytesIO(alert_bytes[5:])
+
+    return fastavro.schemaless_reader(content_bytes, schema.definition)
+
+
 class TestPackageAlerts(lsst.utils.tests.TestCase):
 
     def setUp(self):
+        patcher = patch.dict(os.environ, {"AP_KAFKA_PRODUCER_PASSWORD": "fake_password",
+                                          "AP_KAFKA_PRODUCER_USERNAME": "fake_username",
+                                          "AP_KAFKA_SERVER": "fake_server",
+                                          "AP_KAFKA_TOPIC": "fake_topic"})
+        self.environ = patcher.start()
+        self.addCleanup(patcher.stop)
         np.random.seed(1234)
         self.cutoutSize = 35
         self.center = lsst.geom.Point2D(50.1, 49.8)
@@ -120,14 +184,17 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         self.exposure.info.id = 1234
         self.exposure.info.setVisitInfo(visit)
 
-        self.exposure.setFilter(afwImage.FilterLabel(band='g', physical="g.MP9401"))
+        self.exposure.setFilter(
+            afwImage.FilterLabel(band='g', physical="g.MP9401"))
 
         diaObjects = utils_tests.makeDiaObjects(2, self.exposure)
         diaSourceHistory = utils_tests.makeDiaSources(10,
-                                                      diaObjects["diaObjectId"],
+                                                      diaObjects[
+                                                          "diaObjectId"],
                                                       self.exposure)
         diaForcedSources = utils_tests.makeDiaForcedSources(10,
-                                                            diaObjects["diaObjectId"],
+                                                            diaObjects[
+                                                                "diaObjectId"],
                                                             self.exposure)
         self.diaObjects, diaSourceHistory, self.diaForcedSources = _roundTripThroughApdb(
             diaObjects,
@@ -136,11 +203,11 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             self.exposure.visitInfo.date)
         self.diaObjects.replace(to_replace=[None], value=np.nan, inplace=True)
         diaSourceHistory.replace(to_replace=[None], value=np.nan, inplace=True)
-        self.diaForcedSources.replace(to_replace=[None], value=np.nan, inplace=True)
+        self.diaForcedSources.replace(to_replace=[None], value=np.nan,
+                                      inplace=True)
         diaSourceHistory["programId"] = 0
 
-        self.diaSources = diaSourceHistory.loc[
-            [(1, "g", 9), (2, "g", 10)], :]
+        self.diaSources = diaSourceHistory.loc[[(1, "g", 9), (2, "g", 10)], :]
         self.diaSources["bboxSize"] = self.cutoutSize
         self.diaSourceHistory = diaSourceHistory.drop(labels=[(1, "g", 9),
                                                               (2, "g", 10)])
@@ -275,10 +342,126 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             self.assertEqual(alert["cutoutTemplate"],
                              cutoutBytes)
 
-    def testRun(self):
-        """Test the run method of package alerts.
+    @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
+    def test_produceAlerts_empty_password(self):
+        """ Test that produceAlerts raises if the password is empty or missing.
         """
-        packConfig = PackageAlertsConfig()
+        self.environ['AP_KAFKA_PRODUCER_PASSWORD'] = ""
+        with self.assertRaisesRegex(ValueError, "Kafka password"):
+            packConfig = PackageAlertsConfig(doProduceAlerts=True)
+            PackageAlertsTask(config=packConfig)
+
+        del self.environ['AP_KAFKA_PRODUCER_PASSWORD']
+        with self.assertRaisesRegex(ValueError, "Kafka password"):
+            packConfig = PackageAlertsConfig(doProduceAlerts=True)
+            PackageAlertsTask(config=packConfig)
+
+    @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
+    def test_produceAlerts_empty_username(self):
+        """ Test that produceAlerts raises if the username is empty or missing.
+        """
+        self.environ['AP_KAFKA_PRODUCER_USERNAME'] = ""
+        with self.assertRaisesRegex(ValueError, "Kafka username"):
+            packConfig = PackageAlertsConfig(doProduceAlerts=True)
+            PackageAlertsTask(config=packConfig)
+
+        del self.environ['AP_KAFKA_PRODUCER_USERNAME']
+        with self.assertRaisesRegex(ValueError, "Kafka username"):
+            packConfig = PackageAlertsConfig(doProduceAlerts=True)
+            PackageAlertsTask(config=packConfig)
+
+    @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
+    def test_produceAlerts_empty_server(self):
+        """ Test that produceAlerts raises if the server is empty or missing.
+        """
+        self.environ['AP_KAFKA_SERVER'] = ""
+        with self.assertRaisesRegex(ValueError, "Kafka server"):
+            packConfig = PackageAlertsConfig(doProduceAlerts=True)
+            PackageAlertsTask(config=packConfig)
+
+        del self.environ['AP_KAFKA_SERVER']
+        with self.assertRaisesRegex(ValueError, "Kafka server"):
+            packConfig = PackageAlertsConfig(doProduceAlerts=True)
+            PackageAlertsTask(config=packConfig)
+
+    @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
+    def test_produceAlerts_empty_topic(self):
+        """ Test that produceAlerts raises if the topic is empty or missing.
+        """
+        self.environ['AP_KAFKA_TOPIC'] = ""
+        with self.assertRaisesRegex(ValueError, "Kafka topic"):
+            packConfig = PackageAlertsConfig(doProduceAlerts=True)
+            PackageAlertsTask(config=packConfig)
+
+        del self.environ['AP_KAFKA_TOPIC']
+        with self.assertRaisesRegex(ValueError, "Kafka topic"):
+            packConfig = PackageAlertsConfig(doProduceAlerts=True)
+            PackageAlertsTask(config=packConfig)
+
+    @patch('confluent_kafka.Producer')
+    @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
+    def test_produceAlerts_success(self, mock_producer):
+        """ Test that produceAlerts calls the producer on all provided alerts
+        when the alerts are all under the batch size limit.
+        """
+        packConfig = PackageAlertsConfig(doProduceAlerts=True)
+        packageAlerts = PackageAlertsTask(config=packConfig)
+        alerts = [mock_alert(1), mock_alert(2)]
+        ccdVisitId = 123
+
+        # Create a variable and assign it an instance of the patched kafka producer
+        producer_instance = mock_producer.return_value
+        producer_instance.produce = Mock()
+        producer_instance.flush = Mock()
+        packageAlerts.produceAlerts(alerts, ccdVisitId)
+
+        self.assertEqual(producer_instance.produce.call_count, len(alerts))
+        self.assertEqual(producer_instance.flush.call_count, len(alerts)+1)
+
+    @patch('confluent_kafka.Producer')
+    @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
+    def test_produceAlerts_one_failure(self, mock_producer):
+        """ Test that produceAlerts correctly fails on one alert
+        and is writing the failure to disk.
+        """
+        counter = 0
+
+        def mock_produce(*args, **kwargs):
+            nonlocal counter
+            counter += 1
+            if counter == 2:
+                raise KafkaException
+            else:
+                return
+
+        packConfig = PackageAlertsConfig(doProduceAlerts=True)
+        packageAlerts = PackageAlertsTask(config=packConfig)
+
+        patcher = patch("builtins.open")
+        patch_open = patcher.start()
+        alerts = [mock_alert(1), mock_alert(2), mock_alert(3)]
+        ccdVisitId = 123
+
+        producer_instance = mock_producer.return_value
+        producer_instance.produce = Mock(side_effect=mock_produce)
+        producer_instance.flush = Mock()
+
+        packageAlerts.produceAlerts(alerts, ccdVisitId)
+
+        self.assertEqual(producer_instance.produce.call_count, len(alerts))
+        self.assertEqual(patch_open.call_count, 1)
+        self.assertIn("123_2.avro", patch_open.call_args.args[0])
+        # Because one produce raises, we call flush one fewer times than in the success
+        # test above.
+        self.assertEqual(producer_instance.flush.call_count, len(alerts))
+        patcher.stop()
+
+    def testRun_without_produce(self):
+        """Test the run method of package alerts with produce set to False and
+        doWriteAlerts set to true.
+        """
+
+        packConfig = PackageAlertsConfig(doWriteAlerts=True)
         tempdir = tempfile.mkdtemp(prefix='alerts')
         packConfig.alertWriteLocation = tempdir
         packageAlerts = PackageAlertsTask(config=packConfig)
@@ -323,6 +506,39 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                              packageAlerts.streamCcdDataToBytes(ccdCutout))
 
         shutil.rmtree(tempdir)
+
+    @patch.object(PackageAlertsTask, 'produceAlerts')
+    @patch('confluent_kafka.Producer')
+    @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
+    def testRun_with_produce(self, mock_produceAlerts, mock_producer):
+        """Test that packageAlerts calls produceAlerts when doProduceAlerts
+        is set to True.
+        """
+        packConfig = PackageAlertsConfig(doProduceAlerts=True)
+        packageAlerts = PackageAlertsTask(config=packConfig)
+
+        packageAlerts.run(self.diaSources,
+                          self.diaObjects,
+                          self.diaSourceHistory,
+                          self.diaForcedSources,
+                          self.exposure,
+                          self.exposure)
+
+        self.assertEqual(mock_produceAlerts.call_count, 1)
+
+    def test_serialize_alert_round_trip(self):
+        """Test that values in the alert packet exactly round trip.
+        """
+        ConfigClass = PackageAlertsConfig()
+        packageAlerts = PackageAlertsTask(config=ConfigClass)
+
+        alert = mock_alert(1)
+        serialized = PackageAlertsTask._serializeAlert(packageAlerts, alert)
+        deserialized = _deserialize_alert(serialized)
+
+        for field in alert['diaSource']:
+            self.assertEqual(alert['diaSource'][field], deserialized['diaSource'][field])
+        self.assertEqual(1, deserialized["alertId"])
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
