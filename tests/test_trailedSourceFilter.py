@@ -48,6 +48,7 @@ class TestTrailedSourceFilterTask(unittest.TestCase):
              "flags": 0}
             for idx in range(self.nSources)])
         self.exposure_time = 30.0
+        self.diaSources.loc[[2], 'flags'] = np.power(2, 35)
 
         # For use only with testing the edge flag
         self.edgeDiaSources = pd.DataFrame(data=[
@@ -58,6 +59,7 @@ class TestTrailedSourceFilterTask(unittest.TestCase):
             for idx in range(self.nSources)])
 
         self.edgeDiaSources.loc[[1, 4], 'flags'] = np.power(2, 27) + np.power(2, 36)
+        self.edgeDiaSources.loc[[2], 'flags'] = np.power(2, 35)
 
     def test_run(self):
         """Run trailedSourceFilterTask with the default max distance.
@@ -109,19 +111,23 @@ class TestTrailedSourceFilterTask(unittest.TestCase):
         self.assertEqual(len(results.longTrailedDiaSources), 0)
         np.testing.assert_array_equal(results.diaSources["diaSourceId"].values, [0, 1, 2, 3, 4])
         np.testing.assert_array_equal(results.longTrailedDiaSources["diaSourceId"].values, [])
+        np.testing.assert_array_equal(results.diaSources['flags'][2], np.power(2, 35))
 
     def test_run_edge(self):
         """Run trailedSourceFilterTask with the default max distance.
-        filtered out of the final results and put into results.trailedSources.
+
+        Check that the two sources with the edge and suspect long trail flags
+        are correctly filtered out.
         """
         trailedSourceFilterTask = TrailedSourceFilterTask()
-
-        results = trailedSourceFilterTask.run(self.edgeDiaSources, self.exposure_time)
         results = trailedSourceFilterTask.run(self.edgeDiaSources, self.exposure_time)
 
+        # Only three sources should remain after filtering.
         self.assertEqual(len(results.diaSources), 3)
         np.testing.assert_array_equal(results.diaSources['diaSourceId'].values, [0, 2, 3])
         np.testing.assert_array_equal(results.longTrailedDiaSources['diaSourceId'].values, [1, 4])
+        # Check that the nan flagged source is not filtered out.
+        np.testing.assert_array_equal(results.diaSources['flags'][1], np.power(2, 35))
 
     def test_check_dia_source_trail(self):
         """Test that the DiaSource trail checker is correctly identifying
@@ -131,13 +137,13 @@ class TestTrailedSourceFilterTask(unittest.TestCase):
         """
         trailedSourceFilterTask = TrailedSourceFilterTask()
         flag_map = os.path.join(utils.getPackageDir("ap_association"), "data/association-flag-map.yaml")
+        # Sources which just have long trails in their dia source table.
         unpacker = UnpackApdbFlags(flag_map, "DiaSource")
         flags = unpacker.unpack(self.diaSources["flags"], "flags")
         trailed_source_mask = trailedSourceFilterTask._check_dia_source_trail(self.diaSources,
                                                                               self.exposure_time, flags)
-
         np.testing.assert_array_equal(trailed_source_mask, [False, False, False, True, True])
-
+        # Sources which have no long trails but edge and suspect long trails.
         flags = unpacker.unpack(self.edgeDiaSources["flags"], "flags")
         trailed_source_mask = trailedSourceFilterTask._check_dia_source_trail(self.edgeDiaSources,
                                                                               self.exposure_time, flags)

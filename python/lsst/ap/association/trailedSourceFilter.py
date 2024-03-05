@@ -22,7 +22,6 @@
 __all__ = ("TrailedSourceFilterTask", "TrailedSourceFilterConfig")
 
 import os
-import numpy as np
 
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
@@ -119,18 +118,12 @@ class TrailedSourceFilterTask(pipeBase.Task):
         -------
         trail_mask : `pandas.DataFrame`
             Boolean mask for DIASources which are greater than the
-            cutoff length or have off_image or suspect_long_trail
-            flag set.
+            cutoff length or have off_image setl. Also checks if both
+            suspect_long_trail and edge are set and masks those sources out.
         """
-        trail_mask = (dia_sources.loc[:, "trailLength"].values[:]
-                      >= (self.config.max_trail_length*exposure_time))
-
-        long_flags = flags['ext_trailedSources_Naive_flag_suspect_long_trail']
-        edge_flags = flags['ext_trailedSources_Naive_flag_edge']
-
-        trail_mask[np.where(flags['ext_trailedSources_Naive_flag_off_image'])] = True
-        for index, value in enumerate(long_flags):
-            if value and edge_flags[index]:
-                trail_mask[index] = True
+        trail_mask = dia_sources.loc[:, "trailLength"] >= (self.config.max_trail_length*exposure_time)
+        trail_mask |= flags['ext_trailedSources_Naive_flag_off_image']
+        trail_mask |= (flags['ext_trailedSources_Naive_flag_suspect_long_trail']
+                       & flags['ext_trailedSources_Naive_flag_edge'])
 
         return trail_mask
