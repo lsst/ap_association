@@ -503,7 +503,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             DateTime.now(),
             diaCalResult.updatedDiaObjects,
             associatedDiaSources,
-            diaForcedSources)
+            diaForcedSources,
+            exposure.info.getSummaryStats())
 
         if self.config.doPackageAlerts:
             if len(loaderResult.diaForcedSources) > 1:
@@ -707,3 +708,17 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         except Exception as e:
             self.log.warning("Error attempting to check diaObject history: %s", e)
         return diaObjCat
+
+    def _transformProcessingSummary(self, summary):
+        """Convert the exposure summary statistics to a DataFrame for input
+        into APDB.
+        """
+        ignore = ["raCorners", "decCorners"]
+        columns = ["ccdVisitId"]
+        for name in summary.__dict__:
+            if name not in ignore:
+                columns.append(name)
+        output = pd.DataFrame(columns, index="ccdVisitId")
+        for name in columns:
+            output[name] = getattr(summary, name)
+        return output
