@@ -53,9 +53,6 @@ class TestDiaPipelineTask(unittest.TestCase):
         srcSchema.addField("base_PixelFlags_flag_offimage", type="Flag")
         self.srcSchema = afwTable.SourceCatalog(srcSchema)
 
-    def tearDown(self):
-        pass
-
     def testRun(self):
         """Test running while creating and packaging alerts.
         """
