@@ -261,7 +261,7 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     )
     doWriteAssociatedSources = pexConfig.Field(
         dtype=bool,
-        default=False,
+        default=True,
         doc="Write out associated DiaSources, DiaForcedSources, and DiaObjects, "
             "formatted following the Science Data Model.",
     )
