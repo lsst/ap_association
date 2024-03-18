@@ -332,12 +332,15 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                 objSources,
                 objForcedSources,
                 ccdCutout,
+                ccdCutout,
                 ccdCutout)
-            self.assertEqual(len(alert), 9)
+            self.assertEqual(len(alert), 10)
 
             self.assertEqual(alert["alertId"], alertId)
             self.assertEqual(alert["diaSource"], diaSource.to_dict())
             self.assertEqual(alert["cutoutDifference"],
+                             cutoutBytes)
+            self.assertEqual(alert["cutoutScience"],
                              cutoutBytes)
             self.assertEqual(alert["cutoutTemplate"],
                              cutoutBytes)
@@ -470,6 +473,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                           self.diaObjects,
                           self.diaSourceHistory,
                           self.diaForcedSources,
+                          self.exposure,
                           self.exposure,
                           self.exposure)
 
