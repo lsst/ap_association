@@ -130,6 +130,8 @@ class DiaPipelineConnections(
             self.outputs.remove("associatedDiaSources")
             self.outputs.remove("diaForcedSources")
             self.outputs.remove("diaObjects")
+        elif not config.doRunForcedMeasurement:
+            self.outputs.remove("diaForcedSources")
         if not config.doSolarSystemAssociation:
             self.inputs.remove("solarSystemObjectTable")
         if not config.associator.doTrailedSourceFilter:
@@ -247,10 +249,19 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     doLoadForcedSources = pexConfig.Field(
         dtype=bool,
         default=True,
-        deprecated="Added to allow disabling forced sources for performance"
-                   "reasons during the ops rehearsal."
-                   " It is expected to be removed.",
-        doc="Load forced DiaSource history from the APDB?"
+        deprecated="Added to allow disabling forced sources for performance "
+                   "reasons during the ops rehearsal. "
+                   "It is expected to be removed.",
+        doc="Load forced DiaSource history from the APDB? "
+            "This should only be turned off for debugging purposes.",
+    )
+    doRunForcedMeasurement = pexConfig.Field(
+        dtype=bool,
+        default=True,
+        deprecated="Added to allow disabling forced sources for performance "
+                   "reasons during the ops rehearsal. "
+                   "It is expected to be removed.",
+        doc="Run forced measurement on all of the diaObjects? "
             "This should only be turned off for debugging purposes.",
     )
     diaForcedSource = pexConfig.ConfigurableField(
@@ -317,7 +328,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         self.makeSubtask("diaCatalogLoader")
         self.makeSubtask("associator")
         self.makeSubtask("diaCalculation")
-        self.makeSubtask("diaForcedSource")
+        if self.config.doRunForcedMeasurement:
+            self.makeSubtask("diaForcedSource")
         if self.config.doPackageAlerts:
             self.makeSubtask("alertPackager")
         if self.config.doSolarSystemAssociation:
@@ -498,14 +510,21 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 "DiaCalculation. This is unexpected behavior and should be "
                 "reported. Exiting.")
 
-        # Force photometer on the Difference and Calibrated exposures using
-        # the new and updated DiaObject locations.
-        diaForcedSources = self.diaForcedSource.run(
-            diaCalResult.diaObjectCat,
-            diaCalResult.updatedDiaObjects.loc[:, "diaObjectId"].to_numpy(),
-            exposure,
-            diffIm,
-            idGenerator=idGenerator)
+        if self.config.doRunForcedMeasurement:
+            # Force photometer on the Difference and Calibrated exposures using
+            # the new and updated DiaObject locations.
+            diaForcedSources = self.diaForcedSource.run(
+                diaCalResult.diaObjectCat,
+                diaCalResult.updatedDiaObjects.loc[:, "diaObjectId"].to_numpy(),
+                exposure,
+                diffIm,
+                idGenerator=idGenerator)
+        else:
+            # alertPackager needs correct columns
+            diaForcedSources = pd.DataFrame(columns=[
+                "diaForcedSourceId", "diaObjectID", "ccdVisitID", "psfFlux", "psfFluxErr",
+                "x", "y", "flags", "midpointMjdTai", "band",
+            ])
 
         # Store DiaSources, updated DiaObjects, and DiaForcedSources in the
         # Apdb.
@@ -557,7 +576,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                    diaForcedSources,
                                    diffIm,
                                    exposure,
-                                   template)
+                                   template,
+                                   doRunForcedMeasurement=self.config.doRunForcedMeasurement,
+                                   )
 
         return pipeBase.Struct(apdbMarker=self.config.apdb.value,
                                associatedDiaSources=associatedDiaSources,
