@@ -146,6 +146,7 @@ class PackageAlertsTask(pipeBase.Task):
             diffIm,
             calexp,
             template,
+            doRunForcedMeasurement=True,
             ):
         """Package DiaSources/Object and exposure data into Avro alerts.
 
@@ -177,6 +178,11 @@ class PackageAlertsTask(pipeBase.Task):
             Calexp used to create the ``diffIm``.
         template : `lsst.afw.image.ExposureF` or `None`
             Template image used to create the ``diffIm``.
+        doRunForcedMeasurement : `bool`, optional
+            Flag to indicate whether forced measurement was run.
+            This should only be turned off for debugging purposes.
+            Added to allow disabling forced sources for performance
+            reasons during the ops rehearsal.
         """
         alerts = []
         self._patchDiaSources(diaSourceCat)
@@ -196,7 +202,11 @@ class PackageAlertsTask(pipeBase.Task):
                 objSourceHistory = diaSrcHistory.loc[srcIndex[0]]
             else:
                 objSourceHistory = None
-            objDiaForcedSources = diaForcedSources.loc[srcIndex[0]]
+            if doRunForcedMeasurement:
+                objDiaForcedSources = diaForcedSources.loc[srcIndex[0]]
+            else:
+                # Send empty table with correct columns
+                objDiaForcedSources = diaForcedSources.loc[[]]
             sphPoint = geom.SpherePoint(diaSource["ra"],
                                         diaSource["dec"],
                                         geom.degrees)
