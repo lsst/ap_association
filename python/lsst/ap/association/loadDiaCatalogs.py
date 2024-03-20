@@ -56,7 +56,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
         pipeBase.Task.__init__(self, **kwargs)
 
     @timeMethod
-    def run(self, exposure, apdb):
+    def run(self, exposure, apdb, doLoadForcedSources=True):
         """Preload all DiaObjects and DiaSources from the Apdb given the
         current exposure.
 
@@ -66,6 +66,11 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             An exposure with a bounding box.
         apdb : `lsst.dax.apdb.Apdb`
             AP database connection object.
+        doLoadForcedSources : `bool`, optional
+            Load forced DiaSource history from the APDB?
+            This should only be turned off for debugging purposes.
+            Added to allow disabling forced sources for performance
+            reasons during the ops rehearsal.
 
         Returns
         -------
@@ -79,6 +84,13 @@ class LoadDiaCatalogsTask(pipeBase.Task):
               exposure padded by ``pixelMargin``. DataFrame is indexed by
               ``diaObjectId``, ``band``, ``diaSourceId`` columns.
               (`pandas.DataFrame`)
+            - ``diaForcedSources`` : Complete set of forced photometered fluxes
+            on the past 12 months of difference images at DiaObject locations.
+
+        Raises
+        ------
+        RuntimeError
+            Raised if the Database query failed to load DiaObjects.
         """
         region = self._getRegion(exposure)
 
@@ -95,7 +107,10 @@ class LoadDiaCatalogsTask(pipeBase.Task):
 
         diaSources = self.loadDiaSources(diaObjects, region, dateTime, apdb)
 
-        diaForcedSources = self.loadDiaForcedSources(diaObjects, region, dateTime, apdb)
+        if doLoadForcedSources:
+            diaForcedSources = self.loadDiaForcedSources(diaObjects, region, dateTime, apdb)
+        else:
+            diaForcedSources = pd.DataFrame(columns=["diaObjectId", "diaForcedSourceId"])
 
         return pipeBase.Struct(
             diaObjects=diaObjects,

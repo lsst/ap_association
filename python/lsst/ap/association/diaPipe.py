@@ -244,6 +244,15 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         target=DiaObjectCalculationTask,
         doc="Task to compute summary statistics for DiaObjects.",
     )
+    doLoadForcedSources = pexConfig.Field(
+        dtype=bool,
+        default=True,
+        deprecated="Added to allow disabling forced sources for performance"
+                   "reasons during the ops rehearsal."
+                   " It is expected to be removed.",
+        doc="Load forced DiaSource history from the APDB?"
+            "This should only be turned off for debugging purposes.",
+    )
     diaForcedSource = pexConfig.ConfigurableField(
         target=DiaForcedSourceTask,
         doc="Task used for force photometer DiaObject locations in direct and "
@@ -370,7 +379,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
               DiaSources. (`pandas.DataFrame`)
         """
         # Load the DiaObjects and DiaSource history.
-        loaderResult = self.diaCatalogLoader.run(diffIm, self.apdb)
+        loaderResult = self.diaCatalogLoader.run(diffIm, self.apdb,
+                                                 doLoadForcedSources=self.config.doLoadForcedSources)
         if len(loaderResult.diaObjects) > 0:
             diaObjects = self.purgeDiaObjects(diffIm.getBBox(), diffIm.getWcs(), loaderResult.diaObjects,
                                               buffer=self.config.imagePixelMargin)
