@@ -144,6 +144,7 @@ class PackageAlertsTask(pipeBase.Task):
             diaSrcHistory,
             diaForcedSources,
             diffIm,
+            calexp,
             template,
             ):
         """Package DiaSources/Object and exposure data into Avro alerts.
@@ -172,6 +173,8 @@ class PackageAlertsTask(pipeBase.Task):
             ``["diaObjectId"]``
         diffIm : `lsst.afw.image.ExposureF`
             Difference image the sources in ``diaSourceCat`` were detected in.
+        calexp : `lsst.afw.image.ExposureF`
+            Calexp used to create the ``diffIm``.
         template : `lsst.afw.image.ExposureF` or `None`
             Template image used to create the ``diffIm``.
         """
@@ -180,6 +183,7 @@ class PackageAlertsTask(pipeBase.Task):
         self._patchDiaSources(diaSrcHistory)
         ccdVisitId = diffIm.info.id
         diffImPhotoCalib = diffIm.getPhotoCalib()
+        calexpPhotoCalib = calexp.getPhotoCalib()
         templatePhotoCalib = template.getPhotoCalib()
         for srcIndex, diaSource in diaSourceCat.iterrows():
             # Get all diaSources for the associated diaObject.
@@ -204,6 +208,12 @@ class PackageAlertsTask(pipeBase.Task):
                 cutoutExtent,
                 diffImPhotoCalib,
                 diaSource["diaSourceId"])
+            calexpCutout = self.createCcdDataCutout(
+                calexp,
+                sphPoint,
+                cutoutExtent,
+                calexpPhotoCalib,
+                diaSource["diaSourceId"])
             templateCutout = self.createCcdDataCutout(
                 template,
                 sphPoint,
@@ -220,6 +230,7 @@ class PackageAlertsTask(pipeBase.Task):
                                    objSourceHistory,
                                    objDiaForcedSources,
                                    diffImCutout,
+                                   calexpCutout,
                                    templateCutout))
 
         if self.config.doProduceAlerts:
@@ -398,6 +409,7 @@ class PackageAlertsTask(pipeBase.Task):
                       objDiaSrcHistory,
                       objDiaForcedSources,
                       diffImCutout,
+                      calexpCutout,
                       templateCutout):
         """Convert data and package into a dictionary alert.
 
@@ -413,6 +425,9 @@ class PackageAlertsTask(pipeBase.Task):
             12 month history of ``diaObject`` forced measurements.
         diffImCutout : `astropy.nddata.CCDData` or `None`
             Cutout of the difference image around the location of ``diaSource``
+            with a min size set by the ``cutoutSize`` configurable.
+        calexpCutout : `astropy.nddata.CCDData` or `None`
+            Cutout of the calexp around the location of ``diaSource``
             with a min size set by the ``cutoutSize`` configurable.
         templateCutout : `astropy.nddata.CCDData` or `None`
             Cutout of the template image around the location of ``diaSource``
@@ -441,6 +456,11 @@ class PackageAlertsTask(pipeBase.Task):
             alert['cutoutDifference'] = None
         else:
             alert['cutoutDifference'] = self.streamCcdDataToBytes(diffImCutout)
+
+        if calexpCutout is None:
+            alert['cutoutScience'] = None
+        else:
+            alert['cutoutScience'] = self.streamCcdDataToBytes(calexpCutout)
 
         if templateCutout is None:
             alert["cutoutTemplate"] = None

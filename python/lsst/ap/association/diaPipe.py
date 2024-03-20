@@ -556,6 +556,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                    loaderResult.diaSources,
                                    diaForcedSources,
                                    diffIm,
+                                   exposure,
                                    template)
 
         return pipeBase.Struct(apdbMarker=self.config.apdb.value,
