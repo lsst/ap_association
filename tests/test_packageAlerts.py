@@ -402,8 +402,9 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             PackageAlertsTask(config=packConfig)
 
     @patch('confluent_kafka.Producer')
+    @patch.object(PackageAlertsTask, '_server_check')
     @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
-    def test_produceAlerts_success(self, mock_producer):
+    def test_produceAlerts_success(self, mock_server_check, mock_producer):
         """ Test that produceAlerts calls the producer on all provided alerts
         when the alerts are all under the batch size limit.
         """
@@ -418,12 +419,14 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         producer_instance.flush = Mock()
         packageAlerts.produceAlerts(alerts, ccdVisitId)
 
+        self.assertEqual(mock_server_check.call_count, 2)
         self.assertEqual(producer_instance.produce.call_count, len(alerts))
         self.assertEqual(producer_instance.flush.call_count, len(alerts)+1)
 
     @patch('confluent_kafka.Producer')
+    @patch.object(PackageAlertsTask, '_server_check')
     @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
-    def test_produceAlerts_one_failure(self, mock_producer):
+    def test_produceAlerts_one_failure(self, mock_server_check, mock_producer):
         """ Test that produceAlerts correctly fails on one alert
         and is writing the failure to disk.
         """
@@ -451,6 +454,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
 
         packageAlerts.produceAlerts(alerts, ccdVisitId)
 
+        self.assertEqual(mock_server_check.call_count, 2)
         self.assertEqual(producer_instance.produce.call_count, len(alerts))
         self.assertEqual(patch_open.call_count, 1)
         self.assertIn("123_2.avro", patch_open.call_args.args[0])
@@ -459,11 +463,11 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         self.assertEqual(producer_instance.flush.call_count, len(alerts))
         patcher.stop()
 
-    def testRun_without_produce(self):
+    @patch.object(PackageAlertsTask, '_server_check')
+    def testRun_without_produce(self, mock_server_check):
         """Test the run method of package alerts with produce set to False and
         doWriteAlerts set to true.
         """
-
         packConfig = PackageAlertsConfig(doWriteAlerts=True)
         tempdir = tempfile.mkdtemp(prefix='alerts')
         packConfig.alertWriteLocation = tempdir
@@ -476,6 +480,8 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                           self.exposure,
                           self.exposure,
                           self.exposure)
+
+        self.assertEqual(mock_server_check.call_count, 0)
 
         ccdVisitId = self.exposure.info.id
         with open(os.path.join(tempdir, f"{ccdVisitId}.avro"), 'rb') as f:
@@ -513,8 +519,9 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
 
     @patch.object(PackageAlertsTask, 'produceAlerts')
     @patch('confluent_kafka.Producer')
+    @patch.object(PackageAlertsTask, '_server_check')
     @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
-    def testRun_with_produce(self, mock_produceAlerts, mock_producer):
+    def testRun_with_produce(self, mock_produceAlerts, mock_server_check, mock_producer):
         """Test that packageAlerts calls produceAlerts when doProduceAlerts
         is set to True.
         """
@@ -526,15 +533,16 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                           self.diaSourceHistory,
                           self.diaForcedSources,
                           self.exposure,
+                          self.exposure,
                           self.exposure)
-
+        self.assertEqual(mock_server_check.call_count, 1)
         self.assertEqual(mock_produceAlerts.call_count, 1)
 
     def test_serialize_alert_round_trip(self):
         """Test that values in the alert packet exactly round trip.
         """
-        ConfigClass = PackageAlertsConfig()
-        packageAlerts = PackageAlertsTask(config=ConfigClass)
+        packClass = PackageAlertsConfig()
+        packageAlerts = PackageAlertsTask(config=packClass)
 
         alert = mock_alert(1)
         serialized = PackageAlertsTask._serializeAlert(packageAlerts, alert)
@@ -543,6 +551,13 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         for field in alert['diaSource']:
             self.assertEqual(alert['diaSource'][field], deserialized['diaSource'][field])
         self.assertEqual(1, deserialized["alertId"])
+
+    @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
+    def test_server_check(self):
+
+        with self.assertRaisesRegex(KafkaException, "_TRANSPORT"):
+            packConfig = PackageAlertsConfig(doProduceAlerts=True)
+            PackageAlertsTask(config=packConfig)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
