@@ -118,7 +118,9 @@ class TrailedSourceFilterTask(pipeBase.Task):
         -------
         trail_mask : `pandas.DataFrame`
             Boolean mask for DIASources which are greater than the
-            cutoff length or have off_image setl. Also checks if both
+            Boolean mask for DIASources which are greater than the
+            cutoff length or have trails which extend beyond the edge of the
+            detector (off_image set). Also checks if both
             suspect_long_trail and edge are set and masks those sources out.
         """
         trail_mask = dia_sources.loc[:, "trailLength"] >= (self.config.max_trail_length*exposure_time)
