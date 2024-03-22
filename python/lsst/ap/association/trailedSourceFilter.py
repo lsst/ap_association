@@ -22,7 +22,6 @@
 __all__ = ("TrailedSourceFilterTask", "TrailedSourceFilterConfig")
 
 import os
-import numpy as np
 
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
@@ -96,11 +95,15 @@ class TrailedSourceFilterTask(pipeBase.Task):
             longTrailedDiaSources=dia_sources[trail_mask].reset_index(drop=True))
 
     def _check_dia_source_trail(self, dia_sources, exposure_time, flags):
-        """Find DiaSources that have long trails.
+        """Find DiaSources that have long trails or trails with indeterminant
+        end points.
 
         Return a mask of sources with lengths greater than
-        ``config.max_trail_length``  multiplied by the exposure time in seconds
-        or have ext_trailedSources_Naive_flag_edge set.
+        ``config.max_trail_length``  multiplied by the exposure time in
+        seconds. Additionally, set mask if
+        ``ext_trailedSources_Naive_flag_off_image`` is set or if
+        ``ext_trailedSources_Naive_flag_suspect_long_trail`` and
+        ``ext_trailedSources_Naive_flag_edge`` are both set.
 
         Parameters
         ----------
@@ -115,11 +118,14 @@ class TrailedSourceFilterTask(pipeBase.Task):
         -------
         trail_mask : `pandas.DataFrame`
             Boolean mask for DIASources which are greater than the
-            cutoff length and have the edge flag set.
+            Boolean mask for DIASources which are greater than the
+            cutoff length or have trails which extend beyond the edge of the
+            detector (off_image set). Also checks if both
+            suspect_long_trail and edge are set and masks those sources out.
         """
-        trail_mask = (dia_sources.loc[:, "trailLength"].values[:]
-                      >= (self.config.max_trail_length*exposure_time))
-
-        trail_mask[np.where(flags['ext_trailedSources_Naive_flag_edge'])] = True
+        trail_mask = dia_sources.loc[:, "trailLength"] >= (self.config.max_trail_length*exposure_time)
+        trail_mask |= flags['ext_trailedSources_Naive_flag_off_image']
+        trail_mask |= (flags['ext_trailedSources_Naive_flag_suspect_long_trail']
+                       & flags['ext_trailedSources_Naive_flag_edge'])
 
         return trail_mask
