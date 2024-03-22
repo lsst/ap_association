@@ -36,6 +36,7 @@ import fastavro
 try:
     import confluent_kafka
     from confluent_kafka import KafkaException
+    from confluent_kafka.admin import AdminClient
 except ImportError:
     confluent_kafka = None
 
@@ -131,6 +132,23 @@ class PackageAlertsTask(pipeBase.Task):
                     "batch.size": 2097152,
                     "linger.ms": 5,
                 }
+                self.kafkaAdminConfig = {
+                    # This is the URL to use to connect to the Kafka cluster.
+                    "bootstrap.servers": self.server,
+                    # These next two properties tell the Kafka client about the specific
+                    # authentication and authorization protocols that should be used when
+                    # connecting.
+                    "security.protocol": "SASL_PLAINTEXT",
+                    "sasl.mechanisms": "SCRAM-SHA-512",
+                    # The sasl.username and sasl.password are passed through over
+                    # SCRAM-SHA-512 auth to connect to the cluster. The username is not
+                    # sensitive, but the password is (of course) a secret value which
+                    # should never be committed to source code.
+                    "sasl.username": self.username,
+                    "sasl.password": self.password,
+                }
+
+                self._server_check()
                 self.producer = confluent_kafka.Producer(**self.kafkaConfig)
 
             else:
@@ -293,6 +311,7 @@ class PackageAlertsTask(pipeBase.Task):
             ccdVisitId of the alerts sent to the alert stream. Used to write
             out alerts which fail to be sent to the alert stream.
         """
+        self._server_check()
         for alert in alerts:
             alertBytes = self._serializeAlert(alert, schema=self.alertSchema.definition, schema_id=1)
             try:
@@ -301,7 +320,6 @@ class PackageAlertsTask(pipeBase.Task):
 
             except KafkaException as e:
                 self.log.warning('Kafka error: {}, message was {} bytes'.format(e, sys.getsizeof(alertBytes)))
-
                 with open(os.path.join(self.config.alertWriteLocation,
                                        f"{ccdVisitId}_{alert['alertId']}.avro"), "wb") as f:
                     f.write(alertBytes)
@@ -555,3 +573,21 @@ class PackageAlertsTask(pipeBase.Task):
             self.log.warning('Message failed delivery: %s\n' % err)
         else:
             self.log.debug('Message delivered to %s [%d] @ %d', msg.topic(), msg.partition(), msg.offset())
+
+    def _server_check(self):
+        """Checks if the alert stream credentials are still valid and the
+        server is contactable.
+
+                Raises
+                -------
+                KafkaException
+                    Raised if the server us not contactable.
+                RuntimeError
+                    Raised if the server is contactable but there are no topics
+                    present.
+                """
+        admin_client = AdminClient(self.kafkaAdminConfig)
+        topics = admin_client.list_topics(timeout=0.5).topics
+
+        if not topics:
+            raise RuntimeError()
