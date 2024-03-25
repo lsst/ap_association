@@ -148,7 +148,7 @@ class PackageAlertsTask(pipeBase.Task):
                     "sasl.password": self.password,
                 }
 
-                self._server_check()
+                # self._server_check()
                 self.producer = confluent_kafka.Producer(**self.kafkaConfig)
 
             else:
@@ -311,7 +311,8 @@ class PackageAlertsTask(pipeBase.Task):
             ccdVisitId of the alerts sent to the alert stream. Used to write
             out alerts which fail to be sent to the alert stream.
         """
-        self._server_check()
+        # self._server_check()
+        retry = 0
         for alert in alerts:
             alertBytes = self._serializeAlert(alert, schema=self.alertSchema.definition, schema_id=1)
             try:
@@ -319,10 +320,18 @@ class PackageAlertsTask(pipeBase.Task):
                 self.producer.flush()
 
             except KafkaException as e:
-                self.log.warning('Kafka error: {}, message was {} bytes'.format(e, sys.getsizeof(alertBytes)))
-                with open(os.path.join(self.config.alertWriteLocation,
-                                       f"{ccdVisitId}_{alert['alertId']}.avro"), "wb") as f:
-                    f.write(alertBytes)
+                if e.args[0].retriable():
+                    # retry-able error, try again
+                    if retry >= 5:
+                        raise
+                    else:
+                        retry += 1
+                        continue
+                else:
+                    self.log.warning('Kafka error: {}, message was {} bytes'.format(e, sys.getsizeof(alertBytes)))
+                    with open(os.path.join(self.config.alertWriteLocation,
+                                           f"{ccdVisitId}_{alert['alertId']}.avro"), "wb") as f:
+                        f.write(alertBytes)
 
         self.producer.flush()
 
