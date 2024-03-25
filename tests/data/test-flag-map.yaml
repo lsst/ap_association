@@ -1,5 +1,4 @@
-# This file lists columns for bit-packing using columns for use in the testing
-#
+# A short list of flags for use in tests of our bit [un]packing system.
 tableName: DiaSource
 doc: "Flag packing definitions for the DiaSource table."
 columns:
@@ -9,7 +8,8 @@ columns:
     bitList:
     - name: base_PixelFlags_flag
       bit: 0
-      doc: general failure flag, set if anything went wrong
+      doc: General failure flag, set if anything went wrong.
+    # Intentionally skipping a bit, to test the unpacker.
     - name: base_PixelFlags_flag_offimage
-      bit: 1
-      doc: Source center is off image
+      bit: 2
+      doc: Source center is off image.

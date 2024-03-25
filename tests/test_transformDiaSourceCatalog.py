@@ -219,10 +219,10 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'column doesNotExist not in flag map'):
             unpacker.makeFlagBitMask(['base_PixelFlags_flag'], columnName='doesNotExist')
         self.assertEqual(unpacker.makeFlagBitMask(['base_PixelFlags_flag']), np.uint64(1))
-        self.assertEqual(unpacker.makeFlagBitMask(['base_PixelFlags_flag_offimage']), np.uint64(2))
+        self.assertEqual(unpacker.makeFlagBitMask(['base_PixelFlags_flag_offimage']), np.uint64(4))
         self.assertEqual(unpacker.makeFlagBitMask(['base_PixelFlags_flag',
                                                    'base_PixelFlags_flag_offimage']),
-                         np.uint64(3))
+                         np.uint64(5))
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
