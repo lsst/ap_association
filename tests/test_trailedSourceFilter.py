@@ -57,7 +57,11 @@ class TestTrailedSourceFilterTask(unittest.TestCase):
              "flags": 0}
             for idx in range(self.nSources)])
 
-        self.edgeDiaSources.loc[[1, 4], 'flags'] = np.power(2, 27)
+        flagMap = os.path.join(utils.getPackageDir("ap_association"), "data/association-flag-map.yaml")
+        unpacker = UnpackApdbFlags(flagMap, "DiaSource")
+        bitMask = unpacker.makeFlagBitMask(["ext_trailedSources_Naive_flag_edge"])
+        # Flag two sources as "trailed on the edge".
+        self.edgeDiaSources.loc[[1, 4], "flags"] |= bitMask
 
     def test_run(self):
         """Run trailedSourceFilterTask with the default max distance.
@@ -111,8 +115,7 @@ class TestTrailedSourceFilterTask(unittest.TestCase):
         np.testing.assert_array_equal(results.longTrailedDiaSources["diaSourceId"].values, [])
 
     def test_run_edge(self):
-        """Run trailedSourceFilterTask with the default max distance.
-        filtered out of the final results and put into results.trailedSources.
+        """Run trailedSourceFilterTask on a source on the edge.
         """
         trailedSourceFilterTask = TrailedSourceFilterTask()
 
