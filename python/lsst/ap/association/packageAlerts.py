@@ -84,8 +84,8 @@ class PackageAlertsConfig(pexConfig.Config):
 
     doWriteFailedAlerts = pexConfig.Field(
         dtype=bool,
-        doc="If an alert cannot be sent when doProduceAlerts is set,"
-            " write it to disk for debugging purposes.",
+        doc="If an alert cannot be sent when doProduceAlerts is set, "
+            "write it to disk for debugging purposes.",
         default=False,
     )
 
