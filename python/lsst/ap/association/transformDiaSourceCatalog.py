@@ -356,9 +356,9 @@ class UnpackApdbFlags:
         self.output_flag_columns = {}
 
         for column in self.bit_pack_columns:
-            names = []
+            names = {}
             for bit in column["bitList"]:
-                names.append((bit["name"], bool))
+                names[bit["name"]] = bit["bit"]
             self.output_flag_columns[column["columnName"]] = names
 
     def unpack(self, input_flag_values, flag_name):
@@ -368,22 +368,23 @@ class UnpackApdbFlags:
         Parameters
         ----------
         input_flag_values : array-like of type uint
-            Array of integer flags to unpack.
+            Array of integer packed bit flags to unpack.
         flag_name : `str`
-            Apdb column name of integer flags to unpack. Names of packed int
-            flags are given by the flag_map_file.
+            Apdb column name from the loaded file, e.g. "flags".
 
         Returns
         -------
         output_flags : `numpy.ndarray`
-            Numpy named tuple of booleans.
+            Numpy structured array of booleans, one column per flag in the
+            loaded file.
         """
-        bit_names_types = self.output_flag_columns[flag_name]
-        output_flags = np.zeros(len(input_flag_values), dtype=bit_names_types)
+        output_flags = np.zeros(len(input_flag_values),
+                                dtype=[(name, bool) for name in self.output_flag_columns[flag_name]])
 
-        for bit_idx, (bit_name, dtypes) in enumerate(bit_names_types):
-            masked_bits = np.bitwise_and(input_flag_values, 2**bit_idx)
-            output_flags[bit_name] = masked_bits
+        for name in self.output_flag_columns[flag_name]:
+            masked_bits = np.bitwise_and(input_flag_values,
+                                         2**self.output_flag_columns[flag_name][name])
+            output_flags[name] = masked_bits
 
         return output_flags
 
@@ -410,7 +411,7 @@ class UnpackApdbFlags:
         if columnName not in self.output_flag_columns:
             raise ValueError(f'column {columnName} not in flag map: {self.output_flag_columns}')
 
-        return flagName in [c[0] for c in self.output_flag_columns[columnName]]
+        return flagName in [c for c in self.output_flag_columns[columnName]]
 
     def makeFlagBitMask(self, flagNames, columnName='flags'):
         """Return a bitmask corresponding to the supplied flag names.
