@@ -529,7 +529,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Store DiaSources, updated DiaObjects, and DiaForcedSources in the
         # Apdb.
         self.apdb.store(
-            DateTime.now(),
+            DateTime.now().toAstropy(),
             diaCalResult.updatedDiaObjects,
             associatedDiaSources,
             diaForcedSources)

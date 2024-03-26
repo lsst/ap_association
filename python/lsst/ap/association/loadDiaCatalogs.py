@@ -183,7 +183,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
                                                "band",
                                                "diaSourceId"])
         else:
-            diaSources = apdb.getDiaSources(region, diaObjects.loc[:, "diaObjectId"], dateTime)
+            diaSources = apdb.getDiaSources(region, diaObjects.loc[:, "diaObjectId"], dateTime.toAstropy())
 
         diaSources.set_index(["diaObjectId", "band", "diaSourceId"],
                              drop=False,
@@ -231,7 +231,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             diaForcedSources = apdb.getDiaForcedSources(
                 region,
                 diaObjects.loc[:, "diaObjectId"],
-                dateTime)
+                dateTime.toAstropy())
 
         diaForcedSources.set_index(["diaObjectId", "diaForcedSourceId"],
                                    drop=False,
