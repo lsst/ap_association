@@ -82,6 +82,12 @@ class PackageAlertsConfig(pexConfig.Config):
         default=False,
     )
 
+    doWriteFailedAlerts = pexConfig.Field(
+        dtype=bool,
+        doc="Write alerts which fail to send to disk for debugging purposes.",
+        default=False,
+    )
+
 
 class PackageAlertsTask(pipeBase.Task):
     """Tasks for packaging Dia and Pipelines data into Avro alert packages.
@@ -320,9 +326,11 @@ class PackageAlertsTask(pipeBase.Task):
 
             except KafkaException as e:
                 self.log.warning('Kafka error: {}, message was {} bytes'.format(e, sys.getsizeof(alertBytes)))
-                with open(os.path.join(self.config.alertWriteLocation,
-                                       f"{ccdVisitId}_{alert['alertId']}.avro"), "wb") as f:
-                    f.write(alertBytes)
+
+                if self.config.doWriteFailedAlerts:
+                    with open(os.path.join(self.config.alertWriteLocation,
+                                           f"{ccdVisitId}_{alert['alertId']}.avro"), "wb") as f:
+                        f.write(alertBytes)
 
         self.producer.flush()
 
