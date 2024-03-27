@@ -440,7 +440,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             else:
                 return
 
-        packConfig = PackageAlertsConfig(doProduceAlerts=True)
+        packConfig = PackageAlertsConfig(doProduceAlerts=True, doWriteFailedAlerts=True)
         packageAlerts = PackageAlertsTask(config=packConfig)
 
         patcher = patch("builtins.open")
