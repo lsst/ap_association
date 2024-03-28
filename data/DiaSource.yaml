@@ -126,41 +126,44 @@ funcs:
     dipoleMeanFlux:
         functor: LocalDipoleMeanFlux
         args:
-            - ip_diffim_NaiveDipoleFlux_pos_instFlux
-            - ip_diffim_NaiveDipoleFlux_neg_instFlux
-            - ip_diffim_NaiveDipoleFlux_pos_instFluxErr
-            - ip_diffim_NaiveDipoleFlux_neg_instFluxErr
+            - ip_diffim_DipoleFit_pos_instFlux
+            - ip_diffim_DipoleFit_neg_instFlux
+            - ip_diffim_DipoleFit_pos_instFluxErr
+            - ip_diffim_DipoleFit_neg_instFluxErr
             - base_LocalPhotoCalib
             - base_LocalPhotoCalibErr
     dipoleMeanFluxErr:
         functor: LocalDipoleMeanFluxErr
         args:
-            - ip_diffim_NaiveDipoleFlux_pos_instFlux
-            - ip_diffim_NaiveDipoleFlux_neg_instFlux
-            - ip_diffim_NaiveDipoleFlux_pos_instFluxErr
-            - ip_diffim_NaiveDipoleFlux_neg_instFluxErr
+            - ip_diffim_DipoleFit_pos_instFlux
+            - ip_diffim_DipoleFit_neg_instFlux
+            - ip_diffim_DipoleFit_pos_instFluxErr
+            - ip_diffim_DipoleFit_neg_instFluxErr
             - base_LocalPhotoCalib
             - base_LocalPhotoCalibErr
     dipoleFluxDiff:
         functor: LocalDipoleDiffFlux
         args:
-            - ip_diffim_NaiveDipoleFlux_pos_instFlux
-            - ip_diffim_NaiveDipoleFlux_neg_instFlux
-            - ip_diffim_NaiveDipoleFlux_pos_instFluxErr
-            - ip_diffim_NaiveDipoleFlux_neg_instFluxErr
+            - ip_diffim_DipoleFit_pos_instFlux
+            - ip_diffim_DipoleFit_neg_instFlux
+            - ip_diffim_DipoleFit_pos_instFluxErr
+            - ip_diffim_DipoleFit_neg_instFluxErr
             - base_LocalPhotoCalib
             - base_LocalPhotoCalibErr
     dipoleFluxDiffErr:
         functor: LocalDipoleDiffFluxErr
         args:
-            - ip_diffim_NaiveDipoleFlux_pos_instFlux
-            - ip_diffim_NaiveDipoleFlux_neg_instFlux
-            - ip_diffim_NaiveDipoleFlux_pos_instFluxErr
-            - ip_diffim_NaiveDipoleFlux_neg_instFluxErr
+            - ip_diffim_DipoleFit_pos_instFlux
+            - ip_diffim_DipoleFit_neg_instFlux
+            - ip_diffim_DipoleFit_pos_instFluxErr
+            - ip_diffim_DipoleFit_neg_instFluxErr
             - base_LocalPhotoCalib
             - base_LocalPhotoCalibErr
     # dipoleRa not implemented
     # dipoleDec not implemented
+    # TODO: the below statement is false! Previously, position was from the
+    # NaiveDipoleCentroid, which defaulted to NaiveCentroid for sources without
+    # a positive/negaive double peak.
     #    (this may be redundant with RA/DEC as the default centroid is the
     #     dip model, defaulting to SdssCentroid on Dip-Fit failure.)
     dipoleLength:
