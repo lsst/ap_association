@@ -62,7 +62,7 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
         Set of test DiaSources to round trip.
     forcedSources : `pandas.DataFrame`
         Set of test DiaForcedSources to round trip.
-    dateTime : `lsst.daf.base.DateTime`
+    dateTime : `astropy.time.Time`
         Time for the Apdb.
 
     Returns
@@ -200,7 +200,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             diaObjects,
             diaSourceHistory,
             diaForcedSources,
-            self.exposure.visitInfo.date)
+            self.exposure.visitInfo.date.toAstropy())
         self.diaObjects.replace(to_replace=[None], value=np.nan, inplace=True)
         diaSourceHistory.replace(to_replace=[None], value=np.nan, inplace=True)
         self.diaForcedSources.replace(to_replace=[None], value=np.nan,

@@ -80,7 +80,7 @@ class TestLoadDiaCatalogs(unittest.TestCase):
             self.exposure)
 
         self.dateTime = self.exposure.visitInfo.date
-        self.apdb.store(self.dateTime,
+        self.apdb.store(self.dateTime.toAstropy(),
                         self.diaObjects,
                         self.diaSources,
                         self.diaForcedSources)
