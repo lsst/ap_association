@@ -89,6 +89,13 @@ class PackageAlertsConfig(pexConfig.Config):
         default=False,
     )
 
+    maxTimeout = pexConfig.Field(
+        dtype=float,
+        doc="Sets the maximum time in seconds to wait for the alert stream "
+            "broker to respond to a query before timing out.",
+        default=15.0,
+    )
+
 
 class PackageAlertsTask(pipeBase.Task):
     """Tasks for packaging Dia and Pipelines data into Avro alert packages.
@@ -596,7 +603,7 @@ class PackageAlertsTask(pipeBase.Task):
                     present.
                 """
         admin_client = AdminClient(self.kafkaAdminConfig)
-        topics = admin_client.list_topics(timeout=0.5).topics
+        topics = admin_client.list_topics(timeout=self.config.maxTimeout).topics
 
         if not topics:
             raise RuntimeError()
