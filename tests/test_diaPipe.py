@@ -20,6 +20,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import unittest
+import warnings
+
 import numpy as np
 import pandas as pd
 
@@ -32,6 +34,21 @@ import lsst.utils.timer
 from unittest.mock import patch, Mock, MagicMock, DEFAULT
 
 from lsst.ap.association import DiaPipelineTask
+
+
+def _makeMockDataFrame():
+    """Create a new mock of a DataFrame.
+
+    Returns
+    -------
+    mock : `unittest.mock.Mock`
+        A mock guaranteed to accept all operations used by `pandas.DataFrame`.
+    """
+    with warnings.catch_warnings():
+        # spec triggers deprecation warnings on DataFrame, but will
+        # automatically adapt to any removals.
+        warnings.simplefilter("ignore", category=DeprecationWarning)
+        return MagicMock(spec=pd.DataFrame())
 
 
 class TestDiaPipelineTask(unittest.TestCase):
@@ -89,8 +106,8 @@ class TestDiaPipelineTask(unittest.TestCase):
         diffIm = Mock(spec=afwImage.ExposureF)
         exposure = Mock(spec=afwImage.ExposureF)
         template = Mock(spec=afwImage.ExposureF)
-        diaSrc = MagicMock(spec=pd.DataFrame())
-        ssObjects = MagicMock(spec=pd.DataFrame())
+        diaSrc = _makeMockDataFrame()
+        ssObjects = _makeMockDataFrame()
         ccdExposureIdBits = 32
 
         # Each of these subtasks should be called once during diaPipe
@@ -110,7 +127,7 @@ class TestDiaPipelineTask(unittest.TestCase):
             self.assertFalse(hasattr(task, "solarSystemAssociator"))
 
         def concatMock(_data, **_kwargs):
-            return MagicMock(spec=pd.DataFrame)
+            return _makeMockDataFrame()
 
         # Mock out the run() methods of these two Tasks to ensure they
         # return data in the correct form.
@@ -118,14 +135,14 @@ class TestDiaPipelineTask(unittest.TestCase):
         def solarSystemAssociator_run(self, unAssocDiaSources, solarSystemObjectTable, diffIm):
             return lsst.pipe.base.Struct(nTotalSsObjects=42,
                                          nAssociatedSsObjects=30,
-                                         ssoAssocDiaSources=MagicMock(spec=pd.DataFrame()),
-                                         unAssocDiaSources=MagicMock(spec=pd.DataFrame()))
+                                         ssoAssocDiaSources=_makeMockDataFrame(),
+                                         unAssocDiaSources=_makeMockDataFrame())
 
         @lsst.utils.timer.timeMethod
         def associator_run(self, table, diaObjects, exposure_time=None):
             return lsst.pipe.base.Struct(nUpdatedDiaObjects=2, nUnassociatedDiaObjects=3,
-                                         matchedDiaSources=MagicMock(spec=pd.DataFrame()),
-                                         unAssocDiaSources=MagicMock(spec=pd.DataFrame()),
+                                         matchedDiaSources=_makeMockDataFrame(),
+                                         unAssocDiaSources=_makeMockDataFrame(),
                                          longTrailedSources=None)
 
         # apdb isn't a subtask, but still needs to be mocked out for correct
