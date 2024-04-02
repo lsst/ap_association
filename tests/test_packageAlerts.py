@@ -24,7 +24,6 @@ import os
 
 import numpy as np
 import pandas as pd
-import shutil
 import tempfile
 import unittest
 from unittest.mock import patch, Mock
@@ -72,26 +71,25 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
     sources : `pandas.DataFrame`
         Round tripped sources.
     """
-    tmpFile = tempfile.NamedTemporaryFile()
+    with tempfile.NamedTemporaryFile() as tmpFile:
+        apdbConfig = ApdbSql.init_database(db_url="sqlite:///" + tmpFile.name)
+        apdb = Apdb.from_config(apdbConfig)
 
-    apdbConfig = ApdbSql.init_database(db_url="sqlite:///" + tmpFile.name)
-    apdb = Apdb.from_config(apdbConfig)
+        wholeSky = Box.full()
+        diaObjects = pd.concat([apdb.getDiaObjects(wholeSky), objects])
+        diaSources = pd.concat(
+            [apdb.getDiaSources(wholeSky, [], dateTime), sources])
+        diaForcedSources = pd.concat(
+            [apdb.getDiaForcedSources(wholeSky, [], dateTime), forcedSources])
 
-    wholeSky = Box.full()
-    diaObjects = pd.concat([apdb.getDiaObjects(wholeSky), objects])
-    diaSources = pd.concat(
-        [apdb.getDiaSources(wholeSky, [], dateTime), sources])
-    diaForcedSources = pd.concat(
-        [apdb.getDiaForcedSources(wholeSky, [], dateTime), forcedSources])
+        apdb.store(dateTime, diaObjects, diaSources, diaForcedSources)
 
-    apdb.store(dateTime, diaObjects, diaSources, diaForcedSources)
-
-    diaObjects = apdb.getDiaObjects(wholeSky)
-    diaSources = apdb.getDiaSources(wholeSky,
-                                    np.unique(diaObjects["diaObjectId"]),
-                                    dateTime)
-    diaForcedSources = apdb.getDiaForcedSources(
-        wholeSky, np.unique(diaObjects["diaObjectId"]), dateTime)
+        diaObjects = apdb.getDiaObjects(wholeSky)
+        diaSources = apdb.getDiaSources(wholeSky,
+                                        np.unique(diaObjects["diaObjectId"]),
+                                        dateTime)
+        diaForcedSources = apdb.getDiaForcedSources(
+            wholeSky, np.unique(diaObjects["diaObjectId"]), dateTime)
 
     diaObjects.set_index("diaObjectId", drop=False, inplace=True)
     diaSources.set_index(["diaObjectId", "band", "diaSourceId"],
@@ -464,25 +462,26 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         doWriteAlerts set to true.
         """
         packConfig = PackageAlertsConfig(doWriteAlerts=True)
-        tempdir = tempfile.mkdtemp(prefix='alerts')
-        packConfig.alertWriteLocation = tempdir
-        packageAlerts = PackageAlertsTask(config=packConfig)
+        with tempfile.TemporaryDirectory(prefix='alerts') as tempdir:
+            packConfig.alertWriteLocation = tempdir
+            packageAlerts = PackageAlertsTask(config=packConfig)
 
-        packageAlerts.run(self.diaSources,
-                          self.diaObjects,
-                          self.diaSourceHistory,
-                          self.diaForcedSources,
-                          self.exposure,
-                          self.exposure,
-                          self.exposure)
+            packageAlerts.run(self.diaSources,
+                              self.diaObjects,
+                              self.diaSourceHistory,
+                              self.diaForcedSources,
+                              self.exposure,
+                              self.exposure,
+                              self.exposure)
 
-        self.assertEqual(mock_server_check.call_count, 0)
+            self.assertEqual(mock_server_check.call_count, 0)
 
-        ccdVisitId = self.exposure.info.id
-        with open(os.path.join(tempdir, f"{ccdVisitId}.avro"), 'rb') as f:
-            writer_schema, data_stream = \
-                packageAlerts.alertSchema.retrieve_alerts(f)
-            data = list(data_stream)
+            ccdVisitId = self.exposure.info.id
+            with open(os.path.join(tempdir, f"{ccdVisitId}.avro"), 'rb') as f:
+                writer_schema, data_stream = \
+                    packageAlerts.alertSchema.retrieve_alerts(f)
+                data = list(data_stream)
+
         self.assertEqual(len(data), len(self.diaSources))
         for idx, alert in enumerate(data):
             for key, value in alert["diaSource"].items():
@@ -509,8 +508,6 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                 1234)
             self.assertEqual(alert["cutoutDifference"],
                              packageAlerts.streamCcdDataToBytes(ccdCutout))
-
-        shutil.rmtree(tempdir)
 
     @patch.object(PackageAlertsTask, 'produceAlerts')
     @patch('confluent_kafka.Producer')
