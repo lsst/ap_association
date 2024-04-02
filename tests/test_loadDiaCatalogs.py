@@ -58,6 +58,8 @@ class TestLoadDiaCatalogs(unittest.TestCase):
 
         self.db_file_fd, self.db_file = tempfile.mkstemp(
             dir=os.path.dirname(__file__))
+        self.addCleanup(os.remove, self.db_file)
+        self.addCleanup(os.close, self.db_file_fd)
 
         self.apdbConfig = ApdbSql.init_database(db_url="sqlite:///" + self.db_file)
         self.apdb = Apdb.from_config(self.apdbConfig)
@@ -83,10 +85,6 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         # These columns are not in the DPDD, yet do appear in DiaSource.yaml.
         # We don't need to check them against the default APDB schema.
         self.ignoreColumns = ["band", "bboxSize", "isDipole"]
-
-    def tearDown(self):
-        os.close(self.db_file_fd)
-        os.remove(self.db_file)
 
     def testRun(self):
         """Test the full run method for the loader.
