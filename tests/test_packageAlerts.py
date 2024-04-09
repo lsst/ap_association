@@ -412,7 +412,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         producer_instance.flush = Mock()
         packageAlerts.produceAlerts(alerts, ccdVisitId)
 
-        self.assertEqual(mock_server_check.call_count, 2)
+        self.assertEqual(mock_server_check.call_count, 1)
         self.assertEqual(producer_instance.produce.call_count, len(alerts))
         self.assertEqual(producer_instance.flush.call_count, len(alerts)+1)
 
@@ -447,7 +447,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
 
         packageAlerts.produceAlerts(alerts, ccdVisitId)
 
-        self.assertEqual(mock_server_check.call_count, 2)
+        self.assertEqual(mock_server_check.call_count, 1)
         self.assertEqual(producer_instance.produce.call_count, len(alerts))
         self.assertEqual(patch_open.call_count, 1)
         self.assertIn("123_2.avro", patch_open.call_args.args[0])

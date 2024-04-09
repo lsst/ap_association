@@ -96,6 +96,13 @@ class PackageAlertsConfig(pexConfig.Config):
         default=15.0,
     )
 
+    deliveryTimeout = pexConfig.Field(
+        dtype=float,
+        doc="Sets the time to wait for the producer to wait to deliver an "
+            "alert in milliseconds.",
+        default=1200.0,
+    )
+
 
 class PackageAlertsTask(pipeBase.Task):
     """Tasks for packaging Dia and Pipelines data into Avro alert packages.
@@ -145,6 +152,7 @@ class PackageAlertsTask(pipeBase.Task):
                     # We set the batch size to 2 Mb.
                     "batch.size": 2097152,
                     "linger.ms": 5,
+                    "delivery.timeout.ms": self.config.deliveryTimeout,
                 }
                 self.kafkaAdminConfig = {
                     # This is the URL to use to connect to the Kafka cluster.
@@ -325,7 +333,6 @@ class PackageAlertsTask(pipeBase.Task):
             ccdVisitId of the alerts sent to the alert stream. Used to write
             out alerts which fail to be sent to the alert stream.
         """
-        self._server_check()
         for alert in alerts:
             alertBytes = self._serializeAlert(alert, schema=self.alertSchema.definition, schema_id=1)
             try:
