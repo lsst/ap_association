@@ -68,6 +68,10 @@ class TestDiaPipelineTask(unittest.TestCase):
         return config
 
     def setUp(self):
+        # Create an instance of random generator with fixed seed.
+        rng = np.random.default_rng(1234)
+        self.rng = rng
+
         # schemas are persisted in both Gen 2 and Gen 3 butler as prototypical catalogs
         srcSchema = afwTable.SourceTable.makeMinimalSchema()
         srcSchema.addField("base_PixelFlags_flag", type="Flag")
@@ -248,7 +252,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         nObj0 = 20
 
         # Create diaObjects
-        diaObjects = makeDiaObjects(nObj0, exposure)
+        diaObjects = makeDiaObjects(nObj0, exposure, self.rng)
         # Shrink the bounding box so that some of the diaObjects will be outside
         bbox = exposure.getBBox()
         size = np.minimum(bbox.getHeight(), bbox.getWidth())

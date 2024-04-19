@@ -38,7 +38,9 @@ class TestTrailedSourceFilterTask(unittest.TestCase):
         The trail lengths of the dia sources are 0, 5.5, 11, 16.5, 21.5
         arcseconds.
         """
+        # Create an instance of random generator with fixed seed.
         rng = np.random.default_rng(1234)
+
         scatter = 0.1 / 3600
         self.nSources = 5
         self.diaSources = pd.DataFrame(data=[
