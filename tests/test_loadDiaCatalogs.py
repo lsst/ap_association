@@ -26,6 +26,7 @@ import unittest
 import yaml
 
 from lsst.ap.association import LoadDiaCatalogsTask, LoadDiaCatalogsConfig
+from lsst.ap.association.utils import readSchemaFromApdb
 from lsst.dax.apdb import Apdb, ApdbSql, ApdbTables
 from lsst.utils import getPackageDir
 import lsst.utils.tests
@@ -64,6 +65,7 @@ class TestLoadDiaCatalogs(unittest.TestCase):
 
         self.apdbConfig = ApdbSql.init_database(db_url="sqlite:///" + self.db_file)
         self.apdb = Apdb.from_config(self.apdbConfig)
+        self.schema = readSchemaFromApdb(self.apdb)
 
         self.exposure = makeExposure(False, False)
 
@@ -100,7 +102,8 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         diaLoader = LoadDiaCatalogsTask()
         region = diaLoader._getRegion(self.exposure)
         diaObjects = diaLoader.loadDiaObjects(region,
-                                              self.apdb)
+                                              self.apdb,
+                                              self.schema)
         self.assertEqual(len(diaObjects), len(self.diaObjects))
 
     def testLoadDiaForcedSources(self):
@@ -112,7 +115,8 @@ class TestLoadDiaCatalogs(unittest.TestCase):
             self.diaObjects,
             region,
             self.dateTime,
-            self.apdb)
+            self.apdb,
+            self.schema)
         self.assertEqual(len(diaForcedSources), len(self.diaForcedSources))
 
     def testLoadDiaSources(self):
@@ -128,7 +132,8 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         diaSources = diaLoader.loadDiaSources(self.diaObjects,
                                               region,
                                               self.dateTime,
-                                              self.apdb)
+                                              self.apdb,
+                                              self.schema)
         self.assertEqual(len(diaSources), len(self.diaSources))
 
     def test_apdbSchema(self):

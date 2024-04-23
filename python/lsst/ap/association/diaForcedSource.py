@@ -73,7 +73,6 @@ class DiaForcedSourcedConfig(pexConfig.Config):
                             'base_PsfFlux_flag_edge', 'slot_PsfFlux_flag_edge',
                             'base_PsfFlux_chi2', 'slot_PsfFlux_chi2',
                             'base_PsfFlux_npixels', 'slot_PsfFlux_npixels',
-                            'base_InvalidPsf_flag',
                             ]
 
 

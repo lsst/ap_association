@@ -26,4 +26,5 @@ from .loadDiaCatalogs import *
 from .packageAlerts import *
 from .diaPipe import *
 from .transformDiaSourceCatalog import *
+from .utils import *
 from .version import *

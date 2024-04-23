@@ -75,7 +75,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         self.reliability = lsst.afw.table.BaseCatalog(reliabilitySchema)
         self.reliability.resize(len(self.inputCatalog))
         self.reliability["id"] = self.inputCatalog["id"]
-        self.reliability["score"] = rng.random(len(self.inputCatalog))
+        self.reliability["score"] = rng.random(len(self.inputCatalog), dtype=np.float32)
 
         self.expId = 4321
         self.date = dafBase.DateTime(nsecs=1400000000 * 10**9)
@@ -124,6 +124,36 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         # The final snr value should be NaN because it doesn't have a peak significance field.
         expect_snr = [397.887353515625]*9
         expect_snr.append(np.nan)
+        # Have to use allclose because assert_array_equal doesn't support equal_nan.
+        np.testing.assert_allclose(result.diaSourceTable["snr"], expect_snr, equal_nan=True, rtol=0)
+
+    def test_run_with_apdb_schema(self):
+        """Test output dataFrame is created and values are correctly inserted
+        from the exposure.
+        """
+        self.config.doUseApdbSchema = True
+        transformTask = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
+                                                      config=self.config)
+        result = transformTask.run(self.inputCatalog,
+                                   self.exposure,
+                                   self.band)
+
+        self.assertEqual(len(result.diaSourceTable), len(self.inputCatalog))
+        np.testing.assert_array_equal(result.diaSourceTable["bboxSize"], [self.bboxSize]*self.nSources)
+        np.testing.assert_array_equal(result.diaSourceTable["visit"],
+                                      [self.exposure.visitInfo.id]*self.nSources)
+        np.testing.assert_array_equal(result.diaSourceTable["detector"],
+                                      [self.exposure.detector.getId()]*self.nSources)
+        np.testing.assert_array_equal(result.diaSourceTable["band"], [self.band]*self.nSources)
+        np.testing.assert_array_equal(result.diaSourceTable["midpointMjdTai"],
+                                      [self.date.get(system=dafBase.DateTime.MJD)]*self.nSources)
+        np.testing.assert_array_equal(result.diaSourceTable["diaObjectId"], [0]*self.nSources)
+        np.testing.assert_array_equal(result.diaSourceTable["x"], np.arange(self.nSources))
+        # The final snr value should be NaN because it doesn't have a peak significance field.
+        expect_snr = [397.887353515625]*9
+        expect_snr.append(np.nan)
+        # Downcast to single precision to match `sdm_schemas`
+        expect_snr = np.array(expect_snr, dtype=np.float32)
         # Have to use allclose because assert_array_equal doesn't support equal_nan.
         np.testing.assert_allclose(result.diaSourceTable["snr"], expect_snr, equal_nan=True, rtol=0)
 
@@ -176,37 +206,6 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         for size in boxSizes:
             self.assertEqual(size, self.bboxSize)
         self.assertEqual(len(boxSizes), self.nSources)
-
-    # TODO: remove in DM-41532
-    def test_bit_unpacker(self):
-        """Test that the integer bit packer is functioning correctly.
-        """
-        with self.assertWarns(FutureWarning):
-            self.config.doPackFlags = True
-            transform = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
-                                                      config=self.config)
-        for idx, obj in enumerate(self.inputCatalog):
-            if idx in [1, 3, 5]:
-                obj.set("base_PixelFlags_flag", 1)
-            if idx in [1, 4, 6]:
-                obj.set("base_PixelFlags_flag_offimage", 1)
-        outputCatalog = transform.run(self.inputCatalog,
-                                      self.exposure,
-                                      self.band).diaSourceTable
-
-        unpacker = UnpackApdbFlags(self.config.flagMap, "DiaSource")
-        flag_values = unpacker.unpack(outputCatalog["flags"], "flags")
-
-        for idx, flag in enumerate(flag_values):
-            if idx in [1, 3, 5]:
-                self.assertTrue(flag['base_PixelFlags_flag'])
-            else:
-                self.assertFalse(flag['base_PixelFlags_flag'])
-
-            if idx in [1, 4, 6]:
-                self.assertTrue(flag['base_PixelFlags_flag_offimage'])
-            else:
-                self.assertFalse(flag['base_PixelFlags_flag_offimage'])
 
     def test_flag_existence_check(self):
         unpacker = UnpackApdbFlags(self.config.flagMap, "DiaSource")
