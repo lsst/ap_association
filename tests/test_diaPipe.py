@@ -29,7 +29,6 @@ import pandas as pd
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
 import lsst.utils.tests
-import lsst.utils.timer
 from lsst.pipe.base.testUtils import assertValidOutput
 
 from lsst.ap.association import DiaPipelineTask
@@ -131,15 +130,13 @@ class TestDiaPipelineTask(unittest.TestCase):
 
         # Mock out the run() methods of these two Tasks to ensure they
         # return data in the correct form.
-        @lsst.utils.timer.timeMethod
-        def solarSystemAssociator_run(self, unAssocDiaSources, solarSystemObjectTable, diffIm):
+        def solarSystemAssociator_run(unAssocDiaSources, solarSystemObjectTable, diffIm):
             return lsst.pipe.base.Struct(nTotalSsObjects=42,
                                          nAssociatedSsObjects=30,
                                          ssoAssocDiaSources=_makeMockDataFrame(),
                                          unAssocDiaSources=_makeMockDataFrame())
 
-        @lsst.utils.timer.timeMethod
-        def associator_run(self, table, diaObjects, exposure_time=None):
+        def associator_run(table, diaObjects, exposure_time=None):
             return lsst.pipe.base.Struct(nUpdatedDiaObjects=2, nUnassociatedDiaObjects=3,
                                          matchedDiaSources=_makeMockDataFrame(),
                                          unAssocDiaSources=_makeMockDataFrame(),
@@ -148,10 +145,11 @@ class TestDiaPipelineTask(unittest.TestCase):
         # apdb isn't a subtask, but still needs to be mocked out for correct
         # execution in the test environment.
         with patch.multiple(task, **{task: DEFAULT for task in subtasksToMock + ["apdb"]}), \
-            patch('lsst.ap.association.diaPipe.pd.concat', new=concatMock), \
-            patch('lsst.ap.association.association.AssociationTask.run', new=associator_run), \
+            patch('lsst.ap.association.diaPipe.pd.concat', side_effect=concatMock), \
+            patch('lsst.ap.association.association.AssociationTask.run',
+                  side_effect=associator_run) as mainRun, \
             patch('lsst.ap.association.ssoAssociation.SolarSystemAssociationTask.run',
-                  new=solarSystemAssociator_run):
+                  side_effect=solarSystemAssociator_run) as ssRun:
 
             result = task.run(diaSrc,
                               ssObjects,
@@ -169,12 +167,11 @@ class TestDiaPipelineTask(unittest.TestCase):
             self.assertEqual(meta["diaPipe.numUpdatedDiaObjects"], 2)
             self.assertEqual(meta["diaPipe.numUnassociatedDiaObjects"], 3)
             # and that associators ran once or not at all.
-            self.assertEqual(len(meta.getArray("diaPipe:associator.associator_runEndUtc")), 1)
+            mainRun.assert_called_once()
             if doSolarSystemAssociation:
-                self.assertEqual(len(meta.getArray("diaPipe:solarSystemAssociator."
-                                                   "solarSystemAssociator_runEndUtc")), 1)
+                ssRun.assert_called_once()
             else:
-                self.assertNotIn("diaPipe:solarSystemAssociator", meta)
+                ssRun.assert_not_called()
 
     def test_createDiaObjects(self):
         """Test that creating new DiaObjects works as expected.
