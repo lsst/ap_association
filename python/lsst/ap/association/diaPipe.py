@@ -32,6 +32,9 @@ __all__ = ("DiaPipelineConfig",
            "DiaPipelineTask",
            "DiaPipelineConnections")
 
+
+import warnings
+
 import numpy as np
 import pandas as pd
 
@@ -214,9 +217,12 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         dtype=str,
         default="deep",
     )
-    apdb = daxApdb.ApdbSql.makeField(  # TODO: remove on DM-43419
+    apdb = pexConfig.ConfigurableField(  # TODO: remove on DM-43419
+        target=daxApdb.ApdbSql,
         doc="Database connection for storing associated DiaSources and "
             "DiaObjects. Must already be initialized.",
+        deprecated="This field has been replaced by ``apdb_config_url``; set "
+                   "``doConfigureApdb=False`` to use it. Will be removed after v28.",
     )
     apdb_config_url = pexConfig.Field(
         dtype=str,
@@ -307,7 +313,7 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         doc="Use the deprecated ``apdb`` sub-config to set up the APDB, "
             "instead of the new config (``apdb_config_url``). This field is "
             "provided for backward-compatibility ONLY and will be removed "
-            "without notice alongside ``apdb``.",
+            "without notice after v28.",
     )
 
     def setDefaults(self):
@@ -337,6 +343,14 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         for name, field in self._fields.items():
             if name not in skip:
                 field.validate(self)
+
+        # It's possible to use apdb without setting it, bypassing the deprecation warning.
+        if self.doConfigureApdb:
+            warnings.warn("Config field DiaPipelineConfig.apdb is deprecated: "
+                          # Workaround for DM-44051
+                          "This field has been replaced by ``apdb_config_url``; set "
+                          "``doConfigureApdb=False`` to use it. Will be removed after v28.",
+                          FutureWarning)
 
 
 class DiaPipelineTask(pipeBase.PipelineTask):
