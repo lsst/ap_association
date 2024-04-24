@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import tempfile
 import unittest
 from unittest.mock import patch, Mock, MagicMock, DEFAULT
 import warnings
@@ -28,6 +29,7 @@ import pandas as pd
 
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
+import lsst.dax.apdb as daxApdb
 import lsst.pex.config as pexConfig
 import lsst.utils.tests
 from lsst.pipe.base.testUtils import assertValidOutput
@@ -55,10 +57,12 @@ class TestDiaPipelineTask(unittest.TestCase):
 
     @classmethod
     def _makeDefaultConfig(cls,
+                           config_file,
                            doPackageAlerts=False,
                            doSolarSystemAssociation=False):
         config = DiaPipelineTask.ConfigClass()
-        config.apdb.db_url = "sqlite://"
+        config.doConfigureApdb = False
+        config.apdb_config_url = config_file
         config.doPackageAlerts = doPackageAlerts
         config.doSolarSystemAssociation = doSolarSystemAssociation
         return config
@@ -70,13 +74,19 @@ class TestDiaPipelineTask(unittest.TestCase):
         srcSchema.addField("base_PixelFlags_flag_offimage", type="Flag")
         self.srcSchema = afwTable.SourceCatalog(srcSchema)
 
+        apdb_config = daxApdb.ApdbSql.init_database(db_url="sqlite://")
+        self.config_file = tempfile.NamedTemporaryFile()
+        self.addCleanup(self.config_file.close)
+        apdb_config.save(self.config_file.name)
+
     # TODO: remove on DM-43419
     def testConfigApdbNestedOk(self):
         config = DiaPipelineTask.ConfigClass()
         config.doConfigureApdb = True
-        config.apdb.db_url = "sqlite://"
-        config.freeze()
-        config.validate()
+        with self.assertWarns(FutureWarning):
+            config.apdb.db_url = "sqlite://"
+            config.freeze()
+            config.validate()
 
     # TODO: remove on DM-43419
     def testConfigApdbNestedInvalid(self):
@@ -128,6 +138,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         """Test the normal workflow of each ap_pipe step.
         """
         config = self._makeDefaultConfig(
+            config_file=self.config_file.name,
             doPackageAlerts=doPackageAlerts,
             doSolarSystemAssociation=doSolarSystemAssociation)
         task = DiaPipelineTask(config=config)
@@ -193,7 +204,8 @@ class TestDiaPipelineTask(unittest.TestCase):
             for subtaskName in subtasksToMock:
                 getattr(task, subtaskName).run.assert_called_once()
             assertValidOutput(task, result)
-            self.assertEqual(result.apdbMarker.db_url, "sqlite://")
+            # Exact type and contents of apdbMarker are undefined.
+            self.assertIsInstance(result.apdbMarker, pexConfig.Config)
             meta = task.getFullMetadata()
             # Check that the expected metadata has been set.
             self.assertEqual(meta["diaPipe.numUpdatedDiaObjects"], 2)
@@ -215,7 +227,7 @@ class TestDiaPipelineTask(unittest.TestCase):
              "ssObjectId": 0}
             for idx in range(nSources)])
 
-        config = self._makeDefaultConfig(doPackageAlerts=False)
+        config = self._makeDefaultConfig(config_file=self.config_file.name, doPackageAlerts=False)
         task = DiaPipelineTask(config=config)
         result = task.createNewDiaObjects(diaSources)
         self.assertEqual(nSources, len(result.newDiaObjects))
@@ -230,7 +242,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         """Remove diaOjects that are outside an image's bounding box.
         """
 
-        config = self._makeDefaultConfig(doPackageAlerts=False)
+        config = self._makeDefaultConfig(config_file=self.config_file.name, doPackageAlerts=False)
         task = DiaPipelineTask(config=config)
         exposure = makeExposure(False, False)
         nObj0 = 20
