@@ -28,6 +28,7 @@ import pandas as pd
 
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
+import lsst.pex.config as pexConfig
 import lsst.utils.tests
 from lsst.pipe.base.testUtils import assertValidOutput
 
@@ -69,8 +70,39 @@ class TestDiaPipelineTask(unittest.TestCase):
         srcSchema.addField("base_PixelFlags_flag_offimage", type="Flag")
         self.srcSchema = afwTable.SourceCatalog(srcSchema)
 
-    def tearDown(self):
-        pass
+    # TODO: remove on DM-43419
+    def testConfigApdbNestedOk(self):
+        config = DiaPipelineTask.ConfigClass()
+        config.doConfigureApdb = True
+        config.apdb.db_url = "sqlite://"
+        config.freeze()
+        config.validate()
+
+    # TODO: remove on DM-43419
+    def testConfigApdbNestedInvalid(self):
+        config = DiaPipelineTask.ConfigClass()
+        config.doConfigureApdb = True
+        # Don't set db_url
+        config.freeze()
+        with self.assertRaises(pexConfig.FieldValidationError):
+            config.validate()
+
+    # TODO: remove on DM-43419
+    def testConfigApdbFileOk(self):
+        config = DiaPipelineTask.ConfigClass()
+        config.doConfigureApdb = False
+        config.apdb_config_url = "some/file/path.yaml"
+        config.freeze()
+        config.validate()
+
+    # TODO: remove on DM-43419
+    def testConfigApdbFileInvalid(self):
+        config = DiaPipelineTask.ConfigClass()
+        config.doConfigureApdb = False
+        # Don't set apdb_config_url
+        config.freeze()
+        with self.assertRaises(pexConfig.FieldValidationError):
+            config.validate()
 
     def testRun(self):
         """Test running while creating and packaging alerts.

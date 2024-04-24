@@ -214,9 +214,17 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         dtype=str,
         default="deep",
     )
-    apdb = daxApdb.ApdbSql.makeField(
+    apdb = daxApdb.ApdbSql.makeField(  # TODO: remove on DM-43419
         doc="Database connection for storing associated DiaSources and "
             "DiaObjects. Must already be initialized.",
+    )
+    apdb_config_url = pexConfig.Field(
+        dtype=str,
+        default=None,
+        optional=False,
+        doc="A config file specifying the APDB and its connection parameters, "
+            "typically written by the apdb-cli command-line utility. "
+            "The database must already be initialized.",
     )
     validBands = pexConfig.ListField(
         dtype=str,
@@ -293,6 +301,14 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
             "diaObjects for association.",
     )
     idGenerator = DetectorVisitIdGeneratorConfig.make_field()
+    doConfigureApdb = pexConfig.Field(  # TODO: remove on DM-43419
+        dtype=bool,
+        default=True,
+        doc="Use the deprecated ``apdb`` sub-config to set up the APDB, "
+            "instead of the new config (``apdb_config_url``). This field is "
+            "provided for backward-compatibility ONLY and will be removed "
+            "without notice alongside ``apdb``.",
+    )
 
     def setDefaults(self):
         self.apdb.dia_object_index = "baseline"
@@ -314,6 +330,14 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
                                        "ap_meanTotFlux",
                                        "ap_sigmaTotFlux"]
 
+    # TODO: remove on DM-43419
+    def validate(self):
+        # Sidestep Config.validate to avoid validating uninitialized fields we're not using.
+        skip = {"apdb_config_url"} if self.doConfigureApdb else {"apdb"}
+        for name, field in self._fields.items():
+            if name not in skip:
+                field.validate(self)
+
 
 class DiaPipelineTask(pipeBase.PipelineTask):
     """Task for loading, associating and storing Difference Image Analysis
@@ -324,7 +348,10 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
     def __init__(self, initInputs=None, **kwargs):
         super().__init__(**kwargs)
-        self.apdb = self.config.apdb.apply()
+        if self.config.doConfigureApdb:
+            self.apdb = self.config.apdb.apply()
+        else:
+            self.apdb = daxApdb.Apdb.from_uri(self.config.apdb_config_url)
         self.makeSubtask("diaCatalogLoader")
         self.makeSubtask("associator")
         self.makeSubtask("diaCalculation")
@@ -580,7 +607,10 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                    doRunForcedMeasurement=self.config.doRunForcedMeasurement,
                                    )
 
-        return pipeBase.Struct(apdbMarker=self.config.apdb.value,
+        # For historical reasons, apdbMarker is a Config even if it's not meant to be read.
+        # A default Config is the cheapest way to satisfy the storage class.
+        marker = self.config.apdb.value if self.config.doConfigureApdb else pexConfig.Config()
+        return pipeBase.Struct(apdbMarker=marker,
                                associatedDiaSources=associatedDiaSources,
                                diaForcedSources=diaForcedSources,
                                diaObjects=diaObjects,
