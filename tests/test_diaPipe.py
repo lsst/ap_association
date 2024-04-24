@@ -20,6 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import unittest
+from unittest.mock import patch, Mock, MagicMock, DEFAULT
 import warnings
 
 import numpy as np
@@ -27,13 +28,12 @@ import pandas as pd
 
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
-from lsst.pipe.base.testUtils import assertValidOutput
-from utils_tests import makeExposure, makeDiaObjects
 import lsst.utils.tests
 import lsst.utils.timer
-from unittest.mock import patch, Mock, MagicMock, DEFAULT
+from lsst.pipe.base.testUtils import assertValidOutput
 
 from lsst.ap.association import DiaPipelineTask
+from utils_tests import makeExposure, makeDiaObjects
 
 
 def _makeMockDataFrame():
