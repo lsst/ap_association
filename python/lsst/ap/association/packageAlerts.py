@@ -227,7 +227,8 @@ class PackageAlertsTask(pipeBase.Task):
         alerts = []
         self._patchDiaSources(diaSourceCat)
         self._patchDiaSources(diaSrcHistory)
-        ccdVisitId = diffIm.info.id
+        detector = diffIm.detector.getId()
+        visit = diffIm.visitInfo.id
         diffImPhotoCalib = diffIm.getPhotoCalib()
         calexpPhotoCalib = calexp.getPhotoCalib()
         templatePhotoCalib = template.getPhotoCalib()
@@ -284,10 +285,10 @@ class PackageAlertsTask(pipeBase.Task):
                                    templateCutout))
 
         if self.config.doProduceAlerts:
-            self.produceAlerts(alerts, ccdVisitId)
+            self.produceAlerts(alerts, visit, detector)
 
         if self.config.doWriteAlerts:
-            with open(os.path.join(self.config.alertWriteLocation, f"{ccdVisitId}.avro"), "wb") as f:
+            with open(os.path.join(self.config.alertWriteLocation, f"{visit}_{detector}.avro"), "wb") as f:
                 self.alertSchema.store_alerts(f, alerts)
 
     def _patchDiaSources(self, diaSources):
@@ -321,7 +322,7 @@ class PackageAlertsTask(pipeBase.Task):
             extent = geom.Extent2I(bboxSize, bboxSize)
         return extent
 
-    def produceAlerts(self, alerts, ccdVisitId):
+    def produceAlerts(self, alerts, visit, detector):
         """Serialize alerts and send them to the alert stream using
         confluent_kafka's producer.
 
@@ -329,9 +330,9 @@ class PackageAlertsTask(pipeBase.Task):
         ----------
         alerts : `dict`
             Dictionary of alerts to be sent to the alert stream.
-        ccdVisitId : `int`
-            ccdVisitId of the alerts sent to the alert stream. Used to write
-            out alerts which fail to be sent to the alert stream.
+        visit, detector : `int`
+            Visit and detector ids of these alerts. Used to write out alerts
+            which fail to be sent to the alert stream.
         """
         for alert in alerts:
             alertBytes = self._serializeAlert(alert, schema=self.alertSchema.definition, schema_id=1)
@@ -344,7 +345,7 @@ class PackageAlertsTask(pipeBase.Task):
 
                 if self.config.doWriteFailedAlerts:
                     with open(os.path.join(self.config.alertWriteLocation,
-                                           f"{ccdVisitId}_{alert['alertId']}.avro"), "wb") as f:
+                                           f"{visit}_{detector}_{alert['alertId']}.avro"), "wb") as f:
                         f.write(alertBytes)
 
         self.producer.flush()

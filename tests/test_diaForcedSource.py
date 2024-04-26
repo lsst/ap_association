@@ -173,7 +173,7 @@ class TestDiaForcedSource(unittest.TestCase):
         # above list of ids.
         self.expectedDiaForcedSources = 6
 
-        self.expected_n_columns = 13
+        self.expected_n_columns = 14
 
     def testRun(self):
         """Test that forced source catalogs are successfully created and have
@@ -215,7 +215,8 @@ class TestDiaForcedSource(unittest.TestCase):
             self.assertAlmostEqual(diaFS["scienceFlux"] / dirVal, 1.)
             self.assertAlmostEqual(diaFS["scienceFluxErr"] / dirVar, 1.)
 
-            self.assertEqual(diaFS["ccdVisitId"], self.exposureId)
+            self.assertEqual(diaFS["visit"], self.exposure.visitInfo.id)
+            self.assertEqual(diaFS["detector"], self.exposure.detector.getId())
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

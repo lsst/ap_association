@@ -113,7 +113,8 @@ def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False
                      "dec": coord.getDec().asDegrees(),
                      "x": x,
                      "y": y,
-                     "ccdVisitId": exposure.info.id,
+                     "visit": exposure.visitInfo.id,
+                     "detector": exposure.detector.getId(),
                      "time_processed": datetime.datetime.now(),
                      "diaObjectId": objId,
                      "ssObjectId": 0,
@@ -150,7 +151,8 @@ def makeDiaForcedSources(nForcedSources, diaObjectIds, exposure, rng, randomizeO
         DiaForcedSources generated across the exposure.
     """
     midpointMjdTai = exposure.visitInfo.date.get(system=dafBase.DateTime.MJD)
-    ccdVisitId = exposure.info.id
+    visit = exposure.visitInfo.id
+    detector = exposure.detector.getId()
     if randomizeObjects:
         objectIds = diaObjectIds[rng.randint(len(diaObjectIds), size=nForcedSources)]
     else:
@@ -160,7 +162,8 @@ def makeDiaForcedSources(nForcedSources, diaObjectIds, exposure, rng, randomizeO
     for i, objId in enumerate(objectIds):
         # Put together the minimum values for the alert.
         data.append({"diaForcedSourceId": i + 1,
-                     "ccdVisitId": ccdVisitId + i,
+                     "visit": visit + i,
+                     "detector": detector,
                      "diaObjectId": objId,
                      "midpointMjdTai": midpointMjdTai + 1.0 * i,
                      "time_processed": datetime.datetime.now(),

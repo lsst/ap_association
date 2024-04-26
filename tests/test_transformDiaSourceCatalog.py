@@ -81,9 +81,10 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         self.date = dafBase.DateTime(nsecs=1400000000 * 10**9)
         detector = DetectorWrapper(id=23, bbox=self.exposure.getBBox()).detector
         visit = afwImage.VisitInfo(
+            id=self.expId,
             exposureTime=200.,
             date=self.date)
-        self.exposure.info.id = self.expId
+        self.exposure.info.id = self.expId + (10000*detector.getId())
         self.exposure.setDetector(detector)
         self.exposure.info.setVisitInfo(visit)
         self.band = 'g'
@@ -107,12 +108,14 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
                                                       config=self.config)
         result = transformTask.run(self.inputCatalog,
                                    self.exposure,
-                                   self.band,
-                                   ccdVisitId=self.expId)
+                                   self.band)
 
         self.assertEqual(len(result.diaSourceTable), len(self.inputCatalog))
         np.testing.assert_array_equal(result.diaSourceTable["bboxSize"], [self.bboxSize]*self.nSources)
-        np.testing.assert_array_equal(result.diaSourceTable["ccdVisitId"], [self.expId]*self.nSources)
+        np.testing.assert_array_equal(result.diaSourceTable["visit"],
+                                      [self.exposure.visitInfo.id]*self.nSources)
+        np.testing.assert_array_equal(result.diaSourceTable["detector"],
+                                      [self.exposure.detector.getId()]*self.nSources)
         np.testing.assert_array_equal(result.diaSourceTable["band"], [self.band]*self.nSources)
         np.testing.assert_array_equal(result.diaSourceTable["midpointMjdTai"],
                                       [self.date.get(system=dafBase.DateTime.MJD)]*self.nSources)
@@ -131,8 +134,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         result = transformTask.run(self.inputCatalog,
                                    self.exposure,
                                    self.band,
-                                   reliability=self.reliability,
-                                   ccdVisitId=self.expId)
+                                   reliability=self.reliability)
         self.assertEqual(len(result.diaSourceTable), len(self.inputCatalog))
         np.testing.assert_array_equal(result.diaSourceTable["reliability"], self.reliability["score"])
 
@@ -148,7 +150,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
 
         self.config.doRemoveSkySources = True
         task = TransformDiaSourceCatalogTask(initInputs=self.initInputs, config=self.config)
-        result = task.run(self.inputCatalog, self.exposure, self.band, ccdVisitId=self.expId)
+        result = task.run(self.inputCatalog, self.exposure, self.band)
 
         self.assertEqual(len(result.diaSourceTable), self.nSources-1)
         # 0th source was removed, so x positions of the remaining sources are at x=1,2,3...
@@ -187,8 +189,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
                 obj.set("base_PixelFlags_flag_offimage", 1)
         outputCatalog = transform.run(self.inputCatalog,
                                       self.exposure,
-                                      self.band,
-                                      ccdVisitId=self.expId).diaSourceTable
+                                      self.band).diaSourceTable
 
         unpacker = UnpackApdbFlags(self.config.flagMap, "DiaSource")
         flag_values = unpacker.unpack(outputCatalog["flags"], "flags")

@@ -4,9 +4,12 @@ funcs:
     diaSourceId: # the index of deepCoadd_disSource IS the diaSourceId
         functor: Column
         args: id
-    ccdVisitId:
+    visit:
         functor: Column
-        args: ccdVisitId
+        args: visit
+    detector:
+        functor: Column
+        args: detector
     band:
         functor: Column
         args: band
