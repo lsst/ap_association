@@ -28,7 +28,6 @@ import lsst.utils.tests
 from lsst.pex.config import Config
 from lsst.daf.base import PropertySet
 from lsst.dax.apdb import Apdb
-from lsst.pipe.base import Task, Struct
 import lsst.pipe.base.testUtils
 from lsst.verify import Name
 from lsst.verify.tasks import MetricComputationError
@@ -302,45 +301,26 @@ class TestNumberAssociatedSolarSystemObjects(MetadataMetricTestCase):
 
 class TestTotalUnassociatedObjects(ApdbMetricTestCase):
 
-    @staticmethod
-    def _makeApdb(dummy_dbInfo):
-        """Create a dummy apdb.
-
-        We don't have access to the apdb in the task directly so mocking
-        return values is difficult. We thus make use of the dummy dbInfo
-        that is passed to the init task to pass values to the apdb object
-        instantiated.
-        """
-        apdb = unittest.mock.Mock(Apdb)
-        test_value = dummy_dbInfo["test_value"]
-        apdb.countUnassociatedObjects = unittest.mock.MagicMock(
-            return_value=test_value)
-        return apdb
-
     @classmethod
     def makeTask(cls):
-        class SimpleDbLoader(Task):
-            ConfigClass = Config
-
-            def run(self, dummy):
-                if dummy is not None:
-                    return Struct(apdb=cls._makeApdb(dummy))
-                else:
-                    return Struct(apdb=None)
-
         config = TotalUnassociatedDiaObjectsMetricTask.ConfigClass()
-        config.dbLoader.retarget(SimpleDbLoader)
+        config.doReadMarker = False
+        config.apdb_config_url = "dummy/path.yaml"
         return TotalUnassociatedDiaObjectsMetricTask(config=config)
-
-    @classmethod
-    def makeDbInfo(cls):
-        return {"test_value": "whatever"}
 
     def setUp(self):
         super().setUp()
 
+        # Default patch that applies to ApdbMetricTestCase's tests
+        loadPatcher = unittest.mock.patch(
+            "lsst.dax.apdb.Apdb.from_uri",
+            return_value=unittest.mock.Mock(Apdb, **{"countUnassociatedObjects.return_value": 42})
+        )
+        loadPatcher.start()
+        self.addCleanup(loadPatcher.stop)
+
     def testValid(self):
-        result = self.task.run([{"test_value": 42}])
+        result = self.task.run([Config()])
         lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
         meas = result.measurement
 
@@ -348,7 +328,11 @@ class TestTotalUnassociatedObjects(ApdbMetricTestCase):
         self.assertEqual(meas.quantity, 42 * u.count)
 
     def testAllAssociated(self):
-        result = self.task.run([{"test_value": 0}])
+        with unittest.mock.patch(
+            "lsst.dax.apdb.Apdb.from_uri",
+            return_value=unittest.mock.Mock(Apdb, **{"countUnassociatedObjects.return_value": 0})
+        ):
+            result = self.task.run([Config()])
         lsst.pipe.base.testUtils.assertValidOutput(self.task, result)
         meas = result.measurement
 
@@ -357,7 +341,7 @@ class TestTotalUnassociatedObjects(ApdbMetricTestCase):
 
     def testFineGrainedMetric(self):
         with self.assertRaises(ValueError):
-            self.task.run([self.makeDbInfo()], outputDataId={"visit": 42})
+            self.task.run([Config()], outputDataId={"visit": 42})
 
 
 # Hack around unittest's hacky test setup system

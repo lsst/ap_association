@@ -19,7 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import tempfile
 import unittest
+from unittest.mock import patch, Mock, MagicMock, DEFAULT
 import warnings
 
 import numpy as np
@@ -27,13 +29,13 @@ import pandas as pd
 
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
-from lsst.pipe.base.testUtils import assertValidOutput
-from utils_tests import makeExposure, makeDiaObjects
+import lsst.dax.apdb as daxApdb
+import lsst.pex.config as pexConfig
 import lsst.utils.tests
-import lsst.utils.timer
-from unittest.mock import patch, Mock, MagicMock, DEFAULT
+from lsst.pipe.base.testUtils import assertValidOutput
 
 from lsst.ap.association import DiaPipelineTask
+from utils_tests import makeExposure, makeDiaObjects
 
 
 def _makeMockDataFrame():
@@ -55,10 +57,12 @@ class TestDiaPipelineTask(unittest.TestCase):
 
     @classmethod
     def _makeDefaultConfig(cls,
+                           config_file,
                            doPackageAlerts=False,
                            doSolarSystemAssociation=False):
         config = DiaPipelineTask.ConfigClass()
-        config.apdb.db_url = "sqlite://"
+        config.doConfigureApdb = False
+        config.apdb_config_url = config_file
         config.doPackageAlerts = doPackageAlerts
         config.doSolarSystemAssociation = doSolarSystemAssociation
         return config
@@ -70,8 +74,45 @@ class TestDiaPipelineTask(unittest.TestCase):
         srcSchema.addField("base_PixelFlags_flag_offimage", type="Flag")
         self.srcSchema = afwTable.SourceCatalog(srcSchema)
 
-    def tearDown(self):
-        pass
+        apdb_config = daxApdb.ApdbSql.init_database(db_url="sqlite://")
+        self.config_file = tempfile.NamedTemporaryFile()
+        self.addCleanup(self.config_file.close)
+        apdb_config.save(self.config_file.name)
+
+    # TODO: remove on DM-43419
+    def testConfigApdbNestedOk(self):
+        config = DiaPipelineTask.ConfigClass()
+        config.doConfigureApdb = True
+        with self.assertWarns(FutureWarning):
+            config.apdb.db_url = "sqlite://"
+            config.freeze()
+            config.validate()
+
+    # TODO: remove on DM-43419
+    def testConfigApdbNestedInvalid(self):
+        config = DiaPipelineTask.ConfigClass()
+        config.doConfigureApdb = True
+        # Don't set db_url
+        config.freeze()
+        with self.assertRaises(pexConfig.FieldValidationError):
+            config.validate()
+
+    # TODO: remove on DM-43419
+    def testConfigApdbFileOk(self):
+        config = DiaPipelineTask.ConfigClass()
+        config.doConfigureApdb = False
+        config.apdb_config_url = "some/file/path.yaml"
+        config.freeze()
+        config.validate()
+
+    # TODO: remove on DM-43419
+    def testConfigApdbFileInvalid(self):
+        config = DiaPipelineTask.ConfigClass()
+        config.doConfigureApdb = False
+        # Don't set apdb_config_url
+        config.freeze()
+        with self.assertRaises(pexConfig.FieldValidationError):
+            config.validate()
 
     def testRun(self):
         """Test running while creating and packaging alerts.
@@ -97,6 +138,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         """Test the normal workflow of each ap_pipe step.
         """
         config = self._makeDefaultConfig(
+            config_file=self.config_file.name,
             doPackageAlerts=doPackageAlerts,
             doSolarSystemAssociation=doSolarSystemAssociation)
         task = DiaPipelineTask(config=config)
@@ -131,15 +173,13 @@ class TestDiaPipelineTask(unittest.TestCase):
 
         # Mock out the run() methods of these two Tasks to ensure they
         # return data in the correct form.
-        @lsst.utils.timer.timeMethod
-        def solarSystemAssociator_run(self, unAssocDiaSources, solarSystemObjectTable, diffIm):
+        def solarSystemAssociator_run(unAssocDiaSources, solarSystemObjectTable, diffIm):
             return lsst.pipe.base.Struct(nTotalSsObjects=42,
                                          nAssociatedSsObjects=30,
                                          ssoAssocDiaSources=_makeMockDataFrame(),
                                          unAssocDiaSources=_makeMockDataFrame())
 
-        @lsst.utils.timer.timeMethod
-        def associator_run(self, table, diaObjects, exposure_time=None):
+        def associator_run(table, diaObjects, exposure_time=None):
             return lsst.pipe.base.Struct(nUpdatedDiaObjects=2, nUnassociatedDiaObjects=3,
                                          matchedDiaSources=_makeMockDataFrame(),
                                          unAssocDiaSources=_makeMockDataFrame(),
@@ -147,36 +187,35 @@ class TestDiaPipelineTask(unittest.TestCase):
 
         # apdb isn't a subtask, but still needs to be mocked out for correct
         # execution in the test environment.
-        with patch.multiple(
-            task, **{task: DEFAULT for task in subtasksToMock + ["apdb"]}
-        ):
-            with patch('lsst.ap.association.diaPipe.pd.concat', new=concatMock), \
-                patch('lsst.ap.association.association.AssociationTask.run', new=associator_run), \
-                patch('lsst.ap.association.ssoAssociation.SolarSystemAssociationTask.run',
-                      new=solarSystemAssociator_run):
+        with patch.multiple(task, **{task: DEFAULT for task in subtasksToMock + ["apdb"]}), \
+            patch('lsst.ap.association.diaPipe.pd.concat', side_effect=concatMock), \
+            patch('lsst.ap.association.association.AssociationTask.run',
+                  side_effect=associator_run) as mainRun, \
+            patch('lsst.ap.association.ssoAssociation.SolarSystemAssociationTask.run',
+                  side_effect=solarSystemAssociator_run) as ssRun:
 
-                result = task.run(diaSrc,
-                                  ssObjects,
-                                  diffIm,
-                                  exposure,
-                                  template,
-                                  ccdExposureIdBits,
-                                  "g")
-                for subtaskName in subtasksToMock:
-                    getattr(task, subtaskName).run.assert_called_once()
-                assertValidOutput(task, result)
-                self.assertEqual(result.apdbMarker.db_url, "sqlite://")
-                meta = task.getFullMetadata()
-                # Check that the expected metadata has been set.
-                self.assertEqual(meta["diaPipe.numUpdatedDiaObjects"], 2)
-                self.assertEqual(meta["diaPipe.numUnassociatedDiaObjects"], 3)
-                # and that associators ran once or not at all.
-                self.assertEqual(len(meta.getArray("diaPipe:associator.associator_runEndUtc")), 1)
-                if doSolarSystemAssociation:
-                    self.assertEqual(len(meta.getArray("diaPipe:solarSystemAssociator."
-                                                       "solarSystemAssociator_runEndUtc")), 1)
-                else:
-                    self.assertNotIn("diaPipe:solarSystemAssociator", meta)
+            result = task.run(diaSrc,
+                              ssObjects,
+                              diffIm,
+                              exposure,
+                              template,
+                              ccdExposureIdBits,
+                              "g")
+            for subtaskName in subtasksToMock:
+                getattr(task, subtaskName).run.assert_called_once()
+            assertValidOutput(task, result)
+            # Exact type and contents of apdbMarker are undefined.
+            self.assertIsInstance(result.apdbMarker, pexConfig.Config)
+            meta = task.getFullMetadata()
+            # Check that the expected metadata has been set.
+            self.assertEqual(meta["diaPipe.numUpdatedDiaObjects"], 2)
+            self.assertEqual(meta["diaPipe.numUnassociatedDiaObjects"], 3)
+            # and that associators ran once or not at all.
+            mainRun.assert_called_once()
+            if doSolarSystemAssociation:
+                ssRun.assert_called_once()
+            else:
+                ssRun.assert_not_called()
 
     def test_createDiaObjects(self):
         """Test that creating new DiaObjects works as expected.
@@ -188,7 +227,7 @@ class TestDiaPipelineTask(unittest.TestCase):
              "ssObjectId": 0}
             for idx in range(nSources)])
 
-        config = self._makeDefaultConfig(doPackageAlerts=False)
+        config = self._makeDefaultConfig(config_file=self.config_file.name, doPackageAlerts=False)
         task = DiaPipelineTask(config=config)
         result = task.createNewDiaObjects(diaSources)
         self.assertEqual(nSources, len(result.newDiaObjects))
@@ -203,7 +242,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         """Remove diaOjects that are outside an image's bounding box.
         """
 
-        config = self._makeDefaultConfig(doPackageAlerts=False)
+        config = self._makeDefaultConfig(config_file=self.config_file.name, doPackageAlerts=False)
         task = DiaPipelineTask(config=config)
         exposure = makeExposure(False, False)
         nObj0 = 20
