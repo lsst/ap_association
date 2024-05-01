@@ -126,7 +126,6 @@ def mock_alert(alert_id):
             "snr": np.float32(6.7),
             "psfFlux": np.float32(700.0),
             "psfFluxErr": np.float32(90.0),
-            "flags": 12345,
         }
     }
 
@@ -197,10 +196,6 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             diaSourceHistory,
             diaForcedSources,
             self.exposure.visitInfo.date.toAstropy())
-        self.diaObjects.replace(to_replace=[None], value=np.nan, inplace=True)
-        diaSourceHistory.replace(to_replace=[None], value=np.nan, inplace=True)
-        self.diaForcedSources.replace(to_replace=[None], value=np.nan,
-                                      inplace=True)
         diaSourceHistory["programId"] = 0
 
         self.diaSources = diaSourceHistory.loc[[(1, "g", 9), (2, "g", 10)], :]
