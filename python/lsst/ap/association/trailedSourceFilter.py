@@ -85,17 +85,21 @@ class TrailedSourceFilterTask(pipeBase.Task):
             (`pandas.DataFrame`)
         """
 
-        flag_map = os.path.join(utils.getPackageDir("ap_association"), "data/association-flag-map.yaml")
-        unpacker = UnpackApdbFlags(flag_map, "DiaSource")
-        flags = unpacker.unpack(dia_sources["flags"], "flags")
+        if "flags" in dia_sources.columns:
+            flag_map = os.path.join(utils.getPackageDir("ap_association"), "data/association-flag-map.yaml")
+            unpacker = UnpackApdbFlags(flag_map, "DiaSource")
+            flags = unpacker.unpack(dia_sources["flags"], "flags")
+            trail_edge_flags = flags["ext_trailedSources_Naive_flag_edge"]
+        else:
+            trail_edge_flags = dia_sources["trail_flag_edge"]
 
-        trail_mask = self._check_dia_source_trail(dia_sources, exposure_time, flags)
+        trail_mask = self._check_dia_source_trail(dia_sources, exposure_time, trail_edge_flags)
 
         return pipeBase.Struct(
             diaSources=dia_sources[~trail_mask].reset_index(drop=True),
             longTrailedDiaSources=dia_sources[trail_mask].reset_index(drop=True))
 
-    def _check_dia_source_trail(self, dia_sources, exposure_time, flags):
+    def _check_dia_source_trail(self, dia_sources, exposure_time, trail_edge_flags):
         """Find DiaSources that have long trails.
 
         Return a mask of sources with lengths greater than
@@ -108,18 +112,18 @@ class TrailedSourceFilterTask(pipeBase.Task):
             Input DIASources to check for trail lengths.
         exposure_time : `float`
             Exposure time from difference image.
-        flags : 'numpy.ndArray'
-            Boolean array of flags from the DIASources.
+        trail_edge_flags : 'numpy.ndArray'
+            Boolean array of trail_flag_edge flags from the DIASources.
 
         Returns
         -------
         trail_mask : `pandas.DataFrame`
             Boolean mask for DIASources which are greater than the
-            cutoff length and have the edge flag set.
+            cutoff length or have the edge flag set.
         """
         trail_mask = (dia_sources.loc[:, "trailLength"].values[:]
                       >= (self.config.max_trail_length*exposure_time))
 
-        trail_mask[np.where(flags['ext_trailedSources_Naive_flag_edge'])] = True
+        trail_mask[np.where(trail_edge_flags)] = True
 
         return trail_mask

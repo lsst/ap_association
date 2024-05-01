@@ -177,9 +177,11 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
             self.assertEqual(size, self.bboxSize)
         self.assertEqual(len(boxSizes), self.nSources)
 
+    # TODO: remove in DM-41532
     def test_bit_unpacker(self):
         """Test that the integer bit packer is functioning correctly.
         """
+        self.config.doPackFlags = True
         transform = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
                                                   config=self.config)
         for idx, obj in enumerate(self.inputCatalog):
