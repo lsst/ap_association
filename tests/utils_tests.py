@@ -33,7 +33,7 @@ import lsst.daf.base as dafBase
 import lsst.geom
 
 
-def makeDiaObjects(nObjects, exposure):
+def makeDiaObjects(nObjects, exposure, rng):
     """Make a test set of DiaObjects.
 
     Parameters
@@ -49,8 +49,8 @@ def makeDiaObjects(nObjects, exposure):
         DiaObjects generated across the exposure.
     """
     bbox = lsst.geom.Box2D(exposure.getBBox())
-    rand_x = np.random.uniform(bbox.getMinX(), bbox.getMaxX(), size=nObjects)
-    rand_y = np.random.uniform(bbox.getMinY(), bbox.getMaxY(), size=nObjects)
+    rand_x = rng.uniform(bbox.getMinX(), bbox.getMaxX(), size=nObjects)
+    rand_y = rng.uniform(bbox.getMinY(), bbox.getMaxY(), size=nObjects)
 
     midpointMjdTai = exposure.visitInfo.date.get(system=dafBase.DateTime.MJD)
 
@@ -74,7 +74,7 @@ def makeDiaObjects(nObjects, exposure):
     return pd.DataFrame(data=data)
 
 
-def makeDiaSources(nSources, diaObjectIds, exposure, randomizeObjects=False):
+def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False):
     """Make a test set of DiaSources.
 
     Parameters
@@ -96,10 +96,10 @@ def makeDiaSources(nSources, diaObjectIds, exposure, randomizeObjects=False):
         DiaSources generated across the exposure.
     """
     bbox = lsst.geom.Box2D(exposure.getBBox())
-    rand_x = np.random.uniform(bbox.getMinX(), bbox.getMaxX(), size=nSources)
-    rand_y = np.random.uniform(bbox.getMinY(), bbox.getMaxY(), size=nSources)
+    rand_x = rng.uniform(bbox.getMinX(), bbox.getMaxX(), size=nSources)
+    rand_y = rng.uniform(bbox.getMinY(), bbox.getMaxY(), size=nSources)
     if randomizeObjects:
-        objectIds = diaObjectIds[np.random.randint(len(diaObjectIds), size=nSources)]
+        objectIds = diaObjectIds[rng.randint(len(diaObjectIds), size=nSources)]
     else:
         objectIds = diaObjectIds[[i % len(diaObjectIds) for i in range(nSources)]]
 
@@ -129,7 +129,7 @@ def makeDiaSources(nSources, diaObjectIds, exposure, randomizeObjects=False):
     return pd.DataFrame(data=data)
 
 
-def makeDiaForcedSources(nForcedSources, diaObjectIds, exposure, randomizeObjects=False):
+def makeDiaForcedSources(nForcedSources, diaObjectIds, exposure, rng, randomizeObjects=False):
     """Make a test set of DiaSources.
 
     Parameters
@@ -152,7 +152,7 @@ def makeDiaForcedSources(nForcedSources, diaObjectIds, exposure, randomizeObject
     midpointMjdTai = exposure.visitInfo.date.get(system=dafBase.DateTime.MJD)
     ccdVisitId = exposure.info.id
     if randomizeObjects:
-        objectIds = diaObjectIds[np.random.randint(len(diaObjectIds), size=nForcedSources)]
+        objectIds = diaObjectIds[rng.randint(len(diaObjectIds), size=nForcedSources)]
     else:
         objectIds = diaObjectIds[[i % len(diaObjectIds) for i in range(nForcedSources)]]
 

@@ -41,6 +41,9 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 class TestTransformDiaSourceCatalogTask(unittest.TestCase):
     def setUp(self):
+        # Create an instance of random generator with fixed seed.
+        rng = np.random.default_rng(1234)
+
         # The first source will be a sky source.
         self.nSources = 10
         # Default PSF size (psfDim in makeEmptyExposure) in TestDataset results
@@ -72,7 +75,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         self.reliability = lsst.afw.table.BaseCatalog(reliabilitySchema)
         self.reliability.resize(len(self.inputCatalog))
         self.reliability["id"] = self.inputCatalog["id"]
-        self.reliability["score"] = np.random.random(len(self.inputCatalog))
+        self.reliability["score"] = rng.random(len(self.inputCatalog))
 
         self.expId = 4321
         self.date = dafBase.DateTime(nsecs=1400000000 * 10**9)

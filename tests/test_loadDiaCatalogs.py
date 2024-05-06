@@ -54,7 +54,8 @@ def _data_file_name(basename, module_name):
 class TestLoadDiaCatalogs(unittest.TestCase):
 
     def setUp(self):
-        np.random.seed(1234)
+        # Create an instance of random generator with fixed seed.
+        rng = np.random.default_rng(1234)
 
         self.db_file_fd, self.db_file = tempfile.mkstemp(
             dir=os.path.dirname(__file__))
@@ -66,15 +67,11 @@ class TestLoadDiaCatalogs(unittest.TestCase):
 
         self.exposure = makeExposure(False, False)
 
-        self.diaObjects = makeDiaObjects(20, self.exposure)
+        self.diaObjects = makeDiaObjects(20, self.exposure, rng)
         self.diaSources = makeDiaSources(
-            100,
-            self.diaObjects["diaObjectId"].to_numpy(),
-            self.exposure)
+            100, self.diaObjects["diaObjectId"].to_numpy(), self.exposure, rng)
         self.diaForcedSources = makeDiaForcedSources(
-            200,
-            self.diaObjects["diaObjectId"].to_numpy(),
-            self.exposure)
+            200, self.diaObjects["diaObjectId"].to_numpy(), self.exposure, rng)
 
         self.dateTime = self.exposure.visitInfo.date
         self.apdb.store(self.dateTime.toAstropy(),

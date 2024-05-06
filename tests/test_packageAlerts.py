@@ -147,15 +147,16 @@ def _deserialize_alert(alert_bytes):
 
 
 class TestPackageAlerts(lsst.utils.tests.TestCase):
-
     def setUp(self):
+        # Create an instance of random generator with fixed seed.
+        rng = np.random.default_rng(1234)
+
         patcher = patch.dict(os.environ, {"AP_KAFKA_PRODUCER_PASSWORD": "fake_password",
                                           "AP_KAFKA_PRODUCER_USERNAME": "fake_username",
                                           "AP_KAFKA_SERVER": "fake_server",
                                           "AP_KAFKA_TOPIC": "fake_topic"})
         self.environ = patcher.start()
         self.addCleanup(patcher.stop)
-        np.random.seed(1234)
         self.cutoutSize = 35
         self.center = lsst.geom.Point2D(50.1, 49.8)
         self.bbox = lsst.geom.Box2I(lsst.geom.Point2I(-20, -30),
@@ -165,7 +166,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         exposure, catalog = self.dataset.realize(
             10.0,
             self.dataset.makeMinimalSchema(),
-            randomSeed=0)
+            randomSeed=1234)
         self.exposure = exposure
         detector = DetectorWrapper(id=23, bbox=exposure.getBBox()).detector
         self.exposure.setDetector(detector)
@@ -180,15 +181,11 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         self.exposure.setFilter(
             afwImage.FilterLabel(band='g', physical="g.MP9401"))
 
-        diaObjects = utils_tests.makeDiaObjects(2, self.exposure)
-        diaSourceHistory = utils_tests.makeDiaSources(10,
-                                                      diaObjects[
-                                                          "diaObjectId"],
-                                                      self.exposure)
-        diaForcedSources = utils_tests.makeDiaForcedSources(10,
-                                                            diaObjects[
-                                                                "diaObjectId"],
-                                                            self.exposure)
+        diaObjects = utils_tests.makeDiaObjects(2, self.exposure, rng)
+        diaSourceHistory = utils_tests.makeDiaSources(
+            10, diaObjects["diaObjectId"], self.exposure, rng)
+        diaForcedSources = utils_tests.makeDiaForcedSources(
+            10, diaObjects["diaObjectId"], self.exposure, rng)
         self.diaObjects, diaSourceHistory, self.diaForcedSources = _roundTripThroughApdb(
             diaObjects,
             diaSourceHistory,
