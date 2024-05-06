@@ -100,6 +100,10 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
     return (diaObjects, diaSources, diaForcedSources)
 
 
+VISIT = 2
+DETECTOR = 42
+
+
 def mock_alert(alert_id):
     """Generate a minimal mock alert.
     """
@@ -107,8 +111,9 @@ def mock_alert(alert_id):
         "alertId": alert_id,
         "diaSource": {
             "midpointMjdTai": 5,
-            "diaSourceId": 4,
-            "ccdVisitId": 2,
+            "diaSourceId": 1234,
+            "visit": VISIT,
+            "detector": DETECTOR,
             "band": 'g',
             "ra": 12.5,
             "dec": -16.9,
@@ -168,10 +173,11 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             self.dataset.makeMinimalSchema(),
             randomSeed=1234)
         self.exposure = exposure
-        detector = DetectorWrapper(id=23, bbox=exposure.getBBox()).detector
+        detector = DetectorWrapper(id=DETECTOR, bbox=exposure.getBBox()).detector
         self.exposure.setDetector(detector)
 
         visit = afwImage.VisitInfo(
+            id=VISIT,
             exposureTime=200.,
             date=dafBase.DateTime("2014-05-13T17:00:00.000000000",
                                   dafBase.DateTime.Timescale.TAI))
@@ -401,13 +407,12 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         packConfig = PackageAlertsConfig(doProduceAlerts=True)
         packageAlerts = PackageAlertsTask(config=packConfig)
         alerts = [mock_alert(1), mock_alert(2)]
-        ccdVisitId = 123
 
         # Create a variable and assign it an instance of the patched kafka producer
         producer_instance = mock_producer.return_value
         producer_instance.produce = Mock()
         producer_instance.flush = Mock()
-        packageAlerts.produceAlerts(alerts, ccdVisitId)
+        packageAlerts.produceAlerts(alerts, VISIT, DETECTOR)
 
         self.assertEqual(mock_server_check.call_count, 1)
         self.assertEqual(producer_instance.produce.call_count, len(alerts))
@@ -436,18 +441,16 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         patcher = patch("builtins.open")
         patch_open = patcher.start()
         alerts = [mock_alert(1), mock_alert(2), mock_alert(3)]
-        ccdVisitId = 123
 
         producer_instance = mock_producer.return_value
         producer_instance.produce = Mock(side_effect=mock_produce)
         producer_instance.flush = Mock()
-
-        packageAlerts.produceAlerts(alerts, ccdVisitId)
+        packageAlerts.produceAlerts(alerts, VISIT, DETECTOR)
 
         self.assertEqual(mock_server_check.call_count, 1)
         self.assertEqual(producer_instance.produce.call_count, len(alerts))
         self.assertEqual(patch_open.call_count, 1)
-        self.assertIn("123_2.avro", patch_open.call_args.args[0])
+        self.assertIn(f"{VISIT}_{DETECTOR}_2.avro", patch_open.call_args.args[0])
         # Because one produce raises, we call flush one fewer times than in the success
         # test above.
         self.assertEqual(producer_instance.flush.call_count, len(alerts))
@@ -473,8 +476,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
 
             self.assertEqual(mock_server_check.call_count, 0)
 
-            ccdVisitId = self.exposure.info.id
-            with open(os.path.join(tempdir, f"{ccdVisitId}.avro"), 'rb') as f:
+            with open(os.path.join(tempdir, f"{VISIT}_{DETECTOR}.avro"), 'rb') as f:
                 writer_schema, data_stream = \
                     packageAlerts.alertSchema.retrieve_alerts(f)
                 data = list(data_stream)

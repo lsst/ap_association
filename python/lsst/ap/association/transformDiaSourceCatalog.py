@@ -33,7 +33,6 @@ from lsst.daf.base import DateTime
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
-from lsst.meas.base import DetectorVisitIdGeneratorConfig
 from lsst.pipe.tasks.postprocess import TransformCatalogBaseTask, TransformCatalogBaseConfig
 from lsst.pipe.tasks.functors import Column
 from lsst.utils.timer import timeMethod
@@ -112,8 +111,6 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
         doc="Include the reliability (e.g. real/bogus) classifications in the output."
     )
 
-    idGenerator = DetectorVisitIdGeneratorConfig.make_field()
-
     def setDefaults(self):
         super().setDefaults()
         self.functorFile = os.path.join("${AP_ASSOCIATION_DIR}",
@@ -175,8 +172,6 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
-        idGenerator = self.config.idGenerator.apply(butlerQC.quantum.dataId)
-        inputs["ccdVisitId"] = idGenerator.catalog_id
         inputs["band"] = butlerQC.quantum.dataId["band"]
 
         outputs = self.run(**inputs)
@@ -188,7 +183,6 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             diaSourceCat,
             diffIm,
             band,
-            ccdVisitId,
             reliability=None):
         """Convert input catalog to ParquetTable/Pandas and run functors.
 
@@ -203,8 +197,6 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             Result of subtracting template and science images.
         band : `str`
             Filter band of the science image.
-        ccdVisitId : `int`
-            Identifier for this detector+visit.
         reliability : `lsst.afw.table.SourceCatalog`
             Reliability (e.g. real/bogus) scores, row-matched to
             ``diaSourceCat``.
@@ -219,8 +211,8 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
               (`lsst.pipe.tasks.ParquetTable` or `pandas.DataFrame`)
         """
         self.log.info(
-            "Transforming/standardizing the DiaSource table ccdVisitId: %i",
-            ccdVisitId)
+            "Transforming/standardizing the DiaSource table for visit,detector: %i, %i",
+            diffIm.visitInfo.id, diffIm.detector.getId())
 
         diaSourceDf = diaSourceCat.asAstropy().to_pandas()
         if self.config.doRemoveSkySources:
@@ -230,7 +222,9 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         diaSourceDf["time_processed"] = DateTime.now().toPython()
         diaSourceDf["snr"] = getSignificance(diaSourceCat)
         diaSourceDf["bboxSize"] = self.computeBBoxSizes(diaSourceCat)
-        diaSourceDf["ccdVisitId"] = ccdVisitId
+        diaSourceDf["visit"] = diffIm.visitInfo.id
+        # int16 instead of uint8 because databases don't like unsigned bytes.
+        diaSourceDf["detector"] = np.int16(diffIm.detector.getId())
         diaSourceDf["band"] = band
         diaSourceDf["midpointMjdTai"] = diffIm.visitInfo.date.get(system=DateTime.MJD)
         diaSourceDf["diaObjectId"] = 0
