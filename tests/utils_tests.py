@@ -65,7 +65,6 @@ def makeDiaObjects(nObjects, exposure, rng):
                      "nearbyObj1": 0,
                      "nearbyObj2": 0,
                      "nearbyObj3": 0,
-                     "flags": 1,
                      "nDiaSources": 5}
         for f in ["u", "g", "r", "i", "z", "y"]:
             newObject["%s_psfFluxNdata" % f] = 0
@@ -124,8 +123,7 @@ def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False
                      "band": exposure.getFilter().bandLabel,
                      "psfNdata": 0,
                      "trailNdata": 0,
-                     "dipoleNdata": 0,
-                     "flags": 1})
+                     "dipoleNdata": 0})
 
     return pd.DataFrame(data=data)
 
@@ -167,8 +165,7 @@ def makeDiaForcedSources(nForcedSources, diaObjectIds, exposure, rng, randomizeO
                      "diaObjectId": objId,
                      "midpointMjdTai": midpointMjdTai + 1.0 * i,
                      "time_processed": datetime.datetime.now(),
-                     "band": exposure.getFilter().bandLabel,
-                     "flags": 0})
+                     "band": exposure.getFilter().bandLabel})
 
     return pd.DataFrame(data=data)
 

@@ -81,7 +81,7 @@ class TestLoadDiaCatalogs(unittest.TestCase):
 
         # These columns are not in the DPDD, yet do appear in DiaSource.yaml.
         # We don't need to check them against the default APDB schema.
-        self.ignoreColumns = ["band", "bboxSize", "isDipole"]
+        self.ignoreColumns = ["band", "bboxSize", "isDipole", "flags"]
 
     def testRun(self):
         """Test the full run method for the loader.

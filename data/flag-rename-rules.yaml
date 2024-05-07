@@ -5,3 +5,4 @@ flag_rename_rules:
     - ['slot_Centroid', 'centroid']
     - ['slot_PsfFlux', 'psfFlux']
     - ['slot_Shape', 'shape']
+    - ['ext_trailedSources_Naive', 'trail']

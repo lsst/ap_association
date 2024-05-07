@@ -321,7 +321,6 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         self.apdb.dia_object_columns = []
         self.diaCalculation.plugins = ["ap_meanPosition",
                                        "ap_nDiaSources",
-                                       "ap_diaObjectFlag",
                                        "ap_meanFlux",
                                        "ap_percentileFlux",
                                        "ap_sigmaFlux",
@@ -564,7 +563,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             # alertPackager needs correct columns
             diaForcedSources = pd.DataFrame(columns=[
                 "diaForcedSourceId", "diaObjectID", "ccdVisitID", "psfFlux", "psfFluxErr",
-                "x", "y", "flags", "midpointMjdTai", "band",
+                "x", "y", "midpointMjdTai", "band",
             ])
 
         # Store DiaSources, updated DiaObjects, and DiaForcedSources in the
@@ -695,8 +694,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                           "pmParallaxNdata": 0,
                           "nearbyObj1": 0,
                           "nearbyObj2": 0,
-                          "nearbyObj3": 0,
-                          "flags": 0}
+                          "nearbyObj3": 0}
         for f in ["u", "g", "r", "i", "z", "y"]:
             new_dia_object["%s_psfFluxNdata" % f] = 0
         return pd.Series(data=new_dia_object)
