@@ -35,23 +35,22 @@ __all__ = ("DiaPipelineConfig",
 
 import warnings
 
-import numpy as np
-import pandas as pd
-
-from lsst.daf.base import DateTime
 import lsst.dax.apdb as daxApdb
-from lsst.meas.base import DetectorVisitIdGeneratorConfig, DiaObjectCalculationTask
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
-from lsst.utils.timer import timeMethod
-
+import numpy as np
+import pandas as pd
 from lsst.ap.association import (
     AssociationTask,
     DiaForcedSourceTask,
     LoadDiaCatalogsTask,
     PackageAlertsTask)
 from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
+from lsst.daf.base import DateTime
+from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
+    DiaObjectCalculationTask
+from lsst.utils.timer import timeMethod
 
 
 class DiaPipelineConnections(
@@ -119,12 +118,6 @@ class DiaPipelineConnections(
         storageClass="DataFrame",
         dimensions=("instrument", "visit", "detector"),
     )
-    longTrailedSources = pipeBase.connectionTypes.Output(
-        doc="Optional output temporarily storing long trailed diaSources.",
-        dimensions=("instrument", "visit", "detector"),
-        storageClass="DataFrame",
-        name="{fakesType}{coaddName}Diff_longTrailedSrc",
-    )
 
     def __init__(self, *, config=None):
         super().__init__(config=config)
@@ -137,8 +130,6 @@ class DiaPipelineConnections(
             self.outputs.remove("diaForcedSources")
         if not config.doSolarSystemAssociation:
             self.inputs.remove("solarSystemObjectTable")
-        if not config.associator.doTrailedSourceFilter:
-            self.outputs.remove("longTrailedSources")
 
     def adjustQuantum(self, inputs, outputs, label, dataId):
         """Override to make adjustments to `lsst.daf.butler.DatasetRef` objects
@@ -438,10 +429,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                               buffer=self.config.imagePixelMargin)
         else:
             diaObjects = loaderResult.diaObjects
-
         # Associate new DiaSources with existing DiaObjects.
-        assocResults = self.associator.run(diaSourceTable, diaObjects,
-                                           exposure_time=diffIm.visitInfo.exposureTime)
+        assocResults = self.associator.run(diaSourceTable, diaObjects)
 
         if self.config.doSolarSystemAssociation:
             ssoAssocResult = self.solarSystemAssociator.run(
@@ -627,7 +616,6 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                associatedDiaSources=associatedDiaSources,
                                diaForcedSources=diaForcedSources,
                                diaObjects=diaObjects,
-                               longTrailedSources=assocResults.longTrailedSources
                                )
 
     def createNewDiaObjects(self, unAssocDiaSources):

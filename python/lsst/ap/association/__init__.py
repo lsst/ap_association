@@ -25,6 +25,5 @@ from .filterDiaSourceCatalog import *
 from .loadDiaCatalogs import *
 from .packageAlerts import *
 from .diaPipe import *
-from .trailedSourceFilter import *
 from .transformDiaSourceCatalog import *
 from .version import *
