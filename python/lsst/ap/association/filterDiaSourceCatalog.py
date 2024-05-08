@@ -61,10 +61,28 @@ class FilterDiaSourceCatalogConnections(
         dimensions={"instrument", "visit", "detector"},
     )
 
+    diffImVisitInfo = connTypes.Input(
+        doc="VisitInfo of diffIm.",
+        name="{fakesType}{coaddName}Diff_differenceExp.visitInfo",
+        storageClass="VisitInfo",
+        dimensions=("instrument", "visit", "detector"),
+    )
+
+    longTrailedSources = connTypes.Output(
+        doc="Optional output temporarily storing long trailed diaSources.",
+        dimensions=("instrument", "visit", "detector"),
+        storageClass="ArrowAstropy",
+        name="{fakesType}{coaddName}Diff_longTrailedSrc",
+    )
+
     def __init__(self, *, config=None):
         super().__init__(config=config)
-        if not self.config.doWriteRejectedSources:
+        if not self.config.doWriteRejectedSkySources:
             self.outputs.remove("rejectedDiaSources")
+        if not self.config.doTrailedSourceFilter:
+            self.outputs.remove("longTrailedSources")
+        if not self.config.doWriteTrailedSources:
+            self.outputs.remove("longTrailedSources")
 
 
 class FilterDiaSourceCatalogConfig(
@@ -79,11 +97,35 @@ class FilterDiaSourceCatalogConfig(
         "removed before storing the output DiaSource catalog.",
     )
 
-    doWriteRejectedSources = pexConfig.Field(
+    doWriteRejectedSkySources = pexConfig.Field(
         dtype=bool,
         default=True,
         doc="Store the output DiaSource catalog containing all the rejected "
         "sky sources."
+    )
+
+    doTrailedSourceFilter = pexConfig.Field(
+        doc="Run trailedSourceFilter to remove long trailed sources from the"
+            "diaSource output catalog.",
+        dtype=bool,
+        default=True,
+    )
+
+    doWriteTrailedSources = pexConfig.Field(
+        doc="Write trailed diaSources sources to a table.",
+        dtype=bool,
+        default=True,
+        deprecated="Trailed sources will not be written out during production."
+    )
+
+    max_trail_length = pexConfig.Field(
+        dtype=float,
+        doc="Length of long trailed sources to remove from the input catalog, "
+            "in arcseconds per second. Default comes from DMTN-199, which "
+            "requires removal of sources with trails longer than 10 "
+            "degrees/day, which is 36000/3600/24 arcsec/second, or roughly"
+            "0.416 arcseconds per second.",
+        default=36000/3600.0/24.0,
     )
 
 
@@ -94,13 +136,15 @@ class FilterDiaSourceCatalogTask(pipeBase.PipelineTask):
     _DefaultName = "filterDiaSourceCatalog"
 
     @timeMethod
-    def run(self, diaSourceCat):
+    def run(self, diaSourceCat, diffImVisitInfo):
         """Filter sky sources from the supplied DiaSource catalog.
 
         Parameters
         ----------
         diaSourceCat : `lsst.afw.table.SourceCatalog`
             Catalog of sources measured on the difference image.
+        diffImVisitInfo:  `lsst.afw.image.VisitInfo`
+            VisitInfo for the difference image corresponding to diaSourceCat.
 
         Returns
         -------
@@ -109,9 +153,13 @@ class FilterDiaSourceCatalogTask(pipeBase.PipelineTask):
             ``filteredDiaSourceCat`` : `lsst.afw.table.SourceCatalog`
                 The catalog of filtered sources.
             ``rejectedDiaSources`` : `lsst.afw.table.SourceCatalog`
-                The catalog of rejected sources.
+                The catalog of rejected sky sources.
+            ``longTrailedDiaSources`` : `astropy.table.Table`
+                DiaSources which have trail lengths greater than
+                max_trail_length*exposure_time.
         """
         rejectedSkySources = None
+        exposure_time = diffImVisitInfo.exposureTime
         if self.config.doRemoveSkySources:
             sky_source_column = diaSourceCat["sky_source"]
             num_sky_sources = np.sum(sky_source_column)
@@ -120,6 +168,64 @@ class FilterDiaSourceCatalogTask(pipeBase.PipelineTask):
             self.log.info(f"Filtered {num_sky_sources} sky sources.")
         if not rejectedSkySources:
             rejectedSkySources = SourceCatalog(diaSourceCat.getSchema())
-        filterResults = pipeBase.Struct(filteredDiaSourceCat=diaSourceCat,
-                                        rejectedDiaSources=rejectedSkySources)
+
+        if self.config.doTrailedSourceFilter:
+            trail_mask = self._check_dia_source_trail(diaSourceCat, exposure_time)
+            longTrailedDiaSources = diaSourceCat[trail_mask].copy(deep=True)
+            diaSourceCat = diaSourceCat[~trail_mask]
+
+            self.log.info("%i DiaSources exceed max_trail_length %f arcseconds per second, "
+                          "dropping from source catalog."
+                          % (self.config.max_trail_length, len(diaSourceCat)))
+            self.metadata.add("num_filtered", len(longTrailedDiaSources))
+
+            if self.config.doWriteTrailedSources:
+                filterResults = pipeBase.Struct(filteredDiaSourceCat=diaSourceCat,
+                                                rejectedDiaSources=rejectedSkySources,
+                                                longTrailedSources=longTrailedDiaSources.asAstropy())
+            else:
+                filterResults = pipeBase.Struct(filteredDiaSourceCat=diaSourceCat,
+                                                rejectedDiaSources=rejectedSkySources)
+
+        else:
+            filterResults = pipeBase.Struct(filteredDiaSourceCat=diaSourceCat,
+                                            rejectedDiaSources=rejectedSkySources)
+
         return filterResults
+
+    def _check_dia_source_trail(self, dia_sources, exposure_time):
+        """Find DiaSources that have long trails or trails with indeterminant
+        end points.
+
+        Return a mask of sources with lengths greater than
+        (``config.max_trail_length`` multiplied by the exposure time)
+        arcseconds.
+        Additionally, set mask if
+        ``ext_trailedSources_Naive_flag_off_image`` is set or if
+        ``ext_trailedSources_Naive_flag_suspect_long_trail`` and
+        ``ext_trailedSources_Naive_flag_edge`` are both set.
+
+        Parameters
+        ----------
+        dia_sources : `pandas.DataFrame`
+            Input diaSources to check for trail lengths.
+        exposure_time : `float`
+            Exposure time from difference image.
+
+        Returns
+        -------
+        trail_mask : `pandas.DataFrame`
+            Boolean mask for diaSources which are greater than the
+            Boolean mask for diaSources which are greater than the
+            cutoff length or have trails which extend beyond the edge of the
+            detector (off_image set). Also checks if both
+            suspect_long_trail and edge are set and masks those sources out.
+        """
+        print(dia_sources.getSchema())
+        trail_mask = (dia_sources["ext_trailedSources_Naive_length"]
+                      >= (self.config.max_trail_length*exposure_time))
+        trail_mask |= dia_sources['ext_trailedSources_Naive_flag_off_image']
+        trail_mask |= (dia_sources['ext_trailedSources_Naive_flag_suspect_long_trail']
+                       & dia_sources['ext_trailedSources_Naive_flag_edge'])
+
+        return trail_mask

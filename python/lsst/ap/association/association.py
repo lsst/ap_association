@@ -32,7 +32,6 @@ import lsst.geom as geom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 from lsst.utils.timer import timeMethod
-from .trailedSourceFilter import TrailedSourceFilterTask
 
 # Enforce an error for unsafe column/array value setting in pandas.
 pd.options.mode.chained_assignment = 'raise'
@@ -49,19 +48,6 @@ class AssociationConfig(pexConfig.Config):
         default=1.0,
     )
 
-    trailedSourceFilter = pexConfig.ConfigurableField(
-        target=TrailedSourceFilterTask,
-        doc="Subtask to remove long trailed sources based on catalog source "
-            "morphological measurements.",
-    )
-
-    doTrailedSourceFilter = pexConfig.Field(
-        doc="Run traildeSourceFilter to remove long trailed sources from "
-            "output catalog.",
-        dtype=bool,
-        default=True,
-    )
-
 
 class AssociationTask(pipeBase.Task):
     """Associate DIAOSources into existing DIAObjects.
@@ -75,16 +61,10 @@ class AssociationTask(pipeBase.Task):
     ConfigClass = AssociationConfig
     _DefaultName = "association"
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if self.config.doTrailedSourceFilter:
-            self.makeSubtask("trailedSourceFilter")
-
     @timeMethod
     def run(self,
             diaSources,
-            diaObjects,
-            exposure_time=None):
+            diaObjects):
         """Associate the new DiaSources with existing DiaObjects.
 
         Parameters
@@ -93,8 +73,6 @@ class AssociationTask(pipeBase.Task):
             New DIASources to be associated with existing DIAObjects.
         diaObjects : `pandas.DataFrame`
             Existing diaObjects from the Apdb.
-        exposure_time : `float`, optional
-            Exposure time from difference image.
 
         Returns
         -------
@@ -112,30 +90,15 @@ class AssociationTask(pipeBase.Task):
               matched to new DiaSources. (`int`)
             - ``nUnassociatedDiaObjects`` : Number of DiaObjects that were
               not matched a new DiaSource. (`int`)
-            - ``longTrailedSources`` : DiaSources which have trail lengths
-              greater than max_trail_length/second*exposure_time.
-              (`pandas.DataFrame``)
         """
         diaSources = self.check_dia_source_radec(diaSources)
-
-        if self.config.doTrailedSourceFilter:
-            diaTrailedResult = self.trailedSourceFilter.run(diaSources, exposure_time)
-            diaSources = diaTrailedResult.diaSources
-            longTrailedSources = diaTrailedResult.longTrailedDiaSources
-
-            self.log.info("%i DiaSources exceed max_trail_length, dropping from source "
-                          "catalog." % len(diaTrailedResult.longTrailedDiaSources))
-            self.metadata.add("num_filtered", len(diaTrailedResult.longTrailedDiaSources))
-        else:
-            longTrailedSources = pd.DataFrame(columns=diaSources.columns)
 
         if len(diaObjects) == 0:
             return pipeBase.Struct(
                 matchedDiaSources=pd.DataFrame(columns=diaSources.columns),
                 unAssocDiaSources=diaSources,
                 nUpdatedDiaObjects=0,
-                nUnassociatedDiaObjects=0,
-                longTrailedSources=longTrailedSources)
+                nUnassociatedDiaObjects=0)
 
         matchResult = self.associate_sources(diaObjects, diaSources)
 
@@ -145,8 +108,7 @@ class AssociationTask(pipeBase.Task):
             matchedDiaSources=matchResult.diaSources[mask].reset_index(drop=True),
             unAssocDiaSources=matchResult.diaSources[~mask].reset_index(drop=True),
             nUpdatedDiaObjects=matchResult.nUpdatedDiaObjects,
-            nUnassociatedDiaObjects=matchResult.nUnassociatedDiaObjects,
-            longTrailedSources=longTrailedSources)
+            nUnassociatedDiaObjects=matchResult.nUnassociatedDiaObjects)
 
     def check_dia_source_radec(self, dia_sources):
         """Check that all DiaSources have non-NaN values for RA/DEC.
