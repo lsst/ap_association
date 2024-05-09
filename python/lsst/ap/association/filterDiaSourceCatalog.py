@@ -221,7 +221,6 @@ class FilterDiaSourceCatalogTask(pipeBase.PipelineTask):
             detector (off_image set). Also checks if both
             suspect_long_trail and edge are set and masks those sources out.
         """
-        print(dia_sources.getSchema())
         trail_mask = (dia_sources["ext_trailedSources_Naive_length"]
                       >= (self.config.max_trail_length*exposure_time))
         trail_mask |= dia_sources['ext_trailedSources_Naive_flag_off_image']
