@@ -181,9 +181,10 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
     def test_bit_unpacker(self):
         """Test that the integer bit packer is functioning correctly.
         """
-        self.config.doPackFlags = True
-        transform = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
-                                                  config=self.config)
+        with self.assertWarns(FutureWarning):
+            self.config.doPackFlags = True
+            transform = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
+                                                      config=self.config)
         for idx, obj in enumerate(self.inputCatalog):
             if idx in [1, 3, 5]:
                 obj.set("base_PixelFlags_flag", 1)
