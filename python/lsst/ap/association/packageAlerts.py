@@ -64,6 +64,17 @@ class PackageAlertsConfig(pexConfig.Config):
         default=30,
         doc="Dimension of the square image cutouts to package in the alert."
     )
+    maxCutoutSize = pexConfig.RangeField(
+        dtype=int,
+        min=0,
+        max=1000,
+        default=102,
+        doc="Dimension of the square image cutouts to package in the alert. The"
+            "default size comes from the max trail length in arcseconds "
+            "(10 deg/day) for a 30 second observation divided by the"
+            "arcseconds per pixel (0.2), which is 62.5 pixels. The effective"
+            "size of the psf (40 pixels) is then added for a total of 102 pixels. "
+    )
     alertWriteLocation = pexConfig.Field(
         dtype=str,
         doc="Location to write alerts to.",
@@ -318,6 +329,9 @@ class PackageAlertsTask(pipeBase.Task):
         if bboxSize < self.config.minCutoutSize:
             extent = geom.Extent2I(self.config.minCutoutSize,
                                    self.config.minCutoutSize)
+        elif bboxSize > self.config.maxCutoutSize:
+            extent = geom.Extent2I(self.config.maxCutoutSize,
+                                   self.config.maxCutoutSize)
         else:
             extent = geom.Extent2I(bboxSize, bboxSize)
         return extent
