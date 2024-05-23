@@ -211,18 +211,36 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         self.cutoutWcs.wcs.cd = self.exposure.getWcs().getCdMatrix()
         self.cutoutWcs.wcs.ctype = ["RA---TAN", "DEC--TAN"]
 
-    def testCreateExtent(self):
-        """Test the extent creation for the cutout bbox.
+    def testCreateExtentMinimum(self):
+        """Test the extent creation for the cutout bbox returns a cutout with
+        the minimum cutouut size.
         """
         packConfig = PackageAlertsConfig()
-        # Just create a minimum less than the default cutout.
+        # Just create a minimum less than the default cutout size.
         packConfig.minCutoutSize = self.cutoutSize - 5
         packageAlerts = PackageAlertsTask(config=packConfig)
         extent = packageAlerts.createDiaSourceExtent(
             packConfig.minCutoutSize - 5)
         self.assertTrue(extent == geom.Extent2I(packConfig.minCutoutSize,
                                                 packConfig.minCutoutSize))
-        # Test that the cutout size is correct.
+        # Test that the cutout size is correctly increased.
+        extent = packageAlerts.createDiaSourceExtent(self.cutoutSize)
+        self.assertTrue(extent == geom.Extent2I(self.cutoutSize,
+                                                self.cutoutSize))
+
+    def testCreateExtentMaximum(self):
+        """Test the extent creation for the cutout bbox returns a cutout with
+        the maximum cutout size.
+        """
+        packConfig = PackageAlertsConfig()
+        # Just create a maximum more than the default cutout size.
+        packConfig.maxCutoutSize = self.cutoutSize + 5
+        packageAlerts = PackageAlertsTask(config=packConfig)
+        extent = packageAlerts.createDiaSourceExtent(
+            packConfig.maxCutoutSize + 5)
+        self.assertTrue(extent == geom.Extent2I(packConfig.maxCutoutSize,
+                                                packConfig.maxCutoutSize))
+        # Test that the cutout size is correctly reduced.
         extent = packageAlerts.createDiaSourceExtent(self.cutoutSize)
         self.assertTrue(extent == geom.Extent2I(self.cutoutSize,
                                                 self.cutoutSize))
