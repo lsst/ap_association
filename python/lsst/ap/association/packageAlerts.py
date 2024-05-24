@@ -164,6 +164,8 @@ class PackageAlertsTask(pipeBase.Task):
                     "batch.size": 2097152,
                     "linger.ms": 5,
                     "delivery.timeout.ms": self.config.deliveryTimeout,
+                    # Compression options are snappy, lz4, zstd, and gzip.
+                    "compression.type": 'snappy'
                 }
                 self.kafkaAdminConfig = {
                     # This is the URL to use to connect to the Kafka cluster.
