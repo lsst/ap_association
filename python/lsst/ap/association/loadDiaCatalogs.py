@@ -24,9 +24,11 @@
 import pandas as pd
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
+import lsst.dax.apdb as daxApdb
 import lsst.geom as geom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
+import lsst.pipe.base.connectionTypes as connTypes
 import lsst.sphgeom as sphgeom
 from lsst.utils.timer import timeMethod
 
@@ -35,9 +37,47 @@ from lsst.ap.association.utils import convertTableToSdmSchema, readSchemaFromApd
 __all__ = ("LoadDiaCatalogsTask", "LoadDiaCatalogsConfig")
 
 
-class LoadDiaCatalogsConfig(pexConfig.Config):
+class LoadDiaCatalogsConnections(pipeBase.PipelineTaskConnections,
+                                 dimensions=("instrument", "group", "detector")):
+    regionTime = connTypes.Input(
+        doc="The predicted exposure region and time",
+        name="regionTimeInfo",
+        storageClass="RegionTimeInfo",
+        dimensions={"instrument", "group", "detector"},
+    )
+    diaObjects = connTypes.Output(
+        doc="DiaObjects preloaded from the APDB.",
+        name="preloaded_diaObjects",
+        storageClass="DataFrame",
+        dimensions=("instrument", "group", "detector"),
+    )
+    diaSources = connTypes.Output(
+        doc="DiaSources preloaded from the APDB.",
+        name="preloaded_diaSources",
+        storageClass="DataFrame",
+        dimensions=("instrument", "group", "detector"),
+    )
+    diaForcedSources = connTypes.Output(
+        doc="DiaForcedSources preloaded from the APDB.",
+        name="preloaded_diaForcedSources",
+        storageClass="DataFrame",
+        dimensions=("instrument", "group", "detector"),
+    )
+
+
+class LoadDiaCatalogsConfig(pipeBase.PipelineTaskConfig,
+                            pipelineConnections=LoadDiaCatalogsConnections):
     """Config class for LoadDiaCatalogsConfig.
     """
+    apdb_config_url = pexConfig.Field(
+        dtype=str,
+        default=None,
+        optional=False,
+        doc="A config file specifying the APDB and its connection parameters, "
+            "typically written by the apdb-cli command-line utility. "
+            "The database must already be initialized.",
+    )
+
     pixelMargin = pexConfig.RangeField(
         doc="Padding to add to 4 all edges of the bounding box (pixels)",
         dtype=int,
@@ -46,7 +86,7 @@ class LoadDiaCatalogsConfig(pexConfig.Config):
     )
 
 
-class LoadDiaCatalogsTask(pipeBase.Task):
+class LoadDiaCatalogsTask(pipeBase.PipelineTask):
     """Retrieve DiaObjects and associated DiaSources from the Apdb given an
     input exposure.
     """
@@ -54,24 +94,18 @@ class LoadDiaCatalogsTask(pipeBase.Task):
     _DefaultName = "loadDiaCatalogs"
 
     def __init__(self, **kwargs):
-        pipeBase.Task.__init__(self, **kwargs)
+        super().__init__(**kwargs)
+        self.apdb = daxApdb.Apdb.from_uri(self.config.apdb_config_url)
 
     @timeMethod
-    def run(self, exposure, apdb, doLoadForcedSources=True):
+    def run(self, regionTime):
         """Preload all DiaObjects and DiaSources from the Apdb given the
         current exposure.
 
         Parameters
         ----------
-        exposure : `lsst.afw.image.Exposure`
-            An exposure with a bounding box.
-        apdb : `lsst.dax.apdb.Apdb`
-            AP database connection object.
-        doLoadForcedSources : `bool`, optional
-            Load forced DiaSource history from the APDB?
-            This should only be turned off for debugging purposes.
-            Added to allow disabling forced sources for performance
-            reasons during the ops rehearsal.
+        regionTime : `lsst.pipe.base.utils.RegionTimeInfo`
+            A serializable container for a sky region and timespan.
 
         Returns
         -------
@@ -93,26 +127,24 @@ class LoadDiaCatalogsTask(pipeBase.Task):
         RuntimeError
             Raised if the Database query failed to load DiaObjects.
         """
-        region = self._getRegion(exposure)
-        schema = readSchemaFromApdb(apdb)
+        region = regionTime.region
+        schema = readSchemaFromApdb(self.apdb)
 
         # This is the first database query.
         try:
-            diaObjects = self.loadDiaObjects(region, apdb, schema)
+            diaObjects = self.loadDiaObjects(region, self.apdb, schema)
         except (OperationalError, ProgrammingError) as e:
             raise RuntimeError(
                 "Database query failed to load DiaObjects; did you call "
-                "make_apdb.py first? If you did, some other error occurred "
+                "apdb_cli.py first? If you did, some other error occurred "
                 "during database access of the DiaObject table.") from e
 
-        dateTime = exposure.visitInfo.date
+        # Load diaSources and forced sources up to the time of the beginning of the exposure
+        visitTime = regionTime.timespan.begin.tai
 
-        diaSources = self.loadDiaSources(diaObjects, region, dateTime, apdb, schema)
+        diaSources = self.loadDiaSources(diaObjects, region, visitTime, self.apdb, schema)
 
-        if doLoadForcedSources:
-            diaForcedSources = self.loadDiaForcedSources(diaObjects, region, dateTime, apdb, schema)
-        else:
-            diaForcedSources = pd.DataFrame(columns=["diaObjectId", "diaForcedSourceId"])
+        diaForcedSources = self.loadDiaForcedSources(diaObjects, region, visitTime, self.apdb, schema)
 
         return pipeBase.Struct(
             diaObjects=diaObjects,
@@ -139,13 +171,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             by ``pixelRanges``.
         """
         self.log.info("Loading DiaObjects")
-
-        if region is None:
-            # If no area is specified return an empty DataFrame with the
-            # the column used for indexing later in AssociationTask.
-            diaObjects = pd.DataFrame(columns=["diaObjectId"])
-        else:
-            diaObjects = apdb.getDiaObjects(region)
+        diaObjects = apdb.getDiaObjects(region)
 
         diaObjects.set_index("diaObjectId", drop=False, inplace=True)
         if diaObjects.index.has_duplicates:
@@ -186,14 +212,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
         """
         self.log.info("Loading DiaSources")
 
-        if region is None:
-            # If no area is specified return an empty DataFrame with the
-            # the column used for indexing later in AssociationTask.
-            diaSources = pd.DataFrame(columns=["diaObjectId",
-                                               "band",
-                                               "diaSourceId"])
-        else:
-            diaSources = apdb.getDiaSources(region, diaObjects.loc[:, "diaObjectId"], dateTime.toAstropy())
+        diaSources = apdb.getDiaSources(region, diaObjects.loc[:, "diaObjectId"], dateTime)
 
         diaSources.set_index(["diaObjectId", "band", "diaSourceId"],
                              drop=False,
@@ -245,7 +264,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             diaForcedSources = apdb.getDiaForcedSources(
                 region,
                 diaObjects.loc[:, "diaObjectId"],
-                dateTime.toAstropy())
+                dateTime)
 
         diaForcedSources.set_index(["diaObjectId", "diaForcedSourceId"],
                                    drop=False,
