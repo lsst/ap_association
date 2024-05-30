@@ -111,6 +111,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
         maxRadius = np.deg2rad(self.config.maxDistArcSeconds / 3600)
 
         # Transform DIA RADEC coordinates to unit sphere xyz for tree building.
+        diaSourceCatalog = diaSourceCatalog[np.isfinite(diaSourceCatalog["ra"]).values]
         vectors = self._radec_to_xyz(diaSourceCatalog["ra"],
                                      diaSourceCatalog["dec"])
 
@@ -121,18 +122,18 @@ class SolarSystemAssociationTask(pipeBase.Task):
         # Query the KDtree for DIA nearest neighbors to SSOs. Currently only
         # picks the DiaSource with the shortest distance. We can do something
         # fancier later.
+        diaSourceCatalog["ssObjectId"] = 0
         for index, ssObject in maskedObjects.iterrows():
-
+            
             ssoVect = self._radec_to_xyz(ssObject["ra"], ssObject["dec"])
-
             # Which DIA Sources fall within r?
             dist, idx = tree.query(ssoVect, distance_upper_bound=maxRadius)
             if np.isfinite(dist[0]):
                 nFound += 1
-                diaSourceCatalog.loc[idx[0], "ssObjectId"] = ssObject["ssObjectId"]
-
+                diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "ssObjectId"] = ssObject["ssObjectId"]
+        
         self.log.info("Successfully associated %d SolarSystemObjects.", nFound)
-        assocMask = diaSourceCatalog["ssObjectId"] != 0
+        assocMask = (diaSourceCatalog["ssObjectId"] != 0) & (np.isfinite(diaSourceCatalog["ssObjectId"]))
         return pipeBase.Struct(
             ssoAssocDiaSources=diaSourceCatalog[assocMask].reset_index(drop=True),
             unAssocDiaSources=diaSourceCatalog[~assocMask].reset_index(drop=True),

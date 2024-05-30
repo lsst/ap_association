@@ -52,21 +52,18 @@ pd.options.mode.chained_assignment = 'raise'
 
 class MPSkyEphemerisQueryConnections(PipelineTaskConnections,
                                       dimensions=("instrument",
-                                                  "visit")):
+                                                  "visit", "detector")):
     visitInfos = connTypes.Input(
         doc="Information defining the visit on a per detector basis.",
-        name="raw.visitInfo",
+        name="calexp.visitInfo", #Change to initial_pvi.visitInfo before production
         storageClass="VisitInfo",
-        dimensions=("instrument", "exposure", "detector"),
-        deferLoad=True,
-        multiple=True
+        dimensions=("instrument", "visit", "detector"),
     )
     ssObjects = connTypes.Output(
-        doc="Solar System objects observable in this visit retrieved from "
-            "MPSky",
+        doc="MPSky-provided Solar System objects observable in this detector-visit",
         name="visitSsObjects",
         storageClass="DataFrame",
-        dimensions=("instrument", "visit"),
+        dimensions=("instrument", "visit", "detector"),
     )
 
 
@@ -102,15 +99,13 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         butlerQC.put(outputs, outputRefs)
 
     @timeMethod
-    def run(self, visitInfos, visit):
+    def run(self, visitInfo, visit):
         """Parse the information on the current visit and retrieve the
         observable solar system objects from MPSky.
 
         Parameters
         ----------
-        visitInfos : `list` of `lsst.daf.butler.DeferredDatasetHandle`
-            Set of visitInfos for raws covered by this visit/exposure. We
-            only use the first instance to retrieve the exposure boresight.
+        visitInfo : TODO
         visit : `int`
             Id number of the visit being run.
 
@@ -138,7 +133,6 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         """
         # Grab the visitInfo from the raw to get the information needed on the
         # full visit.
-        visitInfo = visitInfos[0].get()
 
         # Midpoint time of the exposure in JD
         expMidPointEPOCH = visitInfo.date.get(system=DateTime.JD, scale=DateTime.UTC)
@@ -147,7 +141,7 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         expCenter = visitInfo.boresightRaDec
 
         # MPSky service query
-        MPSkySsObjects= self._MPSkyConeSearch(self, expCenter, expMidPointEPOCH, self.config.queryRadiusDegrees) 
+        MPSkySsObjects= self._MPSkyConeSearch(expCenter, expMidPointEPOCH, self.config.queryRadiusDegrees) 
         # Add the visit as an extra column.
         MPSkySsObjects['visitId'] = visit
 
@@ -177,14 +171,16 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         fieldRA = expCenter.getRa().asDegrees()
         fieldDec = expCenter.getDec().asDegrees()
         observerMPCId = self.config.observerCode
-
-        ObjID, ra, dec, obj_poly, obs_poly  = mpsky.query_service('https://sky.dirac.dev/ephemerides/', expMidPointEPOCH, expCenter, queryRadius)#query MPSky[]
+        print(epochJD)
+        print(epochJD, fieldRA, fieldDec, queryRadius)
+        epochMJD = epochJD - 2400000.5
+        ObjID, ra, dec, obj_poly, obs_poly  = mpsky.query_service('https://sky.dirac.dev/ephemerides/', epochMJD, fieldRA, fieldDec, queryRadius)#query MPSky[]
         MPSkySsObjects = pd.DataFrame()
         MPSkySsObjects['ObjID'] = ObjID
         MPSkySsObjects['ra'] = ra
         MPSkySsObjects['dec'] = dec
-        MPSkySsObjects['obj_poly'] = obj_poly
-        MPSkySsObjects['obs_poly'] = obs_poly
+        MPSkySsObjects['obj_poly'] = 0 #fix, eventually
+        MPSkySsObjects['obs_poly'] = 0 #fix, eventually
 
         nFound = len(MPSkySsObjects)
 
