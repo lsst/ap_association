@@ -61,7 +61,7 @@ class DiaForcedSourcedConfig(pexConfig.Config):
         self.forcedMeasurement.slots.centroid = "base_TransformedCentroidFromCoord"
         self.forcedMeasurement.slots.psfFlux = "base_PsfFlux"
         self.forcedMeasurement.slots.shape = None
-        self.dropColumns = ['coord_ra', 'coord_dec', 'parent',
+        self.dropColumns = ['coord_ra', 'coord_dec', 'x', 'y', 'parent',
                             'base_TransformedCentroidFromCoord_x',
                             'base_TransformedCentroidFromCoord_y',
                             'base_PsfFlux_instFlux',
@@ -150,6 +150,8 @@ class DiaForcedSourceTask(pipeBase.Task):
         output_forced_sources = self._trim_to_exposure(output_forced_sources,
                                                        updatedDiaObjectIds,
                                                        exposure)
+        # Drop superfluous columns from output DataFrame.
+        output_forced_sources.drop(columns=self.config.dropColumns, inplace=True)
         return output_forced_sources.set_index(
             ["diaObjectId", "diaForcedSourceId"],
             drop=False)
@@ -236,9 +238,6 @@ class DiaForcedSourceTask(pipeBase.Task):
         output_catalog["band"] = diff_exp.getFilter().bandLabel
         output_catalog["time_processed"] = DateTime.now().toPython()
         # TODO: propagate actual flags (DM-42355)
-
-        # Drop superfluous columns from output DataFrame.
-        output_catalog.drop(columns=self.config.dropColumns, inplace=True)
 
         return output_catalog
 
