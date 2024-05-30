@@ -552,7 +552,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             # alertPackager needs correct columns
             diaForcedSources = pd.DataFrame(columns=[
                 "diaForcedSourceId", "diaObjectID", "ccdVisitID", "psfFlux", "psfFluxErr",
-                "x", "y", "midpointMjdTai", "band",
+                "ra", "dec", "x", "y", "midpointMjdTai", "band",
             ])
 
         # Store DiaSources, updated DiaObjects, and DiaForcedSources in the

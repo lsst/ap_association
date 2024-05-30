@@ -56,8 +56,8 @@ class DiaForcedSourcedConfig(pexConfig.Config):
         self.forcedMeasurement.doReplaceWithNoise = False
         self.forcedMeasurement.copyColumns = {
             "id": "diaObjectId",
-            "coord_ra": "coord_ra",
-            "coord_dec": "coord_dec"}
+            "coord_ra": "ra",
+            "coord_dec": "dec"}
         self.forcedMeasurement.slots.centroid = "base_TransformedCentroidFromCoord"
         self.forcedMeasurement.slots.psfFlux = "base_PsfFlux"
         self.forcedMeasurement.slots.shape = None
