@@ -157,12 +157,19 @@ def makeDiaForcedSources(nForcedSources, diaObjectIds, exposure, rng, randomizeO
         objectIds = diaObjectIds[[i % len(diaObjectIds) for i in range(nForcedSources)]]
 
     data = []
+    bbox = exposure.getBBox()
+
     for i, objId in enumerate(objectIds):
         # Put together the minimum values for the alert.
+        x = rng.uniform(bbox.minX, bbox.maxX)
+        y = rng.uniform(bbox.minY, bbox.maxY)
+        coord = exposure.wcs.pixelToSky(x, y)
         data.append({"diaForcedSourceId": i + 1,
                      "visit": visit + i,
                      "detector": detector,
                      "diaObjectId": objId,
+                     "ra": coord.getRa().asDegrees(),
+                     "dec": coord.getDec().asDegrees(),
                      "midpointMjdTai": midpointMjdTai + 1.0 * i,
                      "time_processed": datetime.datetime.now(),
                      "band": exposure.getFilter().bandLabel})
