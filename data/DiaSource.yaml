@@ -120,8 +120,13 @@ funcs:
             - base_LocalWcs_CDMatrix_2_1
             - base_LocalWcs_CDMatrix_2_2
     trailAngle:
-        functor: CoordColumn
-        args: ext_trailedSources_Naive_angle
+        functor: ConvertDetectorAngleToPositionAngle
+        args:
+            - ext_trailedSources_Naive_angle
+            - base_LocalWcs_CDMatrix_1_1
+            - base_LocalWcs_CDMatrix_1_2
+            - base_LocalWcs_CDMatrix_2_1
+            - base_LocalWcs_CDMatrix_2_2
     # trailCov[15] not implemented
     # trailLnL not implemented
     # trailChi2 not implemented
@@ -178,8 +183,13 @@ funcs:
             - base_LocalWcs_CDMatrix_2_1
             - base_LocalWcs_CDMatrix_2_2
     dipoleAngle:
-        functor: Column
-        args: ip_diffim_DipoleFit_orientation
+        functor: ConvertDetectorAngleToPositionAngle
+        args:
+            - ip_diffim_DipoleFit_orientation
+            - base_LocalWcs_CDMatrix_1_1
+            - base_LocalWcs_CDMatrix_1_2
+            - base_LocalWcs_CDMatrix_2_1
+            - base_LocalWcs_CDMatrix_2_2
     # dipoleCov not implemented
     # dipoleLnl not implemented
     dipoleChi2:
