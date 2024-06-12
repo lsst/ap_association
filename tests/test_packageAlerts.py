@@ -265,6 +265,9 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                                      self.cutoutWcs.wcs.cd)
         self.assertFloatsAlmostEqual(ccdData.data,
                                      calibExposure.getImage().array)
+        self.assertFloatsAlmostEqual(ccdData.psf,
+                                     self.exposure.psf.computeKernelImage(self.center).array)
+        self.assertFloatsAlmostEqual(np.sum(ccdData.psf), 1.0)
 
         ccdData = packageAlerts.createCcdDataCutout(
             self.exposure,

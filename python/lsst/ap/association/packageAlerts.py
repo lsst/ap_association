@@ -393,11 +393,12 @@ class PackageAlertsTask(pipeBase.Task):
             CCDData object storing the calibrate information from the input
             difference or template image.
         """
+        point = image.getWcs().skyToPixel(skyCenter)
+
         # Catch errors in retrieving the cutout.
         try:
             cutout = image.getCutout(skyCenter, extent)
         except InvalidParameterError:
-            point = image.getWcs().skyToPixel(skyCenter)
             imBBox = image.getBBox()
             if not geom.Box2D(image.getBBox()).contains(point):
                 self.log.warning(
@@ -413,6 +414,8 @@ class PackageAlertsTask(pipeBase.Task):
                     "creation. Exiting."
                     % srcId)
             return None
+
+        cutoutPsf = image.psf.computeKernelImage(point).array
 
         # Find the value of the bottom corner of our cutout's BBox and
         # subtract 1 so that the CCDData cutout position value will be
@@ -437,6 +440,7 @@ class PackageAlertsTask(pipeBase.Task):
             uncertainty=VarianceUncertainty(calibCutout.getVariance().array),
             flags=calibCutout.getMask().array,
             wcs=cutoutWcs,
+            psf=cutoutPsf,
             meta={"cutMinX": cutOutMinX,
                   "cutMinY": cutOutMinY},
             unit=u.nJy)
