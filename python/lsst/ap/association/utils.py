@@ -21,7 +21,7 @@
 
 """Utilities for working with the APDB.
 """
-__all__ = ("convertTableToSdmSchema", "readSdmSchemaFile", "readSchemaFromApdb")
+__all__ = ("convertTableToSdmSchema", "readSdmSchemaFile", "readSchemaFromApdb", "dropEmptyColumns")
 
 from collections.abc import Mapping
 import os
@@ -133,8 +133,7 @@ def readSchemaFromApdb(apdb):
     return schemaTable
 
 
-def convertTableToSdmSchema(apdbSchema, sourceTable,
-                            tableName):
+def convertTableToSdmSchema(apdbSchema, sourceTable, tableName):
     """Force a table to conform to the schema defined by the APDB.
 
     This method uses the table definitions in ``sdm_schemas`` to
@@ -146,9 +145,8 @@ def convertTableToSdmSchema(apdbSchema, sourceTable,
         Schema from ``sdm_schemas`` containing the table definition to use.
     sourceTable : `pandas.DataFrame`
         The input table to convert.
-    tableId : `sqlalchemy.schema.Table`, optional
-        Database table identifier for the given schema.
-        If not set, defaults to the DiaSource table.
+    tableName : `str`
+        Name of the table in the schema to use.
 
     Returns
     -------
@@ -174,3 +172,27 @@ def convertTableToSdmSchema(apdbSchema, sourceTable,
                     pass
             data[columnDef.name] = pd.Series(dataInit, index=sourceTable.index)
     return pd.DataFrame(data)
+
+
+def dropEmptyColumns(apdbSchema, sourceTable, tableName):
+    """Drop empty columns that are nullable.
+
+    This method uses the table definitions in ``sdm_schemas`` to
+    load the schema of the APDB, and does not actually connect to the APDB.
+
+    Parameters
+    ----------
+    apdbSchema : `lsst.dax.apdb.apdbSchema.ApdbSchema`
+        Schema from ``sdm_schemas`` containing the table definition to use.
+    sourceTable : `pandas.DataFrame`
+        The input table to remove missing data columns from.
+    tableName : `str`
+        Name of the table in the schema to use.
+    """
+    table = apdbSchema[tableName]
+
+    nullableList = [columnDef.name for columnDef in table.columns if columnDef.nullable]
+    nullColumns = sourceTable.isnull().all()
+    nullColNames = nullColumns[nullColumns].index.tolist()
+    dropColumns = list(set(nullColNames) & set(nullableList))
+    return sourceTable.drop(columns=dropColumns)

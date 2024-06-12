@@ -120,8 +120,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             diaForcedSources=diaForcedSources)
 
     @timeMethod
-    def loadDiaObjects(self, region, apdb, schema,
-                       tableName="DiaObject"):
+    def loadDiaObjects(self, region, apdb, schema):
         """Load DiaObjects from the Apdb based on their HTM location.
 
         Parameters
@@ -130,6 +129,8 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             Region of interest.
         apdb : `lsst.dax.apdb.Apdb`
             Database connection object to load from.
+        schema : 'dict' of `lsst.dax.apdb.apdbSchema.ApdbSchema`
+            A dict of the schemas in the apdb.
 
         Returns
         -------
@@ -152,11 +153,10 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             # Drop duplicates via index and keep the first appearance.
             diaObjects = diaObjects.groupby(diaObjects.index).first()
 
-        return convertTableToSdmSchema(schema, diaObjects, tableName=tableName)
+        return convertTableToSdmSchema(schema, diaObjects, tableName="DiaObject")
 
     @timeMethod
-    def loadDiaSources(self, diaObjects, region, dateTime, apdb, schema,
-                       tableName="DiaSource"):
+    def loadDiaSources(self, diaObjects, region, dateTime, apdb, schema):
         """Load DiaSources from the Apdb based on their diaObjectId or
         location.
 
@@ -173,6 +173,8 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             Time of the current visit
         apdb : `lsst.dax.apdb.Apdb`
             Database connection object to load from.
+        schema : 'dict' of `lsst.dax.apdb.apdbSchema.ApdbSchema`
+            A dict of the schemas in the apdb.
 
         Returns
         -------
@@ -203,11 +205,10 @@ class LoadDiaCatalogsTask(pipeBase.Task):
                                  drop=False,
                                  inplace=True)
 
-        return convertTableToSdmSchema(schema, diaSources, tableName=tableName)
+        return convertTableToSdmSchema(schema, diaSources, tableName="DiaSource")
 
     @timeMethod
-    def loadDiaForcedSources(self, diaObjects, region, dateTime, apdb, schema,
-                             tableName="DiaForcedSource"):
+    def loadDiaForcedSources(self, diaObjects, region, dateTime, apdb, schema):
         """Load DiaObjects from the Apdb based on their HTM location.
 
         Parameters
@@ -220,6 +221,8 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             Time of the current visit
         apdb : `lsst.dax.apdb.Apdb`
             Database connection object to load from.
+        schema : 'dict' of `lsst.dax.apdb.apdbSchema.ApdbSchema`
+            A dict of the schemas in the apdb.
 
         Returns
         -------
@@ -253,7 +256,7 @@ class LoadDiaCatalogsTask(pipeBase.Task):
                                        drop=False,
                                        inplace=True)
 
-        return convertTableToSdmSchema(schema, diaForcedSources, tableName=tableName)
+        return convertTableToSdmSchema(schema, diaForcedSources, tableName="DiaForcedSource")
 
     @timeMethod
     def _getRegion(self, exposure):

@@ -47,7 +47,7 @@ from lsst.ap.association import (
     LoadDiaCatalogsTask,
     PackageAlertsTask)
 from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
-from lsst.ap.association.utils import convertTableToSdmSchema, readSchemaFromApdb
+from lsst.ap.association.utils import convertTableToSdmSchema, readSchemaFromApdb, dropEmptyColumns
 from lsst.daf.base import DateTime
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
     DiaObjectCalculationTask
@@ -572,11 +572,15 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         diaForcedSources = convertTableToSdmSchema(self.schema, diaForcedSources,
                                                    tableName="DiaForcedSource",
                                                    )
+        # Drop empty columns that are nullable in the APDB.
+        diaObjectStore = dropEmptyColumns(self.schema, diaCalResult.updatedDiaObjects, tableName="DiaObject")
+        diaSourceStore = dropEmptyColumns(self.schema, associatedDiaSources, tableName="DiaSource")
+        diaForcedSourceStore = dropEmptyColumns(self.schema, diaForcedSources, tableName="DiaForcedSource")
         self.apdb.store(
             DateTime.now().toAstropy(),
-            diaCalResult.updatedDiaObjects,
-            associatedDiaSources,
-            diaForcedSources)
+            diaObjectStore,
+            diaSourceStore,
+            diaForcedSourceStore)
 
         if self.config.doPackageAlerts:
             if len(loaderResult.diaForcedSources) > 1:
