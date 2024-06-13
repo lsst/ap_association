@@ -24,9 +24,10 @@ __all__ = ("TransformDiaSourceCatalogConnections",
            "TransformDiaSourceCatalogTask",
            "UnpackApdbFlags")
 
-import numpy as np
 import os
 import yaml
+
+import numpy as np
 import pandas as pd
 
 from lsst.daf.base import DateTime
@@ -36,6 +37,8 @@ import lsst.pipe.base.connectionTypes as connTypes
 from lsst.pipe.tasks.postprocess import TransformCatalogBaseTask, TransformCatalogBaseConfig
 from lsst.pipe.tasks.functors import Column
 from lsst.utils.timer import timeMethod
+
+from .utils import convertTableToSdmSchema, readSdmSchemaFile
 
 
 class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
@@ -112,6 +115,23 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
         default=False,
         doc="Include the reliability (e.g. real/bogus) classifications in the output."
     )
+    doUseApdbSchema = pexConfig.Field(
+        dtype=bool,
+        default=False,
+        doc="Use the APDB schema to coerce the data types of the output columns."
+    )
+    schemaFile = pexConfig.Field(
+        dtype=str,
+        doc="Yaml file specifying the schema of the output catalog.",
+        default=os.path.join("${SDM_SCHEMAS_DIR}",
+                             "yml",
+                             "apdb.yaml"),
+    )
+    schemaName = pexConfig.Field(
+        dtype=str,
+        doc="Name of the table in the schema file to read.",
+        default="ApdbSchema",
+    )
 
     def setDefaults(self):
         super().setDefaults()
@@ -140,6 +160,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         self.funcs = self.getFunctors()
         self.inputSchema = initInputs['diaSourceSchema'].schema
         self._create_bit_pack_mappings()
+        self.apdbSchema = readSdmSchemaFile(self.config.schemaFile, self.config.schemaName)
 
         if not self.config.doPackFlags:
             # get the flag rename rules
@@ -258,6 +279,8 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
                             diaSourceDf,
                             self.funcs,
                             dataId=None).df
+        if self.config.doUseApdbSchema:
+            df = convertTableToSdmSchema(self.apdbSchema, df, tableName="DiaSource")
 
         return pipeBase.Struct(
             diaSourceTable=df,

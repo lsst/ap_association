@@ -47,6 +47,7 @@ from lsst.ap.association import (
     LoadDiaCatalogsTask,
     PackageAlertsTask)
 from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
+from lsst.ap.association.utils import convertTableToSdmSchema, readSchemaFromApdb, dropEmptyColumns
 from lsst.daf.base import DateTime
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
     DiaObjectCalculationTask
@@ -308,8 +309,9 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     )
 
     def setDefaults(self):
-        self.apdb.dia_object_index = "baseline"
-        self.apdb.dia_object_columns = []
+        if self.doConfigureApdb:
+            self.apdb.dia_object_index = "baseline"
+            self.apdb.dia_object_columns = []
         self.diaCalculation.plugins = ["ap_meanPosition",
                                        "ap_nDiaSources",
                                        "ap_meanFlux",
@@ -356,6 +358,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             self.apdb = self.config.apdb.apply()
         else:
             self.apdb = daxApdb.Apdb.from_uri(self.config.apdb_config_url)
+        self.schema = readSchemaFromApdb(self.apdb)
         self.makeSubtask("diaCatalogLoader")
         self.makeSubtask("associator")
         self.makeSubtask("diaCalculation")
@@ -415,16 +418,19 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         results : `lsst.pipe.base.Struct`
             Results struct with components.
 
-            - ``apdbMaker`` : Marker dataset to store in the Butler indicating
+            - ``apdbMarker`` : Marker dataset to store in the Butler indicating
               that this ccdVisit has completed successfully.
               (`lsst.dax.apdb.ApdbConfig`)
             - ``associatedDiaSources`` : Catalog of newly associated
               DiaSources. (`pandas.DataFrame`)
+            - ``diaForcedSources`` : Catalog of new and previously detected
+              forced DiaSources. (`pandas.DataFrame`)
+            - ``diaObjects`` : Updated table of DiaObjects. (`pandas.DataFrame`)
         """
         # Load the DiaObjects and DiaSource history.
         loaderResult = self.diaCatalogLoader.run(diffIm, self.apdb,
                                                  doLoadForcedSources=self.config.doLoadForcedSources)
-        if len(loaderResult.diaObjects) > 0:
+        if not loaderResult.diaObjects.empty:
             diaObjects = self.purgeDiaObjects(diffIm.getBBox(), diffIm.getWcs(), loaderResult.diaObjects,
                                               buffer=self.config.imagePixelMargin)
         else:
@@ -476,10 +482,13 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                        inplace=True)
 
         # Append new DiaObjects and DiaSources to their previous history.
-        diaObjects = pd.concat(
-            [diaObjects,
-             createResults.newDiaObjects.set_index("diaObjectId", drop=False)],
-            sort=True)
+        if diaObjects.empty:
+            diaObjects = createResults.newDiaObjects.set_index("diaObjectId", drop=False)
+        elif not createResults.newDiaObjects.empty:
+            diaObjects = pd.concat(
+                [diaObjects,
+                 createResults.newDiaObjects.set_index("diaObjectId", drop=False)],
+                sort=True)
         if self.testDataFrameIndex(diaObjects):
             raise RuntimeError(
                 "Duplicate DiaObjects created after association. This is "
@@ -548,6 +557,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 exposure,
                 diffIm,
                 idGenerator=idGenerator)
+            # columns "ra" and "dec" are required for spatial sharding in Cassandra
+            diaForcedSources.rename(columns={"coord_ra": "ra", "coord_dec": "dec"}, inplace=True)
         else:
             # alertPackager needs correct columns
             diaForcedSources = pd.DataFrame(columns=[
@@ -557,11 +568,19 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         # Store DiaSources, updated DiaObjects, and DiaForcedSources in the
         # Apdb.
+        self.log.info(f"Updating {len(diaForcedSources)} diaForcedSources from the APDB")
+        diaForcedSources = convertTableToSdmSchema(self.schema, diaForcedSources,
+                                                   tableName="DiaForcedSource",
+                                                   )
+        # Drop empty columns that are nullable in the APDB.
+        diaObjectStore = dropEmptyColumns(self.schema, diaCalResult.updatedDiaObjects, tableName="DiaObject")
+        diaSourceStore = dropEmptyColumns(self.schema, associatedDiaSources, tableName="DiaSource")
+        diaForcedSourceStore = dropEmptyColumns(self.schema, diaForcedSources, tableName="DiaForcedSource")
         self.apdb.store(
             DateTime.now().toAstropy(),
-            diaCalResult.updatedDiaObjects,
-            associatedDiaSources,
-            diaForcedSources)
+            diaObjectStore,
+            diaSourceStore,
+            diaForcedSourceStore)
 
         if self.config.doPackageAlerts:
             if len(loaderResult.diaForcedSources) > 1:
@@ -639,53 +658,14 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             - ``nNewDiaObjects`` : Number of newly created diaObjects.(`int`)
         """
         if len(unAssocDiaSources) == 0:
-            tmpObj = self._initialize_dia_object(0)
-            newDiaObjects = pd.DataFrame(data=[],
-                                         columns=tmpObj.keys())
+            newDiaObjects = self.apdb._make_empty_catalog(daxApdb.ApdbTables.DiaObject)
         else:
-            newDiaObjects = unAssocDiaSources["diaSourceId"].apply(
-                self._initialize_dia_object)
             unAssocDiaSources["diaObjectId"] = unAssocDiaSources["diaSourceId"]
+            newDiaObjects = convertTableToSdmSchema(self.schema, unAssocDiaSources,
+                                                    tableName="DiaObject")
         return pipeBase.Struct(diaSources=unAssocDiaSources,
                                newDiaObjects=newDiaObjects,
                                nNewDiaObjects=len(newDiaObjects))
-
-    def _initialize_dia_object(self, objId):
-        """Create a new DiaObject with values required to be initialized by the
-        Ppdb.
-
-        Parameters
-        ----------
-        objid : `int`
-            ``diaObjectId`` value for the of the new DiaObject.
-
-        Returns
-        -------
-        diaObject : `dict`
-            Newly created DiaObject with keys:
-
-            ``diaObjectId``
-                Unique DiaObjectId (`int`).
-            ``pmParallaxNdata``
-                Number of data points used for parallax calculation (`int`).
-            ``nearbyObj1``
-                Id of the a nearbyObject in the Object table (`int`).
-            ``nearbyObj2``
-                Id of the a nearbyObject in the Object table (`int`).
-            ``nearbyObj3``
-                Id of the a nearbyObject in the Object table (`int`).
-            ``?_psfFluxNdata``
-                Number of data points used to calculate point source flux
-                summary statistics in each bandpass (`int`).
-        """
-        new_dia_object = {"diaObjectId": objId,
-                          "pmParallaxNdata": 0,
-                          "nearbyObj1": 0,
-                          "nearbyObj2": 0,
-                          "nearbyObj3": 0}
-        for f in ["u", "g", "r", "i", "z", "y"]:
-            new_dia_object["%s_psfFluxNdata" % f] = 0
-        return pd.Series(data=new_dia_object)
 
     def testDataFrameIndex(self, df):
         """Test the sorted DataFrame index for duplicates.
