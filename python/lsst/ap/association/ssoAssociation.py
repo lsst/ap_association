@@ -36,6 +36,7 @@ from lsst.utils.timer import timeMethod
 class SolarSystemAssociationConfig(pexConfig.Config):
     """Config class for SolarSystemAssociationTask.
     """
+    
     maxDistArcSeconds = pexConfig.Field(
         dtype=float,
         doc='Maximum distance in arcseconds to test for a DIASource to be a '

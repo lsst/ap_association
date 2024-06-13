@@ -34,6 +34,7 @@ import pandas as pd
 import mpsky
 import requests
 from io import StringIO
+import numpy as np
 
 from astropy.coordinates import Angle
 from astropy import units as u
@@ -42,6 +43,7 @@ from lsst.daf.base import DateTime
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 from lsst.utils.timer import timeMethod
+from lsst.geom import SpherePoint
 
 from lsst.pipe.base import PipelineTask, PipelineTaskConfig, PipelineTaskConnections
 import lsst.pipe.base.connectionTypes as connTypes
@@ -52,20 +54,21 @@ pd.options.mode.chained_assignment = 'raise'
 
 class MPSkyEphemerisQueryConnections(PipelineTaskConnections,
                                       dimensions=("instrument",
-                                                  "visit", "detector")):
-    visitInfos = connTypes.Input(
-        doc="Information defining the visit on a per detector basis.",
-        name="calexp.visitInfo", #Change to initial_pvi.visitInfo before production
-        storageClass="VisitInfo",
-        dimensions=("instrument", "visit", "detector"),
-    )
+                                                  "group", "detector")):
+
+    predictedRegionTime = pipeBase.connectionTypes.Input(
+        doc="The predicted exposure region and time",
+        name="predictedRegionTime",
+        storageClass="RegionTimeInfo",
+        dimensions={"instrument", "group", "detector"},
+    ) #Propagate this change through my code.
+    
     ssObjects = connTypes.Output(
         doc="MPSky-provided Solar System objects observable in this detector-visit",
         name="visitSsObjects",
         storageClass="DataFrame",
-        dimensions=("instrument", "visit", "detector"),
+        dimensions=("instrument", "group", "detector"),
     )
-
 
 class MPSkyEphemerisQueryConfig(
         PipelineTaskConfig,
@@ -99,15 +102,16 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         butlerQC.put(outputs, outputRefs)
 
     @timeMethod
-    def run(self, visitInfo, visit):
+
+    #Krzyztof -- regionTime (ra, dec, mjd) 
+    def run(self, predictedRegionTime):
         """Parse the information on the current visit and retrieve the
         observable solar system objects from MPSky.
 
         Parameters
         ----------
-        visitInfo : TODO
-        visit : `int`
-            Id number of the visit being run.
+        predictedRegionTime : `pipe.base.utils.RegionTimeInfo`
+        RegionTime of the predicted exposure
 
         Returns
         -------
@@ -135,21 +139,22 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         # full visit.
 
         # Midpoint time of the exposure in JD
-        expMidPointEPOCH = visitInfo.date.get(system=DateTime.JD, scale=DateTime.UTC)
+        region = predictedRegionTime.region
+        timespan = predictedRegionTime.timespan
+        expCenter = SpherePoint(region.getBoundingCircle().getCenter())
 
-        # Boresight of the exposure on sky.
-        expCenter = visitInfo.boresightRaDec
-
+        ##Make sure date is non-NaN. 
+        expMidPointEPOCH = (timespan.begin.mjd + timespan.end.mjd)/2
+                        
         # MPSky service query
         MPSkySsObjects= self._MPSkyConeSearch(expCenter, expMidPointEPOCH, self.config.queryRadiusDegrees) 
         # Add the visit as an extra column.
-        MPSkySsObjects['visitId'] = visit
 
         return pipeBase.Struct(
             ssObjects=MPSkySsObjects,
         )
 
-    def _MPSkyConeSearch(self, expCenter, epochJD, queryRadius):
+    def _MPSkyConeSearch(self, expCenter, epochMJD, queryRadius):
         """Query MPSky ephemeris service using the exposure boresight.
 
         Parameters
@@ -171,17 +176,15 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         fieldRA = expCenter.getRa().asDegrees()
         fieldDec = expCenter.getDec().asDegrees()
         observerMPCId = self.config.observerCode
-        print(epochJD)
-        print(epochJD, fieldRA, fieldDec, queryRadius)
-        epochMJD = epochJD - 2400000.5
         ObjID, ra, dec, obj_poly, obs_poly  = mpsky.query_service('https://sky.dirac.dev/ephemerides/', epochMJD, fieldRA, fieldDec, queryRadius)#query MPSky[]
         MPSkySsObjects = pd.DataFrame()
         MPSkySsObjects['ObjID'] = ObjID
         MPSkySsObjects['ra'] = ra
         MPSkySsObjects['dec'] = dec
-        MPSkySsObjects['obj_poly'] = 0 #fix, eventually
-        MPSkySsObjects['obs_poly'] = 0 #fix, eventually
-
+        MPSkySsObjects['obj_poly'] = list(np.zeros((len(MPSkySsObjects), 5))) #fix, eventually
+        MPSkySsObjects['obs_poly'] = list(np.zeros((len(MPSkySsObjects), 5))) #fix, eventually
+        MPSkySsObjects['Err(arcsec)'] = 2
+        MPSkySsObjects['ssObjectId'] = [abs(hash(v)) for v in MPSkySsObjects['ObjID'].values]
         nFound = len(MPSkySsObjects)
 
         if nFound == 0:
