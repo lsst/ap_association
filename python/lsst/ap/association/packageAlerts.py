@@ -24,6 +24,7 @@ __all__ = ("PackageAlertsConfig", "PackageAlertsTask")
 import io
 import os
 import sys
+import time
 
 from astropy import wcs
 import astropy.units as u
@@ -353,7 +354,10 @@ class PackageAlertsTask(pipeBase.Task):
         for alert in alerts:
             alertBytes = self._serializeAlert(alert, schema=self.alertSchema.definition, schema_id=1)
             try:
-                self.producer.produce(self.kafkaTopic, alertBytes, callback=self._delivery_callback)
+                timestamp = int(time.time() * 1000)  # Current time in milliseconds
+                headers = [("producer_timestamp", str(timestamp).encode('utf-8'))]
+                self.producer.produce(self.kafkaTopic, alertBytes, callback=self._delivery_callback,
+                                      headers=headers)
                 self.producer.flush()
 
             except KafkaException as e:
