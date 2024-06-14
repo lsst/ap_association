@@ -47,7 +47,8 @@ from lsst.ap.association import (
     LoadDiaCatalogsTask,
     PackageAlertsTask)
 from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
-from lsst.ap.association.utils import convertTableToSdmSchema, readSchemaFromApdb, dropEmptyColumns
+from lsst.ap.association.utils import convertTableToSdmSchema, readSchemaFromApdb, dropEmptyColumns, \
+    make_empty_catalog
 from lsst.daf.base import DateTime
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
     DiaObjectCalculationTask
@@ -658,7 +659,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             - ``nNewDiaObjects`` : Number of newly created diaObjects.(`int`)
         """
         if len(unAssocDiaSources) == 0:
-            newDiaObjects = self.apdb._make_empty_catalog(daxApdb.ApdbTables.DiaObject)
+            newDiaObjects = make_empty_catalog(self.schema, tableName="DiaObject")
         else:
             unAssocDiaSources["diaObjectId"] = unAssocDiaSources["diaSourceId"]
             newDiaObjects = convertTableToSdmSchema(self.schema, unAssocDiaSources,
