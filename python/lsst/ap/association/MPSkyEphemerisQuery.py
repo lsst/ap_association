@@ -32,16 +32,10 @@ __all__ = ["MPSkyEphemerisQueryConfig", "MPSkyEphemerisQueryTask"]
 
 import pandas as pd
 import mpsky
-import requests
-from io import StringIO
 import numpy as np
 
-from astropy.coordinates import Angle
-from astropy import units as u
-
-from lsst.daf.base import DateTime
-import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
+import lsst.pex.config as pexConfig
 from lsst.utils.timer import timeMethod
 from lsst.geom import SpherePoint
 
@@ -53,16 +47,16 @@ pd.options.mode.chained_assignment = 'raise'
 
 
 class MPSkyEphemerisQueryConnections(PipelineTaskConnections,
-                                      dimensions=("instrument",
-                                                  "group", "detector")):
+                                     dimensions=("instrument",
+                                                 "group", "detector")):
 
     predictedRegionTime = pipeBase.connectionTypes.Input(
         doc="The predicted exposure region and time",
         name="predictedRegionTime",
         storageClass="RegionTimeInfo",
         dimensions={"instrument", "group", "detector"},
-    ) #Propagate this change through my code.
-    
+    )
+
     ssObjects = connTypes.Output(
         doc="MPSky-provided Solar System objects observable in this detector-visit",
         name="visitSsObjects",
@@ -70,13 +64,14 @@ class MPSkyEphemerisQueryConnections(PipelineTaskConnections,
         dimensions=("instrument", "group", "detector"),
     )
 
+
 class MPSkyEphemerisQueryConfig(
         PipelineTaskConfig,
         pipelineConnections=MPSkyEphemerisQueryConnections):
     observerCode = pexConfig.Field(
         dtype=str,
-        doc="IAU Minor Planet Center observer code for queries " 
-            "(Rubin Obs./LSST default is X05)",#[]X05? I11? 
+        doc="IAU Minor Planet Center observer code for queries "
+            "(Rubin Obs./LSST default is X05)",
         default='X05'
     )
     queryRadiusDegrees = pexConfig.Field(
@@ -102,8 +97,6 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         butlerQC.put(outputs, outputRefs)
 
     @timeMethod
-
-    #Krzyztof -- regionTime (ra, dec, mjd) 
     def run(self, predictedRegionTime):
         """Parse the information on the current visit and retrieve the
         observable solar system objects from MPSky.
@@ -143,11 +136,11 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         timespan = predictedRegionTime.timespan
         expCenter = SpherePoint(region.getBoundingCircle().getCenter())
 
-        ##Make sure date is non-NaN. 
+        # Make sure date is non-NaN.
         expMidPointEPOCH = (timespan.begin.mjd + timespan.end.mjd)/2
-                        
+
         # MPSky service query
-        MPSkySsObjects= self._MPSkyConeSearch(expCenter, expMidPointEPOCH, self.config.queryRadiusDegrees) 
+        MPSkySsObjects = self._MPSkyConeSearch(expCenter, expMidPointEPOCH, self.config.queryRadiusDegrees)
         # Add the visit as an extra column.
 
         return pipeBase.Struct(
@@ -175,14 +168,14 @@ class MPSkyEphemerisQueryTask(PipelineTask):
 
         fieldRA = expCenter.getRa().asDegrees()
         fieldDec = expCenter.getDec().asDegrees()
-        observerMPCId = self.config.observerCode
-        ObjID, ra, dec, obj_poly, obs_poly  = mpsky.query_service('https://sky.dirac.dev/ephemerides/', epochMJD, fieldRA, fieldDec, queryRadius)#query MPSky[]
+        ObjID, ra, dec, obj_poly, obs_poly = mpsky.query_service('https://sky.dirac.dev/ephemerides/',
+                                                                 epochMJD, fieldRA, fieldDec, queryRadius)
         MPSkySsObjects = pd.DataFrame()
         MPSkySsObjects['ObjID'] = ObjID
         MPSkySsObjects['ra'] = ra
         MPSkySsObjects['dec'] = dec
-        MPSkySsObjects['obj_poly'] = list(np.zeros((len(MPSkySsObjects), 5))) #fix, eventually
-        MPSkySsObjects['obs_poly'] = list(np.zeros((len(MPSkySsObjects), 5))) #fix, eventually
+        MPSkySsObjects['obj_poly'] = list(np.zeros((len(MPSkySsObjects), 5)))  # fix, eventually
+        MPSkySsObjects['obs_poly'] = list(np.zeros((len(MPSkySsObjects), 5)))  # fix, eventually
         MPSkySsObjects['Err(arcsec)'] = 2
         MPSkySsObjects['ssObjectId'] = [abs(hash(v)) for v in MPSkySsObjects['ObjID'].values]
         nFound = len(MPSkySsObjects)

@@ -36,7 +36,7 @@ from lsst.utils.timer import timeMethod
 class SolarSystemAssociationConfig(pexConfig.Config):
     """Config class for SolarSystemAssociationTask.
     """
-    
+
     maxDistArcSeconds = pexConfig.Field(
         dtype=float,
         doc='Maximum distance in arcseconds to test for a DIASource to be a '
@@ -125,14 +125,14 @@ class SolarSystemAssociationTask(pipeBase.Task):
         # fancier later.
         diaSourceCatalog["ssObjectId"] = 0
         for index, ssObject in maskedObjects.iterrows():
-            
+
             ssoVect = self._radec_to_xyz(ssObject["ra"], ssObject["dec"])
             # Which DIA Sources fall within r?
             dist, idx = tree.query(ssoVect, distance_upper_bound=maxRadius)
             if np.isfinite(dist[0]):
                 nFound += 1
                 diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "ssObjectId"] = ssObject["ssObjectId"]
-        
+
         self.log.info("Successfully associated %d SolarSystemObjects.", nFound)
         assocMask = (diaSourceCatalog["ssObjectId"] != 0) & (np.isfinite(diaSourceCatalog["ssObjectId"]))
         return pipeBase.Struct(
