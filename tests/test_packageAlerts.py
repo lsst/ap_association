@@ -255,6 +255,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         ccdData = packageAlerts.createCcdDataCutout(
             self.exposure,
             self.exposure.getWcs().getSkyOrigin(),
+            self.exposure.getWcs().getPixelOrigin(),
             self.exposure.getBBox().getDimensions(),
             self.exposure.getPhotoCalib(),
             diaSrcId)
@@ -265,10 +266,13 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                                      self.cutoutWcs.wcs.cd)
         self.assertFloatsAlmostEqual(ccdData.data,
                                      calibExposure.getImage().array)
+        self.assertFloatsAlmostEqual(ccdData.psf,
+                                     self.exposure.psf.computeKernelImage(self.center).array)
 
         ccdData = packageAlerts.createCcdDataCutout(
             self.exposure,
             geom.SpherePoint(0, 0, geom.degrees),
+            geom.Point2D(-100, -100),
             self.exposure.getBBox().getDimensions(),
             self.exposure.getPhotoCalib(),
             diaSrcId)
@@ -321,12 +325,14 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             sphPoint = geom.SpherePoint(diaSource["ra"],
                                         diaSource["dec"],
                                         geom.degrees)
+            pixelPoint = geom.Point2D(diaSource["x"], diaSource["y"])
             cutout = self.exposure.getCutout(sphPoint,
                                              geom.Extent2I(self.cutoutSize,
                                                            self.cutoutSize))
             ccdCutout = packageAlerts.createCcdDataCutout(
                 cutout,
                 sphPoint,
+                pixelPoint,
                 geom.Extent2I(self.cutoutSize, self.cutoutSize),
                 cutout.getPhotoCalib(),
                 1234)
@@ -509,12 +515,14 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             sphPoint = geom.SpherePoint(alert["diaSource"]["ra"],
                                         alert["diaSource"]["dec"],
                                         geom.degrees)
+            pixelPoint = geom.Point2D(alert["diaSource"]["x"], alert["diaSource"]["y"])
             cutout = self.exposure.getCutout(sphPoint,
                                              geom.Extent2I(self.cutoutSize,
                                                            self.cutoutSize))
             ccdCutout = packageAlerts.createCcdDataCutout(
                 cutout,
                 sphPoint,
+                pixelPoint,
                 geom.Extent2I(self.cutoutSize, self.cutoutSize),
                 cutout.getPhotoCalib(),
                 1234)

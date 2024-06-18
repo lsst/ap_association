@@ -265,23 +265,28 @@ class PackageAlertsTask(pipeBase.Task):
             sphPoint = geom.SpherePoint(diaSource["ra"],
                                         diaSource["dec"],
                                         geom.degrees)
+            pixelPoint = geom.Point2D(diaSource["x"],
+                                      diaSource["y"])
 
             cutoutExtent = self.createDiaSourceExtent(diaSource["bboxSize"])
             diffImCutout = self.createCcdDataCutout(
                 diffIm,
                 sphPoint,
+                pixelPoint,
                 cutoutExtent,
                 diffImPhotoCalib,
                 diaSource["diaSourceId"])
             calexpCutout = self.createCcdDataCutout(
                 calexp,
                 sphPoint,
+                pixelPoint,
                 cutoutExtent,
                 calexpPhotoCalib,
                 diaSource["diaSourceId"])
             templateCutout = self.createCcdDataCutout(
                 template,
                 sphPoint,
+                pixelPoint,
                 cutoutExtent,
                 templatePhotoCalib,
                 diaSource["diaSourceId"])
@@ -370,7 +375,7 @@ class PackageAlertsTask(pipeBase.Task):
 
         self.producer.flush()
 
-    def createCcdDataCutout(self, image, skyCenter, extent, photoCalib, srcId):
+    def createCcdDataCutout(self, image, skyCenter, pixelCenter, extent, photoCalib, srcId):
         """Grab an image as a cutout and return a calibrated CCDData image.
 
         Parameters
@@ -379,6 +384,8 @@ class PackageAlertsTask(pipeBase.Task):
             Image to pull cutout from.
         skyCenter : `lsst.geom.SpherePoint`
             Center point of DiaSource on the sky.
+        pixelCenter : `lsst.geom.Point2D`
+            Pixel center of DiaSource on the sky.
         extent : `lsst.geom.Extent2I`
             Bounding box to cutout from the image.
         photoCalib : `lsst.afw.image.PhotoCalib`
@@ -393,18 +400,18 @@ class PackageAlertsTask(pipeBase.Task):
             CCDData object storing the calibrate information from the input
             difference or template image.
         """
+
         # Catch errors in retrieving the cutout.
         try:
-            cutout = image.getCutout(skyCenter, extent)
+            cutout = image.getCutout(pixelCenter, extent)
         except InvalidParameterError:
-            point = image.getWcs().skyToPixel(skyCenter)
             imBBox = image.getBBox()
-            if not geom.Box2D(image.getBBox()).contains(point):
+            if not geom.Box2D(image.getBBox()).contains(pixelCenter):
                 self.log.warning(
                     "DiaSource id=%i centroid lies at pixel (%.2f, %.2f) "
                     "which is outside the Exposure with bounding box "
                     "((%i, %i), (%i, %i)). Returning None for cutout...",
-                    srcId, point.x, point.y,
+                    srcId, pixelCenter.x, pixelCenter.y,
                     imBBox.minX, imBBox.maxX, imBBox.minY, imBBox.maxY)
             else:
                 raise InvalidParameterError(
@@ -413,6 +420,9 @@ class PackageAlertsTask(pipeBase.Task):
                     "creation. Exiting."
                     % srcId)
             return None
+
+        # use image.psf.computeKernelImage to provide PSF centered in the array
+        cutoutPsf = image.psf.computeKernelImage(pixelCenter).array
 
         # Find the value of the bottom corner of our cutout's BBox and
         # subtract 1 so that the CCDData cutout position value will be
@@ -437,6 +447,7 @@ class PackageAlertsTask(pipeBase.Task):
             uncertainty=VarianceUncertainty(calibCutout.getVariance().array),
             flags=calibCutout.getMask().array,
             wcs=cutoutWcs,
+            psf=cutoutPsf,
             meta={"cutMinX": cutOutMinX,
                   "cutMinY": cutOutMinY},
             unit=u.nJy)
