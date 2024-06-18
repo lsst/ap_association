@@ -31,8 +31,10 @@ __all__ = ["MPSkyEphemerisQueryConfig", "MPSkyEphemerisQueryTask"]
 
 
 import pandas as pd
-import mpsky
 import numpy as np
+import pyarrow as pa
+import requests
+import sys
 
 import lsst.pipe.base as pipeBase
 import lsst.pex.config as pexConfig
@@ -78,7 +80,13 @@ class MPSkyEphemerisQueryConfig(
         dtype=float,
         doc="On sky radius for Ephemeris cone search. Defaults "
             "to the radius of Rubin Obs FoV in degrees",
-        default=1.75)
+        default=1.75
+    )
+    MPSkyURL = pexConfig.Field(
+        dtype=str,
+        doc="URL to query mpsky service",
+        default="http://sdfrome001.sdf.slac.stanford.edu:3666"
+    )
 
 
 class MPSkyEphemerisQueryTask(PipelineTask):
@@ -168,8 +176,37 @@ class MPSkyEphemerisQueryTask(PipelineTask):
 
         fieldRA = expCenter.getRa().asDegrees()
         fieldDec = expCenter.getDec().asDegrees()
-        ObjID, ra, dec, obj_poly, obs_poly = mpsky.query_service('https://sky.dirac.dev/ephemerides/',
-                                                                 epochMJD, fieldRA, fieldDec, queryRadius)
+
+        params = {
+            "t": epochMJD,
+            "ra": fieldRA,
+            "dec": fieldDec,
+            "radius": queryRadius
+        }
+
+        try:
+            response = requests.get(self.config.MP, params=params)
+            response.raise_for_status()
+        except requests.exceptions.ConnectionError as e:
+            print("failed to connect to the remote ephemerides service. details:", file=sys.stderr)
+            print(e, file=sys.stderr)
+            exit(-1)
+
+        with pa.input_stream(memoryview(response.content)) as fp:
+            fp.seek(0)
+            p = pa.ipc.read_tensor(fp)
+            op = pa.ipc.read_tensor(fp)
+            op, p = op, p
+            with pa.ipc.open_stream(fp) as reader:
+                r = next(reader)
+
+        ObjID = r["name"].to_numpy(zero_copy_only=False)
+        ra = r["ra"].to_numpy()
+        dec = r["dec"].to_numpy()
+
+        # ObjID, ra, dec, obj_poly, obs_poly = mpsky.query_service('https://sky.dirac.dev/ephemerides/',
+        #                                                         epochMJD, fieldRA, fieldDec, queryRadius)
+
         MPSkySsObjects = pd.DataFrame()
         MPSkySsObjects['ObjID'] = ObjID
         MPSkySsObjects['ra'] = ra
