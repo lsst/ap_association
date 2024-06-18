@@ -1,0 +1,146 @@
+# This file is part of ap_association.
+#
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+
+import os
+import sys
+from collections import defaultdict
+
+from astropy.time import Time
+import pickle
+import pandas as pd
+import healpy as hp
+import numpy as np
+
+from sorcha.ephemeris.simulation_parsing import (Observatory, mjd_tai_to_epoch)
+from sorcha.ephemeris.simulation_setup import create_assist_ephemeris, furnish_spiceypy, generate_simulations, precompute_pointing_information
+from sorcha.ephemeris.simulation_driver import EphemerisGeometryParameters, calculate_rates_and_geometry
+from sorcha.ephemeris.simulation_geometry import integrate_light_time
+from sorcha.utilities.sorchaArguments import sorchaArguments
+from sorcha.modules.PPConfigParser import PPConfigFileParser
+from sorcha.modules.PPReadPointingDatabase import PPReadPointingDatabase
+
+
+import lsst.pex.config
+import lsst.pipe.base 
+
+class DailySolarSystemPrecomputeConfig(lsst.pex.config.Config):
+    pass
+
+class DailySolarSystemPrecomputeTask(lsst.pipe.base.Task):
+    _DefaultName = "dailySolarSystemPrecompute"
+    ConfigClass = DailySolarSystemPrecomputeConfig
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        #Make the database connection
+        self.mpcorb_db = None
+
+    def run(self, date):
+        orbits = self._load_mpcorb()
+        state_vectors = self._compute_positions(orbits, date)
+        self._write_apdb(state_vectors)
+
+    def _compute_positions(self, orbits, date):
+        """Summary
+
+        Parameters
+        ----------
+        orbits : `pandas.DataFrame`
+            MPCORB 6-parameter orbits, plus epoch and ObjID.
+        date : `astropy.time.Time`
+            Time at which to compute states.
+        """
+        chunksize = 100000
+
+        configs = {"ar_obs_code":"X05", "ar_ang_fov": 0, "ar_fov_buffer": 0, 
+        "ar_healpix_order": 0, "t": date.mjd, "outfile": ""}
+
+        cmd_args_dict = {
+            "paramsinput": None,
+            "orbinfile": "",
+            "oifoutput": None,
+            "configfile": None,
+            "outpath": ".",
+            "surveyname": "LSST",
+            "outfilestem": "precompute_practice",
+            "verbose": False,
+            "pointing_database": None,
+            "makeTemporaryEphemerisDatabase": False,
+            "readTemporaryEphemerisDatabase": False,
+            "deleteTemporaryEphemerisDatabase": False
+        }
+
+        args = sorchaArguments(cmd_args_dict)
+        
+        pointings = pd.DataFrame()
+        pointings["observationStartMJD_TAI"] = [date.mjd]
+        pointings["visitTime"] = 30
+        pointings["fieldRA"] = 0
+        pointings["fieldDec"] = 0
+        pointings["FieldID"] = 0
+        pointings["observationMidpointMJD_TAI"] = pointings["observationStartMJD_TAI"] + (
+                    (pointings["visitTime"] / 2.0) / 86400.0)   
+        pointings = precompute_pointing_information(pointings, args, configs)
+
+
+        ephem, gm_sun, gm_total = create_assist_ephemeris(args)
+        furnish_spiceypy(args)
+        sim_dict = generate_simulations(ephem, gm_sun, gm_total, orbits, args)
+        observatories = Observatory(args)
+
+        nside = 128
+        states = []
+        names = []
+        radecs = []
+
+        for _, pointing in pointings_df.iterrows():
+            mjd_tai = float(pointing["observationMidpointMJD_TAI"])
+            desigs = orbits['ObjID']
+            for obj_id in sorted(desigs):
+                ephem_geom_params = EphemerisGeometryParameters()
+                ephem_geom_params.obj_id = obj_id
+                ephem_geom_params.mjd_tai = mjd_tai
+                v = sim_dict[obj_id]
+                sim, ex = v["sim"], v["ex"]
+                simt = sim.t
+                (
+                    ephem_geom_params.rho,
+                    ephem_geom_params.rho_mag,
+                    _,
+                    ephem_geom_params.r_ast,
+                    ephem_geom_params.v_ast,
+                ) = integrate_light_time(
+                    sim, ex, pointing["JD_TDB"] - ephem.jd_ref, pointing["r_obs"], iter = 1, lt0=0
+                )
+                rho_hat = ephem_geom_params.rho / ephem_geom_params.rho_mag
+                
+                state_vec = equatorial_to_ecliptic(np.hstack([ephem_geom_params.r_ast, ephem_geom_params.v_ast]))
+                states.append(state_vec)
+                names.append(obj_id)
+                radecs.append(hp.vec2ang(rho_hat, lonlat=True))
+                
+        results = pd.DataFrame()
+        results['ObjID'] = names
+        results[['x', 'y', 'z', 'vx', 'vy', 'vz']] = states 
+        results[['ra', 'dec']] = radecs
+        return results
+        
