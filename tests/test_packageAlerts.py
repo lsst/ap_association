@@ -272,7 +272,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         ccdData = packageAlerts.createCcdDataCutout(
             self.exposure,
             geom.SpherePoint(0, 0, geom.degrees),
-            geom.Point2D(0, 0),
+            geom.Point2D(-100, -100),
             self.exposure.getBBox().getDimensions(),
             self.exposure.getPhotoCalib(),
             diaSrcId)

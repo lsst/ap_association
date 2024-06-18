@@ -403,16 +403,15 @@ class PackageAlertsTask(pipeBase.Task):
 
         # Catch errors in retrieving the cutout.
         try:
-            cutout = image.getCutout(skyCenter, extent)
+            cutout = image.getCutout(pixelCenter, extent)
         except InvalidParameterError:
-            point = image.getWcs().skyToPixel(skyCenter)
             imBBox = image.getBBox()
-            if not geom.Box2D(image.getBBox()).contains(point):
+            if not geom.Box2D(image.getBBox()).contains(pixelCenter):
                 self.log.warning(
                     "DiaSource id=%i centroid lies at pixel (%.2f, %.2f) "
                     "which is outside the Exposure with bounding box "
                     "((%i, %i), (%i, %i)). Returning None for cutout...",
-                    srcId, point.x, point.y,
+                    srcId, pixelCenter.x, pixelCenter.y,
                     imBBox.minX, imBBox.maxX, imBBox.minY, imBBox.maxY)
             else:
                 raise InvalidParameterError(
