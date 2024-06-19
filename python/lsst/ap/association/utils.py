@@ -21,11 +21,13 @@
 
 """Utilities for working with the APDB.
 """
-__all__ = ("convertTableToSdmSchema", "readSdmSchemaFile", "readSchemaFromApdb", "dropEmptyColumns")
+__all__ = ("convertTableToSdmSchema", "readSdmSchemaFile", "readSchemaFromApdb",
+           "dropEmptyColumns", "make_empty_catalog")
 
 from collections.abc import Mapping
 import os
 
+from lsst.dax.apdb import Apdb, ApdbTables, schema_model
 import felis.datamodel
 import numpy as np
 import pandas as pd
@@ -89,7 +91,7 @@ def readSdmSchemaFile(schemaFile: str,
 
     Returns
     -------
-    schemaTable : 'dict' of `lsst.dax.apdb.apdbSchema.ApdbSchema`
+    schemaTable : dict[str, schema_model.Table]
         A dict of the schemas in the given table defined in the specified file.
 
     Raises
@@ -114,7 +116,7 @@ def readSdmSchemaFile(schemaFile: str,
     return schemaTable
 
 
-def readSchemaFromApdb(apdb):
+def readSchemaFromApdb(apdb: Apdb) -> dict[str, schema_model.Table | None]:
     """Extract the schema from an APDB instance.
 
     Parameters
@@ -124,13 +126,10 @@ def readSchemaFromApdb(apdb):
 
     Returns
     -------
-    schemaTable : 'dict' of `lsst.dax.apdb.apdbSchema.ApdbSchema`
+    schemaTable : dict[str, schema_model.Table | None]
         A dict of the schemas in the given table defined in the specified file.
     """
-    schemaTable = {}
-    for singleTable in apdb._schema.tableSchemas:
-        schemaTable[singleTable.name] = apdb._schema.tableSchemas[singleTable]
-    return schemaTable
+    return {table.table_name(): apdb.tableDef(table) for table in ApdbTables}
 
 
 def convertTableToSdmSchema(apdbSchema, sourceTable, tableName):
@@ -141,7 +140,7 @@ def convertTableToSdmSchema(apdbSchema, sourceTable, tableName):
 
     Parameters
     ----------
-    apdbSchema : `lsst.dax.apdb.apdbSchema.ApdbSchema`
+    apdbSchema : `dict` [`str`, `lsst.dax.apdb.schema_model.Table`]
         Schema from ``sdm_schemas`` containing the table definition to use.
     sourceTable : `pandas.DataFrame`
         The input table to convert.
@@ -182,7 +181,7 @@ def dropEmptyColumns(apdbSchema, sourceTable, tableName):
 
     Parameters
     ----------
-    apdbSchema : `lsst.dax.apdb.apdbSchema.ApdbSchema`
+    apdbSchema : `dict` [`str`, `lsst.dax.apdb.schema_model.Table`]
         Schema from ``sdm_schemas`` containing the table definition to use.
     sourceTable : `pandas.DataFrame`
         The input table to remove missing data columns from.
@@ -196,3 +195,27 @@ def dropEmptyColumns(apdbSchema, sourceTable, tableName):
     nullColNames = nullColumns[nullColumns].index.tolist()
     dropColumns = list(set(nullColNames) & set(nullableList))
     return sourceTable.drop(columns=dropColumns)
+
+
+def make_empty_catalog(apdbSchema, tableName):
+    """Make an empty catalog for a table with a given name.
+
+    Parameters
+    ----------
+    apdbSchema : `dict` [`str`, `lsst.dax.apdb.schema_model.Table`]
+        Schema from ``sdm_schemas`` containing the table definition to use.
+    tableName : `str`
+        Name of the table in the schema to use.
+
+    Returns
+    -------
+    catalog : `pandas.DataFrame`
+        An empty catalog.
+    """
+    table = apdbSchema[tableName]
+
+    data = {
+        columnDef.name: pd.Series(column_dtype(columnDef.datatype))
+        for columnDef in table.columns
+    }
+    return pd.DataFrame(data)
