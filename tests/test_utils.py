@@ -39,6 +39,8 @@ class TestUtils(unittest.TestCase):
         tableNames = ["DiaObject", "DiaSource", "DiaForcedSource"]
         for tableName in tableNames:
             emptyDiaObjects = make_empty_catalog(schema, tableName=tableName)
+            self.assertTrue(emptyDiaObjects.empty)
+
             emptyColumns = set(emptyDiaObjects.columns)
             self.assertIn("ra", emptyColumns)
             self.assertIn("dec", emptyColumns)
@@ -47,4 +49,7 @@ class TestUtils(unittest.TestCase):
             emptyDf = pd.DataFrame(columns=["diaObjectId",])
             emptyDf.set_index("diaObjectId")
             convertedEmptyDiaObjects = convertTableToSdmSchema(schema, emptyDf, tableName=tableName)
-            self.assertEqual(set(convertedEmptyDiaObjects.columns), emptyColumns)
+            # TODO: we have no tests of convertTableToSdmSchema, so it's dangerous to use it as an oracle.
+            emptyTypes = dict(zip(emptyDiaObjects.columns, emptyDiaObjects.dtypes))
+            convertedEmptyTypes = dict(zip(convertedEmptyDiaObjects.columns, convertedEmptyDiaObjects.dtypes))
+            self.assertEqual(emptyTypes, convertedEmptyTypes)

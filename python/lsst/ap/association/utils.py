@@ -215,7 +215,7 @@ def make_empty_catalog(apdbSchema, tableName):
     table = apdbSchema[tableName]
 
     data = {
-        columnDef.name: pd.Series(column_dtype(columnDef.datatype))
+        columnDef.name: pd.Series(dtype=column_dtype(columnDef.datatype))
         for columnDef in table.columns
     }
     return pd.DataFrame(data)
