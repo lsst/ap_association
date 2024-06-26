@@ -42,6 +42,7 @@ except ImportError:
     confluent_kafka = None
 
 import lsst.alert.packet as alertPack
+from lsst.afw.detection import InvalidPsfError
 import lsst.afw.geom as afwGeom
 import lsst.geom as geom
 import lsst.pex.config as pexConfig
@@ -424,6 +425,11 @@ class PackageAlertsTask(pipeBase.Task):
         except InvalidParameterError:
             self.log.warning("Could not calculate PSF for DiaSource with "
                              "id=%i. InvalidParameterError encountered. Exiting."
+                             % srcId)
+            cutoutPsf = None
+        except InvalidPsfError:
+            self.log.warning("Could not calculate PSF for DiaSource with "
+                             "id=%i. InvalidPsfError encountered. Exiting."
                              % srcId)
             cutoutPsf = None
 
