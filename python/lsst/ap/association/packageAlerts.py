@@ -400,29 +400,32 @@ class PackageAlertsTask(pipeBase.Task):
             CCDData object storing the calibrate information from the input
             difference or template image.
         """
-
+        imBBox = image.getBBox()
+        if not geom.Box2D(image.getBBox()).contains(pixelCenter):
+            self.log.warning(
+                "DiaSource id=%i centroid lies at pixel (%.2f, %.2f) "
+                "which is outside the Exposure with bounding box "
+                "((%i, %i), (%i, %i)). Returning None for cutout...",
+                srcId, pixelCenter.x, pixelCenter.y,
+                imBBox.minX, imBBox.maxX, imBBox.minY, imBBox.maxY)
+            return None
         # Catch errors in retrieving the cutout.
         try:
             cutout = image.getCutout(pixelCenter, extent)
         except InvalidParameterError:
-            imBBox = image.getBBox()
-            if not geom.Box2D(image.getBBox()).contains(pixelCenter):
-                self.log.warning(
-                    "DiaSource id=%i centroid lies at pixel (%.2f, %.2f) "
-                    "which is outside the Exposure with bounding box "
-                    "((%i, %i), (%i, %i)). Returning None for cutout...",
-                    srcId, pixelCenter.x, pixelCenter.y,
-                    imBBox.minX, imBBox.maxX, imBBox.minY, imBBox.maxY)
-            else:
-                raise InvalidParameterError(
-                    "Failed to retrieve cutout from image for DiaSource with "
-                    "id=%i. InvalidParameterError thrown during cutout "
-                    "creation. Exiting."
-                    % srcId)
-            return None
-
-        # use image.psf.computeKernelImage to provide PSF centered in the array
-        cutoutPsf = image.psf.computeKernelImage(pixelCenter).array
+            raise InvalidParameterError(
+                "Failed to retrieve cutout from image for DiaSource with "
+                "id=%i. InvalidParameterError thrown during cutout "
+                "creation. Returning None for cutout..."
+                % srcId)
+        try:
+            # use image.psf.computeKernelImage to provide PSF centered in the array
+            cutoutPsf = image.psf.computeKernelImage(pixelCenter).array
+        except InvalidParameterError:
+            self.log.warning("Could not calculate PSF for DiaSource with "
+                             "id=%i. InvalidParameterError encountered. Exiting."
+                             % srcId)
+            cutoutPsf = None
 
         # Find the value of the bottom corner of our cutout's BBox and
         # subtract 1 so that the CCDData cutout position value will be
