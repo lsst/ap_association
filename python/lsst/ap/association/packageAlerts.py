@@ -306,6 +306,7 @@ class PackageAlertsTask(pipeBase.Task):
 
         if self.config.doProduceAlerts:
             self.produceAlerts(alerts, visit, detector)
+            self.producer.close()
 
         if self.config.doWriteAlerts:
             with open(os.path.join(self.config.alertWriteLocation, f"{visit}_{detector}.avro"), "wb") as f:
