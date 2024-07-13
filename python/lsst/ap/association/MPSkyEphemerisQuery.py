@@ -61,7 +61,7 @@ class MPSkyEphemerisQueryConnections(PipelineTaskConnections,
 
     ssObjects = connTypes.Output(
         doc="MPSky-provided Solar System objects observable in this detector-visit",
-        name="visitSsObjects",
+        name="preloaded_ssObjects",
         storageClass="DataFrame",
         dimensions=("instrument", "group", "detector"),
     )
@@ -185,7 +185,7 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         }
 
         try:
-            response = requests.get(self.config.MP, params=params)
+            response = requests.get(self.config.MPSkyURL, params=params)
             response.raise_for_status()
         except requests.exceptions.ConnectionError as e:
             print("failed to connect to the remote ephemerides service. details:", file=sys.stderr)

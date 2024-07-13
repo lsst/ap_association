@@ -28,4 +28,4 @@ from .diaPipe import *
 from .transformDiaSourceCatalog import *
 from .utils import *
 from .version import *
-from .MPSkyEphemerisQuery import *
+from .mpSkyEphemerisQuery import *
