@@ -138,6 +138,8 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             DiaObjects loaded from the Apdb that are within the area defined
             by ``pixelRanges``.
         """
+        self.log.info("Loading DiaObjects")
+
         if region is None:
             # If no area is specified return an empty DataFrame with the
             # the column used for indexing later in AssociationTask.
@@ -182,6 +184,8 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             DiaSources loaded from the Apdb that are within the area defined
             by ``pixelRange`` and associated with ``diaObjects``.
         """
+        self.log.info("Loading DiaSources")
+
         if region is None:
             # If no area is specified return an empty DataFrame with the
             # the column used for indexing later in AssociationTask.
@@ -230,6 +234,8 @@ class LoadDiaCatalogsTask(pipeBase.Task):
             DiaObjects loaded from the Apdb that are within the area defined
             by ``pixelRanges``.
         """
+        self.log.info("Loading DiaForcedSources")
+
         if len(diaObjects) == 0:
             # If no diaObjects are available return an empty DataFrame with
             # the the column used for indexing later in AssociationTask.
