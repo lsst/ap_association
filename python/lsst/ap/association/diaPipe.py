@@ -569,7 +569,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         # Store DiaSources, updated DiaObjects, and DiaForcedSources in the
         # Apdb.
-        self.log.info(f"Updating {len(diaForcedSources)} diaForcedSources from the APDB")
+        self.log.info(f"Updating {len(diaForcedSources)} diaForcedSources in the APDB")
         diaForcedSources = convertTableToSdmSchema(self.schema, diaForcedSources,
                                                    tableName="DiaForcedSource",
                                                    )
@@ -582,6 +582,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diaObjectStore,
             diaSourceStore,
             diaForcedSourceStore)
+        self.log.info("APDB updated.")
 
         if self.config.doPackageAlerts:
             if len(loaderResult.diaForcedSources) > 1:
