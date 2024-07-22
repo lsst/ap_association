@@ -363,6 +363,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         self.makeSubtask("diaCatalogLoader")
         self.makeSubtask("associator")
         self.makeSubtask("diaCalculation")
+        self.makeSubtask("")
         if self.config.doRunForcedMeasurement:
             self.makeSubtask("diaForcedSource")
         if self.config.doPackageAlerts:
@@ -438,6 +439,13 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diaObjects = loaderResult.diaObjects
         # Associate new DiaSources with existing DiaObjects.
         assocResults = self.associator.run(diaSourceTable, diaObjects)
+
+        # New task should run here? Would need to pass exposure psf as well as the
+        # bounding box.
+
+        diaSourceTable = filterResults(
+
+        )
 
         if self.config.doSolarSystemAssociation:
             ssoAssocResult = self.solarSystemAssociator.run(

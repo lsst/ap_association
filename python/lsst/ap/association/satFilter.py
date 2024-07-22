@@ -22,7 +22,7 @@
 __all__ = ("SatelliteFilterTask", "SatelliteFilterConfig")
 
 import numpy as np
-from shapely.geometry import Point, Polygon
+from lsst.geom import Point, Polygon
 
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
