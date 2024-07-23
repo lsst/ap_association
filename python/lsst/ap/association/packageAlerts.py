@@ -48,6 +48,7 @@ import lsst.geom as geom
 import lsst.pex.config as pexConfig
 from lsst.pex.exceptions import InvalidParameterError
 import lsst.pipe.base as pipeBase
+import lsst.utils.logging
 from lsst.utils.timer import timeMethod
 
 
@@ -247,7 +248,14 @@ class PackageAlertsTask(pipeBase.Task):
         diffImPhotoCalib = diffIm.getPhotoCalib()
         calexpPhotoCalib = calexp.getPhotoCalib()
         templatePhotoCalib = template.getPhotoCalib()
+
+        n_sources = len(diaSourceCat)
+        self.log.info("Packaging alerts for %d DiaSources.", n_sources)
+        # Log every 10 seconds as proof of liveness.
+        loop_logger = lsst.utils.logging.PeriodicLogger(self.log, interval=10.0)
+
         for srcIndex, diaSource in diaSourceCat.iterrows():
+            loop_logger.log("%s/%s sources have been packaged.", len(alerts), n_sources)
             # Get all diaSources for the associated diaObject.
             # TODO: DM-31992 skip DiaSources associated with Solar System
             #       Objects for now.
@@ -305,10 +313,13 @@ class PackageAlertsTask(pipeBase.Task):
                                    templateCutout))
 
         if self.config.doProduceAlerts:
+            self.log.info("Producing alerts to %s.", self.kafkaTopic)
             self.produceAlerts(alerts, visit, detector)
 
         if self.config.doWriteAlerts:
-            with open(os.path.join(self.config.alertWriteLocation, f"{visit}_{detector}.avro"), "wb") as f:
+            avro_path = os.path.join(self.config.alertWriteLocation, f"{visit}_{detector}.avro")
+            self.log.info("Writing alerts to %s.", avro_path)
+            with open(avro_path, "wb") as f:
                 self.alertSchema.store_alerts(f, alerts)
 
     def _patchDiaSources(self, diaSources):
