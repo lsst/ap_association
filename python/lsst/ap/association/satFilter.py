@@ -22,7 +22,7 @@
 __all__ = ("SatelliteFilterTask", "SatelliteFilterConfig")
 
 import numpy as np
-from lsst.geom import Point, Polygon
+import lsst.sphgeom as sphgeom
 
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
@@ -52,20 +52,19 @@ class SatelliteFilterTask(pipeBase.Task):
         midpoints = self._midpoint(sat_coords)
         angles = self._angle_between_points(sat_coords)
 
-        ra, dec = self.satellite_ellipse(midpoints, psf, angles, sat_coords)
+        ellipses = self.satellite_ellipse(midpoints, psf, angles, sat_coords)
 
-        trail_mask = self._check_satellites(dia_sources, ra, dec)
+        trail_mask = self._check_satellites(dia_sources, ellipses)
 
         return pipeBase.Struct(
             diaSources=dia_sources[~trail_mask].reset_index(drop=True))
 
     def _midpoint(sat_coords):
-        xm = (sat_coords[:, 1, 0].flatten() + sat_coords[:, 0, 0].flatten()) / 2
-        ym = (sat_coords[:, 1, 1].flatten() + sat_coords[:, 0, 1].flatten()) / 2
+        xm = (sat_coords[:, 1, 0].flatten() + sat_coords[:, 0, 0].flatten()) / 2.0
+        ym = (sat_coords[:, 1, 1].flatten() + sat_coords[:, 0, 1].flatten()) / 2.0
         return np.array([xm, ym])
 
     def _angle_between_points(sat_coords):
-        # Compute differences
         dx = sat_coords[:, 1, 0].flatten() - sat_coords[:, 0, 0].flatten()
         dy = sat_coords[:, 1, 1].flatten() - sat_coords[:, 0, 1].flatten()
 
@@ -74,34 +73,30 @@ class SatelliteFilterTask(pipeBase.Task):
 
         return angle_array
 
-    def satellite_ellipse(center, psf, theta, array):
-        # Generate points for ellipse
-        t = np.linspace(0, 2 * np.pi, 100)
-        t_large = np.repeat([t], len(theta), axis=0)
+    def satellite_ellipse(self, center, theta):
+        ellipses=[]
+        for i in range(len(center)):
+            ellipse = sphgeom.Ellipse(
+                center=sphgeom.UnitVector3d(
+                    lsst.sphgeom._sphgeom.LonLat.fromDegrees(center[i, 0],
+                                                             center[i, 1])
+                ),
+                alpha=sphgeom.Angle.fromDegrees(0),
+                beta=sphgeom.Angle.fromDegrees(0),
+                orientation=sphgeom.Angle.fromDegrees(theta[i]),
+            )
 
-        # The semi major axis with the psf buffer times two so the ellipse
-        # doesn't terminate exactly at the endpoints
-        a = np.linalg.norm(array[:, 0] - array[:, 1], axis=1) / 2.0 + 2.0*psf
-        # Semi minor axis that is the width of the psf
-        b = psf
+            ellipses.append(ellipse)
+
+        return ellipses
+
+    def _in_ellipse(self, catalog_radec, ellipses):
+        # Check if the
 
 
-        # Rotate to match with the angle. Need to ask about
-        # how much satellites curve in images.
-        x = center[0, :, np.newaxis] + a[:, np.newaxis] * np.cos(
-            theta[:, np.newaxis]) * np.cos(t_large) - b * np.sin(
-            theta[:, np.newaxis]) * np.sin(t_large)
-        y = center[1, :, np.newaxis] + a[:, np.newaxis] * np.sin(
-            theta[:, np.newaxis]) * np.cos(t_large) + b * np.cos(
-            theta[:, np.newaxis]) * np.sin(t_large)
 
-        return x, y
-
-    def _in_ellipse(self, sat_radec, ra, dec):
-        point = Point(sat_radec[0], sat_radec[1])
-        for i, k in enumerate(ra):
-            polygon = Polygon(list(zip(ra[i], dec[i])))
-            if point.within(polygon):
+        for ellipse in ellipses:
+            if ellipse.contains(sat_radec):
                 return point.within(polygon)
             else:
                 continue

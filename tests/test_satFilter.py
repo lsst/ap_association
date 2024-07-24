@@ -2,7 +2,6 @@ import random
 import unittest
 
 import lsst.utils.tests
-import utils_tests
 import lsst.meas.base.tests as measTests
 import lsst.geom as geom
 from lsst.ap.association.satFilter import (SatelliteFilterTask,
