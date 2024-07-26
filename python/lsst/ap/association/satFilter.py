@@ -22,8 +22,9 @@
 __all__ = ("SatelliteFilterTask", "SatelliteFilterConfig")
 
 import numpy as np
-import lsst.sphgeom as sphgeom
+import math
 
+import lsst.sphgeom as sphgeom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 from lsst.utils.timer import timeMethod
@@ -48,23 +49,25 @@ class SatelliteFilterTask(pipeBase.Task):
     @timeMethod
     def run(self, dia_sources, psf, sat_coords):
 
-
-        midpoints = self._midpoint(sat_coords)
         angles = self._angle_between_points(sat_coords)
+        sph_coords = self.sph_sat_coords(dia_sources)
+        tracts = self.satellite_tracts(psf, angles, sat_coords)
 
-        ellipses = self.satellite_ellipse(midpoints, psf, angles, sat_coords)
 
-        trail_mask = self._check_satellites(dia_sources, ellipses)
+        trail_mask = self._check_tracts(sph_coords, tracts)
 
         return pipeBase.Struct(
             diaSources=dia_sources[~trail_mask].reset_index(drop=True))
 
-    def _midpoint(sat_coords):
-        xm = (sat_coords[:, 1, 0].flatten() + sat_coords[:, 0, 0].flatten()) / 2.0
-        ym = (sat_coords[:, 1, 1].flatten() + sat_coords[:, 0, 1].flatten()) / 2.0
-        return np.array([xm, ym])
+    def sph_sat_coords(self, dia_sources):
 
-    def _angle_between_points(sat_coords):
+        sphere_coords = []
+        for source in dia_sources.iterrows():
+            sphere_coords.append(sphgeom.UnitVector3d(sphgeom.LonLat.fromDegrees(source[1]['ra'], source[1]['dec'])))
+
+        return np.array(sphere_coords)
+
+    def _angle_between_points(self, sat_coords):
         dx = sat_coords[:, 1, 0].flatten() - sat_coords[:, 0, 0].flatten()
         dy = sat_coords[:, 1, 1].flatten() - sat_coords[:, 0, 1].flatten()
 
@@ -73,47 +76,53 @@ class SatelliteFilterTask(pipeBase.Task):
 
         return angle_array
 
-    def satellite_ellipse(self, center, theta):
-        ellipses=[]
-        for i in range(len(center)):
-            ellipse = sphgeom.Ellipse(
-                center=sphgeom.UnitVector3d(
-                    lsst.sphgeom._sphgeom.LonLat.fromDegrees(center[i, 0],
-                                                             center[i, 1])
-                ),
-                alpha=sphgeom.Angle.fromDegrees(0),
-                beta=sphgeom.Angle.fromDegrees(0),
-                orientation=sphgeom.Angle.fromDegrees(theta[i]),
-            )
+    def satellite_tracts(self, psf, theta, sat_coords):
+        """ Calculate the satellite tracts
+        """
+        tracts = []
 
-            ellipses.append(ellipse)
+        perp_slopes = -1.0/np.tan(theta)
 
-        return ellipses
+        corner1 = [sat_coords[:,0,0] + psf * perp_slopes, sat_coords[:,0,1] + psf * perp_slopes]
+        corner2 = [sat_coords[:,0,0] - psf * perp_slopes, sat_coords[:,0,1] - psf * perp_slopes]
+        corner3 = [sat_coords[:,1,0] + psf * perp_slopes, sat_coords[:,1,1] + psf * perp_slopes]
+        corner4 = [sat_coords[:,1,0] - psf * perp_slopes, sat_coords[:,1,1] - psf * perp_slopes]
 
-    def _in_ellipse(self, catalog_radec, ellipses):
-        # Check if the
+        for i in range(len(theta)):
+            if (np.isfinite(corner1[0][i]) and np.isfinite(corner1[1][i]) and np.isfinite(corner2[0][i])
+                    and np.isfinite(corner2[1][i]) and np.isfinite(corner3[0][i])
+                    and np.isfinite(corner3[1][i]) and np.isfinite(corner4[0][i]) and np.isfinite(corner4[1][i])):
+                print(corner1[0][i], corner1[1][i])
+                tract = sphgeom.ConvexPolygon([sphgeom.UnitVector3d(sphgeom.LonLat.fromDegrees(corner1[0][i], corner1[1][i])),
+                                               sphgeom.UnitVector3d(
+                                                   sphgeom.LonLat.fromDegrees(
+                                                       corner2[0][i],
+                                                       corner2[1][i])),
+                                               sphgeom.UnitVector3d(
+                                                   sphgeom.LonLat.fromDegrees(
+                                                       corner3[0][i],
+                                                       corner3[1][i])),
+                                               sphgeom.UnitVector3d(
+                                                   sphgeom.LonLat.fromDegrees(
+                                                       corner4[0][i],
+                                                       corner4[1][i]))
+                    ])
+                tracts.append(tract)
 
+        return tracts
 
-
-        for ellipse in ellipses:
-            if ellipse.contains(sat_radec):
-                return point.within(polygon)
-            else:
-                continue
-
-    def _check_satellites(self, catalog, x, y):
+    def _check_tracts(self, sphere_coords, tracts):
         """ Check if sources in the catalog fall within the calculated
         satellite boundaries. If so, add them to a mask of sources which will
         be dropped.
         """
-        mask = []
+        sat_mask = []
+        for tract in tracts:
+            if tract.contains(sphere_coords[:,0],sphere_coords[:,1],sphere_coords[:,2]).any():
+                if sat_mask == []:
 
-        for k in range(len(catalog)):
-            ra = catalog[k]["base_SdssCentroid_x"]
-            dec = catalog[k]["base_SdssCentroid_y"]
-            check = self._in_ellipse(np.array([ra, dec]), x, y)
-            print(check)
+                    sat_mask = tract.contains(sphere_coords[:,0],sphere_coords[:,1],sphere_coords[:,2])
+                else:
+                    sat_mask |= tract.contains(sphere_coords[:,0],sphere_coords[:,1],sphere_coords[:,2])
 
-            mask.append[k]
-
-        return mask
+        return sat_mask
