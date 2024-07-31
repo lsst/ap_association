@@ -207,7 +207,7 @@ class PackageAlertsTask(pipeBase.Task):
             diaSrcHistory,
             diaForcedSources,
             diffIm,
-            calexp,
+            science,
             template,
             doRunForcedMeasurement=True,
             ):
@@ -237,7 +237,7 @@ class PackageAlertsTask(pipeBase.Task):
             ``["diaObjectId"]``
         diffIm : `lsst.afw.image.ExposureF`
             Difference image the sources in ``diaSourceCat`` were detected in.
-        calexp : `lsst.afw.image.ExposureF`
+        science : `lsst.afw.image.ExposureF`
             Calexp used to create the ``diffIm``.
         template : `lsst.afw.image.ExposureF` or `None`
             Template image used to create the ``diffIm``.
@@ -253,10 +253,10 @@ class PackageAlertsTask(pipeBase.Task):
         detector = diffIm.detector.getId()
         visit = diffIm.visitInfo.id
         diffImPhotoCalib = diffIm.getPhotoCalib()
-        calexpPhotoCalib = calexp.getPhotoCalib()
+        sciencePhotoCalib = science.getPhotoCalib()
         templatePhotoCalib = template.getPhotoCalib()
         diffImPsf = self._computePsf(diffIm, diffIm.psf.getAveragePosition())
-        sciencePsf = self._computePsf(calexp, calexp.psf.getAveragePosition())
+        sciencePsf = self._computePsf(science, science.psf.getAveragePosition())
         templatePsf = self._computePsf(template, template.psf.getAveragePosition())
 
         n_sources = len(diaSourceCat)
@@ -296,12 +296,12 @@ class PackageAlertsTask(pipeBase.Task):
                 diffImPhotoCalib,
                 diaSource["diaSourceId"],
                 averagePsf=diffImPsf)
-            calexpCutout = self.createCcdDataCutout(
-                calexp,
+            scienceCutout = self.createCcdDataCutout(
+                science,
                 sphPoint,
                 pixelPoint,
                 cutoutExtent,
-                calexpPhotoCalib,
+                sciencePhotoCalib,
                 diaSource["diaSourceId"],
                 averagePsf=sciencePsf)
             templateCutout = self.createCcdDataCutout(
@@ -322,7 +322,7 @@ class PackageAlertsTask(pipeBase.Task):
                                    objSourceHistory,
                                    objDiaForcedSources,
                                    diffImCutout,
-                                   calexpCutout,
+                                   scienceCutout,
                                    templateCutout))
 
         if self.config.doProduceAlerts:
@@ -524,7 +524,7 @@ class PackageAlertsTask(pipeBase.Task):
                       objDiaSrcHistory,
                       objDiaForcedSources,
                       diffImCutout,
-                      calexpCutout,
+                      scienceCutout,
                       templateCutout):
         """Convert data and package into a dictionary alert.
 
@@ -541,8 +541,8 @@ class PackageAlertsTask(pipeBase.Task):
         diffImCutout : `astropy.nddata.CCDData` or `None`
             Cutout of the difference image around the location of ``diaSource``
             with a min size set by the ``cutoutSize`` configurable.
-        calexpCutout : `astropy.nddata.CCDData` or `None`
-            Cutout of the calexp around the location of ``diaSource``
+        scienceCutout : `astropy.nddata.CCDData` or `None`
+            Cutout of the science image around the location of ``diaSource``
             with a min size set by the ``cutoutSize`` configurable.
         templateCutout : `astropy.nddata.CCDData` or `None`
             Cutout of the template image around the location of ``diaSource``
@@ -572,10 +572,10 @@ class PackageAlertsTask(pipeBase.Task):
         else:
             alert['cutoutDifference'] = self.streamCcdDataToBytes(diffImCutout)
 
-        if calexpCutout is None:
+        if scienceCutout is None:
             alert['cutoutScience'] = None
         else:
-            alert['cutoutScience'] = self.streamCcdDataToBytes(calexpCutout)
+            alert['cutoutScience'] = self.streamCcdDataToBytes(scienceCutout)
 
         if templateCutout is None:
             alert["cutoutTemplate"] = None

@@ -198,11 +198,11 @@ class DiaForcedSourceTask(pipeBase.Task):
         diff_sources : `lsst.afw.table.SourceTable`
             Catalog with PsFluxes measured on the difference image.
         direct_sources : `lsst.afw.table.SourceTable`
-            Catalog with PsfFluxes measured on the direct (calexp) image.
+            Catalog with PsfFluxes measured on the direct (science) image.
         diff_exp : `lsst.afw.image.Exposure`
             Difference exposure ``diff_sources`` were measured on.
         direct_exp : `lsst.afw.image.Exposure`
-            Direct (calexp) exposure ``direct_sources`` were measured on.
+            Direct (science) exposure ``direct_sources`` were measured on.
 
         Returns
         -------

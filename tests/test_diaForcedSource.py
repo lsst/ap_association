@@ -153,7 +153,7 @@ class TestDiaForcedSource(unittest.TestCase):
 
         self.testDiaObjects = create_test_dia_objects(5, self.wcs)
         # Add additional diaObjects that are outside of the above difference
-        # and calexp visit images.
+        # and science visit images.
         objects = [
             (10000000, self.wcs.pixelToSky(-100000, -100000)),  # xy outside
             (10000001, self.wcs.pixelToSky(100, -100000)),  # y outside

@@ -81,7 +81,7 @@ class DiaPipelineConnections(
     exposure = connTypes.Input(
         doc="Calibrated exposure differenced with a template image during "
             "image differencing.",
-        name="{fakesType}calexp",
+        name="{fakesType}initial_pvi",
         storageClass="ExposureF",
         dimensions=("instrument", "visit", "detector"),
     )
