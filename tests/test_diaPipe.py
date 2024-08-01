@@ -30,12 +30,13 @@ import pandas as pd
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
 import lsst.dax.apdb as daxApdb
+from lsst.meas.base import IdGenerator
 import lsst.pex.config as pexConfig
 import lsst.utils.tests
 from lsst.pipe.base.testUtils import assertValidOutput
 
 from lsst.ap.association import DiaPipelineTask
-from utils_tests import makeExposure, makeDiaObjects
+from utils_tests import makeExposure, makeDiaObjects, makeDiaSources, makeDiaForcedSources
 
 
 def _makeMockDataFrame():
@@ -77,6 +78,12 @@ class TestDiaPipelineTask(unittest.TestCase):
         srcSchema.addField("base_PixelFlags_flag", type="Flag")
         srcSchema.addField("base_PixelFlags_flag_offimage", type="Flag")
         self.srcSchema = afwTable.SourceCatalog(srcSchema)
+        self.exposure = makeExposure(False, False)
+        self.diaObjects = makeDiaObjects(20, self.exposure, rng)
+        self.diaSources = makeDiaSources(
+            100, self.diaObjects["diaObjectId"].to_numpy(), self.exposure, rng)
+        self.diaForcedSources = makeDiaForcedSources(
+            200, self.diaObjects["diaObjectId"].to_numpy(), self.exposure, rng)
 
         apdb_config = daxApdb.ApdbSql.init_database(db_url="sqlite://")
         self.config_file = tempfile.NamedTemporaryFile()
@@ -154,13 +161,11 @@ class TestDiaPipelineTask(unittest.TestCase):
         template = Mock(spec=afwImage.ExposureF)
         diaSrc = _makeMockDataFrame()
         ssObjects = _makeMockDataFrame()
-        ccdExposureIdBits = 32
 
         # Each of these subtasks should be called once during diaPipe
         # execution. We use mocks here to check they are being executed
         # appropriately.
         subtasksToMock = [
-            "diaCatalogLoader",
             "diaCalculation",
             "diaForcedSource",
         ]
@@ -202,8 +207,11 @@ class TestDiaPipelineTask(unittest.TestCase):
                               diffIm,
                               exposure,
                               template,
-                              ccdExposureIdBits,
-                              "g")
+                              self.diaObjects,
+                              self.diaSources,
+                              self.diaForcedSources,
+                              "g",
+                              IdGenerator())
             for subtaskName in subtasksToMock:
                 getattr(task, subtaskName).run.assert_called_once()
             assertValidOutput(task, result)
