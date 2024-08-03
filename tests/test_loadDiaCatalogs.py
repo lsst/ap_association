@@ -25,12 +25,12 @@ import tempfile
 import unittest
 import yaml
 
-from lsst.ap.association import LoadDiaCatalogsTask, LoadDiaCatalogsConfig
+from lsst.ap.association import LoadDiaCatalogsTask
 from lsst.ap.association.utils import readSchemaFromApdb
 from lsst.dax.apdb import Apdb, ApdbSql, ApdbTables
 from lsst.utils import getPackageDir
 import lsst.utils.tests
-from utils_tests import makeExposure, makeDiaObjects, makeDiaSources, makeDiaForcedSources
+from utils_tests import makeExposure, makeDiaObjects, makeDiaSources, makeDiaForcedSources, makeRegionTime
 
 
 def _data_file_name(basename, module_name):
@@ -64,10 +64,14 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         self.addCleanup(os.close, self.db_file_fd)
 
         self.apdbConfig = ApdbSql.init_database(db_url="sqlite:///" + self.db_file)
+        self.config_file = tempfile.NamedTemporaryFile()
+        self.addCleanup(self.config_file.close)
+        self.apdbConfig.save(self.config_file.name)
         self.apdb = Apdb.from_config(self.apdbConfig)
         self.schema = readSchemaFromApdb(self.apdb)
 
         self.exposure = makeExposure(False, False)
+        self.regionTime = makeRegionTime(exposure=self.exposure)
 
         self.diaObjects = makeDiaObjects(20, self.exposure, rng)
         self.diaSources = makeDiaSources(
@@ -75,8 +79,8 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         self.diaForcedSources = makeDiaForcedSources(
             200, self.diaObjects["diaObjectId"].to_numpy(), self.exposure, rng)
 
-        self.dateTime = self.exposure.visitInfo.date
-        self.apdb.store(self.dateTime.toAstropy(),
+        self.dateTime = self.regionTime.timespan.begin.tai
+        self.apdb.store(self.dateTime,
                         self.diaObjects,
                         self.diaSources,
                         self.diaForcedSources)
@@ -88,8 +92,10 @@ class TestLoadDiaCatalogs(unittest.TestCase):
     def testRun(self):
         """Test the full run method for the loader.
         """
-        diaLoader = LoadDiaCatalogsTask()
-        result = diaLoader.run(self.exposure, self.apdb)
+        diaConfig = LoadDiaCatalogsTask.ConfigClass()
+        diaConfig.apdb_config_url = self.config_file.name
+        diaLoader = LoadDiaCatalogsTask(config=diaConfig)
+        result = diaLoader.run(self.regionTime)
 
         self.assertEqual(len(result.diaObjects), len(self.diaObjects))
         self.assertEqual(len(result.diaSources), len(self.diaSources))
@@ -99,7 +105,9 @@ class TestLoadDiaCatalogs(unittest.TestCase):
     def testLoadDiaObjects(self):
         """Test that the correct number of diaObjects are loaded.
         """
-        diaLoader = LoadDiaCatalogsTask()
+        diaConfig = LoadDiaCatalogsTask.ConfigClass()
+        diaConfig.apdb_config_url = self.config_file.name
+        diaLoader = LoadDiaCatalogsTask(config=diaConfig)
         region = diaLoader._getRegion(self.exposure)
         diaObjects = diaLoader.loadDiaObjects(region,
                                               self.apdb,
@@ -109,7 +117,9 @@ class TestLoadDiaCatalogs(unittest.TestCase):
     def testLoadDiaForcedSources(self):
         """Test that the correct number of diaForcedSources are loaded.
         """
-        diaLoader = LoadDiaCatalogsTask()
+        diaConfig = LoadDiaCatalogsTask.ConfigClass()
+        diaConfig.apdb_config_url = self.config_file.name
+        diaLoader = LoadDiaCatalogsTask(config=diaConfig)
         region = diaLoader._getRegion(self.exposure)
         diaForcedSources = diaLoader.loadDiaForcedSources(
             self.diaObjects,
@@ -125,7 +135,8 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         Also check that they can be properly loaded both by location and
         ``diaObjectId``.
         """
-        diaConfig = LoadDiaCatalogsConfig()
+        diaConfig = LoadDiaCatalogsTask.ConfigClass()
+        diaConfig.apdb_config_url = self.config_file.name
         diaLoader = LoadDiaCatalogsTask(config=diaConfig)
 
         region = diaLoader._getRegion(self.exposure)

@@ -22,6 +22,7 @@
 """Helper functions for tests of DIA catalogs, including generating mock
 catalogs for simulated APDB access.
 """
+import astropy.units
 import datetime
 import pandas as pd
 import numpy as np
@@ -30,7 +31,10 @@ from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 import lsst.daf.base as dafBase
+import lsst.daf.butler as dafButler
 import lsst.geom
+from lsst.pipe.base.utils import RegionTimeInfo
+import lsst.sphgeom
 
 
 def makeDiaObjects(nObjects, exposure, rng):
@@ -237,3 +241,34 @@ def makeExposure(flipX=False, flipY=False):
     exposure.setFilter(afwImage.FilterLabel(band='g'))
 
     return exposure
+
+
+def makeRegionTime(exposure=None):
+    if exposure is None:
+        exposure = makeExposure()
+    region = getRegion(exposure)
+    begin = exposure.visitInfo.date.toAstropy()
+    end = begin + exposure.visitInfo.exposureTime*astropy.units.second
+    timespan = dafButler.Timespan(begin=begin, end=end)
+    return RegionTimeInfo(region=region, timespan=timespan)
+
+
+def getRegion(exposure):
+    """Calculate an enveloping region for an exposure.
+
+    Parameters
+    ----------
+    exposure : `lsst.afw.image.Exposure`
+        Exposure object with calibrated WCS.
+
+    Returns
+    -------
+    region : `lsst.sphgeom.Region`
+        Region enveloping an exposure.
+    """
+    bbox = lsst.geom.Box2D(exposure.getBBox())
+    wcs = exposure.getWcs()
+
+    region = lsst.sphgeom.ConvexPolygon([wcs.pixelToSky(pp).getVector()
+                                         for pp in bbox.getCorners()])
+    return region
