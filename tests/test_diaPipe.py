@@ -36,7 +36,7 @@ import lsst.utils.tests
 from lsst.pipe.base.testUtils import assertValidOutput
 
 from lsst.ap.association import DiaPipelineTask
-from utils_tests import makeExposure, makeDiaObjects, makeDiaSources
+from utils_tests import makeExposure, makeDiaObjects, makeDiaSources, makeDiaForcedSources
 
 
 def _makeMockDataFrame():
@@ -82,6 +82,8 @@ class TestDiaPipelineTask(unittest.TestCase):
         self.diaObjects = makeDiaObjects(20, self.exposure, rng)
         self.diaSources = makeDiaSources(
             100, self.diaObjects["diaObjectId"].to_numpy(), self.exposure, rng)
+        self.diaForcedSources = makeDiaForcedSources(
+            200, self.diaObjects["diaObjectId"].to_numpy(), self.exposure, rng)
 
         apdb_config = daxApdb.ApdbSql.init_database(db_url="sqlite://")
         self.config_file = tempfile.NamedTemporaryFile()
@@ -164,7 +166,6 @@ class TestDiaPipelineTask(unittest.TestCase):
         # execution. We use mocks here to check they are being executed
         # appropriately.
         subtasksToMock = [
-            "diaCatalogLoader",
             "diaCalculation",
             "diaForcedSource",
         ]
@@ -206,6 +207,9 @@ class TestDiaPipelineTask(unittest.TestCase):
                               diffIm,
                               exposure,
                               template,
+                              self.diaObjects,
+                              self.diaSources,
+                              self.diaForcedSources,
                               "g",
                               IdGenerator())
             for subtaskName in subtasksToMock:
