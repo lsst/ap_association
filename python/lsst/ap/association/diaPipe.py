@@ -401,6 +401,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         ----------
         diaSourceTable : `pandas.DataFrame`
             Newly detected DiaSources.
+        solarSystemObjectTable : `pandas.DataFrame`
+            Preloaded Solar System objects expected to be visible in the image.
         diffIm : `lsst.afw.image.ExposureF`
             Difference image exposure in which the sources in ``diaSourceCat``
             were detected.
