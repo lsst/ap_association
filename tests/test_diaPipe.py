@@ -30,6 +30,7 @@ import pandas as pd
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
 import lsst.dax.apdb as daxApdb
+from lsst.meas.base import IdGenerator
 import lsst.pex.config as pexConfig
 import lsst.utils.tests
 from lsst.pipe.base.testUtils import assertValidOutput
@@ -154,7 +155,6 @@ class TestDiaPipelineTask(unittest.TestCase):
         template = Mock(spec=afwImage.ExposureF)
         diaSrc = _makeMockDataFrame()
         ssObjects = _makeMockDataFrame()
-        ccdExposureIdBits = 32
 
         # Each of these subtasks should be called once during diaPipe
         # execution. We use mocks here to check they are being executed
@@ -202,8 +202,8 @@ class TestDiaPipelineTask(unittest.TestCase):
                               diffIm,
                               exposure,
                               template,
-                              ccdExposureIdBits,
-                              "g")
+                              "g",
+                              IdGenerator())
             for subtaskName in subtasksToMock:
                 getattr(task, subtaskName).run.assert_called_once()
             assertValidOutput(task, result)
