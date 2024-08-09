@@ -500,26 +500,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 "failure in Association while matching and creating new "
                 "DiaObjects and should be reported. Exiting.")
 
-        if len(loaderResult.diaSources) > 0:
-            # We need to coerce the types of loaderResult.diaSources
-            # to be the same as associatedDiaSources, thanks to pandas
-            # datetime issues (DM-41100). And we may as well coerce
-            # all the columns to ensure consistency for future compatibility.
-            for name, dtype in associatedDiaSources.dtypes.items():
-                if name in loaderResult.diaSources.columns and loaderResult.diaSources[name].dtype != dtype:
-                    self.log.debug(
-                        "Coercing loaderResult.diaSources column %s from %s to %s",
-                        name,
-                        str(loaderResult.diaSources[name].dtype),
-                        str(dtype),
-                    )
-                    loaderResult.diaSources[name] = loaderResult.diaSources[name].astype(dtype)
-
-            mergedDiaSourceHistory = pd.concat(
-                [loaderResult.diaSources, associatedDiaSources],
-                sort=True)
-        else:
-            mergedDiaSourceHistory = pd.concat([associatedDiaSources], sort=True)
+        mergedDiaSourceHistory = self.mergeCatalogs(associatedDiaSources, loaderResult.diaSources,
+                                                    "preloadedDiaSources")
 
         # Test for DiaSource duplication first. If duplicates are found,
         # this likely means this is duplicate data being processed and sent
@@ -587,26 +569,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         self.log.info("APDB updated.")
 
         if self.config.doPackageAlerts:
-            if len(loaderResult.diaForcedSources) > 1:
-                # We need to coerce the types of loaderResult.diaForcedSources
-                # to be the same as associatedDiaSources, thanks to pandas
-                # datetime issues (DM-41100). And we may as well coerce
-                # all the columns to ensure consistency for future compatibility.
-                for name, dtype in diaForcedSources.dtypes.items():
-                    if name in loaderResult.diaForcedSources.columns and \
-                       loaderResult.diaForcedSources[name].dtype != dtype:
-                        self.log.debug(
-                            "Coercing loaderResult.diaForcedSources column %s from %s to %s",
-                            name,
-                            str(loaderResult.diaForcedSources[name].dtype),
-                            str(dtype),
-                        )
-                        loaderResult.diaForcedSources[name] = (
-                            loaderResult.diaForcedSources[name].astype(dtype)
-                        )
-                diaForcedSources = pd.concat(
-                    [diaForcedSources, loaderResult.diaForcedSources],
-                    sort=True)
+            diaForcedSources = self.mergeCatalogs(diaForcedSources, loaderResult.diaForcedSources,
+                                                  "preloadedDiaForcedSources")
             if self.testDataFrameIndex(diaForcedSources):
                 self.log.warning(
                     "Duplicate DiaForcedSources created after merge with "
@@ -753,3 +717,44 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         except Exception as e:
             self.log.warning("Error attempting to check diaObject history: %s", e)
         return diaObjCat
+
+    def mergeCatalogs(self, originalCatalog, newCatalog, catalogName):
+        """Combine two catalogs, ensuring that the columns of the new catalog
+        have the same dtype as the original.
+
+        Parameters
+        ----------
+        originalCatalog : `pandas.DataFrame`
+            The original catalog to be added to.
+        newCatalog : `pandas.DataFrame`
+            The new catalog to append to `originalCatalog`
+        catalogName : `str`, optional
+            The name of the catalog to use for logging messages.
+
+        Returns
+        -------
+        mergedCatalog : `pandas.DataFrame`
+            The combined catalog, with all of the rows from ``originalCatalog``
+            ordered before the rows of ``newCatalog``
+        """
+        if len(newCatalog) > 0:
+            catalog = newCatalog.copy(deep=True)
+            # We need to coerce the types of `newCatalog`
+            # to be the same as `originalCatalog`, thanks to pandas
+            # datetime issues (DM-41100). And we may as well coerce
+            # all the columns to ensure consistency for future compatibility.
+            for name, dtype in originalCatalog.dtypes.items():
+                if name in newCatalog.columns and newCatalog[name].dtype != dtype:
+                    self.log.debug(
+                        "Coercing %s column %s from %s to %s",
+                        catalogName,
+                        name,
+                        str(newCatalog[name].dtype),
+                        str(dtype),
+                    )
+                    catalog[name] = newCatalog[name].astype(dtype)
+
+            mergedCatalog = pd.concat([originalCatalog, catalog], sort=True)
+        else:
+            mergedCatalog = pd.concat([originalCatalog], sort=True)
+        return mergedCatalog.loc[:, originalCatalog.columns]

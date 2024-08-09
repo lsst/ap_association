@@ -36,7 +36,7 @@ import lsst.utils.tests
 from lsst.pipe.base.testUtils import assertValidOutput
 
 from lsst.ap.association import DiaPipelineTask
-from utils_tests import makeExposure, makeDiaObjects
+from utils_tests import makeExposure, makeDiaObjects, makeDiaSources
 
 
 def _makeMockDataFrame():
@@ -78,6 +78,10 @@ class TestDiaPipelineTask(unittest.TestCase):
         srcSchema.addField("base_PixelFlags_flag", type="Flag")
         srcSchema.addField("base_PixelFlags_flag_offimage", type="Flag")
         self.srcSchema = afwTable.SourceCatalog(srcSchema)
+        self.exposure = makeExposure(False, False)
+        self.diaObjects = makeDiaObjects(20, self.exposure, rng)
+        self.diaSources = makeDiaSources(
+            100, self.diaObjects["diaObjectId"].to_numpy(), self.exposure, rng)
 
         apdb_config = daxApdb.ApdbSql.init_database(db_url="sqlite://")
         self.config_file = tempfile.NamedTemporaryFile()
@@ -291,6 +295,38 @@ class TestDiaPipelineTask(unittest.TestCase):
         self.assertEqual(nOut1, 0)
         # Verify that no objects inside the bounding box were removed
         self.assertEqual(nIn1, nIn0)
+
+    def test_mergeEmptyCatalog(self):
+        """Test that a catalog is unchanged if it is merged with an empty
+        catalog.
+        """
+        diaSourcesBase = self.diaSources
+
+        config = self._makeDefaultConfig(config_file=self.config_file.name, doPackageAlerts=False)
+        task = DiaPipelineTask(config=config)
+        # Include some but not all columns that should be in diaSourcesBase, and some that are mis-matched
+        diaSourcesEmpty = pd.DataFrame(columns=["ra", "dec", "foo"])
+        diaSourcesTest = task.mergeCatalogs(diaSourcesBase, diaSourcesEmpty, "diaSourcesTest")
+        self.assertTrue(diaSourcesBase.equals(diaSourcesTest))
+
+    def test_mergeCatalogs(self):
+        """Test that a merged catalog is concatenated correctly.
+        """
+        diaSourcesBase = self.diaSources
+        nBase = len(diaSourcesBase)
+        nNew = int(nBase/2)
+
+        diaSourcesNew = makeDiaSources(nNew, self.diaObjects["diaObjectId"].to_numpy(), self.exposure,
+                                       self.rng)
+        config = self._makeDefaultConfig(config_file=self.config_file.name, doPackageAlerts=False)
+        task = DiaPipelineTask(config=config)
+        diaSourcesTest = task.mergeCatalogs(diaSourcesBase, diaSourcesNew, "diaSourcesTest")
+        self.assertEqual(len(diaSourcesTest), nBase + nNew)
+        diaSourcesExtract1 = diaSourcesTest.iloc[:nBase]
+        diaSourcesExtract2 = diaSourcesTest.iloc[nBase:]
+
+        self.assertTrue(diaSourcesBase.equals(diaSourcesExtract1))
+        self.assertTrue(diaSourcesNew.equals(diaSourcesExtract2))
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
