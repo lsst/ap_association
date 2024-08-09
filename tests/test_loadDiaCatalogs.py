@@ -26,11 +26,11 @@ import unittest
 import yaml
 
 from lsst.ap.association import LoadDiaCatalogsTask, LoadDiaCatalogsConfig
-from lsst.ap.association.utils import readSchemaFromApdb
+from lsst.ap.association.utils import readSchemaFromApdb, getRegion
 from lsst.dax.apdb import Apdb, ApdbSql, ApdbTables
 from lsst.utils import getPackageDir
 import lsst.utils.tests
-from utils_tests import makeExposure, makeDiaObjects, makeDiaSources, makeDiaForcedSources
+from utils_tests import makeExposure, makeDiaObjects, makeDiaSources, makeDiaForcedSources, makeRegionTime
 
 
 def _data_file_name(basename, module_name):
@@ -68,6 +68,8 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         self.schema = readSchemaFromApdb(self.apdb)
 
         self.exposure = makeExposure(False, False)
+        self.regionTime = makeRegionTime(exposure=self.exposure)
+        self.dateTime = self.exposure.visitInfo.date
 
         self.diaObjects = makeDiaObjects(20, self.exposure, rng)
         self.diaSources = makeDiaSources(
@@ -75,8 +77,10 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         self.diaForcedSources = makeDiaForcedSources(
             200, self.diaObjects["diaObjectId"].to_numpy(), self.exposure, rng)
 
-        self.dateTime = self.exposure.visitInfo.date
-        self.apdb.store(self.dateTime.toAstropy(),
+        # Store the test diaSources as though they were observed a month before
+        # the current exposure.
+        dateTime = self.regionTime.timespan.begin.tai - 30
+        self.apdb.store(dateTime,
                         self.diaObjects,
                         self.diaSources,
                         self.diaForcedSources)
@@ -100,7 +104,7 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         """Test that the correct number of diaObjects are loaded.
         """
         diaLoader = LoadDiaCatalogsTask()
-        region = diaLoader._getRegion(self.exposure)
+        region = getRegion(self.exposure)
         diaObjects = diaLoader.loadDiaObjects(region,
                                               self.apdb,
                                               self.schema)
@@ -110,7 +114,7 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         """Test that the correct number of diaForcedSources are loaded.
         """
         diaLoader = LoadDiaCatalogsTask()
-        region = diaLoader._getRegion(self.exposure)
+        region = getRegion(self.exposure)
         diaForcedSources = diaLoader.loadDiaForcedSources(
             self.diaObjects,
             region,
@@ -128,7 +132,7 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         diaConfig = LoadDiaCatalogsConfig()
         diaLoader = LoadDiaCatalogsTask(config=diaConfig)
 
-        region = diaLoader._getRegion(self.exposure)
+        region = getRegion(self.exposure)
         diaSources = diaLoader.loadDiaSources(self.diaObjects,
                                               region,
                                               self.dateTime,

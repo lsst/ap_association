@@ -24,7 +24,11 @@ import unittest
 
 import pandas as pd
 
-from lsst.ap.association.utils import readSdmSchemaFile, make_empty_catalog, convertTableToSdmSchema
+import lsst.daf.butler as dafButler
+
+from lsst.ap.association.utils import readSdmSchemaFile, make_empty_catalog, convertTableToSdmSchema, \
+    getMidpointFromTimespan
+from utils_tests import makeExposure, makeRegionTime
 
 
 class TestUtils(unittest.TestCase):
@@ -53,3 +57,40 @@ class TestUtils(unittest.TestCase):
             emptyTypes = dict(zip(emptyDiaObjects.columns, emptyDiaObjects.dtypes))
             convertedEmptyTypes = dict(zip(convertedEmptyDiaObjects.columns, convertedEmptyDiaObjects.dtypes))
             self.assertEqual(emptyTypes, convertedEmptyTypes)
+
+    def test_regionTime_timespan(self):
+        """Check that the midpoint from a RegionTimeInfo matches the time from
+        the visitInfo of the exposure.
+        """
+        exposure = makeExposure()
+        regionTime = makeRegionTime(exposure)
+        visitTime = exposure.visitInfo.date.toAstropy()
+        midpoint = getMidpointFromTimespan(regionTime.timespan).tai
+        self.assertEqual(visitTime.jd, midpoint.jd)
+
+    def test_invalidTimespan(self):
+        """Test the error handling of getMidpointFromTimespan.
+        """
+        exposure = makeExposure()
+        visitTime = exposure.visitInfo.date.toAstropy()
+        timespan_no_end = dafButler.Timespan(begin=visitTime, end=dafButler.Timespan.EMPTY)
+        timespan_no_begin = dafButler.Timespan(begin=dafButler.Timespan.EMPTY, end=visitTime)
+        with self.assertRaises(ValueError):
+            getMidpointFromTimespan(timespan_no_end)
+        with self.assertRaises(ValueError):
+            getMidpointFromTimespan(timespan_no_begin)
+
+        timespan_none_end = dafButler.Timespan(begin=visitTime, end=None)
+        timespan_none_begin = dafButler.Timespan(begin=None, end=visitTime)
+        with self.assertRaises(ValueError):
+            getMidpointFromTimespan(timespan_none_end, allowUnbounded=False)
+        with self.assertRaises(ValueError):
+            getMidpointFromTimespan(timespan_none_begin, allowUnbounded=False)
+        self.assertEqual(getMidpointFromTimespan(timespan_none_begin).jd, visitTime.jd)
+        self.assertEqual(getMidpointFromTimespan(timespan_none_end).jd, visitTime.jd)
+
+        timespan_none_both = dafButler.Timespan(begin=None, end=None)
+        with self.assertRaises(ValueError):
+            getMidpointFromTimespan(timespan_none_both, allowUnbounded=True)
+        with self.assertRaises(ValueError):
+            getMidpointFromTimespan(timespan_none_both, allowUnbounded=False)
