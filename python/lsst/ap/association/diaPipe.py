@@ -24,8 +24,6 @@
 
 Additionally performs forced photometry on the calibrated and difference
 images at the updated locations of DiaObjects.
-
-Currently loads directly from the Apdb rather than pre-loading.
 """
 
 __all__ = ("DiaPipelineConfig",
@@ -44,7 +42,6 @@ import pandas as pd
 from lsst.ap.association import (
     AssociationTask,
     DiaForcedSourceTask,
-    LoadDiaCatalogsTask,
     PackageAlertsTask)
 from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
 from lsst.ap.association.utils import convertTableToSdmSchema, readSchemaFromApdb, dropEmptyColumns, \
@@ -93,6 +90,24 @@ class DiaPipelineConnections(
         dimensions=("instrument", "visit", "detector"),
         storageClass="ExposureF",
         name="{fakesType}{coaddName}Diff_templateExp",
+    )
+    preloadedDiaObjects = connTypes.Input(
+        doc="DiaObjects preloaded from the APDB.",
+        name="preloaded_diaObjects",
+        storageClass="DataFrame",
+        dimensions=("instrument", "group", "detector"),
+    )
+    preloadedDiaSources = connTypes.Input(
+        doc="DiaSources preloaded from the APDB.",
+        name="preloaded_diaSources",
+        storageClass="DataFrame",
+        dimensions=("instrument", "group", "detector"),
+    )
+    preloadedDiaForcedSources = connTypes.Input(
+        doc="DiaForcedSources preloaded from the APDB.",
+        name="preloaded_diaForcedSources",
+        storageClass="DataFrame",
+        dimensions=("instrument", "group", "detector"),
     )
     apdbMarker = connTypes.Output(
         doc="Marker dataset storing the configuration of the Apdb for each "
@@ -232,10 +247,6 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
             "band not on this list, the appropriate band specific columns "
             "must be added to the Apdb schema in dax_apdb.",
     )
-    diaCatalogLoader = pexConfig.ConfigurableField(
-        target=LoadDiaCatalogsTask,
-        doc="Task to load DiaObjects and DiaSources from the Apdb.",
-    )
     associator = pexConfig.ConfigurableField(
         target=AssociationTask,
         doc="Task used to associate DiaSources with DiaObjects.",
@@ -252,15 +263,6 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     diaCalculation = pexConfig.ConfigurableField(
         target=DiaObjectCalculationTask,
         doc="Task to compute summary statistics for DiaObjects.",
-    )
-    doLoadForcedSources = pexConfig.Field(
-        dtype=bool,
-        default=True,
-        deprecated="Added to allow disabling forced sources for performance "
-                   "reasons during the ops rehearsal. "
-                   "It is expected to be removed.",
-        doc="Load forced DiaSource history from the APDB? "
-            "This should only be turned off for debugging purposes.",
     )
     doRunForcedMeasurement = pexConfig.Field(
         dtype=bool,
@@ -360,7 +362,6 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         else:
             self.apdb = daxApdb.Apdb.from_uri(self.config.apdb_config_url)
         self.schema = readSchemaFromApdb(self.apdb)
-        self.makeSubtask("diaCatalogLoader")
         self.makeSubtask("associator")
         self.makeSubtask("diaCalculation")
         if self.config.doRunForcedMeasurement:
@@ -388,6 +389,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diffIm,
             exposure,
             template,
+            preloadedDiaObjects,
+            preloadedDiaSources,
+            preloadedDiaForcedSources,
             band,
             idGenerator):
         """Process DiaSources and DiaObjects.
@@ -401,6 +405,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         ----------
         diaSourceTable : `pandas.DataFrame`
             Newly detected DiaSources.
+        solarSystemObjectTable : `pandas.DataFrame`
+            Preloaded Solar System objects expected to be visible in the image.
         diffIm : `lsst.afw.image.ExposureF`
             Difference image exposure in which the sources in ``diaSourceCat``
             were detected.
@@ -409,6 +415,12 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             ``diffIm``.
         template : `lsst.afw.image.ExposureF`
             Template exposure used to create diffIm.
+        preloadedDiaObjects : `pandas.DataFrame`
+            Previously detected DiaObjects, loaded from the APDB.
+        preloadedDiaSources : `pandas.DataFrame`
+            Previously detected DiaSources, loaded from the APDB.
+        preloadedDiaForcedSources : `pandas.DataFrame`
+            Catalog of previously detected forced DiaSources, from the APDB
         band : `str`
             The band in which the new DiaSources were detected.
         idGenerator : `lsst.meas.base.IdGenerator`
@@ -427,15 +439,17 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             - ``diaForcedSources`` : Catalog of new and previously detected
               forced DiaSources. (`pandas.DataFrame`)
             - ``diaObjects`` : Updated table of DiaObjects. (`pandas.DataFrame`)
+
+        Raises
+        ------
+        RuntimeError
+            Raised if duplicate DiaObjects or duplicate DiaSources are found.
         """
-        # Load the DiaObjects and DiaSource history.
-        loaderResult = self.diaCatalogLoader.run(diffIm, self.apdb,
-                                                 doLoadForcedSources=self.config.doLoadForcedSources)
-        if not loaderResult.diaObjects.empty:
-            diaObjects = self.purgeDiaObjects(diffIm.getBBox(), diffIm.getWcs(), loaderResult.diaObjects,
+        if not preloadedDiaObjects.empty:
+            diaObjects = self.purgeDiaObjects(diffIm.getBBox(), diffIm.getWcs(), preloadedDiaObjects,
                                               buffer=self.config.imagePixelMargin)
         else:
-            diaObjects = loaderResult.diaObjects
+            diaObjects = preloadedDiaObjects
         # Associate new DiaSources with existing DiaObjects.
         assocResults = self.associator.run(diaSourceTable, diaObjects)
 
@@ -498,26 +512,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 "failure in Association while matching and creating new "
                 "DiaObjects and should be reported. Exiting.")
 
-        if len(loaderResult.diaSources) > 0:
-            # We need to coerce the types of loaderResult.diaSources
-            # to be the same as associatedDiaSources, thanks to pandas
-            # datetime issues (DM-41100). And we may as well coerce
-            # all the columns to ensure consistency for future compatibility.
-            for name, dtype in associatedDiaSources.dtypes.items():
-                if name in loaderResult.diaSources.columns and loaderResult.diaSources[name].dtype != dtype:
-                    self.log.debug(
-                        "Coercing loaderResult.diaSources column %s from %s to %s",
-                        name,
-                        str(loaderResult.diaSources[name].dtype),
-                        str(dtype),
-                    )
-                    loaderResult.diaSources[name] = loaderResult.diaSources[name].astype(dtype)
-
-            mergedDiaSourceHistory = pd.concat(
-                [loaderResult.diaSources, associatedDiaSources],
-                sort=True)
-        else:
-            mergedDiaSourceHistory = pd.concat([associatedDiaSources], sort=True)
+        mergedDiaSourceHistory = self.mergeCatalogs(preloadedDiaSources, associatedDiaSources,
+                                                    "preloadedDiaSources")
 
         # Test for DiaSource duplication first. If duplicates are found,
         # this likely means this is duplicate data being processed and sent
@@ -585,26 +581,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         self.log.info("APDB updated.")
 
         if self.config.doPackageAlerts:
-            if len(loaderResult.diaForcedSources) > 1:
-                # We need to coerce the types of loaderResult.diaForcedSources
-                # to be the same as associatedDiaSources, thanks to pandas
-                # datetime issues (DM-41100). And we may as well coerce
-                # all the columns to ensure consistency for future compatibility.
-                for name, dtype in diaForcedSources.dtypes.items():
-                    if name in loaderResult.diaForcedSources.columns and \
-                       loaderResult.diaForcedSources[name].dtype != dtype:
-                        self.log.debug(
-                            "Coercing loaderResult.diaForcedSources column %s from %s to %s",
-                            name,
-                            str(loaderResult.diaForcedSources[name].dtype),
-                            str(dtype),
-                        )
-                        loaderResult.diaForcedSources[name] = (
-                            loaderResult.diaForcedSources[name].astype(dtype)
-                        )
-                diaForcedSources = pd.concat(
-                    [diaForcedSources, loaderResult.diaForcedSources],
-                    sort=True)
+            diaForcedSources = self.mergeCatalogs(preloadedDiaForcedSources, diaForcedSources,
+                                                  "preloadedDiaForcedSources")
             if self.testDataFrameIndex(diaForcedSources):
                 self.log.warning(
                     "Duplicate DiaForcedSources created after merge with "
@@ -622,7 +600,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                     inplace=True)
             self.alertPackager.run(associatedDiaSources,
                                    diaCalResult.diaObjectCat,
-                                   loaderResult.diaSources,
+                                   preloadedDiaSources,
                                    diaForcedSources,
                                    diffIm,
                                    exposure,
@@ -751,3 +729,44 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         except Exception as e:
             self.log.warning("Error attempting to check diaObject history: %s", e)
         return diaObjCat
+
+    def mergeCatalogs(self, originalCatalog, newCatalog, catalogName):
+        """Combine two catalogs, ensuring that the columns of the new catalog
+        have the same dtype as the original.
+
+        Parameters
+        ----------
+        originalCatalog : `pandas.DataFrame`
+            The original catalog to be added to.
+        newCatalog : `pandas.DataFrame`
+            The new catalog to append to `originalCatalog`
+        catalogName : `str`, optional
+            The name of the catalog to use for logging messages.
+
+        Returns
+        -------
+        mergedCatalog : `pandas.DataFrame`
+            The combined catalog, with all of the rows from ``originalCatalog``
+            ordered before the rows of ``newCatalog``
+        """
+        if len(newCatalog) > 0:
+            catalog = newCatalog.copy(deep=True)
+            # We need to coerce the types of `newCatalog`
+            # to be the same as `originalCatalog`, thanks to pandas
+            # datetime issues (DM-41100). And we may as well coerce
+            # all the columns to ensure consistency for future compatibility.
+            for name, dtype in originalCatalog.dtypes.items():
+                if name in newCatalog.columns and newCatalog[name].dtype != dtype:
+                    self.log.debug(
+                        "Coercing %s column %s from %s to %s",
+                        catalogName,
+                        name,
+                        str(newCatalog[name].dtype),
+                        str(dtype),
+                    )
+                    catalog[name] = newCatalog[name].astype(dtype)
+
+            mergedCatalog = pd.concat([originalCatalog, catalog], sort=True)
+        else:
+            mergedCatalog = pd.concat([originalCatalog], sort=True)
+        return mergedCatalog.loc[:, originalCatalog.columns]

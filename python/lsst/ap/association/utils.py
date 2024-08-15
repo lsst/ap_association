@@ -22,7 +22,7 @@
 """Utilities for working with the APDB.
 """
 __all__ = ("convertTableToSdmSchema", "readSdmSchemaFile", "readSchemaFromApdb",
-           "dropEmptyColumns", "make_empty_catalog")
+           "dropEmptyColumns", "make_empty_catalog", "getMidpointFromTimespan")
 
 from collections.abc import Mapping
 import os
@@ -33,6 +33,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
+from lsst.daf.butler import Timespan
 import lsst.dax.apdb as daxApdb
 
 
@@ -219,3 +220,44 @@ def make_empty_catalog(apdbSchema, tableName):
         for columnDef in table.columns
     }
     return pd.DataFrame(data)
+
+
+def getMidpointFromTimespan(timespan, allowUnbounded=True):
+    """Safely retrieve the midpoint in TAI from a Timespan.
+
+    Parameters
+    ----------
+    timespan : `lsst.daf.butler.Timespan` of `astropy.time.Time`
+        A Timespan centered on the midpoint of a visit.
+    allowUnbounded : `bool`, optional
+        If set, return the start or end of an unbounded timespan.
+
+    Returns
+    -------
+    midpoint : `astropy.time.Time`
+        The midpoint of the timespan.
+
+    Raises
+    ------
+    ValueError
+        Raised if either the start or end of the timespan is None, and
+        ``allowUnbounded`` is not set.
+    ValueError
+        Raised if the timespan is empty.
+    """
+    if (timespan.begin == Timespan.EMPTY) or (timespan.begin == Timespan.EMPTY):
+        raise ValueError("Cannot compute midpoint: EMPTY Timespan.")
+
+    try:
+        interval = timespan.end - timespan.begin
+        return timespan.begin + interval/2
+    except TypeError as e:
+        if allowUnbounded:
+            if timespan.end is not None:
+                return timespan.end
+            elif timespan.begin is not None:
+                return timespan.begin
+            else:
+                raise ValueError("Cannot compute midpoint: unbounded timespan.") from e
+        else:
+            raise ValueError("Cannot compute midpoint: unbounded timespan.") from e
