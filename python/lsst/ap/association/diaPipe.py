@@ -464,6 +464,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 assocResults.unAssocDiaSources,
                 solarSystemObjectTable,
                 diffIm)
+            # Create new DiaObjects from unassociated diaSources.
             createResults = self.createNewDiaObjects(
                 ssoAssocResult.unAssocDiaSources)
             toAssociate = []
@@ -476,6 +477,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             nTotalSsObjects = ssoAssocResult.nTotalSsObjects
             nAssociatedSsObjects = ssoAssocResult.nAssociatedSsObjects
         else:
+            # Create new DiaObjects from unassociated diaSources.
             createResults = self.createNewDiaObjects(
                 assocResults.unAssocDiaSources)
             toAssociate = []
@@ -486,7 +488,6 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             nTotalSsObjects = 0
             nAssociatedSsObjects = 0
 
-        # Create new DiaObjects from unassociated diaSources.
         self._add_association_meta_data(assocResults.nUpdatedDiaObjects,
                                         assocResults.nUnassociatedDiaObjects,
                                         createResults.nNewDiaObjects,
