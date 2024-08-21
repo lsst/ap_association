@@ -161,7 +161,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
         """
         wcs = exposure.getWcs()
         padding = min(
-            int(np.ceil(marginArcsec / wcs.getPixelScale().asArcseconds())),
+            int(np.ceil(marginArcsec / wcs.getPixelScale(exposure.getBBox().getCenter()).asArcseconds())),
             self.config.maxPixelMargin)
 
         return solarSystemObjects[exposure.containsSkyCoords(
