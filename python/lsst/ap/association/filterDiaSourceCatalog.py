@@ -75,6 +75,20 @@ class FilterDiaSourceCatalogConnections(
         name="{fakesType}{coaddName}Diff_longTrailedSrc",
     )
 
+    glintSources = connTypes.Output(
+        doc="Optional output storing diaSources filtered as glints.",
+        dimensions=("instrument", "visit", "detector"),
+        storageClass="ArrowAstropy",
+        name="{fakesType}{coaddName}Diff_glintSrc",
+    )
+
+    glintTrainInfo = connTypes.Output(
+        doc="Optional output storing glint train information.",
+        dimensions=("instrument", "visit", "detector"),
+        storageClass="ArrowAstropy",
+        name="{fakesType}{coaddName}Diff_glintTrainInfo",
+    )
+
     def __init__(self, *, config=None):
         super().__init__(config=config)
         if not self.config.doWriteRejectedSkySources:
