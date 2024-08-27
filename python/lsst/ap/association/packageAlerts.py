@@ -368,8 +368,10 @@ class PackageAlertsTask(pipeBase.Task):
             Visit and detector ids of these alerts. Used to write out alerts
             which fail to be sent to the alert stream.
         """
+        schema_id = self.alertSchema.get_schema_id()
+        # Serialize and send alerts with the producer timestamp.
         for alert in alerts:
-            alertBytes = self._serializeAlert(alert, schema=self.alertSchema.definition, schema_id=1)
+            alertBytes = self._serializeAlert(alert, schema=self.alertSchema.definition, schema_id=schema_id)
             try:
                 timestamp = int(time.time() * 1000)  # Current time in milliseconds
                 headers = [("producer_timestamp", str(timestamp).encode('utf-8'))]
@@ -614,7 +616,6 @@ class PackageAlertsTask(pipeBase.Task):
             schema = self.alertSchema.definition
 
         buf = io.BytesIO()
-        # TODO: Use a proper schema versioning system (DM-42606)
         buf.write(self._serializeConfluentWireHeader(schema_id))
         fastavro.schemaless_writer(buf, schema, alert)
         return buf.getvalue()
