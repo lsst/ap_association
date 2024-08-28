@@ -22,7 +22,8 @@
 """Utilities for working with the APDB.
 """
 __all__ = ("convertTableToSdmSchema", "readSdmSchemaFile", "readSchemaFromApdb",
-           "dropEmptyColumns", "make_empty_catalog", "getMidpointFromTimespan")
+           "dropEmptyColumns", "make_empty_catalog", "getMidpointFromTimespan",
+           "makeEmptyForcedSourceTable")
 
 from collections.abc import Mapping
 import os
@@ -329,3 +330,15 @@ def ssObjectID_to_objID(ssObjectID):
 
     objID = ''.join([chr((ssObjectID >> (8 * i)) % 256) for i in reversed(range(0, 7))])
     return objID, ssObjectID >> (8 * 7) % 256
+
+
+def makeEmptyForcedSourceTable(schema):
+    """Return a dataframe with the correct columns for diaForcedSources table.
+
+    Returns
+    -------
+    diaForcedSources : `pandas.DataFrame`
+        Empty dataframe.
+    """
+    diaForcedSources = convertTableToSdmSchema(schema, pd.DataFrame(), tableName="DiaForcedSource")
+    return diaForcedSources

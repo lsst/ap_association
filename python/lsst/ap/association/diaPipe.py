@@ -45,7 +45,7 @@ from lsst.ap.association import (
     PackageAlertsTask)
 from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
 from lsst.ap.association.utils import convertTableToSdmSchema, readSchemaFromApdb, dropEmptyColumns, \
-    make_empty_catalog
+    make_empty_catalog, makeEmptyForcedSourceTable
 from lsst.daf.base import DateTime
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
     DiaObjectCalculationTask
@@ -428,6 +428,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             The band in which the new DiaSources were detected.
         idGenerator : `lsst.meas.base.IdGenerator`
             Object that generates source IDs and random number generator seeds.
+        solarSystemObjectTable : `pandas.DataFrame`
+            Preloaded Solar System objects expected to be visible in the image.
 
         Returns
         -------
@@ -451,11 +453,156 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Accept either legacySolarSystemTable or optional solarSystemObjectTable.
         if legacySolarSystemTable is not None and solarSystemObjectTable is None:
             solarSystemObjectTable = legacySolarSystemTable
+
         if not preloadedDiaObjects.empty:
             diaObjects = self.purgeDiaObjects(diffIm.getBBox(), diffIm.getWcs(), preloadedDiaObjects,
                                               buffer=self.config.imagePixelMargin)
         else:
             diaObjects = preloadedDiaObjects
+
+        # Associate DiaSources with DiaObjects
+        associatedDiaSources, newDiaObjects = self.associateDiaSources(
+            diaSourceTable, solarSystemObjectTable, diffIm, diaObjects
+        )
+
+        # Merge associated diaSources
+        mergedDiaSourceHistory, mergedDiaObjects, updatedDiaObjectIds = self.mergeAssociatedCatalogs(
+            preloadedDiaSources, associatedDiaSources, diaObjects, newDiaObjects
+        )
+
+        # Compute DiaObject Summary statistics from their full DiaSource
+        # history.
+        diaCalResult = self.diaCalculation.run(
+            mergedDiaObjects,
+            mergedDiaSourceHistory,
+            updatedDiaObjectIds,
+            [band])
+
+        # Test for duplication in the updated DiaObjects.
+        if self.testDataFrameIndex(diaCalResult.diaObjectCat):
+            raise RuntimeError(
+                "Duplicate DiaObjects (loaded + updated) created after "
+                "DiaCalculation. This is unexpected behavior and should be "
+                "reported. Exiting.")
+        if self.testDataFrameIndex(diaCalResult.updatedDiaObjects):
+            raise RuntimeError(
+                "Duplicate DiaObjects (updated) created after "
+                "DiaCalculation. This is unexpected behavior and should be "
+                "reported. Exiting.")
+
+        # Forced source measurement
+        if self.config.doRunForcedMeasurement:
+            diaForcedSources = self.runForcedMeasurement(
+                diaCalResult.diaObjectCat, diaCalResult.updatedDiaObjects, exposure, diffIm, idGenerator
+            )
+
+        else:
+            # alertPackager needs correct columns
+            diaForcedSources = makeEmptyForcedSourceTable(self.schema)
+
+        # Write results to Alert Production Database (APDB)
+        self.writeToApdb(diaCalResult.updatedDiaObjects, associatedDiaSources, diaForcedSources)
+
+        # Package alerts
+        if self.config.doPackageAlerts:
+            # Append new forced sources to the full history
+            diaForcedSourcesFull = self.mergeCatalogs(preloadedDiaForcedSources, diaForcedSources,
+                                                      "preloadedDiaForcedSources")
+            if self.testDataFrameIndex(diaForcedSources):
+                self.log.warning(
+                    "Duplicate DiaForcedSources created after merge with "
+                    "history and new sources. This may cause downstream "
+                    "problems. Dropping duplicates.")
+                # Drop duplicates via index and keep the first appearance.
+                # Reset due to the index shape being slight different than
+                # expected.
+                diaForcedSourcesFull = diaForcedSourcesFull.groupby(
+                    diaForcedSourcesFull.index).first()
+                diaForcedSourcesFull.reset_index(drop=True, inplace=True)
+                diaForcedSourcesFull.set_index(
+                    ["diaObjectId", "diaForcedSourceId"],
+                    drop=False,
+                    inplace=True)
+            self.alertPackager.run(associatedDiaSources,
+                                   diaCalResult.diaObjectCat,
+                                   preloadedDiaSources,
+                                   diaForcedSourcesFull,
+                                   diffIm,
+                                   exposure,
+                                   template,
+                                   doRunForcedMeasurement=self.config.doRunForcedMeasurement,
+                                   )
+
+        # For historical reasons, apdbMarker is a Config even if it's not meant to be read.
+        # A default Config is the cheapest way to satisfy the storage class.
+        marker = self.config.apdb.value if self.config.doConfigureApdb else pexConfig.Config()
+        return pipeBase.Struct(apdbMarker=marker,
+                               associatedDiaSources=associatedDiaSources,
+                               diaForcedSources=diaForcedSources,
+                               diaObjects=diaCalResult.diaObjectCat,
+                               )
+
+    def createNewDiaObjects(self, unAssocDiaSources):
+        """Loop through the set of DiaSources and create new DiaObjects
+        for unassociated DiaSources.
+
+        Parameters
+        ----------
+        unAssocDiaSources : `pandas.DataFrame`
+            Set of DiaSources to create new DiaObjects from.
+
+        Returns
+        -------
+        results : `lsst.pipe.base.Struct`
+            Results struct containing:
+
+            - diaSources : `pandas.DataFrame`
+                DiaSource catalog with updated DiaObject ids.
+            - newDiaObjects : `pandas.DataFrame`
+                Newly created DiaObjects from the unassociated DiaSources.
+            - nNewDiaObjects : `int`
+                Number of newly created diaObjects.
+        """
+        if len(unAssocDiaSources) == 0:
+            newDiaObjects = make_empty_catalog(self.schema, tableName="DiaObject")
+        else:
+            unAssocDiaSources["diaObjectId"] = unAssocDiaSources["diaSourceId"]
+            newDiaObjects = convertTableToSdmSchema(self.schema, unAssocDiaSources,
+                                                    tableName="DiaObject")
+        return pipeBase.Struct(diaSources=unAssocDiaSources,
+                               newDiaObjects=newDiaObjects,
+                               nNewDiaObjects=len(newDiaObjects))
+
+    @timeMethod
+    def associateDiaSources(self, diaSourceTable, solarSystemObjectTable, diffIm, diaObjects):
+        """Associate DiaSources with DiaObjects.
+
+        Associate new DiaSources with existing DiaObjects. Create new
+        DiaObjects fron unassociated DiaSources. Index DiaSource catalogue
+        after associations. Append new DiaObjects and DiaSources to their
+        previous history. Test for DiaSource and DiaObject duplications.
+        Compute DiaObject Summary statistics from their full DiaSource
+        history. Test for duplication in the updated DiaObjects.
+
+        Parameters
+        ----------
+        diaSourceTable : `pandas.DataFrame`
+            Newly detected DiaSources.
+        solarSystemObjectTable : `pandas.DataFrame`
+            Preloaded Solar System objects expected to be visible in the image.
+        diffIm : `lsst.afw.image.ExposureF`
+            Difference image exposure in which the sources in ``diaSourceCat``
+            were detected.
+        diaObjects : `pandas.DataFrame`
+            Table of  DiaObjects from preloaded DiaObjects.
+
+        Returns
+        -------
+        associatedDiaSources : `pandas.DataFrame`
+            Associated DiaSources with DiaObjects.
+        newDiaObjects : `pandas.DataFrame`
+            Table of new DiaObjects after association.
+        """
         # Associate new DiaSources with existing DiaObjects.
         assocResults = self.associator.run(diaSourceTable, diaObjects)
 
@@ -493,6 +640,43 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                         createResults.nNewDiaObjects,
                                         nTotalSsObjects,
                                         nAssociatedSsObjects)
+        self.log.info("%i updated and %i unassociated diaObjects. Creating %i new diaObjects",
+                      assocResults.nUpdatedDiaObjects,
+                      assocResults.nUnassociatedDiaObjects,
+                      createResults.nNewDiaObjects,
+                      )
+        return (associatedDiaSources, createResults.newDiaObjects)
+
+    @timeMethod
+    def mergeAssociatedCatalogs(self, preloadedDiaSources, associatedDiaSources, diaObjects, newDiaObjects):
+        """Merge the associated diaSource and diaObjects to their previous history.
+
+        Parameters
+        ----------
+        preloadedDiaSources : `pandas.DataFrame`
+            Previously detected DiaSources, loaded from the APDB.
+        associatedDiaSources : `pandas.DataFrame`
+            Associated DiaSources with DiaObjects.
+        diaObjects : `pandas.DataFrame`
+            Table of  DiaObjects from preloaded DiaObjects.
+        newDiaObjects : `pandas.DataFrame`
+            Table of new DiaObjects after association.
+
+        Raises
+        ------
+        RuntimeError
+            Raised if duplicate DiaObjects or duplicate DiaSources are found.
+
+        Returns
+        -------
+        mergedDiaSourceHistory : `pandas.DataFrame`
+            The combined catalog, with all of the rows from preloadedDiaSources
+            catalog ordered before the rows of associatedDiaSources catalog.
+        mergedDiaObjects : `pandas.DataFrame`
+            Table of new DiaObjects merged with their history.
+        updatedDiaObjectIds : `numpy.Array`
+            Object Id's from associated diaSources.
+        """
         # Index the DiaSource catalog for this visit after all associations
         # have been made.
         updatedDiaObjectIds = associatedDiaSources["diaObjectId"][
@@ -505,12 +689,14 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         # Append new DiaObjects and DiaSources to their previous history.
         if diaObjects.empty:
-            diaObjects = createResults.newDiaObjects.set_index("diaObjectId", drop=False)
-        elif not createResults.newDiaObjects.empty:
-            diaObjects = pd.concat(
+            mergedDiaObjects = newDiaObjects.set_index("diaObjectId", drop=False)
+        elif not newDiaObjects.empty:
+            mergedDiaObjects = pd.concat(
                 [diaObjects,
-                 createResults.newDiaObjects.set_index("diaObjectId", drop=False)],
+                 newDiaObjects.set_index("diaObjectId", drop=False)],
                 sort=True)
+        else:
+            mergedDiaObjects = diaObjects
         if self.testDataFrameIndex(diaObjects):
             raise RuntimeError(
                 "Duplicate DiaObjects created after association. This is "
@@ -532,50 +718,71 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 "already populated Apdb. If this was not the case then there "
                 "was an unexpected failure in Association while matching "
                 "sources to objects, and should be reported. Exiting.")
+        return (mergedDiaSourceHistory, mergedDiaObjects, updatedDiaObjectIds)
 
-        # Compute DiaObject Summary statistics from their full DiaSource
-        # history.
-        diaCalResult = self.diaCalculation.run(
+    @timeMethod
+    def runForcedMeasurement(self, diaObjects, updatedDiaObjects, exposure, diffIm, idGenerator):
+        """Forced Source Measurement
+
+        Forced photometry on the difference and calibrated exposures using the
+        new and updated DiaObject locations.
+
+        Parameters
+        ----------
+        diaObjects : `pandas.DataFrame`
+            Catalog of DiaObjects.
+        updatedDiaObjects : `pandas.DataFrame`
+            Catalog of updated DiaObjects.
+        exposure : `lsst.afw.image.ExposureF`
+            Calibrated exposure differenced with a template to create
+            ``diffIm``.
+        diffIm : `lsst.afw.image.ExposureF`
+            Difference image exposure in which the sources in ``diaSourceCat``
+            were detected.
+        idGenerator : `lsst.meas.base.IdGenerator`
+            Object that generates source IDs and random number generator seeds.
+
+        Returns
+        -------
+        diaForcedSources : `pandas.DataFrame`
+            Catalog of calibrated forced photometered fluxes on both the
+            difference and direct images at DiaObject locations.
+        """
+        # Force photometer on the Difference and Calibrated exposures using
+        # the new and updated DiaObject locations.
+        diaForcedSources = self.diaForcedSource.run(
             diaObjects,
-            mergedDiaSourceHistory,
-            updatedDiaObjectIds,
-            [band])
-        # Test for duplication in the updated DiaObjects.
-        if self.testDataFrameIndex(diaCalResult.diaObjectCat):
-            raise RuntimeError(
-                "Duplicate DiaObjects (loaded + updated) created after "
-                "DiaCalculation. This is unexpected behavior and should be "
-                "reported. Exiting.")
-        if self.testDataFrameIndex(diaCalResult.updatedDiaObjects):
-            raise RuntimeError(
-                "Duplicate DiaObjects (updated) created after "
-                "DiaCalculation. This is unexpected behavior and should be "
-                "reported. Exiting.")
-
-        if self.config.doRunForcedMeasurement:
-            # Force photometer on the Difference and Calibrated exposures using
-            # the new and updated DiaObject locations.
-            diaForcedSources = self.diaForcedSource.run(
-                diaCalResult.diaObjectCat,
-                diaCalResult.updatedDiaObjects.loc[:, "diaObjectId"].to_numpy(),
-                exposure,
-                diffIm,
-                idGenerator=idGenerator)
-        else:
-            # alertPackager needs correct columns
-            diaForcedSources = pd.DataFrame(columns=[
-                "diaForcedSourceId", "diaObjectID", "ccdVisitID", "psfFlux", "psfFluxErr",
-                "ra", "dec", "midpointMjdTai", "band",
-            ])
-
-        # Store DiaSources, updated DiaObjects, and DiaForcedSources in the
-        # Apdb.
+            updatedDiaObjects.loc[:, "diaObjectId"].to_numpy(),
+            exposure,
+            diffIm,
+            idGenerator=idGenerator)
         self.log.info(f"Updating {len(diaForcedSources)} diaForcedSources in the APDB")
         diaForcedSources = convertTableToSdmSchema(self.schema, diaForcedSources,
                                                    tableName="DiaForcedSource",
                                                    )
+        return diaForcedSources
+
+    @timeMethod
+    def writeToApdb(self, updatedDiaObjects, associatedDiaSources, diaForcedSources):
+        """Write to the Alert Production Database (Apdb).
+
+        Store DiaSources, updated DiaObjects, and DiaForcedSources in the
+        Alert Production Database (Apdb).
+
+        Parameters
+        ----------
+        updatedDiaObjects : `pandas.DataFrame`
+            Catalog of updated DiaObjects.
+        associatedDiaSources : `pandas.DataFrame`
+            Associated DiaSources with DiaObjects.
+        diaForcedSources : `pandas.DataFrame`
+            Catalog of calibrated forced photometered fluxes on both the
+            difference and direct images at DiaObject locations.
+        """
+        # Store DiaSources, updated DiaObjects, and DiaForcedSources in the
+        # Apdb.
         # Drop empty columns that are nullable in the APDB.
-        diaObjectStore = dropEmptyColumns(self.schema, diaCalResult.updatedDiaObjects, tableName="DiaObject")
+        diaObjectStore = dropEmptyColumns(self.schema, updatedDiaObjects, tableName="DiaObject")
         diaSourceStore = dropEmptyColumns(self.schema, associatedDiaSources, tableName="DiaSource")
         diaForcedSourceStore = dropEmptyColumns(self.schema, diaForcedSources, tableName="DiaForcedSource")
         self.apdb.store(
@@ -584,73 +791,6 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diaSourceStore,
             diaForcedSourceStore)
         self.log.info("APDB updated.")
-
-        if self.config.doPackageAlerts:
-            diaForcedSources = self.mergeCatalogs(preloadedDiaForcedSources, diaForcedSources,
-                                                  "preloadedDiaForcedSources")
-            if self.testDataFrameIndex(diaForcedSources):
-                self.log.warning(
-                    "Duplicate DiaForcedSources created after merge with "
-                    "history and new sources. This may cause downstream "
-                    "problems. Dropping duplicates.")
-                # Drop duplicates via index and keep the first appearance.
-                # Reset due to the index shape being slight different than
-                # expected.
-                diaForcedSources = diaForcedSources.groupby(
-                    diaForcedSources.index).first()
-                diaForcedSources.reset_index(drop=True, inplace=True)
-                diaForcedSources.set_index(
-                    ["diaObjectId", "diaForcedSourceId"],
-                    drop=False,
-                    inplace=True)
-            self.alertPackager.run(associatedDiaSources,
-                                   diaCalResult.diaObjectCat,
-                                   preloadedDiaSources,
-                                   diaForcedSources,
-                                   diffIm,
-                                   exposure,
-                                   template,
-                                   doRunForcedMeasurement=self.config.doRunForcedMeasurement,
-                                   )
-
-        # For historical reasons, apdbMarker is a Config even if it's not meant to be read.
-        # A default Config is the cheapest way to satisfy the storage class.
-        marker = self.config.apdb.value if self.config.doConfigureApdb else pexConfig.Config()
-        return pipeBase.Struct(apdbMarker=marker,
-                               associatedDiaSources=associatedDiaSources,
-                               diaForcedSources=diaForcedSources,
-                               diaObjects=diaObjects,
-                               )
-
-    def createNewDiaObjects(self, unAssocDiaSources):
-        """Loop through the set of DiaSources and create new DiaObjects
-        for unassociated DiaSources.
-
-        Parameters
-        ----------
-        unAssocDiaSources : `pandas.DataFrame`
-            Set of DiaSources to create new DiaObjects from.
-
-        Returns
-        -------
-        results : `lsst.pipe.base.Struct`
-            Results struct containing:
-
-            - ``diaSources`` : DiaSource catalog with updated DiaObject ids.
-              (`pandas.DataFrame`)
-            - ``newDiaObjects`` : Newly created DiaObjects from the
-              unassociated DiaSources. (`pandas.DataFrame`)
-            - ``nNewDiaObjects`` : Number of newly created diaObjects.(`int`)
-        """
-        if len(unAssocDiaSources) == 0:
-            newDiaObjects = make_empty_catalog(self.schema, tableName="DiaObject")
-        else:
-            unAssocDiaSources["diaObjectId"] = unAssocDiaSources["diaSourceId"]
-            newDiaObjects = convertTableToSdmSchema(self.schema, unAssocDiaSources,
-                                                    tableName="DiaObject")
-        return pipeBase.Struct(diaSources=unAssocDiaSources,
-                               newDiaObjects=newDiaObjects,
-                               nNewDiaObjects=len(newDiaObjects))
 
     def testDataFrameIndex(self, df):
         """Test the sorted DataFrame index for duplicates.
