@@ -218,6 +218,10 @@ class DiaForcedSourceTask(pipeBase.Task):
                                                           "slot_PsfFlux")
 
         output_catalog = diff_sources.asAstropy().to_pandas()
+        # afwTable source catalogs store coordinates as radians, but the
+        # output must be in degrees
+        output_catalog.loc[:, "ra"] = np.rad2deg(output_catalog.loc[:, "ra"])
+        output_catalog.loc[:, "dec"] = np.rad2deg(output_catalog.loc[:, "dec"])
         output_catalog.rename(columns={"id": "diaForcedSourceId",
                                        "slot_PsfFlux_instFlux": "psfFlux",
                                        "slot_PsfFlux_instFluxErr": "psfFluxErr",
