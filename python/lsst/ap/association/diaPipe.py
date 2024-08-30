@@ -560,8 +560,6 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 exposure,
                 diffIm,
                 idGenerator=idGenerator)
-            # columns "ra" and "dec" are required for spatial sharding in Cassandra
-            diaForcedSources.rename(columns={"coord_ra": "ra", "coord_dec": "dec"}, inplace=True)
         else:
             # alertPackager needs correct columns
             diaForcedSources = pd.DataFrame(columns=[
