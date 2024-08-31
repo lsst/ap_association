@@ -427,7 +427,7 @@ class PackageAlertsTask(pipeBase.Task):
         try:
             cutout = image.getCutout(pixelCenter, extent)
         except InvalidParameterError:
-            raise InvalidParameterError(
+            self.log.warning(
                 "Failed to retrieve cutout from image for DiaSource with "
                 "id=%i. InvalidParameterError thrown during cutout "
                 "creation. Returning None for cutout..."
