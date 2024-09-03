@@ -448,6 +448,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         RuntimeError
             Raised if duplicate DiaObjects or duplicate DiaSources are found.
         """
+        # Accept either legacySolarSystemTable or optional solarSystemObjectTable.
+        if legacySolarSystemTable is not None and solarSystemObjectTable is None:
+            solarSystemObjectTable = legacySolarSystemTable
         if not preloadedDiaObjects.empty:
             diaObjects = self.purgeDiaObjects(diffIm.getBBox(), diffIm.getWcs(), preloadedDiaObjects,
                                               buffer=self.config.imagePixelMargin)
