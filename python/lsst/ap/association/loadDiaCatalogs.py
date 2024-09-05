@@ -21,9 +21,13 @@
 
 """Task for pre-loading DiaSources and DiaObjects within ap_pipe.
 """
+
+import math
+
 import pandas as pd
 
 import lsst.dax.apdb as daxApdb
+import lsst.geom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
@@ -183,9 +187,21 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
         padded : `lsst.sphgeom.Region`
             An enlarged copy of ``region``.
         """
-        circle = region.getBoundingCircle()
-        circle.dilateBy(margin)
-        return circle
+        # region is almost certainly a (padded) detector bounding box.
+        if isinstance(region, lsst.sphgeom.ConvexPolygon):
+            # This is an ad-hoc, approximate implementation. It should be good
+            # enough for catalog loading, but is not a general-purpose solution.
+            center = lsst.geom.SpherePoint(region.getCentroid())
+            corners = [lsst.geom.SpherePoint(c) for c in region.getVertices()]
+            # Approximate the region as a Euclidian square
+            # geom.Angle(sphgeom.Angle) converter not pybind-wrapped???
+            diagonal_margin = lsst.geom.Angle(margin.asRadians() * math.sqrt(2.0))
+            padded = [c.offset(center.bearingTo(c), diagonal_margin) for c in corners]
+            return lsst.sphgeom.ConvexPolygon.convexHull([c.getVector() for c in padded])
+        elif hasattr(region, "dilatedBy"):
+            return region.dilatedBy(margin)
+        else:
+            return region.getBoundingCircle().dilatedBy(margin)
 
     @timeMethod
     def loadDiaObjects(self, region, schema):
