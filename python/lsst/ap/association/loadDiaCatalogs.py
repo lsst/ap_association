@@ -21,9 +21,13 @@
 
 """Task for pre-loading DiaSources and DiaObjects within ap_pipe.
 """
+
+import math
+
 import pandas as pd
 
 import lsst.dax.apdb as daxApdb
+import lsst.geom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
@@ -143,10 +147,8 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
         RuntimeError
             Raised if the Database query failed to load DiaObjects.
         """
-        baseRegion = regionTime.region
-        region = baseRegion.getBoundingCircle()
-        region.dilateBy(lsst.sphgeom.Angle.fromDegrees(self.config.angleMargin/3600.))
-
+        region = self._paddedRegion(regionTime.region,
+                                    lsst.sphgeom.Angle.fromDegrees(self.config.angleMargin/3600.))
         schema = readSchemaFromApdb(self.apdb)
 
         # This is the first database query.
@@ -168,6 +170,38 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
             diaObjects=diaObjects,
             diaSources=diaSources,
             diaForcedSources=diaForcedSources)
+
+    @staticmethod
+    def _paddedRegion(region, margin):
+        """Return a region that has been expanded by a buffer.
+
+        Parameters
+        ----------
+        region : `lsst.sphgeom.Region`
+            The region to pad.
+        margin : `lsst.sphgeom.Angle`
+            The amount by which to increase the region.
+
+        Returns
+        -------
+        padded : `lsst.sphgeom.Region`
+            An enlarged copy of ``region``.
+        """
+        # region is almost certainly a (padded) detector bounding box.
+        if isinstance(region, lsst.sphgeom.ConvexPolygon):
+            # This is an ad-hoc, approximate implementation. It should be good
+            # enough for catalog loading, but is not a general-purpose solution.
+            center = lsst.geom.SpherePoint(region.getCentroid())
+            corners = [lsst.geom.SpherePoint(c) for c in region.getVertices()]
+            # Approximate the region as a Euclidian square
+            # geom.Angle(sphgeom.Angle) converter not pybind-wrapped???
+            diagonal_margin = lsst.geom.Angle(margin.asRadians() * math.sqrt(2.0))
+            padded = [c.offset(center.bearingTo(c), diagonal_margin) for c in corners]
+            return lsst.sphgeom.ConvexPolygon.convexHull([c.getVector() for c in padded])
+        elif hasattr(region, "dilatedBy"):
+            return region.dilatedBy(margin)
+        else:
+            return region.getBoundingCircle().dilatedBy(margin)
 
     @timeMethod
     def loadDiaObjects(self, region, schema):
