@@ -67,9 +67,10 @@ class DiaPipelineConnections(
     solarSystemObjectTable = connTypes.Input(
         doc="Catalog of SolarSolarSystem objects expected to be observable in "
             "this detectorVisit.",
-        name="visitSsObjects",
+        name="preloaded_SsObjects",
         storageClass="DataFrame",
-        dimensions=("instrument", "visit"),
+        dimensions=("instrument", "group", "detector"),
+        minimum=0,
     )
     diffIm = connTypes.Input(
         doc="Difference image on which the DiaSources were detected.",
@@ -375,6 +376,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         inputs = butlerQC.get(inputRefs)
         inputs["idGenerator"] = self.config.idGenerator.apply(butlerQC.quantum.dataId)
         inputs["band"] = butlerQC.quantum.dataId["band"]
+        inputs["legacySolarSystemTable"] = None
         if not self.config.doSolarSystemAssociation:
             inputs["solarSystemObjectTable"] = None
 
@@ -385,7 +387,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
     @timeMethod
     def run(self,
             diaSourceTable,
-            solarSystemObjectTable,
+            legacySolarSystemTable,
             diffIm,
             exposure,
             template,
@@ -393,7 +395,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             preloadedDiaSources,
             preloadedDiaForcedSources,
             band,
-            idGenerator):
+            idGenerator,
+            solarSystemObjectTable=None):
         """Process DiaSources and DiaObjects.
 
         Load previous DiaObjects and their DiaSource history. Calibrate the
@@ -405,8 +408,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         ----------
         diaSourceTable : `pandas.DataFrame`
             Newly detected DiaSources.
-        solarSystemObjectTable : `pandas.DataFrame`
-            Preloaded Solar System objects expected to be visible in the image.
+        legacySolarSystemTable : `pandas.DataFrame`
+            Not used
         diffIm : `lsst.afw.image.ExposureF`
             Difference image exposure in which the sources in ``diaSourceCat``
             were detected.
@@ -445,6 +448,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         RuntimeError
             Raised if duplicate DiaObjects or duplicate DiaSources are found.
         """
+        # Accept either legacySolarSystemTable or optional solarSystemObjectTable.
+        if legacySolarSystemTable is not None and solarSystemObjectTable is None:
+            solarSystemObjectTable = legacySolarSystemTable
         if not preloadedDiaObjects.empty:
             diaObjects = self.purgeDiaObjects(diffIm.getBBox(), diffIm.getWcs(), preloadedDiaObjects,
                                               buffer=self.config.imagePixelMargin)
@@ -453,7 +459,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Associate new DiaSources with existing DiaObjects.
         assocResults = self.associator.run(diaSourceTable, diaObjects)
 
-        if self.config.doSolarSystemAssociation:
+        if self.config.doSolarSystemAssociation and solarSystemObjectTable is not None:
             ssoAssocResult = self.solarSystemAssociator.run(
                 assocResults.unAssocDiaSources,
                 solarSystemObjectTable,
