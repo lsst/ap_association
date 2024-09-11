@@ -117,6 +117,13 @@ class PackageAlertsConfig(pexConfig.Config):
         default=1200.0,
     )
 
+    useAveragePsf = pexConfig.Field(
+        dtype=bool,
+        doc="Use the average PSF for the image, instead of the PSF for each cutout. "
+            "This option is much less accurate, but much faster.",
+        default=False,
+    )
+
 
 class PackageAlertsTask(pipeBase.Task):
     """Tasks for packaging Dia and Pipelines data into Avro alert packages.
@@ -248,6 +255,9 @@ class PackageAlertsTask(pipeBase.Task):
         diffImPhotoCalib = diffIm.getPhotoCalib()
         calexpPhotoCalib = calexp.getPhotoCalib()
         templatePhotoCalib = template.getPhotoCalib()
+        diffImPsf = self._computePsf(diffIm, diffIm.psf.getAveragePosition())
+        sciencePsf = self._computePsf(calexp, calexp.psf.getAveragePosition())
+        templatePsf = self._computePsf(template, template.psf.getAveragePosition())
 
         n_sources = len(diaSourceCat)
         self.log.info("Packaging alerts for %d DiaSources.", n_sources)
@@ -284,21 +294,24 @@ class PackageAlertsTask(pipeBase.Task):
                 pixelPoint,
                 cutoutExtent,
                 diffImPhotoCalib,
-                diaSource["diaSourceId"])
+                diaSource["diaSourceId"],
+                averagePsf=diffImPsf)
             calexpCutout = self.createCcdDataCutout(
                 calexp,
                 sphPoint,
                 pixelPoint,
                 cutoutExtent,
                 calexpPhotoCalib,
-                diaSource["diaSourceId"])
+                diaSource["diaSourceId"],
+                averagePsf=sciencePsf)
             templateCutout = self.createCcdDataCutout(
                 template,
                 sphPoint,
                 pixelPoint,
                 cutoutExtent,
                 templatePhotoCalib,
-                diaSource["diaSourceId"])
+                diaSource["diaSourceId"],
+                averagePsf=templatePsf)
 
             # TODO: Create alertIds DM-24858
             alertId = diaSource["diaSourceId"]
@@ -389,7 +402,7 @@ class PackageAlertsTask(pipeBase.Task):
 
         self.producer.flush()
 
-    def createCcdDataCutout(self, image, skyCenter, pixelCenter, extent, photoCalib, srcId):
+    def createCcdDataCutout(self, image, skyCenter, pixelCenter, extent, photoCalib, srcId, averagePsf=None):
         """Grab an image as a cutout and return a calibrated CCDData image.
 
         Parameters
@@ -407,6 +420,9 @@ class PackageAlertsTask(pipeBase.Task):
         srcId : `int`
             Unique id of DiaSource. Used for when an error occurs extracting
             a cutout.
+        averagePsf : `numpy.array`, optional
+            Average PSF to attach to the cutout.
+            Used if ``self.config.useAveragePsf`` is set.
 
         Returns
         -------
@@ -427,24 +443,18 @@ class PackageAlertsTask(pipeBase.Task):
         try:
             cutout = image.getCutout(pixelCenter, extent)
         except InvalidParameterError:
-            raise InvalidParameterError(
+            self.log.warning(
                 "Failed to retrieve cutout from image for DiaSource with "
                 "id=%i. InvalidParameterError thrown during cutout "
                 "creation. Returning None for cutout..."
                 % srcId)
-        try:
-            # use image.psf.computeKernelImage to provide PSF centered in the array
-            cutoutPsf = image.psf.computeKernelImage(pixelCenter).array
-        except InvalidParameterError:
-            self.log.warning("Could not calculate PSF for DiaSource with "
-                             "id=%i. InvalidParameterError encountered. Exiting."
-                             % srcId)
-            cutoutPsf = None
-        except InvalidPsfError:
-            self.log.warning("Could not calculate PSF for DiaSource with "
-                             "id=%i. InvalidPsfError encountered. Exiting."
-                             % srcId)
-            cutoutPsf = None
+        if self.config.useAveragePsf:
+            if averagePsf is None:
+                self.log.info("Using source id=%i to compute the average PSF.", srcId)
+                averagePsf = self._computePsf(image, pixelCenter, srcId=srcId)
+            cutoutPsf = averagePsf
+        else:
+            cutoutPsf = self._computePsf(image, pixelCenter, srcId=srcId)
 
         # Find the value of the bottom corner of our cutout's BBox and
         # subtract 1 so that the CCDData cutout position value will be
@@ -667,3 +677,44 @@ class PackageAlertsTask(pipeBase.Task):
 
         if not topics:
             raise RuntimeError()
+
+    def _computePsf(self, exposure, pixelCenter, srcId=None):
+        """Compute the PSF at a location and catch errors.
+
+        Parameters
+        ----------
+        exposure : `lsst.afw.image.Exposure`
+            The image to compute the PSF for.
+        pixelCenter : `lsst.geom.Point2D`
+            The location on the image to compute the PSF.
+        srcId : `int`, optional
+            Unique id of DiaSource. Used for when an error occurs extracting
+            a cutout.
+
+        Returns
+        -------
+        cutoutPsf : `numpy.array`
+            Array of the PSF values.
+        """
+        try:
+            # use exposure.psf.computeKernelImage to provide PSF centered in the array
+            cutoutPsf = exposure.psf.computeKernelImage(pixelCenter).array
+        except InvalidParameterError:
+            if srcId is not None:
+                msg = "Could not calculate PSF for DiaSource with "\
+                      "id=%i. InvalidParameterError encountered. Exiting."\
+                      % srcId
+            else:
+                msg = "Could not calculate average PSF for the image"
+            self.log.warning(msg)
+            cutoutPsf = None
+        except InvalidPsfError:
+            if srcId is not None:
+                msg = "Could not calculate PSF for DiaSource with "\
+                      "id=%i. InvalidPsfError encountered. Exiting."\
+                      % srcId
+            else:
+                msg = "Could not calculate average PSF for the image"
+            self.log.warning(msg)
+            cutoutPsf = None
+        return cutoutPsf

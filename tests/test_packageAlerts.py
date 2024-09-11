@@ -76,11 +76,21 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
         apdb = Apdb.from_config(apdbConfig)
 
         wholeSky = Box.full()
-        diaObjects = pd.concat([apdb.getDiaObjects(wholeSky), objects])
-        diaSources = pd.concat(
-            [apdb.getDiaSources(wholeSky, [], dateTime), sources])
-        diaForcedSources = pd.concat(
-            [apdb.getDiaForcedSources(wholeSky, [], dateTime), forcedSources])
+        loadedObjects = apdb.getDiaObjects(wholeSky)
+        if loadedObjects.empty:
+            diaObjects = objects
+        else:
+            diaObjects = pd.concat([loadedObjects, objects])
+        loadedDiaSources = apdb.getDiaSources(wholeSky, [], dateTime)
+        if loadedDiaSources.empty:
+            diaSources = sources
+        else:
+            diaSources = pd.concat([loadedDiaSources, sources])
+        loadedDiaForcedSources = apdb.getDiaForcedSources(wholeSky, [], dateTime)
+        if loadedDiaForcedSources.empty:
+            diaForcedSources = forcedSources
+        else:
+            diaForcedSources = pd.concat([loadedDiaForcedSources, forcedSources])
 
         apdb.store(dateTime, diaObjects, diaSources, diaForcedSources)
 
@@ -483,6 +493,61 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         packConfig = PackageAlertsConfig(doWriteAlerts=True)
         with tempfile.TemporaryDirectory(prefix='alerts') as tempdir:
             packConfig.alertWriteLocation = tempdir
+            packageAlerts = PackageAlertsTask(config=packConfig)
+
+            packageAlerts.run(self.diaSources,
+                              self.diaObjects,
+                              self.diaSourceHistory,
+                              self.diaForcedSources,
+                              self.exposure,
+                              self.exposure,
+                              self.exposure)
+
+            self.assertEqual(mock_server_check.call_count, 0)
+
+            with open(os.path.join(tempdir, f"{VISIT}_{DETECTOR}.avro"), 'rb') as f:
+                writer_schema, data_stream = \
+                    packageAlerts.alertSchema.retrieve_alerts(f)
+                data = list(data_stream)
+
+        self.assertEqual(len(data), len(self.diaSources))
+        for idx, alert in enumerate(data):
+            for key, value in alert["diaSource"].items():
+                if isinstance(value, float):
+                    if np.isnan(self.diaSources.iloc[idx][key]):
+                        self.assertTrue(np.isnan(value))
+                    else:
+                        self.assertAlmostEqual(
+                            1 - value / self.diaSources.iloc[idx][key],
+                            0.)
+                else:
+                    self.assertEqual(value, self.diaSources.iloc[idx][key])
+            sphPoint = geom.SpherePoint(alert["diaSource"]["ra"],
+                                        alert["diaSource"]["dec"],
+                                        geom.degrees)
+            pixelPoint = geom.Point2D(alert["diaSource"]["x"], alert["diaSource"]["y"])
+            cutout = self.exposure.getCutout(sphPoint,
+                                             geom.Extent2I(self.cutoutSize,
+                                                           self.cutoutSize))
+            ccdCutout = packageAlerts.createCcdDataCutout(
+                cutout,
+                sphPoint,
+                pixelPoint,
+                geom.Extent2I(self.cutoutSize, self.cutoutSize),
+                cutout.getPhotoCalib(),
+                1234)
+            self.assertEqual(alert["cutoutDifference"],
+                             packageAlerts.streamCcdDataToBytes(ccdCutout))
+
+    @patch.object(PackageAlertsTask, '_server_check')
+    def testRun_without_produce_use_averagePsf(self, mock_server_check):
+        """Test the run method of package alerts with produce set to False and
+        doWriteAlerts set to true.
+        """
+        packConfig = PackageAlertsConfig(doWriteAlerts=True)
+        with tempfile.TemporaryDirectory(prefix='alerts') as tempdir:
+            packConfig.alertWriteLocation = tempdir
+            packConfig.useAveragePsf = True
             packageAlerts = PackageAlertsTask(config=packConfig)
 
             packageAlerts.run(self.diaSources,
