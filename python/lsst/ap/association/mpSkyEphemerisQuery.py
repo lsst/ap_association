@@ -125,7 +125,7 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         timespan = predictedRegionTime.timespan
         expCenter = SpherePoint(region.getBoundingCircle().getCenter())
         expRadius = region.getBoundingCircle().getOpeningAngle().asDegrees()
-        expMidPointEPOCH = getMidpointFromTimespan(timespan, allowUnbounded=False).tai.mjd
+        expMidPointEPOCH = getMidpointFromTimespan(timespan, allowUnbounded=False).mjd
 
         # MPSky service query
         mpSkyURL = os.environ.get('MP_SKY_URL', '')

@@ -250,13 +250,13 @@ def getMidpointFromTimespan(timespan, allowUnbounded=True):
 
     try:
         interval = timespan.end - timespan.begin
-        return timespan.begin + interval/2
+        return (timespan.begin + interval/2).tai
     except TypeError as e:
         if allowUnbounded:
             if timespan.end is not None:
-                return timespan.end
+                return timespan.end.tai
             elif timespan.begin is not None:
-                return timespan.begin
+                return timespan.begin.tai
             else:
                 raise ValueError("Cannot compute midpoint: unbounded timespan.") from e
         else:

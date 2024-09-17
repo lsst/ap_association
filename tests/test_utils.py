@@ -65,7 +65,7 @@ class TestUtils(unittest.TestCase):
         exposure = makeExposure()
         regionTime = makeRegionTime(exposure)
         visitTime = exposure.visitInfo.date.toAstropy()
-        midpoint = getMidpointFromTimespan(regionTime.timespan).tai
+        midpoint = getMidpointFromTimespan(regionTime.timespan)
         self.assertEqual(visitTime.jd, midpoint.jd)
 
     def test_invalidTimespan(self):
