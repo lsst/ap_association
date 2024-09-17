@@ -74,7 +74,7 @@ class TestLoadDiaCatalogs(unittest.TestCase):
 
         self.exposure = makeExposure(False, False)
         self.regionTime = makeRegionTime(exposure=self.exposure)
-        self.dateTime = getMidpointFromTimespan(self.regionTime.timespan).tai
+        self.dateTime = getMidpointFromTimespan(self.regionTime.timespan)
 
         self.diaObjects = makeDiaObjects(20, self.exposure, rng)
         self.diaSources = makeDiaSources(

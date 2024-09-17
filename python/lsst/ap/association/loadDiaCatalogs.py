@@ -157,7 +157,7 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
         # Load diaSources and forced sources up to the time of the exposure
         # The timespan may include significant padding, so use the midpoint to
         #  avoid missing valid recent diaSources.
-        visitTime = getMidpointFromTimespan(regionTime.timespan).tai
+        visitTime = getMidpointFromTimespan(regionTime.timespan)
 
         diaSources = self.loadDiaSources(diaObjects, region, visitTime, schema)
 
