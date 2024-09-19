@@ -103,7 +103,7 @@ def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False
     rand_x = rng.uniform(bbox.getMinX(), bbox.getMaxX(), size=nSources)
     rand_y = rng.uniform(bbox.getMinY(), bbox.getMaxY(), size=nSources)
     if randomizeObjects:
-        objectIds = diaObjectIds[rng.randint(len(diaObjectIds), size=nSources)]
+        objectIds = diaObjectIds[rng.integers(len(diaObjectIds), size=nSources)]
     else:
         objectIds = diaObjectIds[[i % len(diaObjectIds) for i in range(nSources)]]
 
