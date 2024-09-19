@@ -240,6 +240,7 @@ def makeExposure(flipX=False, flipY=False):
     exposure.setDetector(detector)
     exposure.info.setVisitInfo(visit)
     exposure.setFilter(afwImage.FilterLabel(band='g'))
+    exposure.setPhotoCalib(afwImage.PhotoCalib(1., 0., exposure.getBBox()))
 
     return exposure
 
