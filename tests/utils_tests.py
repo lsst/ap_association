@@ -103,7 +103,7 @@ def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False
     rand_x = rng.uniform(bbox.getMinX(), bbox.getMaxX(), size=nSources)
     rand_y = rng.uniform(bbox.getMinY(), bbox.getMaxY(), size=nSources)
     if randomizeObjects:
-        objectIds = diaObjectIds[rng.randint(len(diaObjectIds), size=nSources)]
+        objectIds = diaObjectIds[rng.integers(len(diaObjectIds), size=nSources)]
     else:
         objectIds = diaObjectIds[[i % len(diaObjectIds) for i in range(nSources)]]
 
@@ -131,6 +131,34 @@ def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False
                      "dipoleNdata": 0})
 
     return pd.DataFrame(data=data)
+
+
+def makeSolarSystemSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False):
+    """Make a test set of solar system sources.
+
+    Parameters
+    ----------
+    nSources : `int`
+        Number of sources to create.
+    diaObjectIds : `numpy.ndarray`
+        Integer Ids of diaobjects to "associate" with the DiaSources.
+    exposure : `lsst.afw.image.Exposure`
+        Exposure to create sources over.
+    randomizeObjects : `bool`, optional
+        If True, randomly draw from `diaObjectIds` to generate the ids in the
+        output catalog, otherwise just iterate through them, repeating as
+        necessary to get nSources objectIds.
+
+    Returns
+    -------
+    solarSystemSources : `pandas.DataFrame`
+        Solar system sources generated across the exposure.
+    """
+    solarSystemSources = makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False)
+    solarSystemSources["ssObjectId"] = rng.integers(0, high=2**63-1, size=nSources)
+    solarSystemSources["Err(arcsec)"] = rng.uniform(0.2, 0.4, size=nSources)
+
+    return solarSystemSources
 
 
 def makeDiaForcedSources(nForcedSources, diaObjectIds, exposure, rng, randomizeObjects=False):
@@ -240,6 +268,7 @@ def makeExposure(flipX=False, flipY=False):
     exposure.setDetector(detector)
     exposure.info.setVisitInfo(visit)
     exposure.setFilter(afwImage.FilterLabel(band='g'))
+    exposure.setPhotoCalib(afwImage.PhotoCalib(1., 0., exposure.getBBox()))
 
     return exposure
 

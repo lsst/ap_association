@@ -36,7 +36,8 @@ import lsst.utils.tests
 from lsst.pipe.base.testUtils import assertValidOutput
 
 from lsst.ap.association import DiaPipelineTask
-from utils_tests import makeExposure, makeDiaObjects, makeDiaSources, makeDiaForcedSources
+from utils_tests import makeExposure, makeDiaObjects, makeDiaSources, makeDiaForcedSources, \
+    makeSolarSystemSources
 
 
 def _makeMockDataFrame():
@@ -57,15 +58,11 @@ def _makeMockDataFrame():
 class TestDiaPipelineTask(unittest.TestCase):
 
     @classmethod
-    def _makeDefaultConfig(cls,
-                           config_file,
-                           doPackageAlerts=False,
-                           doSolarSystemAssociation=False):
+    def _makeDefaultConfig(cls, config_file, **kwargs):
         config = DiaPipelineTask.ConfigClass()
         config.doConfigureApdb = False
         config.apdb_config_url = config_file
-        config.doPackageAlerts = doPackageAlerts
-        config.doSolarSystemAssociation = doSolarSystemAssociation
+        config.update(**kwargs)
         return config
 
     def setUp(self):
@@ -84,6 +81,8 @@ class TestDiaPipelineTask(unittest.TestCase):
             100, self.diaObjects["diaObjectId"].to_numpy(), self.exposure, rng)
         self.diaForcedSources = makeDiaForcedSources(
             200, self.diaObjects["diaObjectId"].to_numpy(), self.exposure, rng)
+        self.ssSources = makeSolarSystemSources(
+            20, self.diaObjects["diaObjectId"].to_numpy(), self.exposure, rng)
 
         apdb_config = daxApdb.ApdbSql.init_database(db_url="sqlite://")
         self.config_file = tempfile.NamedTemporaryFile()
@@ -145,13 +144,15 @@ class TestDiaPipelineTask(unittest.TestCase):
         """
         self._testRun(doPackageAlerts=False, doSolarSystemAssociation=False)
 
-    def _testRun(self, doPackageAlerts=False, doSolarSystemAssociation=False):
+    def _testRun(self, doPackageAlerts=False, doSolarSystemAssociation=False, doRunForcedMeasurement=False):
         """Test the normal workflow of each ap_pipe step.
         """
         config = self._makeDefaultConfig(
             config_file=self.config_file.name,
             doPackageAlerts=doPackageAlerts,
-            doSolarSystemAssociation=doSolarSystemAssociation)
+            doSolarSystemAssociation=doSolarSystemAssociation,
+            doRunForcedMeasurement=doRunForcedMeasurement,
+        )
         task = DiaPipelineTask(config=config)
         # Set DataFrame index testing to always return False. Mocks return
         # true for this check otherwise.
@@ -167,7 +168,6 @@ class TestDiaPipelineTask(unittest.TestCase):
         # appropriately.
         subtasksToMock = [
             "diaCalculation",
-            "diaForcedSource",
         ]
         if doPackageAlerts:
             subtasksToMock.append("alertPackager")
