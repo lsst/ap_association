@@ -37,7 +37,8 @@ from lsst.utils.timer import timeMethod
 
 from lsst.ap.association.utils import convertTableToSdmSchema, readSchemaFromApdb, getMidpointFromTimespan
 
-__all__ = ("LoadDiaCatalogsTask", "LoadDiaCatalogsConfig")
+__all__ = ("LoadDiaCatalogsTask", "LoadDiaCatalogsConfig",
+           "LoadDiaCatalogsBatchConfig", "LoadDiaCatalogsBatchTask")
 
 
 class LoadDiaCatalogsConnections(pipeBase.PipelineTaskConnections,
@@ -328,3 +329,21 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
         self.log.info("Loaded %i DiaForcedSources from %i visits", len(diaForcedSources), nVisits)
 
         return convertTableToSdmSchema(schema, diaForcedSources, tableName="DiaForcedSource")
+
+
+class LoadDiaCatalogsBatchConnections(LoadDiaCatalogsConnections,
+                                      dimensions=("instrument", "group", "visit", "detector")):
+    pass
+
+
+class LoadDiaCatalogsBatchConfig(LoadDiaCatalogsConfig,
+                                 pipelineConnections=LoadDiaCatalogsBatchConnections):
+    pass
+
+
+class LoadDiaCatalogsBatchTask(LoadDiaCatalogsTask):
+    """Retrieve DiaObjects and associated DiaSources from the Apdb given an
+    input exposure.
+    """
+    ConfigClass = LoadDiaCatalogsBatchConfig
+    _DefaultName = "loadDiaCatalogsBatch"
