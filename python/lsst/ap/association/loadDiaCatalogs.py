@@ -220,7 +220,6 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
             DiaObjects loaded from the Apdb that are within the area defined
             by ``pixelRanges``.
         """
-        self.log.info("Loading DiaObjects")
         diaObjects = self.apdb.getDiaObjects(region)
 
         diaObjects.set_index("diaObjectId", drop=False, inplace=True)
@@ -230,6 +229,7 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
                 "downstream pipeline issues. Dropping duplicated rows")
             # Drop duplicates via index and keep the first appearance.
             diaObjects = diaObjects.groupby(diaObjects.index).first()
+        self.log.info("Loaded %i DiaObjects", len(diaObjects))
 
         return convertTableToSdmSchema(schema, diaObjects, tableName="DiaObject")
 
@@ -258,8 +258,6 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
             DiaSources loaded from the Apdb that are within the area defined
             by ``pixelRange`` and associated with ``diaObjects``.
         """
-        self.log.info("Loading DiaSources")
-
         diaSources = self.apdb.getDiaSources(region, diaObjects.loc[:, "diaObjectId"], dateTime)
 
         diaSources.set_index(["diaObjectId", "band", "diaSourceId"],
@@ -275,6 +273,7 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
             diaSources.set_index(["diaObjectId", "band", "diaSourceId"],
                                  drop=False,
                                  inplace=True)
+        self.log.info("Loaded %i DiaSources", len(diaSources))
 
         return convertTableToSdmSchema(schema, diaSources, tableName="DiaSource")
 
@@ -299,7 +298,6 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
             DiaObjects loaded from the Apdb that are within the area defined
             by ``pixelRanges``.
         """
-        self.log.info("Loading DiaForcedSources")
 
         if len(diaObjects) == 0:
             # If no diaObjects are available return an empty DataFrame with
@@ -326,5 +324,7 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
             diaForcedSources.set_index(["diaObjectId", "diaForcedSourceId"],
                                        drop=False,
                                        inplace=True)
+        nVisits = 0 if diaForcedSources.empty else len(set(diaForcedSources["visit"]))
+        self.log.info("Loaded %i DiaForcedSources from %i visits", len(diaForcedSources), nVisits)
 
         return convertTableToSdmSchema(schema, diaForcedSources, tableName="DiaForcedSource")
