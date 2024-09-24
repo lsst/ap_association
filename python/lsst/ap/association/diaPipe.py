@@ -455,8 +455,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             solarSystemObjectTable = legacySolarSystemTable
 
         if not preloadedDiaObjects.empty:
-            diaObjects = self.purgeDiaObjects(diffIm.getBBox(), diffIm.getWcs(), preloadedDiaObjects,
-                                              buffer=self.config.imagePixelMargin)
+            # Include a small buffer outside the image so that we can associate sources near the edge
+            diaObjects, _ = self.purgeDiaObjects(diffIm.getBBox(), diffIm.getWcs(), preloadedDiaObjects,
+                                                 buffer=self.config.imagePixelMargin)
         else:
             diaObjects = preloadedDiaObjects
 
@@ -467,7 +468,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         # Merge associated diaSources
         mergedDiaSourceHistory, mergedDiaObjects, updatedDiaObjectIds = self.mergeAssociatedCatalogs(
-            preloadedDiaSources, associatedDiaSources, diaObjects, newDiaObjects
+            preloadedDiaSources, associatedDiaSources, diaObjects, newDiaObjects, diffIm
         )
 
         # Compute DiaObject Summary statistics from their full DiaSource
@@ -648,7 +649,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         return (associatedDiaSources, createResults.newDiaObjects)
 
     @timeMethod
-    def mergeAssociatedCatalogs(self, preloadedDiaSources, associatedDiaSources, diaObjects, newDiaObjects):
+    def mergeAssociatedCatalogs(self, preloadedDiaSources, associatedDiaSources, diaObjects, newDiaObjects,
+                                diffIm):
         """Merge the associated diaSource and diaObjects to their previous history.
 
         Parameters
@@ -697,7 +699,13 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 sort=True)
         else:
             mergedDiaObjects = diaObjects
-        if self.testDataFrameIndex(diaObjects):
+
+        # Exclude any objects that are off the image after association.
+        mergedDiaObjects, updatedDiaObjectIds = self.purgeDiaObjects(diffIm.getBBox(), diffIm.getWcs(),
+                                                                     mergedDiaObjects,
+                                                                     diaObjectIds=updatedDiaObjectIds,
+                                                                     buffer=-1)
+        if self.testDataFrameIndex(mergedDiaObjects):
             raise RuntimeError(
                 "Duplicate DiaObjects created after association. This is "
                 "likely due to re-running data with an already populated "
@@ -840,7 +848,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         self.metadata.add('numTotalSolarSystemObjects', nTotalSsObjects)
         self.metadata.add('numAssociatedSsObjects', nAssociatedSsObjects)
 
-    def purgeDiaObjects(self, bbox, wcs, diaObjCat, buffer=0):
+    def purgeDiaObjects(self, bbox, wcs, diaObjCat, diaObjectIds=None, buffer=0):
         """Drop diaObjects that are outside the exposure bounding box.
 
         Parameters
@@ -868,12 +876,21 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             selector = bbox.contains(xVals, yVals)
             nPurged = np.sum(~selector)
             if nPurged > 0:
+                if diaObjectIds is not None:
+                    # We also need to drop any of the associated IDs if this runs after association
+                    purgedIds = diaObjCat[~selector].diaObjectId
+                    diaObjectIds = diaObjectIds[~np.isin(diaObjectIds, purgedIds)]
+                    self.log.info("Dropped %i diaObjects that were outside the bbox "
+                                  "after association, leaving %i in the catalog",
+                                  nPurged, len(diaObjCat) - nPurged)
+                else:
+                    self.log.info("Dropped %i diaObjects that were outside the padded bbox "
+                                  "before association, leaving %i in the catalog",
+                                  nPurged, len(diaObjCat) - nPurged)
                 diaObjCat = diaObjCat[selector].copy()
-                self.log.info(f"Dropped {nPurged} diaObjects that were outside the bbox "
-                              f"leaving {len(diaObjCat)} in the catalog")
         except Exception as e:
             self.log.warning("Error attempting to check diaObject history: %s", e)
-        return diaObjCat
+        return diaObjCat, diaObjectIds
 
     def mergeCatalogs(self, originalCatalog, newCatalog, catalogName):
         """Combine two catalogs, ensuring that the columns of the new catalog
