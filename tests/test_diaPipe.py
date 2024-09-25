@@ -282,8 +282,12 @@ class TestDiaPipelineTask(unittest.TestCase):
         nOut0 = np.count_nonzero(~selector0)
         self.assertEqual(nObj0, nIn0 + nOut0)
 
-        diaObjects1 = task.purgeDiaObjects(exposureCut.getBBox(), exposureCut.getWcs(), diaObjects,
-                                           buffer=buffer)
+        # Add an ID that is not in the diaObject table. It should not get removed.
+        diaObjectIds0 = diaObjects["diaObjectId"].copy(deep=True)
+        diaObjectIds0[max(diaObjectIds0.index) + 1] = 999
+        diaObjects1, objIds = task.purgeDiaObjects(exposureCut.getBBox(), exposureCut.getWcs(), diaObjects,
+                                                   diaObjectIds=diaObjectIds0, buffer=buffer)
+        diaObjectIds1 = diaObjects1["diaObjectId"]
         # Verify that the bounding box was not changed
         sizeCheck = np.minimum(exposureCut.getBBox().getHeight(), exposureCut.getBBox().getWidth())
         self.assertEqual(sizeCut, sizeCheck)
@@ -300,6 +304,15 @@ class TestDiaPipelineTask(unittest.TestCase):
         self.assertEqual(nOut1, 0)
         # Verify that no objects inside the bounding box were removed
         self.assertEqual(nIn1, nIn0)
+        # The length of the updated object IDs should equal the number of objects
+        # plus one, since we added an extra ID.
+        self.assertEqual(nObj1 + 1, len(objIds))
+        # All of the object IDs extracted from the catalog should be in the pruned object IDs
+        self.assertTrue(set(objIds).issuperset(diaObjectIds1))
+        # The pruned object IDs should contain entries that are not in the catalog
+        self.assertFalse(set(diaObjectIds1).issuperset(objIds))
+        # Some IDs should have been removed
+        self.assertLess(len(objIds), len(diaObjectIds0))
 
     def test_mergeEmptyCatalog(self):
         """Test that a catalog is unchanged if it is merged with an empty
