@@ -150,6 +150,20 @@ class DiaPipelineConnections(
         storageClass="DataFrame",
         dimensions=("instrument", "visit", "detector"),
     )
+    newDiaSources = connTypes.Output(
+        doc="New diaSources not associated with an existing diaObject that"
+        " were used to create a new diaObject",
+        name="newDiaSources",
+        storageClass="ArrowAstropy",
+        dimensions=("instrument", "visit", "detector"),
+    )
+    marginalDiaSources = connTypes.Output(
+        doc="Low SNR diaSources not associated with an existing diaObject that"
+        " were rejected instead of creating a new diaObject",
+        name="marginalDiaSources",
+        storageClass="ArrowAstropy",
+        dimensions=("instrument", "visit", "detector"),
+    )
 
     def __init__(self, *, config=None):
         super().__init__(config=config)
@@ -158,8 +172,14 @@ class DiaPipelineConnections(
             self.outputs.remove("associatedDiaSources")
             self.outputs.remove("diaForcedSources")
             self.outputs.remove("diaObjects")
-        elif not config.doRunForcedMeasurement:
-            self.outputs.remove("diaForcedSources")
+            self.outputs.remove("newDiaSources")
+            self.outputs.remove("marginalDiaSources")
+        else:
+            if not config.doRunForcedMeasurement:
+                self.outputs.remove("diaForcedSources")
+            if not config.filterUnAssociatedSources:
+                self.outputs.remove("newDiaSources")
+                self.outputs.remove("marginalDiaSources")
         if not config.doSolarSystemAssociation:
             self.inputs.remove("solarSystemObjectTable")
         if (not config.doWriteAssociatedSources) or (not config.doSolarSystemAssociation):
@@ -312,6 +332,68 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         doc="Pad the image by this many pixels before removing off-image "
             "diaObjects for association.",
     )
+    filterUnAssociatedSources = pexConfig.Field(
+        dtype=bool,
+        default=False,
+        doc="Check unassociated diaSources for quality before creating new ."
+        "diaObjects. DiaSources that are associated with existing diaObjects "
+        "will not be affected."
+    )
+    newObjectBadFlags = pexConfig.ListField(
+        dtype=str,
+        default=("pixelFlags_crCenter",
+                 "pixelFlags_nodataCenter",
+                 "pixelFlags_interpolatedCenter",
+                 "pixelFlags_saturatedCenter",
+                 "pixelFlags_suspectCenter",
+                 "pixelFlags_streakCenter"),
+        doc="If `filterUnAssociatedSources` is set, exclude diaSources with "
+        "these flags set before creating new diaObjects.",
+    )
+    newObjectSnrThreshold = pexConfig.RangeField(
+        dtype=float,
+        default=0,
+        min=0,
+        doc="If `filterUnAssociatedSources` is set, exclude diaSources with "
+        "Abs(flux/fluxErr) less than this threshold before creating new "
+        "diaObjects."
+        "Set to zero to disable.",
+    )
+    newObjectLowReliabilitySnrThreshold = pexConfig.RangeField(
+        dtype=float,
+        default=0,
+        min=0,
+        doc="If `filterUnAssociatedSources` is set, exclude diaSources with "
+        "signal-to-noise ratios less than this threshold if they have"
+        " low reliability scores before creating new diaObjects."
+        "Set to zero to disable.",
+    )
+    newObjectReliabilityThreshold = pexConfig.RangeField(
+        dtype=float,
+        default=0.1,
+        min=0,
+        max=1,
+        doc="If `filterUnAssociatedSources` is set, exclude diaSources with "
+        "reliability scores less than this threshold before creating new "
+        "diaObjects."
+        "Set to zero to disable.",
+    )
+    newObjectLowSnrReliabilityThreshold = pexConfig.RangeField(
+        dtype=float,
+        default=0.1,
+        min=0,
+        max=1,
+        doc="If `filterUnAssociatedSources` is set, exclude diaSources with "
+        "low signal-to-noise and reliability scores below this threshold "
+        "before creating new diaObjects."
+        "Set to zero to disable.",
+    )
+    newObjectFluxField = pexConfig.Field(
+        dtype=str,
+        default="apFlux",
+        doc="Name of the flux field in the standardized diaSource catalog to "
+        "use for checking the signal-to-noise before creating new diaObjects.",
+    )
     idGenerator = DetectorVisitIdGeneratorConfig.make_field()
 
     def setDefaults(self):
@@ -446,13 +528,15 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         # Associate DiaSources with DiaObjects
 
-        (
-            associatedDiaSources, newDiaObjects, associatedSsSources, unassociatedSsObjects
-        ) = self.associateDiaSources(diaSourceTable, solarSystemObjectTable, diffIm, diaObjects)
+        assocResults = self.associateDiaSources(diaSourceTable, solarSystemObjectTable, diffIm, diaObjects)
 
         # Merge associated diaSources
         mergedDiaSourceHistory, mergedDiaObjects, updatedDiaObjectIds = self.mergeAssociatedCatalogs(
-            preloadedDiaSources, associatedDiaSources, diaObjects, newDiaObjects, diffIm
+            preloadedDiaSources,
+            assocResults.associatedDiaSources,
+            diaObjects,
+            assocResults.newDiaObjects,
+            diffIm
         )
 
         # Compute DiaObject Summary statistics from their full DiaSource
@@ -489,7 +573,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             forcedSourceHistoryThreshold = 0
 
         # Write results to Alert Production Database (APDB)
-        self.writeToApdb(updatedDiaObjects, associatedDiaSources, diaForcedSources)
+        self.writeToApdb(updatedDiaObjects, assocResults.associatedDiaSources, diaForcedSources)
         self.metadata["writeToApdbDuration"] = duration_from_timeMethod(self.metadata, "writeToApdb")
         # A single log message is easier for Loki to parse than timeMethod's start+end pairs.
         self.log.verbose("writeToApdb: Took %.4f seconds", self.metadata["writeToApdbDuration"])
@@ -514,7 +598,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                     ["diaObjectId", "diaForcedSourceId"],
                     drop=False,
                     inplace=True)
-            self.alertPackager.run(associatedDiaSources,
+            self.alertPackager.run(assocResults.associatedDiaSources,
                                    diaCalResult.diaObjectCat,
                                    preloadedDiaSources,
                                    diaForcedSourcesFull,
@@ -529,20 +613,22 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # A default Config is the cheapest way to satisfy the storage class.
         marker = pexConfig.Config()
         return pipeBase.Struct(apdbMarker=marker,
-                               associatedDiaSources=associatedDiaSources,
+                               associatedDiaSources=assocResults.associatedDiaSources,
                                diaForcedSources=diaForcedSources,
                                diaObjects=diaCalResult.diaObjectCat,
-                               associatedSsSources=associatedSsSources,
-                               unassociatedSsObjects=unassociatedSsObjects
+                               associatedSsSources=assocResults.associatedSsSources,
+                               unassociatedSsObjects=assocResults.unassociatedSsObjects,
+                               newDiaSources=assocResults.newDiaSources,
+                               marginalDiaSources=assocResults.marginalDiaSources
                                )
 
-    def createNewDiaObjects(self, unAssocDiaSources):
+    def createNewDiaObjects(self, unassociatedDiaSources):
         """Loop through the set of DiaSources and create new DiaObjects
         for unassociated DiaSources.
 
         Parameters
         ----------
-        unAssocDiaSources : `pandas.DataFrame`
+        unassociatedDiaSources : `pandas.DataFrame`
             Set of DiaSources to create new DiaObjects from.
 
         Returns
@@ -556,16 +642,120 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 Newly created DiaObjects from the unassociated DiaSources.
             - nNewDiaObjects : `int`
                 Number of newly created diaObjects.
+            - marginalDiaSources : `astropy.table.Table`
+                Unassociated diaSources with low signal-to-noise and/or
+                reliability, which are excluded from the new DiaObjects.
         """
-        if len(unAssocDiaSources) == 0:
+        marginalDiaSources = make_empty_catalog(self.schema, tableName="DiaSource")
+        if len(unassociatedDiaSources) == 0:
             newDiaObjects = make_empty_catalog(self.schema, tableName="DiaObject")
         else:
-            unAssocDiaSources["diaObjectId"] = unAssocDiaSources["diaSourceId"]
-            newDiaObjects = convertTableToSdmSchema(self.schema, unAssocDiaSources,
+            if self.config.filterUnAssociatedSources:
+                results = self.filterSources(unassociatedDiaSources)
+                unassociatedDiaSources = results.goodSources
+                marginalDiaSources = results.badSources
+            unassociatedDiaSources["diaObjectId"] = unassociatedDiaSources["diaSourceId"]
+            newDiaObjects = convertTableToSdmSchema(self.schema, unassociatedDiaSources,
                                                     tableName="DiaObject")
-        return pipeBase.Struct(diaSources=unAssocDiaSources,
+        self.metadata["nRejectedNewDiaObjects"] = len(marginalDiaSources)
+        return pipeBase.Struct(diaSources=unassociatedDiaSources,
                                newDiaObjects=newDiaObjects,
-                               nNewDiaObjects=len(newDiaObjects))
+                               nNewDiaObjects=len(newDiaObjects),
+                               marginalDiaSources=Table.from_pandas(marginalDiaSources))
+
+    def filterSources(self, sources, snrThreshold=None, lowReliabilitySnrThreshold=None,
+                      reliabilityThreshold=None, lowSnrReliabilityThreshold=None, badFlags=None):
+        """Select good sources out of a catalog.
+
+        Parameters
+        ----------
+        sources : `pandas.DataFrame`
+            Set of DiaSources to check.
+        snrThreshold : `float`, optional
+            The minimum signal to noise diaSource to make a new diaObject.
+            Included for unit tests. Uses the task config value if not set.
+        lowReliabilitySnrThreshold : `float`, optional
+            Use ``lowSnrReliabilityThreshold`` as the reliability threshold for
+            diaSources with ``snrThreshold`` < SNR < ``lowReliabilitySnrThreshold``
+            Included for unit tests. Uses the task config value if not set.
+        reliabilityThreshold : `float`, optional
+            The minimum reliability score diaSource to make a new diaObject
+            Included for unit tests. Uses the task config value if not set.
+        lowSnrReliabilityThreshold : `float`, optional
+            Use ``lowSnrReliabilityThreshold`` as the reliability threshold for
+            diaSources with ``snrThreshold`` < SNR < ``lowReliabilitySnrThreshold``
+            Included for unit tests. Uses the task config value if not set.
+        badFlags : `list` of `str`, optional
+            Do not create new diaObjects for any diaSource with any of these
+            flags set.
+            Included for unit tests. Uses the task config value if not set.
+
+        Returns
+        -------
+        results : `lsst.pipe.base.Struct`
+            Results struct containing:
+
+            - goodSources : `pandas.DataFrame`
+                Subset of the input sources that pass all checks.
+            - badSources : `pandas.DataFrame`
+                Subset of the input sources that fail any check.
+        """
+        if snrThreshold is None:
+            snrThreshold = self.config.newObjectSnrThreshold
+        if lowReliabilitySnrThreshold is None:
+            lowReliabilitySnrThreshold = self.config.newObjectLowReliabilitySnrThreshold
+        if reliabilityThreshold is None:
+            reliabilityThreshold = self.config.newObjectReliabilityThreshold
+        if lowSnrReliabilityThreshold is None:
+            lowSnrReliabilityThreshold = self.config.newObjectLowSnrReliabilityThreshold
+        if badFlags is None:
+            badFlags = self.config.newObjectBadFlags
+        flagged = np.zeros(len(sources), dtype=bool)
+        fluxField = self.config.newObjectFluxField
+        fluxErrField = fluxField + "Err"
+        signalToNoise = np.abs(np.array(sources[fluxField]/sources[fluxErrField]))
+        reliability = np.array(sources['reliability'])
+        for flag in badFlags:
+            flagged += sources[flag].values
+        nFlagged = np.count_nonzero(flagged)
+        if nFlagged > 0:
+            self.log.info("Not creating new diaObjects for %i unassociated diaSources due to flags", nFlagged)
+
+        if snrThreshold > 0:
+            snr_flag = signalToNoise < snrThreshold
+            self.log.info("Not creating new diaObjects for %i unassociated diaSources due to %sFlux"
+                          " signal to noise < %f",
+                          np.sum(snr_flag), fluxField, snrThreshold)
+            flagged += snr_flag
+        if reliabilityThreshold > 0:
+            reliability_flag = reliability < reliabilityThreshold
+            self.log.info("Not creating new diaObjects for %i unassociated diaSources due to "
+                          "reliability<%f",
+                          np.sum(reliability_flag), reliabilityThreshold)
+            flagged += reliability_flag
+        if min(lowReliabilitySnrThreshold, lowSnrReliabilityThreshold) > 0:
+            # Only run the combined test if both thresholds are greater than zero
+            lowSnrReliability_flag = ((signalToNoise < lowReliabilitySnrThreshold)
+                                      & (reliability < lowSnrReliabilityThreshold))
+            self.log.info("Not creating new diaObjects for %i unassociated diaSources due to %sFlux"
+                          " signal to noise < %f combined with reliability< %f",
+                          np.sum(lowSnrReliability_flag),
+                          fluxField,
+                          lowReliabilitySnrThreshold,
+                          lowSnrReliabilityThreshold)
+            flagged += lowSnrReliability_flag
+
+        if np.count_nonzero(~flagged) > 0:
+            goodSources = sources[~flagged].copy(deep=True)
+        else:
+            goodSources = make_empty_catalog(self.schema, tableName="DiaSource")
+        if np.count_nonzero(flagged) > 0:
+            badSources = sources[flagged].copy(deep=True)
+        else:
+            badSources = make_empty_catalog(self.schema, tableName="DiaSource")
+        return pipeBase.Struct(goodSources=goodSources,
+                               badSources=badSources
+                               )
 
     @timeMethod
     def associateDiaSources(self, diaSourceTable, solarSystemObjectTable, diffIm, diaObjects):
@@ -592,12 +782,25 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         Returns
         -------
-        associatedDiaSources : `pandas.DataFrame`
-            Associated DiaSources with DiaObjects.
-        newDiaObjects : `pandas.DataFrame`
-            Table of new DiaObjects after association.
-        associatedSsSources : `astropy.table.Table`
-            Table of new ssSources after association.
+        results : `lsst.pipe.base.Struct`
+            Results struct containing:
+
+            - associatedDiaSources : `pandas.DataFrame`
+                Associated DiaSources with DiaObjects.
+            - newDiaObjects : `pandas.DataFrame`
+                Table of new DiaObjects after association.
+            - associatedSsSources : `astropy.table.Table`
+                Table of new ssSources after association.
+            - unassociatedSsObjects : `astropy.table.Table`
+                Table of expected ssSources that were not associated with a
+                diaSource.
+            - newDiaSources : `pandas.DataFrame`
+                Subset of `associatedDiaSources` consisting of only the
+                unassociated diaSources that were added as new diaObjects.
+            - marginalDiaSources : `astropy.table.Table`
+                Unassociated diaSources with marginal detections, which were
+                removed from `associatedDiaSources` and were not added as new
+                diaObjects.
         """
         # Associate new DiaSources with existing DiaObjects.
         assocResults = self.associator.run(diaSourceTable, diaObjects)
@@ -636,12 +839,20 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                         createResults.nNewDiaObjects,
                                         nTotalSsObjects,
                                         nAssociatedSsObjects)
-        self.log.info("%i updated and %i unassociated diaObjects. Creating %i new diaObjects",
+        self.log.info("%i updated and %i unassociated diaObjects. Creating %i new diaObjects"
+                      " and dropping %i marginal diaSources.",
                       assocResults.nUpdatedDiaObjects,
                       assocResults.nUnassociatedDiaObjects,
                       createResults.nNewDiaObjects,
+                      len(createResults.marginalDiaSources),
                       )
-        return (associatedDiaSources, createResults.newDiaObjects, associatedSsSources, unassociatedSsObjects)
+        return pipeBase.Struct(associatedDiaSources=associatedDiaSources,
+                               newDiaObjects=createResults.newDiaObjects,
+                               associatedSsSources=associatedSsSources,
+                               unassociatedSsObjects=unassociatedSsObjects,
+                               newDiaSources=createResults.diaSources,
+                               marginalDiaSources=createResults.marginalDiaSources
+                               )
 
     @timeMethod
     def mergeAssociatedCatalogs(self, preloadedDiaSources, associatedDiaSources, diaObjects, newDiaObjects,

@@ -78,7 +78,7 @@ def makeDiaObjects(nObjects, exposure, rng):
     return pd.DataFrame(data=data).set_index("diaObjectId", drop=False)
 
 
-def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False):
+def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False, flagList=None):
     """Make a test set of DiaSources.
 
     Parameters
@@ -93,6 +93,8 @@ def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False
         If True, randomly draw from `diaObjectIds` to generate the ids in the
         output catalog, otherwise just iterate through them, repeating as
         necessary to get nSources objectIds.
+    flagList : `list` of `str`, optional
+        Optional list of names of flag columns to add to the DiaSource table.
 
     Returns
     -------
@@ -110,10 +112,14 @@ def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False
     midpointMjdTai = exposure.visitInfo.date.get(system=dafBase.DateTime.MJD)
 
     data = []
+    flags = {}
+    if flagList is not None:
+        for flag in flagList:
+            flags[flag] = False
     for idx, (x, y, objId) in enumerate(zip(rand_x, rand_y, objectIds)):
         coord = exposure.wcs.pixelToSky(x, y)
         # Put together the minimum values for the alert.
-        data.append({"ra": coord.getRa().asDegrees(),
+        diaSource = {"ra": coord.getRa().asDegrees(),
                      "dec": coord.getDec().asDegrees(),
                      "x": x,
                      "y": y,
@@ -128,7 +134,8 @@ def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False
                      "band": exposure.getFilter().bandLabel,
                      "psfNdata": 0,
                      "trailNdata": 0,
-                     "dipoleNdata": 0})
+                     "dipoleNdata": 0}
+        data.append(diaSource | flags)
 
     return pd.DataFrame(data=data).set_index(["diaObjectId", "band", "diaSourceId"], drop=False)
 
