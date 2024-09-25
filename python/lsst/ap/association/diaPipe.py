@@ -608,34 +608,27 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Associate new DiaSources with existing DiaObjects.
         assocResults = self.associator.run(diaSourceTable, diaObjects)
 
+        toAssociate = []
         if self.config.doSolarSystemAssociation and solarSystemObjectTable is not None:
             ssoAssocResult = self.solarSystemAssociator.run(
                 assocResults.unAssocDiaSources,
                 solarSystemObjectTable,
                 diffIm)
             # Create new DiaObjects from unassociated diaSources.
-            createResults = self.createNewDiaObjects(
-                ssoAssocResult.unAssocDiaSources)
-            toAssociate = []
-            if len(assocResults.matchedDiaSources) > 0:
-                toAssociate.append(assocResults.matchedDiaSources)
+            createResults = self.createNewDiaObjects(ssoAssocResult.unAssocDiaSources)
             if len(ssoAssocResult.ssoAssocDiaSources) > 0:
                 toAssociate.append(ssoAssocResult.ssoAssocDiaSources)
-            toAssociate.append(createResults.diaSources)
-            associatedDiaSources = pd.concat(toAssociate)
             nTotalSsObjects = ssoAssocResult.nTotalSsObjects
             nAssociatedSsObjects = ssoAssocResult.nAssociatedSsObjects
         else:
             # Create new DiaObjects from unassociated diaSources.
-            createResults = self.createNewDiaObjects(
-                assocResults.unAssocDiaSources)
-            toAssociate = []
-            if len(assocResults.matchedDiaSources) > 0:
-                toAssociate.append(assocResults.matchedDiaSources)
-            toAssociate.append(createResults.diaSources)
-            associatedDiaSources = pd.concat(toAssociate)
+            createResults = self.createNewDiaObjects(assocResults.unAssocDiaSources)
             nTotalSsObjects = 0
             nAssociatedSsObjects = 0
+        if len(assocResults.matchedDiaSources) > 0:
+            toAssociate.append(assocResults.matchedDiaSources)
+        toAssociate.append(createResults.diaSources)
+        associatedDiaSources = pd.concat(toAssociate)
 
         self._add_association_meta_data(assocResults.nUpdatedDiaObjects,
                                         assocResults.nUnassociatedDiaObjects,
