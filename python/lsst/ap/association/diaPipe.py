@@ -459,6 +459,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diaObjects, _ = self.purgeDiaObjects(diffIm.getBBox(), diffIm.getWcs(), preloadedDiaObjects,
                                                  buffer=self.config.imagePixelMargin)
         else:
+            self.log.info("Preloaded DiaObject table is empty.")
             diaObjects = preloadedDiaObjects
 
         # Associate DiaSources with DiaObjects
