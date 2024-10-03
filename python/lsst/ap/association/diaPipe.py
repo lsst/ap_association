@@ -727,6 +727,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 "already populated Apdb. If this was not the case then there "
                 "was an unexpected failure in Association while matching "
                 "sources to objects, and should be reported. Exiting.")
+        # Finally, update the diaObject table with the number of associated diaSources
+        self.updateObjectTable(mergedDiaObjects, mergedDiaSourceHistory)
         return (mergedDiaSourceHistory, mergedDiaObjects, updatedDiaObjectIds)
 
     @timeMethod
@@ -933,3 +935,19 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         else:
             mergedCatalog = pd.concat([originalCatalog], sort=True)
         return mergedCatalog.loc[:, originalCatalog.columns]
+
+    @staticmethod
+    def updateObjectTable(diaObjects, diaSources):
+        """Update the diaObject table with the new diaSource records.
+
+        Parameters
+        ----------
+        diaObjects : `pandas.DataFrame`
+            Table of new DiaObjects merged with their history.
+            This table will be updated in place.
+        diaSources : `pandas.DataFrame`
+            The combined preloaded and associated diaSource catalog.
+        """
+        nDiaSources = diaSources[["diaSourceId"]].groupby("diaObjectId").agg(len)
+        nDiaSources.rename({"diaSourceId": "nDiaSources"}, errors="raise", axis="columns", inplace=True)
+        diaObjects.loc[:, "nDiaSources"] = nDiaSources
