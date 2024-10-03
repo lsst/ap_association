@@ -193,10 +193,15 @@ class TestDiaPipelineTask(unittest.TestCase):
                                          matchedDiaSources=_makeMockDataFrame(),
                                          unAssocDiaSources=_makeMockDataFrame())
 
+        def updateObjectTableMock(diaObjects, diaSources):
+            pass
+
         # apdb isn't a subtask, but still needs to be mocked out for correct
         # execution in the test environment.
         with patch.multiple(task, **{task: DEFAULT for task in subtasksToMock + ["apdb"]}), \
             patch('lsst.ap.association.diaPipe.pd.concat', side_effect=concatMock), \
+            patch('lsst.ap.association.diaPipe.DiaPipelineTask.updateObjectTable',
+                  side_effect=updateObjectTableMock), \
             patch('lsst.ap.association.association.AssociationTask.run',
                   side_effect=associator_run) as mainRun, \
             patch('lsst.ap.association.ssoAssociation.SolarSystemAssociationTask.run',

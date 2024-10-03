@@ -727,7 +727,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 "already populated Apdb. If this was not the case then there "
                 "was an unexpected failure in Association while matching "
                 "sources to objects, and should be reported. Exiting.")
-        return (mergedDiaSourceHistory, mergedDiaObjects, updatedDiaObjectIds)
+        # Finally, update the diaObject table with the number of associated diaSources
+        mergedUpdatedDiaObjects = self.updateObjectTable(mergedDiaObjects, mergedDiaSourceHistory)
+        return (mergedDiaSourceHistory, mergedUpdatedDiaObjects, updatedDiaObjectIds)
 
     @timeMethod
     def runForcedMeasurement(self, diaObjects, updatedDiaObjects, exposure, diffIm, idGenerator):
@@ -933,3 +935,25 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         else:
             mergedCatalog = pd.concat([originalCatalog], sort=True)
         return mergedCatalog.loc[:, originalCatalog.columns]
+
+    @staticmethod
+    def updateObjectTable(diaObjects, diaSources):
+        """Update the diaObject table with the new diaSource records.
+
+        Parameters
+        ----------
+        diaObjects : `pandas.DataFrame`
+            Table of new DiaObjects merged with their history.
+        diaSources : `pandas.DataFrame`
+            The combined preloaded and associated diaSource catalog.
+
+        Returns
+        -------
+        updatedDiaObjects : `pandas.DataFrame`
+            Table of DiaObjects updated with the number of associated DiaSources
+        """
+        nDiaSources = diaSources[["diaSourceId"]].groupby("diaObjectId").agg(len)
+        nDiaSources.rename({"diaSourceId": "nDiaSources"}, errors="raise", axis="columns", inplace=True)
+        del diaObjects["nDiaSources"]
+        updatedDiaObjects = diaObjects.join(nDiaSources, how="left")
+        return updatedDiaObjects
