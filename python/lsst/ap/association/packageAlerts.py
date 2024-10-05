@@ -276,7 +276,7 @@ class PackageAlertsTask(pipeBase.Task):
                 objSourceHistory = diaSrcHistory.loc[srcIndex[0]]
             else:
                 objSourceHistory = None
-            if doRunForcedMeasurement:
+            if doRunForcedMeasurement and not diaForcedSources.empty:
                 objDiaForcedSources = diaForcedSources.loc[srcIndex[0]]
             else:
                 # Send empty table with correct columns
