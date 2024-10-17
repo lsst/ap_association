@@ -70,13 +70,25 @@ class TestSolarSystemAssociation(unittest.TestCase):
                                    inplace=True,)
         self.testDiaSources.loc[:, "ra"] = np.rad2deg(self.testDiaSources["ra"])
         self.testDiaSources.loc[:, "dec"] = np.rad2deg(self.testDiaSources["dec"])
+        self.testDiaSources = pd.concat([self.testDiaSources,
+                                        pd.DataFrame([[45, 45]], columns=["ra", "dec"])],
+                                        ignore_index=True)
         self.testDiaSources["ssObjectId"] = 0
 
         # Grab a subset to treat as solar system objects
-        self.testSsObjects = self.testDiaSources[2:8].reset_index()
-        # Assign them ids starting from 1.
-        self.testSsObjects.loc[:, "ssObjectId"] = np.arange(
-            1, len(self.testSsObjects) + 1, dtype=int,)
+        self.testSsObjects = pd.DataFrame()
+        self.testSsObjects["ObjID"] = ["test_ob"]
+        self.testSsObjects["ssObjectId"] = [1234]
+        self.testSsObjects["ra"] = [45]
+        self.testSsObjects["dec"] = [45]
+        self.testSsObjects["tmin"] = [-1]
+        self.testSsObjects["tmax"] = [1]
+        self.testSsObjects["obs_x_poly"] = [np.array([0])]
+        self.testSsObjects["obs_y_poly"] = [np.array([0])]
+        self.testSsObjects["obs_z_poly"] = [np.array([0])]
+        self.testSsObjects["obj_x_poly"] = [np.array([1])]
+        self.testSsObjects["obj_y_poly"] = [np.array([1])]
+        self.testSsObjects["obj_z_poly"] = [np.array([2 ** 0.5])]
         self.testSsObjects["Err(arcsec)"] = np.ones(len(self.testSsObjects))
 
     def test_run(self):
@@ -86,17 +98,10 @@ class TestSolarSystemAssociation(unittest.TestCase):
         results = ssAssocTask.run(self.testDiaSources,
                                   self.testSsObjects,
                                   self.exposure)
-        self.assertEqual(self.nSources,
-                         len(results.ssoAssocDiaSources)
-                         + len(results.unAssocDiaSources))
-        self.assertEqual(len(self.testSsObjects),
-                         len(results.ssoAssocDiaSources))
-        self.assertEqual(self.nSources - len(self.testSsObjects),
-                         len(results.unAssocDiaSources))
-        for idx, ssObject in self.testSsObjects.iterrows():
-            self.assertEqual(
-                ssObject["ssObjectId"],
-                results.ssoAssocDiaSources.iloc[idx]["ssObjectId"])
+        self.assertEqual(len(results.ssoAssocDiaSources), 1)
+        self.assertEqual(results.ssoAssocDiaSources['ra'].iloc[0], 45.0)
+        self.assertEqual(results.ssoAssocDiaSources['dec'].iloc[0], 45.0)
+        self.assertEqual(results.ssoAssocDiaSources['ssObjectId'].iloc[0], 1234)
 
     def test_mask(self):
         """Test that masking against the CCD bounding box works as expected.

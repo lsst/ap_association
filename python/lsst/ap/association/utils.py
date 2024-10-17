@@ -23,7 +23,7 @@
 """
 __all__ = ("convertTableToSdmSchema", "readSdmSchemaFile", "readSchemaFromApdb",
            "dropEmptyColumns", "make_empty_catalog", "getMidpointFromTimespan",
-           "makeEmptyForcedSourceTable")
+           "makeEmptyForcedSourceTable", "objID_to_ssObjectID", "ssObjectID_to_objID")
 
 from collections.abc import Mapping
 import os
