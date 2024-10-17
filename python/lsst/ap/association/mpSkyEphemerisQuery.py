@@ -218,8 +218,10 @@ class MPSkyEphemerisQueryTask(PipelineTask):
             mpSkySsObjects = pd.DataFrame()
             mpSkySsObjects['ObjID'] = objID
             mpSkySsObjects['ra'] = ra
-            mpSkySsObjects['obj_poly'] = [op.to_numpy() for op in object_polynomial]
-            mpSkySsObjects['obs_poly'] = [op.to_numpy() for op in observer_polynomial]
+            mpSkySsObjects['obj_poly'] = object_polynomial.to_numpy()
+            mpSkySsObjects['obj_poly'] = [op.to_numpy() for op in mpSkySsObjects['obj_poly'].values]
+            mpSkySsObjects['obs_poly'] = observer_polynomial.to_numpy()
+            mpSkySsObjects['obs_poly'] = [op.to_numpy() for op in mpSkySsObjects['obs_poly'].values]
             mpSkySsObjects['tmin'] = tmin
             mpSkySsObjects['tmax'] = tmax
             mpSkySsObjects['dec'] = dec
