@@ -116,9 +116,13 @@ class MPSkyEphemerisQueryTask(PipelineTask):
                 ``dec``
                     DEC in decimal degrees (`float`)
                 ``obj_poly``
-                    DO NOT USE until DM-46069 is resolved
+                    Chebyshev coefficients for object path
                 ``obs_poly``
-                    DO NOT USE until DM-46069 is resolved
+                    Chebyshev coefficients for observer path
+                ``t_min``
+                    Lower time bound for polynomials
+                ``t_max``
+                    Upper time bound for polynomials
         """
         # Get detector center and timespan midpoint from predictedRegionTime.
         region = predictedRegionTime.region
@@ -156,6 +160,11 @@ class MPSkyEphemerisQueryTask(PipelineTask):
             Array of object cartesian position polynomials
         observer_polynomial : `np.ndarray`, (N,M)
             Array of observer cartesian position polynomials
+        t_min : `np.ndarray`
+            Lower time bound for polynomials
+        t_max : `np.ndarray`
+            Upper time bound for polynomials
+
         """
         with pa.input_stream(memoryview(response.content)) as stream:
             stream.seek(0)
@@ -166,7 +175,9 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         objID = columns["name"].to_numpy(zero_copy_only=False)
         ra = columns["ra"].to_numpy()
         dec = columns["dec"].to_numpy()
-        return objID, ra, dec, object_polynomial, observer_polynomial
+        t_min = columns["tmin"].to_numpy()
+        t_max = columns["tmin"].to_numpy()
+        return objID, ra, dec, object_polynomial, observer_polynomial, t_min, t_max
 
     def _mpSkyConeSearch(self, expCenter, epochMJD, queryRadius, mpSkyURL):
         """Query MPSky ephemeris service for objects near the expected detector position
@@ -201,13 +212,16 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         try:
             response = requests.get(mpSkyURL, params=params, timeout=self.config.mpSkyRequestTimeoutSeconds)
             response.raise_for_status()
-            objID, ra, dec, object_polynomial, observer_polynomial = self.read_mp_sky_response(response)
+            response = self.read_mp_sky_response(response)
+            objID, ra, dec, object_polynomial, observer_polynomial, tmin, tmax = response
 
             mpSkySsObjects = pd.DataFrame()
             mpSkySsObjects['ObjID'] = objID
             mpSkySsObjects['ra'] = ra
-            mpSkySsObjects['obj_poly'] = object_polynomial
-            mpSkySsObjects['obs_poly'] = observer_polynomial
+            mpSkySsObjects['obj_poly'] = [op.to_numpy() for op in object_polynomial]
+            mpSkySsObjects['obs_poly'] = [op.to_numpy() for op in observer_polynomial]
+            mpSkySsObjects['tmin'] = tmin
+            mpSkySsObjects['tmax'] = tmax
             mpSkySsObjects['dec'] = dec
             mpSkySsObjects['Err(arcsec)'] = 2
             mpSkySsObjects['ssObjectId'] = [abs(hash(v)) for v in mpSkySsObjects['ObjID'].values]

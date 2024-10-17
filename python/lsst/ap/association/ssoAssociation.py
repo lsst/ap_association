@@ -91,7 +91,22 @@ class SolarSystemAssociationTask(pipeBase.Task):
               contained in the CCD footprint. (`int`)
             - ``nAssociatedSsObjects`` : Number of SolarSystemObjects
               that were associated with DiaSources.
+            - ``ssSourceData`` : Data required for ssSource table
         """
+        metadata = exposure.getMetadata()
+        mjd_begin, mjd_end = metadata.get('MJD-BEG'), metadata.get('MJD-END')
+        if mjd_begin is None or mjd_end is None:
+            return pipeBase.Struct(
+                ssoAssocDiaSources=None,
+                unAssocDiaSources=diaSourceCatalog,
+                nTotalSsObjects=0,
+                nAssociatedSsObjects=0,
+                ssSourceData=None)
+        mjd_midpoint = (mjd_begin + mjd_end) / 2
+        solarSystemObjects["obs_position"] = np.polynomial.chebyshev.chebval(
+            mjd_midpoint, solarSystemObjects["obs_poly"].values)
+        solarSystemObjects["obj_position"] = np.polynomial.chebyshev.chebval(
+            mjd_midpoint, solarSystemObjects["obj_poly"].values)
         maskedObjects = self._maskToCcdRegion(
             solarSystemObjects,
             exposure,
@@ -121,6 +136,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
         # Query the KDtree for DIA nearest neighbors to SSOs. Currently only
         # picks the DiaSource with the shortest distance. We can do something
         # fancier later.
+        ssSourceData = []
         diaSourceCatalog["ssObjectId"] = 0
         for index, ssObject in maskedObjects.iterrows():
 
@@ -130,14 +146,18 @@ class SolarSystemAssociationTask(pipeBase.Task):
             if np.isfinite(dist[0]):
                 nFound += 1
                 diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "ssObjectId"] = ssObject["ssObjectId"]
+                ssSourceData.append()
+        ssSourceData = []
 
         self.log.info("Successfully associated %d SolarSystemObjects.", nFound)
         assocMask = diaSourceCatalog["ssObjectId"] != 0
+
         return pipeBase.Struct(
             ssoAssocDiaSources=diaSourceCatalog[assocMask].reset_index(drop=True),
             unAssocDiaSources=diaSourceCatalog[~assocMask].reset_index(drop=True),
             nTotalSsObjects=nSolarSystemObjects,
-            nAssociatedSsObjects=nFound)
+            nAssociatedSsObjects=nFound,
+            ssSourceData=None)
 
     def _maskToCcdRegion(self, solarSystemObjects, exposure, marginArcsec):
         """Mask the input SolarSystemObjects to only those in the exposure

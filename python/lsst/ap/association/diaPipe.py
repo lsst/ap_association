@@ -124,6 +124,12 @@ class DiaPipelineConnections(
         storageClass="DataFrame",
         dimensions=("instrument", "visit", "detector"),
     )
+    associatedSsSources = connTypes.Output(
+        doc="ssSource record columns which can be computed as of association",
+        name="associatedSsSources",
+        storageClass="DataFrame",
+        dimensions=("instrument", "visit", "detector"),
+    )
     diaForcedSources = connTypes.Output(
         doc="Optional output storing the forced sources computed at the diaObject positions.",
         name="{fakesType}{coaddName}Diff_diaForcedSrc",
@@ -148,6 +154,8 @@ class DiaPipelineConnections(
             self.outputs.remove("diaForcedSources")
         if not config.doSolarSystemAssociation:
             self.inputs.remove("solarSystemObjectTable")
+        if (not config.doWriteAssociatedSources) or (not config.doSolarSystemAssociation):
+            self.outputs.remove("associatedSsSources")
 
     def adjustQuantum(self, inputs, outputs, label, dataId):
         """Override to make adjustments to `lsst.daf.butler.DatasetRef` objects
@@ -442,6 +450,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             - ``diaForcedSources`` : Catalog of new and previously detected
               forced DiaSources. (`pandas.DataFrame`)
             - ``diaObjects`` : Updated table of DiaObjects. (`pandas.DataFrame`)
+            - ``associatedSsSources`` : Catalog of ssSource records.
+              (`pandas.DataFrame`)
 
         Raises
         ------
@@ -475,6 +485,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             associatedDiaSources = pd.concat(toAssociate)
             nTotalSsObjects = ssoAssocResult.nTotalSsObjects
             nAssociatedSsObjects = ssoAssocResult.nAssociatedSsObjects
+            associatedSsSources = ssoAssocResult.ssSourceData
         else:
             createResults = self.createNewDiaObjects(
                 assocResults.unAssocDiaSources)
@@ -485,6 +496,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             associatedDiaSources = pd.concat(toAssociate)
             nTotalSsObjects = 0
             nAssociatedSsObjects = 0
+            associatedSsSources = None
 
         # Create new DiaObjects from unassociated diaSources.
         self._add_association_meta_data(assocResults.nUpdatedDiaObjects,
@@ -619,6 +631,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                associatedDiaSources=associatedDiaSources,
                                diaForcedSources=diaForcedSources,
                                diaObjects=diaObjects,
+                               associatedSsSources=associatedSsSources
                                )
 
     def createNewDiaObjects(self, unAssocDiaSources):
