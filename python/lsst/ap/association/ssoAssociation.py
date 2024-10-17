@@ -93,16 +93,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
               that were associated with DiaSources.
             - ``ssSourceData`` : Data required for ssSource table
         """
-        metadata = exposure.getMetadata()
-        mjd_begin, mjd_end = metadata.get('MJD-BEG'), metadata.get('MJD-END')
-        if mjd_begin is None or mjd_end is None:
-            return pipeBase.Struct(
-                ssoAssocDiaSources=None,
-                unAssocDiaSources=diaSourceCatalog,
-                nTotalSsObjects=0,
-                nAssociatedSsObjects=0,
-                ssSourceData=None)
-        mjd_midpoint = (mjd_begin + mjd_end) / 2
+        mjd_midpoint = exposure.visitInfo.date.toAstropy().tai.mjd
         solarSystemObjects["obs_position"] = np.polynomial.chebyshev.chebval(
             mjd_midpoint, solarSystemObjects["obs_poly"].values)
         solarSystemObjects["obj_position"] = np.polynomial.chebyshev.chebval(

@@ -49,8 +49,6 @@ class TestSolarSystemAssociation(unittest.TestCase):
         schema.addField("base_PixelFlags_flag_offimage", type="Flag")
         self.exposure, catalog = dataset.realize(
             10.0, schema, randomSeed=1234)
-        self.exposure.metadata["MJD-BEG"] = 0.
-        self.exposure.metadata["MJD-END"] = 1.5
         for src in catalog:
             src.setCoord(self.exposure.getWcs().pixelToSky(src.getCentroid()))
         # Non-invertible WCS to test robustness to distortions.
