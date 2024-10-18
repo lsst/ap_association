@@ -96,9 +96,9 @@ class SolarSystemAssociationTask(pipeBase.Task):
         mjd_midpoint = exposure.visitInfo.date.toAstropy().tai.mjd
         ref_time = mjd_midpoint - solarSystemObjects["tmin"].values[0]
         solarSystemObjects["obs_position"] = [v for v in np.polynomial.chebyshev.chebval(
-            mjd_midpoint, np.stack(solarSystemObjects["obs_poly"].values).T).T]
+            ref_time, np.stack(solarSystemObjects["obs_poly"].values).T).T]
         solarSystemObjects["obj_position"] = [v for v in np.polynomial.chebyshev.chebval(
-            mjd_midpoint, np.stack(solarSystemObjects["obj_poly"].values).T).T]
+            ref_time, np.stack(solarSystemObjects["obj_poly"].values).T).T]
         maskedObjects = self._maskToCcdRegion(
             solarSystemObjects,
             exposure,
@@ -131,15 +131,13 @@ class SolarSystemAssociationTask(pipeBase.Task):
         ssSourceData = []
         diaSourceCatalog["ssObjectId"] = 0
         for index, ssObject in maskedObjects.iterrows():
-
             ssoVect = self._radec_to_xyz(ssObject["ra"], ssObject["dec"])
             # Which DIA Sources fall within r?
             dist, idx = tree.query(ssoVect, distance_upper_bound=maxRadius)
-            if np.isfinite(dist[0]):
+            if len(idx) == 1 and np.isfinite(dist[0]):
                 nFound += 1
                 diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "ssObjectId"] = ssObject["ssObjectId"]
-                #ssSourceData.append()
-        ssSourceData = []
+                ssSourceData.append(ssObject[["obs_position", "obj_position"]].values)
 
         self.log.info("Successfully associated %d SolarSystemObjects.", nFound)
         assocMask = diaSourceCatalog["ssObjectId"] != 0
@@ -149,7 +147,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
             unAssocDiaSources=diaSourceCatalog[~assocMask].reset_index(drop=True),
             nTotalSsObjects=nSolarSystemObjects,
             nAssociatedSsObjects=nFound,
-            ssSourceData=None)
+            ssSourceData=ssSourceData)
 
     def _maskToCcdRegion(self, solarSystemObjects, exposure, marginArcsec):
         """Mask the input SolarSystemObjects to only those in the exposure
