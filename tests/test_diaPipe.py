@@ -351,6 +351,21 @@ class TestDiaPipelineTask(unittest.TestCase):
         self.assertTrue(diaSourcesBase.equals(diaSourcesExtract1))
         self.assertTrue(diaSourcesNew.equals(diaSourcesExtract2))
 
+    def test_updateObjectTable(self):
+        """Test that the diaObject record is updated with the number of
+        diaSources.
+        """
+        nObjects = 20
+        nSrcPerObject = 10
+        nExtraSources = 5
+        nSources = nSrcPerObject*nObjects + nExtraSources
+        expectedSourcesPerObject = nSrcPerObject*np.ones(nObjects)
+        expectedSourcesPerObject[:nExtraSources] += 1
+        diaObjects = makeDiaObjects(nObjects, self.exposure, self.rng)
+        diaSources = makeDiaSources(nSources, diaObjects["diaObjectId"].to_numpy(), self.exposure, self.rng)
+        updatedDiaObjects = DiaPipelineTask.updateObjectTable(diaObjects, diaSources)
+        self.assertTrue(np.all(updatedDiaObjects.nDiaSources.values == expectedSourcesPerObject))
+
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass
