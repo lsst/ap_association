@@ -137,7 +137,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
             if len(idx) == 1 and np.isfinite(dist[0]):
                 nFound += 1
                 diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "ssObjectId"] = ssObject["ssObjectId"]
-                ssSourceData.append(ssObject[["obs_position", "obj_position"]].values)
+                ssSourceData.append(ssObject[["ssObjectId", "ra", "dec", "obs_position", "obj_position"]].values)
 
         self.log.info("Successfully associated %d SolarSystemObjects.", nFound)
         assocMask = diaSourceCatalog["ssObjectId"] != 0
