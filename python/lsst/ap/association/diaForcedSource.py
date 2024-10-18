@@ -26,6 +26,7 @@ locations.
 __all__ = ["DiaForcedSourceTask", "DiaForcedSourcedConfig"]
 
 import numpy as np
+import pandas as pd
 
 import lsst.afw.table as afwTable
 from lsst.daf.base import DateTime
@@ -48,6 +49,12 @@ class DiaForcedSourcedConfig(pexConfig.Config):
         dtype=str,
         doc="Columns produced in forced measurement that can be dropped upon "
             "creation and storage of the final pandas data.",
+    )
+    historyThreshold = pexConfig.Field(
+        dtype=int,
+        doc="Minimum number of detections of a diaObject required "
+            "to run forced photometry. Set to 0 to include all diaObjects.",
+        default=1,
     )
 
     def setDefaults(self):
@@ -120,8 +127,13 @@ class DiaForcedSourceTask(pipeBase.Task):
             Catalog of calibrated forced photometered fluxes on both the
             difference and direct images at DiaObject locations.
         """
+        # Restrict forced source measurement to objects with sufficient history to be reliable.
+        objectTable = dia_objects.query(f'nDiaSources > {self.config.historyThreshold}')
+        if objectTable.empty:
+            # The dataframe will be coerced to the correct (empty) format in diaPipe.
+            return pd.DataFrame()
 
-        afw_dia_objects = self._convert_from_pandas(dia_objects)
+        afw_dia_objects = self._convert_from_pandas(objectTable)
 
         idFactoryDiff = idGenerator.make_table_id_factory()
 

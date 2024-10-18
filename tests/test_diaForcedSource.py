@@ -24,8 +24,6 @@ import pandas as pd
 import unittest
 import unittest.mock
 
-import pandas
-
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
@@ -57,11 +55,15 @@ def create_test_dia_objects(n_points, wcs, startPos=100):
     points = [wcs.pixelToSky(startPos + src_idx, startPos + src_idx) for src_idx in ids]
     ra = np.array([point.getRa().asDegrees() for point in points], dtype=float)
     dec = np.array([point.getDec().asDegrees() for point in points], dtype=float)
+    rng = np.random.default_rng(1234)
+    maxSources = 10
+    nDiaSources = rng.integers(1, maxSources, size=n_points)
 
-    objects = pandas.DataFrame({
+    objects = pd.DataFrame({
         "diaObjectId": ids,
         "ra": ra,
-        "dec": dec
+        "dec": dec,
+        "nDiaSources": nDiaSources,
     })
 
     return objects
@@ -159,10 +161,12 @@ class TestDiaForcedSource(unittest.TestCase):
             (10000001, self.wcs.pixelToSky(100, -100000)),  # y outside
             (10000002, self.wcs.pixelToSky(-100000, 100)),  # x outside
         ]
-        extra = pandas.DataFrame({
+        rng = np.random.default_rng(1234)
+        extra = pd.DataFrame({
             "diaObjectId": np.array([id for id, point in objects], dtype=np.int64),
             "ra": [point.getRa().asDegrees() for id, point in objects],
-            "dec": [point.getDec().asDegrees() for id, point in objects]
+            "dec": [point.getDec().asDegrees() for id, point in objects],
+            "nDiaSources": rng.integers(1, 5, size=len(objects)),
         })
         self.testDiaObjects = pd.concat([self.testDiaObjects, extra], ignore_index=True)
         # Ids of objects that were "updated" during "ap_association"
