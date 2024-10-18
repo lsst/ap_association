@@ -75,7 +75,7 @@ def makeDiaObjects(nObjects, exposure, rng):
             newObject["%s_psfFluxNdata" % f] = 0
         data.append(newObject)
 
-    return pd.DataFrame(data=data)
+    return pd.DataFrame(data=data).set_index("diaObjectId", drop=False)
 
 
 def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False):
@@ -130,7 +130,7 @@ def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False
                      "trailNdata": 0,
                      "dipoleNdata": 0})
 
-    return pd.DataFrame(data=data)
+    return pd.DataFrame(data=data).set_index(["diaObjectId", "band", "diaSourceId"], drop=False)
 
 
 def makeSolarSystemSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False):
@@ -207,7 +207,7 @@ def makeDiaForcedSources(nForcedSources, diaObjectIds, exposure, rng, randomizeO
                      "time_processed": datetime.datetime.now(),
                      "band": exposure.getFilter().bandLabel})
 
-    return pd.DataFrame(data=data)
+    return pd.DataFrame(data=data).set_index(["diaObjectId", "diaForcedSourceId"], drop=False)
 
 
 def makeExposure(flipX=False, flipY=False):
