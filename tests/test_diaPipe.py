@@ -212,11 +212,11 @@ class TestDiaPipelineTask(unittest.TestCase):
                               diffIm,
                               exposure,
                               template,
-                              self.diaObjects,
-                              self.diaSources,
-                              self.diaForcedSources,
-                              "g",
-                              IdGenerator(),
+                              preloadedDiaObjects=self.diaObjects,
+                              preloadedDiaSources=self.diaSources,
+                              preloadedDiaForcedSources=self.diaForcedSources,
+                              band="g",
+                              idGenerator=IdGenerator(),
                               solarSystemObjectTable=ssObjects)
             for subtaskName in subtasksToMock:
                 getattr(task, subtaskName).run.assert_called_once()
