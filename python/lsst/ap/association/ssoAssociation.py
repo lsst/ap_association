@@ -129,8 +129,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
         # picks the DiaSource with the shortest distance. We can do something
         # fancier later.
         ssSourceData = []
-        ssSourceRaDec = []
-
+        ras, decs, residual_ras, residual_decs = [], [], [], []
         diaSourceCatalog["ssObjectId"] = 0
         for index, ssObject in maskedObjects.iterrows():
             ssoVect = self._radec_to_xyz(ssObject["ra"], ssObject["dec"])
@@ -139,13 +138,19 @@ class SolarSystemAssociationTask(pipeBase.Task):
             if len(idx) == 1 and np.isfinite(dist[0]):
                 nFound += 1
                 diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "ssObjectId"] = ssObject["ssObjectId"]
-                residual_ras.append(ssObject["ra"] - diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]]]["ra"].values)
                 ssSourceData.append(ssObject[["ssObjectId", "obs_position", "obj_position"]].values)
-                ssSourceRaDec.append(ssobject[["ra", "dec"]].values)
+                dia_ra = diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "ra"]
+                dia_dec = diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "dec"]
+                ras.append(dia_ra)
+                decs.append(dia_dec)
+                residual_ras.append(dia_ra - ssObject["ra"])
+                residual_decs.append(dia_dec - ssObject["dec"])
 
         self.log.info("Successfully associated %d SolarSystemObjects.", nFound)
         assocMask = diaSourceCatalog["ssObjectId"] != 0
-
+        ssSourceData = pd.DataFrame(ssSourceData, columns=["ssObjectId", "obs_position", "obj_position"])
+        ssSourceData["residual_ras"] = residual_ras
+        ssSourceData["residual_decs"] = residual_decs
 
         return pipeBase.Struct(
             ssoAssocDiaSources=diaSourceCatalog[assocMask].reset_index(drop=True),

@@ -218,7 +218,7 @@ class MPSkyEphemerisQueryTask(PipelineTask):
             mpSkySsObjects['ObjID'] = objID
             mpSkySsObjects['ra'] = ra
             mpSkySsObjects['obj_poly'] = [poly for poly in object_polynomial.to_numpy().T]
-            mpSkySsObjects['obs_poly'] = [observer_polynomial.to_numpy().T for 
+            mpSkySsObjects['obs_poly'] = [observer_polynomial.to_numpy().T for
                                           i in range(len(mpSkySsObjects))]
             mpSkySsObjects['tmin'] = tmin
             mpSkySsObjects['tmax'] = tmax
