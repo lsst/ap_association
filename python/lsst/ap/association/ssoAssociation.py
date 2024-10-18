@@ -94,10 +94,11 @@ class SolarSystemAssociationTask(pipeBase.Task):
             - ``ssSourceData`` : Data required for ssSource table
         """
         mjd_midpoint = exposure.visitInfo.date.toAstropy().tai.mjd
-        solarSystemObjects["obs_position"] = np.polynomial.chebyshev.chebval(
-            mjd_midpoint, solarSystemObjects["obs_poly"].values)
-        solarSystemObjects["obj_position"] = np.polynomial.chebyshev.chebval(
-            mjd_midpoint, solarSystemObjects["obj_poly"].values)
+        ref_time = mjd_midpoint - solarSystemObjects["tmin"].values[0]
+        solarSystemObjects["obs_position"] = [v for v in np.polynomial.chebyshev.chebval(
+            mjd_midpoint, np.stack(solarSystemObjects["obs_poly"].values).T).T]
+        solarSystemObjects["obj_position"] = [v for v in np.polynomial.chebyshev.chebval(
+            mjd_midpoint, np.stack(solarSystemObjects["obj_poly"].values).T).T]
         maskedObjects = self._maskToCcdRegion(
             solarSystemObjects,
             exposure,
@@ -137,7 +138,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
             if np.isfinite(dist[0]):
                 nFound += 1
                 diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "ssObjectId"] = ssObject["ssObjectId"]
-                ssSourceData.append()
+                #ssSourceData.append()
         ssSourceData = []
 
         self.log.info("Successfully associated %d SolarSystemObjects.", nFound)

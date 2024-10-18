@@ -135,7 +135,6 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         mpSkyURL = os.environ.get('MP_SKY_URL', '')
         mpSkySsObjects = self._mpSkyConeSearch(expCenter, expMidPointEPOCH,
                                                expRadius + self.config.queryBufferRadiusDegrees, mpSkyURL)
-
         return Struct(
             ssObjects=mpSkySsObjects,
         )
@@ -218,10 +217,8 @@ class MPSkyEphemerisQueryTask(PipelineTask):
             mpSkySsObjects = pd.DataFrame()
             mpSkySsObjects['ObjID'] = objID
             mpSkySsObjects['ra'] = ra
-            mpSkySsObjects['obj_poly'] = object_polynomial.to_numpy()
-            mpSkySsObjects['obj_poly'] = [op.to_numpy() for op in mpSkySsObjects['obj_poly'].values]
-            mpSkySsObjects['obs_poly'] = observer_polynomial.to_numpy()
-            mpSkySsObjects['obs_poly'] = [op.to_numpy() for op in mpSkySsObjects['obs_poly'].values]
+            mpSkySsObjects['obj_poly'] = [poly for poly in object_polynomial.to_numpy().T]
+            mpSkySsObjects['obs_poly'] = [observer_polynomial.to_numpy().T for i in range(len(mpSkySsObjects))]
             mpSkySsObjects['tmin'] = tmin
             mpSkySsObjects['tmax'] = tmax
             mpSkySsObjects['dec'] = dec
