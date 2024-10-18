@@ -91,7 +91,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
               contained in the CCD footprint. (`int`)
             - ``nAssociatedSsObjects`` : Number of SolarSystemObjects
               that were associated with DiaSources.
-            - ``ssSourceData`` : Data required for ssSource table
+            - ``ssSourceData`` : ssSource table data. (`pandas.DataFrame)
         """
         mjd_midpoint = exposure.visitInfo.date.toAstropy().tai.mjd
         ref_time = mjd_midpoint - solarSystemObjects["tmin"].values[0]
@@ -129,6 +129,8 @@ class SolarSystemAssociationTask(pipeBase.Task):
         # picks the DiaSource with the shortest distance. We can do something
         # fancier later.
         ssSourceData = []
+        ssSourceRaDec = []
+
         diaSourceCatalog["ssObjectId"] = 0
         for index, ssObject in maskedObjects.iterrows():
             ssoVect = self._radec_to_xyz(ssObject["ra"], ssObject["dec"])
@@ -137,10 +139,13 @@ class SolarSystemAssociationTask(pipeBase.Task):
             if len(idx) == 1 and np.isfinite(dist[0]):
                 nFound += 1
                 diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "ssObjectId"] = ssObject["ssObjectId"]
-                ssSourceData.append(ssObject[["ssObjectId", "ra", "dec", "obs_position", "obj_position"]].values)
+                residual_ras.append(ssObject["ra"] - diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]]]["ra"].values)
+                ssSourceData.append(ssObject[["ssObjectId", "obs_position", "obj_position"]].values)
+                ssSourceRaDec.append(ssobject[["ra", "dec"]].values)
 
         self.log.info("Successfully associated %d SolarSystemObjects.", nFound)
         assocMask = diaSourceCatalog["ssObjectId"] != 0
+
 
         return pipeBase.Struct(
             ssoAssocDiaSources=diaSourceCatalog[assocMask].reset_index(drop=True),
