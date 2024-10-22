@@ -198,9 +198,9 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
 
         diaObjects = utils_tests.makeDiaObjects(2, self.exposure, rng)
         diaSourceHistory = utils_tests.makeDiaSources(
-            10, diaObjects["diaObjectId"], self.exposure, rng)
+            10, diaObjects["diaObjectId"].to_numpy(), self.exposure, rng)
         diaForcedSources = utils_tests.makeDiaForcedSources(
-            10, diaObjects["diaObjectId"], self.exposure, rng)
+            10, diaObjects["diaObjectId"].to_numpy(), self.exposure, rng)
         self.diaObjects, diaSourceHistory, self.diaForcedSources = _roundTripThroughApdb(
             diaObjects,
             diaSourceHistory,

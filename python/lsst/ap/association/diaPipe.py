@@ -608,34 +608,27 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Associate new DiaSources with existing DiaObjects.
         assocResults = self.associator.run(diaSourceTable, diaObjects)
 
+        toAssociate = []
         if self.config.doSolarSystemAssociation and solarSystemObjectTable is not None:
             ssoAssocResult = self.solarSystemAssociator.run(
                 assocResults.unAssocDiaSources,
                 solarSystemObjectTable,
                 diffIm)
             # Create new DiaObjects from unassociated diaSources.
-            createResults = self.createNewDiaObjects(
-                ssoAssocResult.unAssocDiaSources)
-            toAssociate = []
-            if len(assocResults.matchedDiaSources) > 0:
-                toAssociate.append(assocResults.matchedDiaSources)
+            createResults = self.createNewDiaObjects(ssoAssocResult.unAssocDiaSources)
             if len(ssoAssocResult.ssoAssocDiaSources) > 0:
                 toAssociate.append(ssoAssocResult.ssoAssocDiaSources)
-            toAssociate.append(createResults.diaSources)
-            associatedDiaSources = pd.concat(toAssociate)
             nTotalSsObjects = ssoAssocResult.nTotalSsObjects
             nAssociatedSsObjects = ssoAssocResult.nAssociatedSsObjects
         else:
             # Create new DiaObjects from unassociated diaSources.
-            createResults = self.createNewDiaObjects(
-                assocResults.unAssocDiaSources)
-            toAssociate = []
-            if len(assocResults.matchedDiaSources) > 0:
-                toAssociate.append(assocResults.matchedDiaSources)
-            toAssociate.append(createResults.diaSources)
-            associatedDiaSources = pd.concat(toAssociate)
+            createResults = self.createNewDiaObjects(assocResults.unAssocDiaSources)
             nTotalSsObjects = 0
             nAssociatedSsObjects = 0
+        if len(assocResults.matchedDiaSources) > 0:
+            toAssociate.append(assocResults.matchedDiaSources)
+        toAssociate.append(createResults.diaSources)
+        associatedDiaSources = pd.concat(toAssociate)
 
         self._add_association_meta_data(assocResults.nUpdatedDiaObjects,
                                         assocResults.nUnassociatedDiaObjects,
@@ -727,7 +720,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 "already populated Apdb. If this was not the case then there "
                 "was an unexpected failure in Association while matching "
                 "sources to objects, and should be reported. Exiting.")
-        return (mergedDiaSourceHistory, mergedDiaObjects, updatedDiaObjectIds)
+        # Finally, update the diaObject table with the number of associated diaSources
+        mergedUpdatedDiaObjects = self.updateObjectTable(mergedDiaObjects, mergedDiaSourceHistory)
+        return (mergedDiaSourceHistory, mergedUpdatedDiaObjects, updatedDiaObjectIds)
 
     @timeMethod
     def runForcedMeasurement(self, diaObjects, updatedDiaObjects, exposure, diffIm, idGenerator):
@@ -933,3 +928,25 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         else:
             mergedCatalog = pd.concat([originalCatalog], sort=True)
         return mergedCatalog.loc[:, originalCatalog.columns]
+
+    @staticmethod
+    def updateObjectTable(diaObjects, diaSources):
+        """Update the diaObject table with the new diaSource records.
+
+        Parameters
+        ----------
+        diaObjects : `pandas.DataFrame`
+            Table of new DiaObjects merged with their history.
+        diaSources : `pandas.DataFrame`
+            The combined preloaded and associated diaSource catalog.
+
+        Returns
+        -------
+        updatedDiaObjects : `pandas.DataFrame`
+            Table of DiaObjects updated with the number of associated DiaSources
+        """
+        nDiaSources = diaSources[["diaSourceId"]].groupby("diaObjectId").agg(len)
+        nDiaSources.rename({"diaSourceId": "nDiaSources"}, errors="raise", axis="columns", inplace=True)
+        del diaObjects["nDiaSources"]
+        updatedDiaObjects = diaObjects.join(nDiaSources, how="left")
+        return updatedDiaObjects
