@@ -271,7 +271,9 @@ funcs:
             - base_LocalWcs_CDMatrix_1_2
             - base_LocalWcs_CDMatrix_2_1
             - base_LocalWcs_CDMatrix_2_2
-    # extendedness not implemented
+    extendedness:
+        functor: Column
+        args: base_ClassificationSizeExtendedness_value
     reliability:
         functor: Column
         args: reliability
