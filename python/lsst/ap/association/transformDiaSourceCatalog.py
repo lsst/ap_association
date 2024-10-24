@@ -115,6 +115,11 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
         default=False,
         doc="Include the reliability (e.g. real/bogus) classifications in the output."
     )
+    doIncludeExtendedness = pexConfig.Field(
+        dtype=bool,
+        default=False,
+        doc="Include the reliability (e.g. real/bogus) classifications in the output."
+    )
     doUseApdbSchema = pexConfig.Field(
         dtype=bool,
         default=False,
@@ -158,6 +163,8 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
     def __init__(self, initInputs, **kwargs):
         super().__init__(**kwargs)
         self.funcs = self.getFunctors()
+        if ~self.config.doIncludeExtendedness:
+            self.funcs.pop("extendedness")
         self.inputSchema = initInputs['diaSourceSchema'].schema
         self._create_bit_pack_mappings()
         self.apdbSchema = readSdmSchemaFile(self.config.schemaFile, self.config.schemaName)
