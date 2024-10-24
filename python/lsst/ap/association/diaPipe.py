@@ -497,10 +497,11 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diaForcedSources = self.runForcedMeasurement(
                 diaCalResult.diaObjectCat, diaCalResult.updatedDiaObjects, exposure, diffIm, idGenerator
             )
-
+            forcedSourceHistoryThreshold = self.diaForcedSource.config.historyThreshold
         else:
             # alertPackager needs correct columns
             diaForcedSources = makeEmptyForcedSourceTable(self.schema)
+            forcedSourceHistoryThreshold = 0
 
         # Write results to Alert Production Database (APDB)
         self.writeToApdb(diaCalResult.updatedDiaObjects, associatedDiaSources, diaForcedSources)
@@ -533,6 +534,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                    exposure,
                                    template,
                                    doRunForcedMeasurement=self.config.doRunForcedMeasurement,
+                                   forcedSourceHistoryThreshold=forcedSourceHistoryThreshold,
                                    )
 
         # For historical reasons, apdbMarker is a Config even if it's not meant to be read.

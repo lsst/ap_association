@@ -53,8 +53,8 @@ class DiaForcedSourcedConfig(pexConfig.Config):
     historyThreshold = pexConfig.Field(
         dtype=int,
         doc="Minimum number of detections of a diaObject required "
-            "to run forced photometry. Set to 0 to include all diaObjects.",
-        default=1,
+            "to run forced photometry. Set to 1 to include all diaObjects.",
+        default=2,
     )
 
     def setDefaults(self):
@@ -128,7 +128,7 @@ class DiaForcedSourceTask(pipeBase.Task):
             difference and direct images at DiaObject locations.
         """
         # Restrict forced source measurement to objects with sufficient history to be reliable.
-        objectTable = dia_objects.query(f'nDiaSources > {self.config.historyThreshold}')
+        objectTable = dia_objects.query(f'nDiaSources >= {self.config.historyThreshold}')
         if objectTable.empty:
             # The dataframe will be coerced to the correct (empty) format in diaPipe.
             return pd.DataFrame()

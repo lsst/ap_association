@@ -210,6 +210,7 @@ class PackageAlertsTask(pipeBase.Task):
             calexp,
             template,
             doRunForcedMeasurement=True,
+            forcedSourceHistoryThreshold=0,
             ):
         """Package DiaSources/Object and exposure data into Avro alerts.
 
@@ -246,6 +247,9 @@ class PackageAlertsTask(pipeBase.Task):
             This should only be turned off for debugging purposes.
             Added to allow disabling forced sources for performance
             reasons during the ops rehearsal.
+        forcedSourceHistoryThreshold : `int`, optional
+            Minimum number of detections of a diaObject required
+            to run forced photometry. Set to 1 to include all diaObjects.
         """
         alerts = []
         self._patchDiaSources(diaSourceCat)
@@ -276,7 +280,7 @@ class PackageAlertsTask(pipeBase.Task):
                 objSourceHistory = diaSrcHistory.loc[srcIndex[0]]
             else:
                 objSourceHistory = None
-            if doRunForcedMeasurement and not diaForcedSources.empty:
+            if doRunForcedMeasurement and diaObject["nDiaSources"] >= forcedSourceHistoryThreshold:
                 objDiaForcedSources = diaForcedSources.loc[srcIndex[0]]
             else:
                 # Send empty table with correct columns
