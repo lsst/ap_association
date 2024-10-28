@@ -1,0 +1,14 @@
+description: |
+  AP pipeline specialized for LATISS Prompt Processing. This
+  file is imported in prompt_prototype/pipelines/LATISS/ApPipe.yaml
+  which is used in realtime Prompt Processing production.
+instrument: lsst.obs.lsst.Latiss
+imports:
+  - location: $AP_PIPE_DIR/pipelines/LATISS/ApPipe.yaml
+    include:
+    - isr
+    - calibrateImage
+    - ssSingleFrameAssociation
+tasks:
+  ssSingleFrameAssociation:
+    class: lsst.ap.association.SsSingleFrameAssociationTask
