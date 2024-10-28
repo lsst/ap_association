@@ -41,10 +41,16 @@ class SsSingleFrameAssociationConnections(
         defaultTemplates={"fakesType": ""}):
     """Butler connections for SsSingleFrameAssociationTask.
     """
+    exposure = connTypes.Input(
+        doc="Exposure from which source table was generated",
+        name="initial_pvi",
+        storageClass="ExposureF",
+        dimensions=("instrument", "visit", "detector"),
+    )
     sourceTable = connTypes.Input(
-        doc="Catalog of calibrated DiaSources.",
+        doc="Catalog of calibrated Sources.",
         name="initial_stars_footprints_detector",
-        storageClass="DataFrame",
+        storageClass="SourceCatalog",
         dimensions=("instrument", "visit", "detector"),
     )
     solarSystemObjectTable = connTypes.Input(
@@ -53,21 +59,14 @@ class SsSingleFrameAssociationConnections(
         name="preloaded_SsObjects",
         storageClass="DataFrame",
         dimensions=("instrument", "group", "detector"),
-        minimum=0,
-    )
-    exposure = connTypes.Input(
-        doc="Calibrated exposure differenced with a template image during "
-            "image differencing.",
-        name="calexp",
-        storageClass="ExposureF",
-        dimensions=("instrument", "visit", "detector"),
     )
     associatedSsSources = connTypes.Output(
         doc="ssSource record columns which can be computed as of association",
-        name="Diff_associatedSsSources",
+        name="ssSingleFrameAssociatedSources",
         storageClass="DataFrame",
         dimensions=("instrument", "visit", "detector"),
     )
+
 
     def __init__(self, *, config=None):
         super().__init__(config=config)
@@ -110,10 +109,7 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
-        inputs["idGenerator"] = self.config.idGenerator.apply(butlerQC.quantum.dataId)
         inputs["band"] = butlerQC.quantum.dataId["band"]
-        inputs["legacySolarSystemTable"] = None
-
         outputs = self.run(**inputs)
 
         butlerQC.put(outputs, outputRefs)
@@ -121,7 +117,6 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
     @timeMethod
     def run(self,
             sourceTable,
-            exposure,
             band,
             solarSystemObjectTable):
         """Process DiaSources and DiaObjects.
@@ -133,8 +128,6 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
 
         Parameters
         ----------
-        exposure : `lsst.afw.image.ExposureF`
-            Calibrated exposure
         band : `str`
             The band in which the new DiaSources were detected.
         solarSystemObjectTable : `pandas.DataFrame`
