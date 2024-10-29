@@ -355,6 +355,8 @@ class TestDiaPipelineTask(unittest.TestCase):
         """Test that the diaObject record is updated with the number of
         diaSources.
         """
+        config = self._makeDefaultConfig(config_file=self.config_file.name, doPackageAlerts=False)
+        task = DiaPipelineTask(config=config)
         nObjects = 20
         nSrcPerObject = 10
         nExtraSources = 5
@@ -363,7 +365,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         expectedSourcesPerObject[:nExtraSources] += 1
         diaObjects = makeDiaObjects(nObjects, self.exposure, self.rng)
         diaSources = makeDiaSources(nSources, diaObjects["diaObjectId"].to_numpy(), self.exposure, self.rng)
-        updatedDiaObjects = DiaPipelineTask.updateObjectTable(diaObjects, diaSources)
+        updatedDiaObjects = task.updateObjectTable(diaObjects, diaSources)
         self.assertTrue(np.all(updatedDiaObjects.nDiaSources.values == expectedSourcesPerObject))
 
 

@@ -931,8 +931,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             mergedCatalog = pd.concat([originalCatalog], sort=True)
         return mergedCatalog.loc[:, originalCatalog.columns]
 
-    @staticmethod
-    def updateObjectTable(diaObjects, diaSources):
+    def updateObjectTable(self, diaObjects, diaSources):
         """Update the diaObject table with the new diaSource records.
 
         Parameters
@@ -951,4 +950,4 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         nDiaSources.rename({"diaSourceId": "nDiaSources"}, errors="raise", axis="columns", inplace=True)
         del diaObjects["nDiaSources"]
         updatedDiaObjects = diaObjects.join(nDiaSources, how="left")
-        return updatedDiaObjects
+        return convertTableToSdmSchema(self.schema, updatedDiaObjects, tableName="DiaObject")
