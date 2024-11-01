@@ -479,6 +479,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             mergedDiaSourceHistory,
             updatedDiaObjectIds,
             [band])
+        updatedDiaObjects = convertTableToSdmSchema(self.schema, diaCalResult.updatedDiaObjects,
+                                                    tableName="DiaObject")
 
         # Test for duplication in the updated DiaObjects.
         if self.testDataFrameIndex(diaCalResult.diaObjectCat):
@@ -486,7 +488,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 "Duplicate DiaObjects (loaded + updated) created after "
                 "DiaCalculation. This is unexpected behavior and should be "
                 "reported. Exiting.")
-        if self.testDataFrameIndex(diaCalResult.updatedDiaObjects):
+        if self.testDataFrameIndex(updatedDiaObjects):
             raise RuntimeError(
                 "Duplicate DiaObjects (updated) created after "
                 "DiaCalculation. This is unexpected behavior and should be "
@@ -495,7 +497,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Forced source measurement
         if self.config.doRunForcedMeasurement:
             diaForcedSources = self.runForcedMeasurement(
-                diaCalResult.diaObjectCat, diaCalResult.updatedDiaObjects, exposure, diffIm, idGenerator
+                diaCalResult.diaObjectCat, updatedDiaObjects, exposure, diffIm, idGenerator
             )
             forcedSourceHistoryThreshold = self.diaForcedSource.config.historyThreshold
         else:
@@ -504,7 +506,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             forcedSourceHistoryThreshold = 0
 
         # Write results to Alert Production Database (APDB)
-        self.writeToApdb(diaCalResult.updatedDiaObjects, associatedDiaSources, diaForcedSources)
+        self.writeToApdb(updatedDiaObjects, associatedDiaSources, diaForcedSources)
 
         # Package alerts
         if self.config.doPackageAlerts:
@@ -950,4 +952,4 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         nDiaSources.rename({"diaSourceId": "nDiaSources"}, errors="raise", axis="columns", inplace=True)
         del diaObjects["nDiaSources"]
         updatedDiaObjects = diaObjects.join(nDiaSources, how="left")
-        return convertTableToSdmSchema(self.schema, updatedDiaObjects, tableName="DiaObject")
+        return updatedDiaObjects
