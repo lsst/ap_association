@@ -186,7 +186,8 @@ class TestDiaPipelineTask(unittest.TestCase):
             return lsst.pipe.base.Struct(nTotalSsObjects=42,
                                          nAssociatedSsObjects=30,
                                          ssoAssocDiaSources=_makeMockDataFrame(),
-                                         unAssocDiaSources=_makeMockDataFrame())
+                                         unAssocDiaSources=_makeMockDataFrame(),
+                                         ssSourceData=_makeMockDataFrame())
 
         def associator_run(table, diaObjects):
             return lsst.pipe.base.Struct(nUpdatedDiaObjects=2, nUnassociatedDiaObjects=3,

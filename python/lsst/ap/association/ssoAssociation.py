@@ -91,7 +91,23 @@ class SolarSystemAssociationTask(pipeBase.Task):
               contained in the CCD footprint. (`int`)
             - ``nAssociatedSsObjects`` : Number of SolarSystemObjects
               that were associated with DiaSources.
+            - ``ssSourceData`` : ssSource table data. (`pandas.DataFrame)
         """
+        mjd_midpoint = exposure.visitInfo.date.toAstropy().tai.mjd
+        ref_time = mjd_midpoint - solarSystemObjects["tmin"].values[0]
+
+        solarSystemObjects['obs_position'] = solarSystemObjects.apply(lambda row: np.array([
+            np.polynomial.chebyshev.chebval(ref_time, row['obs_x_poly']),
+            np.polynomial.chebyshev.chebval(ref_time, row['obs_y_poly']),
+            np.polynomial.chebyshev.chebval(ref_time, row['obs_z_poly'])
+        ]), axis=1)
+
+        solarSystemObjects['obj_position'] = solarSystemObjects.apply(lambda row: np.array([
+            np.polynomial.chebyshev.chebval(ref_time, row['obj_x_poly']),
+            np.polynomial.chebyshev.chebval(ref_time, row['obj_y_poly']),
+            np.polynomial.chebyshev.chebval(ref_time, row['obj_z_poly'])
+        ]), axis=1)
+
         maskedObjects = self._maskToCcdRegion(
             solarSystemObjects,
             exposure,
@@ -104,7 +120,10 @@ class SolarSystemAssociationTask(pipeBase.Task):
                 ssoAssocDiaSources=pd.DataFrame(columns=diaSourceCatalog.columns),
                 unAssocDiaSources=diaSourceCatalog,
                 nTotalSsObjects=0,
-                nAssociatedSsObjects=0)
+                nAssociatedSsObjects=0,
+                ssSourceData=pd.DataFrame(columns=["ssObjectId", "obs_position", "obj_position",
+                                          "residual_ras", "residual_decs"])
+            )
         else:
             self.log.debug("Matching solar system objects:\n%s", maskedObjects)
         self.log.info("Attempting to associate %d objects...", nSolarSystemObjects)
@@ -121,23 +140,36 @@ class SolarSystemAssociationTask(pipeBase.Task):
         # Query the KDtree for DIA nearest neighbors to SSOs. Currently only
         # picks the DiaSource with the shortest distance. We can do something
         # fancier later.
+        ssSourceData = []
+        ras, decs, residual_ras, residual_decs = [], [], [], []
         diaSourceCatalog["ssObjectId"] = 0
         for index, ssObject in maskedObjects.iterrows():
-
             ssoVect = self._radec_to_xyz(ssObject["ra"], ssObject["dec"])
             # Which DIA Sources fall within r?
             dist, idx = tree.query(ssoVect, distance_upper_bound=maxRadius)
-            if np.isfinite(dist[0]):
+            if len(idx) == 1 and np.isfinite(dist[0]):
                 nFound += 1
                 diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "ssObjectId"] = ssObject["ssObjectId"]
+                ssSourceData.append(ssObject[["ssObjectId", "obs_position", "obj_position"]].values)
+                dia_ra = diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "ra"]
+                dia_dec = diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "dec"]
+                ras.append(dia_ra)
+                decs.append(dia_dec)
+                residual_ras.append(dia_ra - ssObject["ra"])
+                residual_decs.append(dia_dec - ssObject["dec"])
 
         self.log.info("Successfully associated %d SolarSystemObjects.", nFound)
         assocMask = diaSourceCatalog["ssObjectId"] != 0
+        ssSourceData = pd.DataFrame(ssSourceData, columns=["ssObjectId", "obs_position", "obj_position"])
+        ssSourceData["residual_ras"] = residual_ras
+        ssSourceData["residual_decs"] = residual_decs
+
         return pipeBase.Struct(
             ssoAssocDiaSources=diaSourceCatalog[assocMask].reset_index(drop=True),
             unAssocDiaSources=diaSourceCatalog[~assocMask].reset_index(drop=True),
             nTotalSsObjects=nSolarSystemObjects,
-            nAssociatedSsObjects=nFound)
+            nAssociatedSsObjects=nFound,
+            ssSourceData=ssSourceData)
 
     def _maskToCcdRegion(self, solarSystemObjects, exposure, marginArcsec):
         """Mask the input SolarSystemObjects to only those in the exposure

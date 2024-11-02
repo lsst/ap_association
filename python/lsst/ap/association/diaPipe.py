@@ -124,6 +124,12 @@ class DiaPipelineConnections(
         storageClass="DataFrame",
         dimensions=("instrument", "visit", "detector"),
     )
+    associatedSsSources = connTypes.Output(
+        doc="Optional output storing ssSource data computed during association.",
+        name="{fakesType}{coaddName}Diff_associatedSsSources",
+        storageClass="DataFrame",
+        dimensions=("instrument", "visit", "detector"),
+    )
     diaForcedSources = connTypes.Output(
         doc="Optional output storing the forced sources computed at the diaObject positions.",
         name="{fakesType}{coaddName}Diff_diaForcedSrc",
@@ -148,6 +154,8 @@ class DiaPipelineConnections(
             self.outputs.remove("diaForcedSources")
         if not config.doSolarSystemAssociation:
             self.inputs.remove("solarSystemObjectTable")
+        if (not config.doWriteAssociatedSources) or (not config.doSolarSystemAssociation):
+            self.outputs.remove("associatedSsSources")
 
     def adjustQuantum(self, inputs, outputs, label, dataId):
         """Override to make adjustments to `lsst.daf.butler.DatasetRef` objects
@@ -444,6 +452,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             - ``diaForcedSources`` : Catalog of new and previously detected
               forced DiaSources. (`pandas.DataFrame`)
             - ``diaObjects`` : Updated table of DiaObjects. (`pandas.DataFrame`)
+            - ``associatedSsSources`` : Catalog of ssSource records.
+              (`pandas.DataFrame`)
 
         Raises
         ------
@@ -463,7 +473,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diaObjects = preloadedDiaObjects
 
         # Associate DiaSources with DiaObjects
-        associatedDiaSources, newDiaObjects = self.associateDiaSources(
+        associatedDiaSources, newDiaObjects, associatedSsSources = self.associateDiaSources(
             diaSourceTable, solarSystemObjectTable, diffIm, diaObjects
         )
 
@@ -546,6 +556,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                associatedDiaSources=associatedDiaSources,
                                diaForcedSources=diaForcedSources,
                                diaObjects=diaCalResult.diaObjectCat,
+                               associatedSsSources=associatedSsSources
                                )
 
     def createNewDiaObjects(self, unAssocDiaSources):
@@ -608,6 +619,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             Associated DiaSources with DiaObjects.
         newDiaObjects : `pandas.DataFrame`
             Table of new DiaObjects after association.
+        associatedSsSources : `pandas.DataFrame`
+            Table of new ssSources after association.
         """
         # Associate new DiaSources with existing DiaObjects.
         assocResults = self.associator.run(diaSourceTable, diaObjects)
@@ -624,11 +637,13 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 toAssociate.append(ssoAssocResult.ssoAssocDiaSources)
             nTotalSsObjects = ssoAssocResult.nTotalSsObjects
             nAssociatedSsObjects = ssoAssocResult.nAssociatedSsObjects
+            associatedSsSources = ssoAssocResult.ssSourceData
         else:
             # Create new DiaObjects from unassociated diaSources.
             createResults = self.createNewDiaObjects(assocResults.unAssocDiaSources)
             nTotalSsObjects = 0
             nAssociatedSsObjects = 0
+            associatedSsSources = None
         if len(assocResults.matchedDiaSources) > 0:
             toAssociate.append(assocResults.matchedDiaSources)
         toAssociate.append(createResults.diaSources)
@@ -644,7 +659,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                       assocResults.nUnassociatedDiaObjects,
                       createResults.nNewDiaObjects,
                       )
-        return (associatedDiaSources, createResults.newDiaObjects)
+        return (associatedDiaSources, createResults.newDiaObjects, associatedSsSources)
 
     @timeMethod
     def mergeAssociatedCatalogs(self, preloadedDiaSources, associatedDiaSources, diaObjects, newDiaObjects,
