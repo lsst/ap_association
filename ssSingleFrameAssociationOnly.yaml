@@ -4,13 +4,11 @@ instrument: lsst.obs.lsst.LsstComCam
 imports:
   - location: $AP_PIPE_DIR/pipelines/LSSTComCam/ApPipe.yaml
     include:
-    - isr
-    - calibrateImage
     - mpSkyEphemerisQuery
 tasks:
   getRegionTimeFromVisitSingleFrame:
     class: lsst.pipe.tasks.getRegionTimeFromVisit.GetRegionTimeFromVisitTask
     config:
-      connections.dummy_visit: initial_stars_footprints_detector
+      connections.dummy_visit: src
   ssSingleFrameAssociation:
     class: lsst.ap.association.SsSingleFrameAssociationTask

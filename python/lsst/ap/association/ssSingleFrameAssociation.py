@@ -27,6 +27,7 @@
 __all__ = ("SsSingleFrameAssociationConfig",
            "SsSingleFrameAssociationTask",
            "SsSingleFrameAssociationConnections")
+from astropy.units import deg
 
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
@@ -43,13 +44,13 @@ class SsSingleFrameAssociationConnections(
     """
     exposure = connTypes.Input(
         doc="Exposure from which source table was generated",
-        name="initial_pvi",
+        name="calexp",
         storageClass="ExposureF",
         dimensions=("instrument", "visit", "detector"),
     )
     sourceTable = connTypes.Input(
         doc="Catalog of calibrated Sources.",
-        name="initial_stars_footprints_detector",
+        name="src",
         storageClass="SourceCatalog",
         dimensions=("instrument", "visit", "detector"),
     )
@@ -66,7 +67,6 @@ class SsSingleFrameAssociationConnections(
         storageClass="DataFrame",
         dimensions=("instrument", "visit", "detector"),
     )
-
 
     def __init__(self, *, config=None):
         super().__init__(config=config)
@@ -116,6 +116,7 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
 
     @timeMethod
     def run(self,
+            exposure,
             sourceTable,
             band,
             solarSystemObjectTable):
@@ -147,12 +148,12 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
             Raised if duplicate DiaObjects or duplicate DiaSources are found.
         """
         # Associate DiaSources with DiaObjects
-        associatedSsSources = self.associateSsSources(sourceTable, solarSystemObjectTable)
+        associatedSsSources = self.associateSources(sourceTable, solarSystemObjectTable, exposure)
 
         return pipeBase.Struct(associatedSsSources=associatedSsSources)
 
     @timeMethod
-    def associateSources(self, sourceTable, solarSystemObjectTable):
+    def associateSources(self, sourceTable, solarSystemObjectTable, exposure):
         """Associate single-image sources with ssObjects.
 
         Parameters
@@ -167,6 +168,10 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
         associatedSsSources : `pandas.DataFrame`
             Table of new ssSources after association.
         """
-        ssoAssocResult = self.solarSystemAssociator.run(sourceTable, solarSystemObjectTable)
+        sourceTable = sourceTable.asAstropy()
+        sourceTable['ra'] = sourceTable['coord_ra'].to(deg).value
+        sourceTable['dec'] = sourceTable['coord_dec'].to(deg).value
+        ssoAssocResult = self.solarSystemAssociator.run(sourceTable.to_pandas(),
+                                                        solarSystemObjectTable, exposure)
         associatedSsSources = ssoAssocResult.ssSourceData
         return associatedSsSources

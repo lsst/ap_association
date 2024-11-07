@@ -23,10 +23,11 @@
 
 __all__ = ["SolarSystemAssociationConfig", "SolarSystemAssociationTask"]
 
+from astropy import units as u
+import healpy as hp
 import numpy as np
 import pandas as pd
 from scipy.spatial import cKDTree
-from astropy import units as u
 
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
@@ -93,6 +94,10 @@ class SolarSystemAssociationTask(pipeBase.Task):
               that were associated with DiaSources.
             - ``ssSourceData`` : ssSource table data. (`pandas.DataFrame)
         """
+        nSolarSystemObjects = len(solarSystemObjects)
+        if nSolarSystemObjects <= 0:
+            return self._return_empty(diaSourceCatalog)
+
         mjd_midpoint = exposure.visitInfo.date.toAstropy().tai.mjd
         ref_time = mjd_midpoint - solarSystemObjects["tmin"].values[0]
 
@@ -108,24 +113,18 @@ class SolarSystemAssociationTask(pipeBase.Task):
             np.polynomial.chebyshev.chebval(ref_time, row['obj_z_poly'])
         ]), axis=1)
 
+        vector = np.vstack(solarSystemObjects['obj_position'].values
+                           - solarSystemObjects['obs_position'].values)
+        solarSystemObjects[['ra', 'dec']] = np.vstack(hp.vec2ang(vector, lonlat=True)).T
+
         maskedObjects = self._maskToCcdRegion(
             solarSystemObjects,
             exposure,
             solarSystemObjects["Err(arcsec)"].max())
         nSolarSystemObjects = len(maskedObjects)
         if nSolarSystemObjects <= 0:
-            self.log.info("No SolarSystemObjects found in detector bounding "
-                          "box.")
-            return pipeBase.Struct(
-                ssoAssocDiaSources=pd.DataFrame(columns=diaSourceCatalog.columns),
-                unAssocDiaSources=diaSourceCatalog,
-                nTotalSsObjects=0,
-                nAssociatedSsObjects=0,
-                ssSourceData=pd.DataFrame(columns=["ssObjectId", "obs_position", "obj_position",
-                                          "residual_ras", "residual_decs"])
-            )
-        else:
-            self.log.debug("Matching solar system objects:\n%s", maskedObjects)
+            return self._return_empty(diaSourceCatalog)
+
         self.log.info("Attempting to associate %d objects...", nSolarSystemObjects)
         maxRadius = np.deg2rad(self.config.maxDistArcSeconds / 3600)
 
@@ -141,7 +140,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
         # picks the DiaSource with the shortest distance. We can do something
         # fancier later.
         ssSourceData = []
-        ras, decs, residual_ras, residual_decs = [], [], [], []
+        ras, decs, expected_ras, expected_decs = [], [], [], []
         diaSourceCatalog["ssObjectId"] = 0
         for index, ssObject in maskedObjects.iterrows():
             ssoVect = self._radec_to_xyz(ssObject["ra"], ssObject["dec"])
@@ -155,14 +154,16 @@ class SolarSystemAssociationTask(pipeBase.Task):
                 dia_dec = diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "dec"]
                 ras.append(dia_ra)
                 decs.append(dia_dec)
-                residual_ras.append(dia_ra - ssObject["ra"])
-                residual_decs.append(dia_dec - ssObject["dec"])
+                expected_ras.append(ssObject["ra"])
+                expected_decs.append(ssObject["dec"])
 
         self.log.info("Successfully associated %d SolarSystemObjects.", nFound)
         assocMask = diaSourceCatalog["ssObjectId"] != 0
         ssSourceData = pd.DataFrame(ssSourceData, columns=["ssObjectId", "obs_position", "obj_position"])
-        ssSourceData["residual_ras"] = residual_ras
-        ssSourceData["residual_decs"] = residual_decs
+        ssSourceData["ra"] = ras
+        ssSourceData["dec"] = decs
+        ssSourceData["expected_ra"] = expected_ras
+        ssSourceData["expected_dec"] = expected_decs
 
         return pipeBase.Struct(
             ssoAssocDiaSources=diaSourceCatalog[assocMask].reset_index(drop=True),
@@ -231,3 +232,15 @@ class SolarSystemAssociationTask(pipeBase.Task):
         vectors[:, 2] = np.cos(np.pi / 2 - decs)
 
         return vectors
+
+    def _return_empty(self, diaSourceCatalog):
+        self.log.info(str(type(diaSourceCatalog)))
+        self.log.info("No SolarSystemObjects found in detector bounding box.")
+        return pipeBase.Struct(
+            ssoAssocDiaSources=pd.DataFrame(columns=diaSourceCatalog.columns),
+            unAssocDiaSources=diaSourceCatalog,
+            nTotalSsObjects=0,
+            nAssociatedSsObjects=0,
+            ssSourceData=pd.DataFrame(columns=["ssObjectId", "ra", "dec", "obs_position", "obj_position",
+                                      "residual_ras", "residual_decs"])
+        )
