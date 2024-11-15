@@ -103,3 +103,9 @@ columns:
     - name: base_PixelFlags_flag_injected_templateCenter
       bit: 33
       doc: Fake source template injection center in source footprint
+    - name: base_PixelFlags_flag_nodata
+      bit: 34
+      doc: NO_DATA pixel in the source footprint.
+    - name: base_PixelFlags_flag_nodataCenter
+      bit: 35
+      doc: NO_DATA pixel in the 3x3 region around the centroid.
