@@ -44,13 +44,13 @@ class SsSingleFrameAssociationConnections(
     """
     exposure = connTypes.Input(
         doc="Exposure from which source table was generated",
-        name="calexp",
+        name="initial_pvi",
         storageClass="ExposureF",
         dimensions=("instrument", "visit", "detector"),
     )
     sourceTable = connTypes.Input(
         doc="Catalog of calibrated Sources.",
-        name="src",
+        name="initial_stars_footprints_detector",
         storageClass="SourceCatalog",
         dimensions=("instrument", "visit", "detector"),
     )
