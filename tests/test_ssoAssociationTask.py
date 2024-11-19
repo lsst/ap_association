@@ -99,9 +99,9 @@ class TestSolarSystemAssociation(unittest.TestCase):
                                   self.testSsObjects,
                                   self.exposure)
         self.assertEqual(len(results.ssoAssocDiaSources), 1)
-        self.assertEqual(results.ssoAssocDiaSources['ra'].iloc[0], 45.0)
-        self.assertEqual(results.ssoAssocDiaSources['dec'].iloc[0], 45.0)
-        self.assertEqual(results.ssoAssocDiaSources['ssObjectId'].iloc[0], 1234)
+        self.assertEqual(results.ssoAssocDiaSources['ra'][0], 45.0)
+        self.assertEqual(results.ssoAssocDiaSources['dec'][0], 45.0)
+        self.assertEqual(results.ssoAssocDiaSources['ssObjectId'][0], 1234)
 
     def test_mask(self):
         """Test that masking against the CCD bounding box works as expected.

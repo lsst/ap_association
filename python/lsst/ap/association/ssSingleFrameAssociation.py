@@ -64,25 +64,15 @@ class SsSingleFrameAssociationConnections(
     associatedSsSources = connTypes.Output(
         doc="ssSource record columns which can be computed as of association",
         name="ssSingleFrameAssociatedSources",
-        storageClass="DataFrame",
+        storageClass="ArrowAstropy",
         dimensions=("instrument", "visit", "detector"),
     )
-
-    def __init__(self, *, config=None):
-        super().__init__(config=config)
 
 
 class SsSingleFrameAssociationConfig(pipeBase.PipelineTaskConfig,
                                      pipelineConnections=SsSingleFrameAssociationConnections):
     """Config for DiaPipelineTask.
     """
-    validBands = pexConfig.ListField(
-        dtype=str,
-        default=["u", "g", "r", "i", "z", "y"],
-        doc="List of bands that are valid for AP processing. To process a "
-            "band not on this list, the appropriate band specific columns "
-            "must be added to the Apdb schema in dax_apdb.",
-    )
     solarSystemAssociator = pexConfig.ConfigurableField(
         target=SolarSystemAssociationTask,
         doc="Task used to associate DiaSources with SolarSystemObjects.",
@@ -140,7 +130,7 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
             Results struct with components.
 
             - ``associatedSsSources`` : Catalog of ssSource records.
-              (`pandas.DataFrame`)
+              (`astropy.table.Table`)
 
         Raises
         ------
@@ -165,7 +155,7 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
 
         Returns
         -------
-        associatedSsSources : `pandas.DataFrame`
+        associatedSsSources : `astropy.table.Table`
             Table of new ssSources after association.
         """
         sourceTable = sourceTable.asAstropy()
