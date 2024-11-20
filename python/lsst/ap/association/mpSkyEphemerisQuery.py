@@ -81,6 +81,11 @@ class MPSkyEphemerisQueryConfig(
         doc="Time in seconds to wait for mpSky request before failing ",
         default=1.0
     )
+    mpSkyFallbackURL = pexConfig.Field(
+        dtype=str,
+        doc="mpSky default URL if MP_SKY_URL environment variable unset",
+        default="http://sdfiana014.sdf.slac.stanford.edu:3666/ephemerides/"
+    )
 
 
 class MPSkyEphemerisQueryTask(PipelineTask):
@@ -132,7 +137,7 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         expMidPointEPOCH = getMidpointFromTimespan(timespan, allowUnbounded=False).mjd
 
         # MPSky service query
-        mpSkyURL = os.environ.get('MP_SKY_URL', '')
+        mpSkyURL = os.environ.get('MP_SKY_URL', self.config.mpSkyFallbackURL)
         mpSkySsObjects = self._mpSkyConeSearch(expCenter, expMidPointEPOCH,
                                                expRadius + self.config.queryBufferRadiusDegrees, mpSkyURL)
         return Struct(
