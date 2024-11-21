@@ -60,6 +60,7 @@ class SsSingleFrameAssociationConnections(
         name="preloaded_SsObjects",
         storageClass="DataFrame",
         dimensions=("instrument", "group", "detector"),
+        minimum=0,
     )
     associatedSsSources = connTypes.Output(
         doc="ssSource record columns which can be computed as of association",
@@ -109,7 +110,7 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
             exposure,
             sourceTable,
             band,
-            solarSystemObjectTable):
+            solarSystemObjectTable=None):
         """Process DiaSources and DiaObjects.
 
         Load previous DiaObjects and their DiaSource history. Calibrate the
@@ -137,8 +138,11 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
         RuntimeError
             Raised if duplicate DiaObjects or duplicate DiaSources are found.
         """
-        # Associate DiaSources with DiaObjects
-        associatedSsSources = self.associateSources(sourceTable, solarSystemObjectTable, exposure)
+        if solarSystemObjectTable is None:
+            associatedSsSources = None
+        else:
+            # Associate DiaSources with DiaObjects
+            associatedSsSources = self.associateSources(sourceTable, solarSystemObjectTable, exposure)
 
         return pipeBase.Struct(associatedSsSources=associatedSsSources)
 
