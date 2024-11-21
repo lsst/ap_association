@@ -55,8 +55,8 @@ class SsSingleFrameAssociationConnections(
         dimensions=("instrument", "visit", "detector"),
     )
     solarSystemObjectTable = connTypes.Input(
-        doc="Catalog of SolarSolarSystem objects expected to be observable in "
-            "this detectorVisit.",
+        doc="Optional catalog of SolarSolarSystem objects expected to be"
+            "observable in this detectorVisit.",
         name="preloaded_SsObjects",
         storageClass="DataFrame",
         dimensions=("instrument", "group", "detector"),
@@ -120,10 +120,14 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
 
         Parameters
         ----------
+        exposure : `lsst.afw.image.ExposureF`
+            Calibrated exposure with wcs and midpoint time.
+        diaSourceTable : `pandas.DataFrame`
+            Newly detected sources.
         band : `str`
             The band in which the new DiaSources were detected.
-        solarSystemObjectTable : `pandas.DataFrame`
-            Preloaded Solar System objects expected to be visible in the image, or None.
+        solarSystemObjectTable : `pandas.DataFrame` or `None`
+            Preloaded Solar System objects expected to be visible in the image.
 
         Returns
         -------
