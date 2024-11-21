@@ -123,7 +123,7 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
         band : `str`
             The band in which the new DiaSources were detected.
         solarSystemObjectTable : `pandas.DataFrame`
-            Preloaded Solar System objects expected to be visible in the image.
+            Preloaded Solar System objects expected to be visible in the image, or None.
 
         Returns
         -------
@@ -139,12 +139,11 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
             Raised if duplicate DiaObjects or duplicate DiaSources are found.
         """
         if solarSystemObjectTable is None:
-            associatedSsSources = None
+            raise pipeBase.NoWorkFound("No ephemerides to associate. Skipping ssSingleFrameAssociation.")
         else:
             # Associate DiaSources with DiaObjects
             associatedSsSources = self.associateSources(sourceTable, solarSystemObjectTable, exposure)
-
-        return pipeBase.Struct(associatedSsSources=associatedSsSources)
+            return pipeBase.Struct(associatedSsSources=associatedSsSources)
 
     @timeMethod
     def associateSources(self, sourceTable, solarSystemObjectTable, exposure):
