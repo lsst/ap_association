@@ -55,11 +55,12 @@ class SsSingleFrameAssociationConnections(
         dimensions=("instrument", "visit", "detector"),
     )
     solarSystemObjectTable = connTypes.Input(
-        doc="Catalog of SolarSolarSystem objects expected to be observable in "
-            "this detectorVisit.",
+        doc="Optional catalog of SolarSolarSystem objects expected to be"
+            "observable in this detectorVisit.",
         name="preloaded_SsObjects",
         storageClass="DataFrame",
         dimensions=("instrument", "group", "detector"),
+        minimum=0,
     )
     associatedSsSources = connTypes.Output(
         doc="ssSource record columns which can be computed as of association",
@@ -109,7 +110,7 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
             exposure,
             sourceTable,
             band,
-            solarSystemObjectTable):
+            solarSystemObjectTable=None):
         """Process DiaSources and DiaObjects.
 
         Load previous DiaObjects and their DiaSource history. Calibrate the
@@ -119,9 +120,13 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
 
         Parameters
         ----------
+        exposure : `lsst.afw.image.ExposureF`
+            Calibrated exposure with wcs and midpoint time.
+        diaSourceTable : `pandas.DataFrame`
+            Newly detected sources.
         band : `str`
             The band in which the new DiaSources were detected.
-        solarSystemObjectTable : `pandas.DataFrame`
+        solarSystemObjectTable : `pandas.DataFrame` or `None`
             Preloaded Solar System objects expected to be visible in the image.
 
         Returns
@@ -137,10 +142,12 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
         RuntimeError
             Raised if duplicate DiaObjects or duplicate DiaSources are found.
         """
-        # Associate DiaSources with DiaObjects
-        associatedSsSources = self.associateSources(sourceTable, solarSystemObjectTable, exposure)
-
-        return pipeBase.Struct(associatedSsSources=associatedSsSources)
+        if solarSystemObjectTable is None:
+            raise pipeBase.NoWorkFound("No ephemerides to associate. Skipping ssSingleFrameAssociation.")
+        else:
+            # Associate DiaSources with DiaObjects
+            associatedSsSources = self.associateSources(sourceTable, solarSystemObjectTable, exposure)
+            return pipeBase.Struct(associatedSsSources=associatedSsSources)
 
     @timeMethod
     def associateSources(self, sourceTable, solarSystemObjectTable, exposure):
