@@ -68,6 +68,12 @@ class SsSingleFrameAssociationConnections(
         storageClass="ArrowAstropy",
         dimensions=("instrument", "visit", "detector"),
     )
+    unassociatedObjects = connTypes.Output(
+        doc="Expected locations of an ssObject with no source",
+        name="ssSingleFrameUnassociatedObjects",
+        storageClass="ArrowAstropy",
+        dimensions=("instrument", "visit", "detector"),
+    )
 
 
 class SsSingleFrameAssociationConfig(pipeBase.PipelineTaskConfig,
@@ -146,8 +152,10 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
             raise pipeBase.NoWorkFound("No ephemerides to associate. Skipping ssSingleFrameAssociation.")
         else:
             # Associate DiaSources with DiaObjects
-            associatedSsSources = self.associateSources(sourceTable, solarSystemObjectTable, exposure)
-            return pipeBase.Struct(associatedSsSources=associatedSsSources)
+            associatedSsSources, unassociatedObjects = self.associateSources(sourceTable,
+                                                                             solarSystemObjectTable, exposure)
+            return pipeBase.Struct(associatedSsSources=associatedSsSources,
+                                   unassociatedObjects=unassociatedObjects)
 
     @timeMethod
     def associateSources(self, sourceTable, solarSystemObjectTable, exposure):
@@ -170,5 +178,5 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
         sourceTable['dec'] = sourceTable['coord_dec'].to(deg).value
         ssoAssocResult = self.solarSystemAssociator.run(sourceTable.to_pandas(),
                                                         solarSystemObjectTable, exposure)
-        associatedSsSources = ssoAssocResult.ssSourceData
-        return associatedSsSources
+        self.log.info(str(dir(ssoAssocResult)))
+        return ssoAssocResult.ssSourceData, ssoAssocResult.unAssocSsObjects
