@@ -178,5 +178,4 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
         sourceTable['dec'] = sourceTable['coord_dec'].to(deg).value
         ssoAssocResult = self.solarSystemAssociator.run(sourceTable.to_pandas(),
                                                         solarSystemObjectTable, exposure)
-        self.log.info(str(dir(ssoAssocResult)))
         return ssoAssocResult.ssSourceData, ssoAssocResult.unAssocSsObjects

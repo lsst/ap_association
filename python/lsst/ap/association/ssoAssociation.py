@@ -130,7 +130,6 @@ class SolarSystemAssociationTask(pipeBase.Task):
         if nSolarSystemObjects <= 0:
             return self._return_empty(diaSourceCatalog, maskedObjects)
 
-        self.log.info("Attempting to associate %d objects...", nSolarSystemObjects)
         maxRadius = np.deg2rad(self.config.maxDistArcSeconds / 3600)
 
         # Transform DIA RADEC coordinates to unit sphere xyz for tree building.
@@ -249,7 +248,6 @@ class SolarSystemAssociationTask(pipeBase.Task):
         return vectors
 
     def _return_empty(self, diaSourceCatalog, emptySolarSystemObjects):
-        self.log.info(str(type(diaSourceCatalog)))
         self.log.info("No SolarSystemObjects found in detector bounding box.")
         return pipeBase.Struct(
             ssoAssocDiaSources=Table(names=diaSourceCatalog.columns),
