@@ -637,6 +637,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 toAssociate.append(ssoAssocResult.ssoAssocDiaSources)
             nTotalSsObjects = ssoAssocResult.nTotalSsObjects
             nAssociatedSsObjects = ssoAssocResult.nAssociatedSsObjects
+            self.metadata['nExpectedSsObjects'] = nTotalSsObjects
+            self.metadata['nAssociatedSsObjects'] = nAssociatedSsObjects
             associatedSsSources = ssoAssocResult.ssSourceData
         else:
             # Create new DiaObjects from unassociated diaSources.
