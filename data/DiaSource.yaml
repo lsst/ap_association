@@ -261,7 +261,7 @@ funcs:
     iyyPSF:
         functor: ConvertPixelSqToArcsecondsSq
         args:
-            - slot_PsfShape_xy
+            - slot_PsfShape_yy
             - base_LocalWcs_CDMatrix_1_1
             - base_LocalWcs_CDMatrix_1_2
             - base_LocalWcs_CDMatrix_2_1
