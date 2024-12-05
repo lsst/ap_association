@@ -637,8 +637,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 toAssociate.append(ssoAssocResult.ssoAssocDiaSources)
             nTotalSsObjects = ssoAssocResult.nTotalSsObjects
             nAssociatedSsObjects = ssoAssocResult.nAssociatedSsObjects
-            self.metadata['nExpectedSsObjects'] = nTotalSsObjects
-            self.metadata['nAssociatedSsObjects'] = nAssociatedSsObjects
+            self.metadata['numTotalSolarSystemObjects'] = nTotalSsObjects
+            self.metadata['numAssociatedSsObjects'] = nAssociatedSsObjects
             associatedSsSources = ssoAssocResult.ssSourceData
         else:
             # Create new DiaObjects from unassociated diaSources.
@@ -859,11 +859,11 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         nAssociatedSsObjects : `int`
             Number of successfully associated SolarSystemObjects.
         """
-        self.metadata.add('numUpdatedDiaObjects', nUpdatedDiaObjects)
-        self.metadata.add('numUnassociatedDiaObjects', nUnassociatedDiaObjects)
-        self.metadata.add('numNewDiaObjects', nNewDiaObjects)
-        self.metadata.add('numTotalSolarSystemObjects', nTotalSsObjects)
-        self.metadata.add('numAssociatedSsObjects', nAssociatedSsObjects)
+        self.metadata['numUpdatedDiaObjects'] = nUpdatedDiaObjects
+        self.metadata['numUnassociatedDiaObjects'] = nUnassociatedDiaObjects
+        self.metadata['numNewDiaObjects'] = nNewDiaObjects
+        self.metadata['numTotalSolarSystemObjects'] = nTotalSsObjects
+        self.metadata['numAssociatedSsObjects'] = nAssociatedSsObjects
 
     def purgeDiaObjects(self, bbox, wcs, diaObjCat, diaObjectIds=None, buffer=0):
         """Drop diaObjects that are outside the exposure bounding box.
