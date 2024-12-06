@@ -334,6 +334,13 @@ class PackageAlertsTask(pipeBase.Task):
         if self.config.doProduceAlerts:
             self.log.info("Producing alerts to %s.", self.kafkaTopic)
             self.produceAlerts(alerts, visit, detector, midpoint_unix, exposure_time)
+        else:
+            # Fill values for the metadata so that downstream metrics don't crash
+            self.metadata['visit_midpoint'] = midpoint_unix
+            self.metadata['produce_end_timestamp'] = -1
+            self.metadata['produce_start_timestamp'] = -1
+            self.metadata['alert_timing_since_shutter_close'] = -1
+            self.metadata['total_alerts'] = -1
 
         if self.config.doWriteAlerts:
             avro_path = os.path.join(self.config.alertWriteLocation, f"{visit}_{detector}.avro")
