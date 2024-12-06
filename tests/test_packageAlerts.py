@@ -441,7 +441,9 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         producer_instance = mock_producer.return_value
         producer_instance.produce = Mock()
         producer_instance.flush = Mock()
-        packageAlerts.produceAlerts(alerts, VISIT, DETECTOR)
+        unix_midpoint = self.exposure.visitInfo.date.toAstropy().tai.unix
+        exposure_time = self.exposure.visitInfo.exposureTime
+        packageAlerts.produceAlerts(alerts, VISIT, DETECTOR, unix_midpoint, exposure_time)
 
         self.assertEqual(mock_server_check.call_count, 1)
         self.assertEqual(producer_instance.produce.call_count, len(alerts))
@@ -470,11 +472,13 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         patcher = patch("builtins.open")
         patch_open = patcher.start()
         alerts = [mock_alert(1), mock_alert(2), mock_alert(3)]
+        unix_midpoint = self.exposure.visitInfo.date.toAstropy().tai.unix
+        exposure_time = self.exposure.visitInfo.exposureTime
 
         producer_instance = mock_producer.return_value
         producer_instance.produce = Mock(side_effect=mock_produce)
         producer_instance.flush = Mock()
-        packageAlerts.produceAlerts(alerts, VISIT, DETECTOR)
+        packageAlerts.produceAlerts(alerts, VISIT, DETECTOR, unix_midpoint, exposure_time)
 
         self.assertEqual(mock_server_check.call_count, 1)
         self.assertEqual(producer_instance.produce.call_count, len(alerts))
