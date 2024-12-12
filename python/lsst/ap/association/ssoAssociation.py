@@ -146,21 +146,28 @@ class SolarSystemAssociationTask(pipeBase.Task):
         # fancier later.
         ssSourceData = []
         ras, decs, expected_ras, expected_decs = [], [], [], []
+        raErrs, decErrs, raDecCovs, mags, magErrs = [], [], [], [], []
         diaSourceCatalog["ssObjectId"] = 0
         for index, ssObject in maskedObjects.iterrows():
             ssoVect = self._radec_to_xyz(ssObject["ra"], ssObject["dec"])
             # Which DIA Sources fall within r?
             dist, idx = tree.query(ssoVect, distance_upper_bound=maxRadius)
             if len(idx) == 1 and np.isfinite(dist[0]):
+                index = diaSourceCatalog.index[idx[0]]
                 nFound += 1
-                diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "ssObjectId"] = ssObject["ssObjectId"]
+                diaSourceCatalog.loc[index, "ssObjectId"] = ssObject["ssObjectId"]
                 ssSourceData.append(ssObject[["ssObjectId", "obs_position_x", "obs_position_y",
                                               "obs_position_z", "obj_position_x", "obj_position_y",
                                               "obj_position_z"]].values)
-                dia_ra = diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "ra"]
-                dia_dec = diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "dec"]
+                dia_ra = diaSourceCatalog.loc[index, "ra"]
+                dia_dec = diaSourceCatalog.loc[index, "dec"]
                 ras.append(dia_ra)
                 decs.append(dia_dec)
+                raErrs.append(diaSourceCatalog.loc[index, "coord_raErr"])
+                decErrs.append(diaSourceCatalog.loc[index, "coord_decErr"])
+                raDecCovs.append(diaSourceCatalog.loc[index, "coord_ra_dec_Cov"])
+                mags.append(diaSourceCatalog.loc[index, "base_PsfFlux_mag"])
+                magErrs.append(diaSourceCatalog.loc[index, "base_PsfFlux_magErr"])
                 expected_ras.append(ssObject["ra"])
                 expected_decs.append(ssObject["dec"])
 
@@ -173,6 +180,11 @@ class SolarSystemAssociationTask(pipeBase.Task):
         ssSourceData["dec"] = decs
         ssSourceData["expected_ra"] = expected_ras
         ssSourceData["expected_dec"] = expected_decs
+        ssSourceData["raErr"] = raErrs
+        ssSourceData["decErr"] = decErrs
+        ssSourceData["coord_ra_dec_Cov"] = raDecCovs
+        ssSourceData["base_PsfFlux_mag"] = mags
+        ssSourceData["base_PsfFlux_magErr"] = magErrs
 
         return pipeBase.Struct(
             ssoAssocDiaSources=diaSourceCatalog[assocMask].reset_index(drop=True),

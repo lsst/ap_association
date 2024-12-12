@@ -70,9 +70,24 @@ class TestSolarSystemAssociation(unittest.TestCase):
                                    inplace=True,)
         self.testDiaSources.loc[:, "ra"] = np.rad2deg(self.testDiaSources["ra"])
         self.testDiaSources.loc[:, "dec"] = np.rad2deg(self.testDiaSources["dec"])
-        self.testDiaSources = pd.concat([self.testDiaSources,
-                                        pd.DataFrame([[45, 45]], columns=["ra", "dec"])],
-                                        ignore_index=True)
+        self.testDiaSources = pd.concat(
+            [
+                self.testDiaSources,
+                pd.DataFrame(
+                    [[45, 45, 0.01, 0.01, 0.00001, 20, 0.1]],
+                    columns=[
+                        "ra",
+                        "dec",
+                        "coord_raErr",
+                        "coord_decErr",
+                        "coord_ra_dec_Cov",
+                        "base_PsfFlux_mag",
+                        "base_PsfFlux_magErr",
+                    ],
+                ),
+            ],
+            ignore_index=True,
+        )
         self.testDiaSources["ssObjectId"] = 0
 
         # Grab a subset to treat as solar system objects
