@@ -262,7 +262,7 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     )
     doSolarSystemAssociation = pexConfig.Field(
         dtype=bool,
-        default=False,
+        default=True,
         doc="Process SolarSystem objects through the pipeline.",
     )
     solarSystemAssociator = pexConfig.ConfigurableField(

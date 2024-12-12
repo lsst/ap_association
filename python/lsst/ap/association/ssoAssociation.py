@@ -243,7 +243,6 @@ class SolarSystemAssociationTask(pipeBase.Task):
         return vectors
 
     def _return_empty(self, diaSourceCatalog):
-        self.log.info(str(type(diaSourceCatalog)))
         self.log.info("No SolarSystemObjects found in detector bounding box.")
         return pipeBase.Struct(
             ssoAssocDiaSources=Table(names=diaSourceCatalog.columns),
