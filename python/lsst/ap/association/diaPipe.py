@@ -130,6 +130,13 @@ class DiaPipelineConnections(
         storageClass="DataFrame",
         dimensions=("instrument", "visit", "detector"),
     )
+    unassociatedSsObjects = connTypes.Output(
+        doc="Expected locations of an ssObject with no source",
+        name="ssUnassociatedObjects",
+        storageClass="ArrowAstropy",
+        dimensions=("instrument", "visit", "detector"),
+    )
+
     diaForcedSources = connTypes.Output(
         doc="Optional output storing the forced sources computed at the diaObject positions.",
         name="{fakesType}{coaddName}Diff_diaForcedSrc",
@@ -156,6 +163,7 @@ class DiaPipelineConnections(
             self.inputs.remove("solarSystemObjectTable")
         if (not config.doWriteAssociatedSources) or (not config.doSolarSystemAssociation):
             self.outputs.remove("associatedSsSources")
+            self.outputs.remove("unassociatedSsObjects")
 
     def adjustQuantum(self, inputs, outputs, label, dataId):
         """Override to make adjustments to `lsst.daf.butler.DatasetRef` objects
@@ -473,9 +481,10 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diaObjects = preloadedDiaObjects
 
         # Associate DiaSources with DiaObjects
-        associatedDiaSources, newDiaObjects, associatedSsSources = self.associateDiaSources(
-            diaSourceTable, solarSystemObjectTable, diffIm, diaObjects
-        )
+
+        (
+            associatedDiaSources, newDiaObjects, associatedSsSources, unassociatedSsObjects
+        ) = self.associateDiaSources(diaSourceTable, solarSystemObjectTable, diffIm, diaObjects)
 
         # Merge associated diaSources
         mergedDiaSourceHistory, mergedDiaObjects, updatedDiaObjectIds = self.mergeAssociatedCatalogs(
@@ -556,7 +565,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                associatedDiaSources=associatedDiaSources,
                                diaForcedSources=diaForcedSources,
                                diaObjects=diaCalResult.diaObjectCat,
-                               associatedSsSources=associatedSsSources
+                               associatedSsSources=associatedSsSources,
+                               unassociatedSsObjects=unassociatedSsObjects
                                )
 
     def createNewDiaObjects(self, unAssocDiaSources):
@@ -637,15 +647,15 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 toAssociate.append(ssoAssocResult.ssoAssocDiaSources)
             nTotalSsObjects = ssoAssocResult.nTotalSsObjects
             nAssociatedSsObjects = ssoAssocResult.nAssociatedSsObjects
-            self.metadata['numTotalSolarSystemObjects'] = nTotalSsObjects
-            self.metadata['numAssociatedSsObjects'] = nAssociatedSsObjects
-            associatedSsSources = ssoAssocResult.ssSourceData
+            associatedSsSources = ssoAssocResult.associatedSsSources
+            unassociatedSsObjects = ssoAssocResult.unassociatedSsObjects
         else:
             # Create new DiaObjects from unassociated diaSources.
             createResults = self.createNewDiaObjects(assocResults.unAssocDiaSources)
             nTotalSsObjects = 0
             nAssociatedSsObjects = 0
             associatedSsSources = None
+            unassociatedSsObjects = None
         if len(assocResults.matchedDiaSources) > 0:
             toAssociate.append(assocResults.matchedDiaSources)
         toAssociate.append(createResults.diaSources)
@@ -661,7 +671,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                       assocResults.nUnassociatedDiaObjects,
                       createResults.nNewDiaObjects,
                       )
-        return (associatedDiaSources, createResults.newDiaObjects, associatedSsSources)
+        return (associatedDiaSources, createResults.newDiaObjects, associatedSsSources, unassociatedSsObjects)
 
     @timeMethod
     def mergeAssociatedCatalogs(self, preloadedDiaSources, associatedDiaSources, diaObjects, newDiaObjects,
