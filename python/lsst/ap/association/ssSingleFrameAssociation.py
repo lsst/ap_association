@@ -68,6 +68,12 @@ class SsSingleFrameAssociationConnections(
         storageClass="ArrowAstropy",
         dimensions=("instrument", "visit", "detector"),
     )
+    unassociatedSsObjects = connTypes.Output(
+        doc="Expected locations of an ssObject with no source",
+        name="ssSingleFrameUnassociatedObjects",
+        storageClass="ArrowAstropy",
+        dimensions=("instrument", "visit", "detector"),
+    )
 
 
 class SsSingleFrameAssociationConfig(pipeBase.PipelineTaskConfig,
@@ -122,7 +128,7 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
         ----------
         exposure : `lsst.afw.image.ExposureF`
             Calibrated exposure with wcs and midpoint time.
-        diaSourceTable : `pandas.DataFrame`
+        sourceTable : `lsst.afw.table.SourceCatalog`
             Newly detected sources.
         band : `str`
             The band in which the new DiaSources were detected.
@@ -133,9 +139,16 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
         -------
         results : `lsst.pipe.base.Struct`
             Results struct with components.
+            - ``ssoAssocDiaSources`` : DiaSources that were associated with
+              solar system objects in this visit. (`Astropy.table.Table`)
+            - ``unAssocDiaSources`` : Set of DiaSources that were not
+              associated with any solar system object. (`pandas.DataFrame`)
+            - ``nTotalSsObjects`` : Total number of SolarSystemObjects
+              contained in the CCD footprint. (`int`)
+            - ``nAssociatedSsObjects`` : Number of SolarSystemObjects
+              that were associated with DiaSources.
+            - ``ssSourceData`` : ssSource table data. (`Astropy.table.Table`)
 
-            - ``associatedSsSources`` : Catalog of ssSource records.
-              (`astropy.table.Table`)
 
         Raises
         ------
@@ -144,31 +157,10 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
         """
         if solarSystemObjectTable is None:
             raise pipeBase.NoWorkFound("No ephemerides to associate. Skipping ssSingleFrameAssociation.")
-        else:
-            # Associate DiaSources with DiaObjects
-            associatedSsSources = self.associateSources(sourceTable, solarSystemObjectTable, exposure)
-            return pipeBase.Struct(associatedSsSources=associatedSsSources)
 
-    @timeMethod
-    def associateSources(self, sourceTable, solarSystemObjectTable, exposure):
-        """Associate single-image sources with ssObjects.
-
-        Parameters
-        ----------
-        sourceTable : `pandas.DataFrame`
-            Newly detected sources.
-        solarSystemObjectTable : `pandas.DataFrame`
-            Preloaded Solar System objects expected to be visible in the image.
-
-        Returns
-        -------
-        associatedSsSources : `astropy.table.Table`
-            Table of new ssSources after association.
-        """
+        # Associate DiaSources with DiaObjects
         sourceTable = sourceTable.asAstropy()
         sourceTable['ra'] = sourceTable['coord_ra'].to(deg).value
         sourceTable['dec'] = sourceTable['coord_dec'].to(deg).value
-        ssoAssocResult = self.solarSystemAssociator.run(sourceTable.to_pandas(),
-                                                        solarSystemObjectTable, exposure)
-        associatedSsSources = ssoAssocResult.ssSourceData
-        return associatedSsSources
+        return self.solarSystemAssociator.run(sourceTable.to_pandas(),
+                                              solarSystemObjectTable, exposure)

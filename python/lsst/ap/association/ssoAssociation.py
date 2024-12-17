@@ -92,12 +92,12 @@ class SolarSystemAssociationTask(pipeBase.Task):
             - ``nTotalSsObjects`` : Total number of SolarSystemObjects
               contained in the CCD footprint. (`int`)
             - ``nAssociatedSsObjects`` : Number of SolarSystemObjects
-              that were associated with DiaSources.
+              that were associated with DiaSources. (`int`)
             - ``ssSourceData`` : ssSource table data. (`Astropy.table.Table`)
         """
         nSolarSystemObjects = len(solarSystemObjects)
         if nSolarSystemObjects <= 0:
-            return self._return_empty(diaSourceCatalog)
+            return self._return_empty(diaSourceCatalog, solarSystemObjects)
 
         mjd_midpoint = exposure.visitInfo.date.toAstropy().tai.mjd
         ref_time = mjd_midpoint - solarSystemObjects["tmin"].values[0]
@@ -125,12 +125,11 @@ class SolarSystemAssociationTask(pipeBase.Task):
         maskedObjects = self._maskToCcdRegion(
             solarSystemObjects,
             exposure,
-            solarSystemObjects["Err(arcsec)"].max())
+            solarSystemObjects["Err(arcsec)"].max()).copy()
         nSolarSystemObjects = len(maskedObjects)
         if nSolarSystemObjects <= 0:
-            return self._return_empty(diaSourceCatalog)
+            return self._return_empty(diaSourceCatalog, maskedObjects)
 
-        self.log.info("Attempting to associate %d objects...", nSolarSystemObjects)
         maxRadius = np.deg2rad(self.config.maxDistArcSeconds / 3600)
 
         # Transform DIA RADEC coordinates to unit sphere xyz for tree building.
@@ -163,9 +162,15 @@ class SolarSystemAssociationTask(pipeBase.Task):
                 decs.append(dia_dec)
                 expected_ras.append(ssObject["ra"])
                 expected_decs.append(ssObject["dec"])
+                maskedObjects.loc[index, 'associated'] = True
+            else:
+                maskedObjects.loc[index, 'associated'] = False
 
-        self.log.info("Successfully associated %d SolarSystemObjects.", nFound)
-        assocMask = diaSourceCatalog["ssObjectId"] != 0
+        self.log.info("Successfully associated %d / %d SolarSystemObjects.", nFound, nSolarSystemObjects)
+        self.metadata['nAssociatedSsObjects'] = nFound
+        self.metadata['nExpectedSsObjects'] = nSolarSystemObjects
+        assocSourceMask = diaSourceCatalog["ssObjectId"] != 0
+        unAssocObjectMask = np.logical_not(maskedObjects['associated'].values)
         ssSourceData = pd.DataFrame(ssSourceData, columns=["ssObjectId", "obs_position_x", "obs_position_y",
                                                            "obs_position_z", "obj_position_x",
                                                            "obj_position_y", "obj_position_z"])
@@ -173,13 +178,18 @@ class SolarSystemAssociationTask(pipeBase.Task):
         ssSourceData["dec"] = decs
         ssSourceData["expected_ra"] = expected_ras
         ssSourceData["expected_dec"] = expected_decs
-
+        unassociatedObjects = maskedObjects[unAssocObjectMask].drop(columns=['obs_x_poly', 'obs_y_poly',
+                                                                             'obs_z_poly', 'obj_x_poly',
+                                                                             'obj_y_poly', 'obj_z_poly',
+                                                                             'obs_position', 'obj_position',
+                                                                             'associated'])
         return pipeBase.Struct(
-            ssoAssocDiaSources=diaSourceCatalog[assocMask].reset_index(drop=True),
-            unAssocDiaSources=diaSourceCatalog[~assocMask].reset_index(drop=True),
+            ssoAssocDiaSources=diaSourceCatalog[assocSourceMask].reset_index(drop=True),
+            unAssocDiaSources=diaSourceCatalog[~assocSourceMask].reset_index(drop=True),
             nTotalSsObjects=nSolarSystemObjects,
             nAssociatedSsObjects=nFound,
-            ssSourceData=Table.from_pandas(ssSourceData))
+            associatedSsSources=Table.from_pandas(ssSourceData),
+            unassociatedSsObjects=Table.from_pandas(unassociatedObjects))
 
     def _maskToCcdRegion(self, solarSystemObjects, exposure, marginArcsec):
         """Mask the input SolarSystemObjects to only those in the exposure
@@ -242,13 +252,39 @@ class SolarSystemAssociationTask(pipeBase.Task):
 
         return vectors
 
-    def _return_empty(self, diaSourceCatalog):
+    def _return_empty(self, diaSourceCatalog, emptySolarSystemObjects):
+        """Return a struct with all appropriate empty values for no SSO associations.
+
+        Parameters
+        ----------
+        diaSourceCatalog : `pandas.DataFrame`
+            Used for column names
+        emptySolarSystemObjects : `pandas.DataFrame`
+            Used for column names.
+        Returns
+        -------
+        results : `lsst.pipe.base.Struct`
+            Results struct with components.
+            - ``ssoAssocDiaSources`` : Empty. (`pandas.DataFrame`)
+            - ``unAssocDiaSources`` : Input DiaSources. (`pandas.DataFrame`)
+            - ``nTotalSsObjects`` : Zero. (`int`)
+            - ``nAssociatedSsObjects`` : Zero.
+            - ``associatedSsSources`` : Empty. (`Astropy.table.Table`)
+            - ``unassociatedSsObjects`` : Empty. (`Astropy.table.Table`)
+
+
+        Raises
+        ------
+        RuntimeError
+            Raised if duplicate DiaObjects or duplicate DiaSources are found.
+        """
         self.log.info("No SolarSystemObjects found in detector bounding box.")
         return pipeBase.Struct(
-            ssoAssocDiaSources=Table(names=diaSourceCatalog.columns),
+            ssoAssocDiaSources=pd.DataFrame(columns=diaSourceCatalog.columns),
             unAssocDiaSources=diaSourceCatalog,
             nTotalSsObjects=0,
             nAssociatedSsObjects=0,
-            ssSourceData=Table(names=["ssObjectId", "ra", "dec", "obs_position", "obj_position",
-                                      "residual_ras", "residual_decs"])
+            associatedSsSources=Table(names=["ssObjectId", "ra", "dec", "obs_position", "obj_position",
+                                      "residual_ras", "residual_decs"]),
+            unassociatedSsObjects=Table(names=emptySolarSystemObjects.columns)
         )
