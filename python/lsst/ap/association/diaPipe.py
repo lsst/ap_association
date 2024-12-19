@@ -566,7 +566,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                diaForcedSources=diaForcedSources,
                                diaObjects=diaCalResult.diaObjectCat,
                                associatedSsSources=associatedSsSources,
-                               unassociatedSsObjects=unassociatedSsObjects
+                               unassociatedSsObjects=unassociatedSsObjects,
                                )
 
     def createNewDiaObjects(self, unAssocDiaSources):
