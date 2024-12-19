@@ -131,7 +131,7 @@ class DiaPipelineConnections(
         dimensions=("instrument", "visit", "detector"),
     )
     unassociatedSsObjects = connTypes.Output(
-        doc="Expected locations of an ssObject with no source",
+        doc="Expected locations of an ssObject with no associated diaSource",
         name="ssUnassociatedObjects",
         storageClass="ArrowAstropy",
         dimensions=("instrument", "visit", "detector"),
