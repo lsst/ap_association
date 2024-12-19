@@ -97,7 +97,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
         """
         nSolarSystemObjects = len(solarSystemObjects)
         if nSolarSystemObjects <= 0:
-            return self._return_empty(diaSourceCatalog)
+            return self._return_empty(diaSourceCatalog, solarSystemObjects)
 
         mjd_midpoint = exposure.visitInfo.date.toAstropy().tai.mjd
         ref_time = mjd_midpoint - solarSystemObjects["tmin"].values[0]
@@ -125,12 +125,11 @@ class SolarSystemAssociationTask(pipeBase.Task):
         maskedObjects = self._maskToCcdRegion(
             solarSystemObjects,
             exposure,
-            solarSystemObjects["Err(arcsec)"].max())
+            solarSystemObjects["Err(arcsec)"].max()).copy()
         nSolarSystemObjects = len(maskedObjects)
         if nSolarSystemObjects <= 0:
-            return self._return_empty(diaSourceCatalog)
+            return self._return_empty(diaSourceCatalog, maskedObjects)
 
-        self.log.info("Attempting to associate %d objects...", nSolarSystemObjects)
         maxRadius = np.deg2rad(self.config.maxDistArcSeconds / 3600)
 
         # Transform DIA RADEC coordinates to unit sphere xyz for tree building.
@@ -147,6 +146,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
         ssSourceData = []
         ras, decs, expected_ras, expected_decs = [], [], [], []
         diaSourceCatalog["ssObjectId"] = 0
+        associated = []
         for index, ssObject in maskedObjects.iterrows():
             ssoVect = self._radec_to_xyz(ssObject["ra"], ssObject["dec"])
             # Which DIA Sources fall within r?
@@ -163,8 +163,14 @@ class SolarSystemAssociationTask(pipeBase.Task):
                 decs.append(dia_dec)
                 expected_ras.append(ssObject["ra"])
                 expected_decs.append(ssObject["dec"])
+                associated.append(True)
+            else:
+                associated.append(False)
 
-        self.log.info("Successfully associated %d SolarSystemObjects.", nFound)
+        self.log.info("Successfully associated %d / %d SolarSystemObjects.", nFound, nSolarSystemObjects)
+        self.metadata['nAssociatedSsObjects'] = nFound
+        self.metadata['nExpectedSsObjects'] = nSolarSystemObjects
+        maskedObjects['associated'] = associated
         assocMask = diaSourceCatalog["ssObjectId"] != 0
         ssSourceData = pd.DataFrame(ssSourceData, columns=["ssObjectId", "obs_position_x", "obs_position_y",
                                                            "obs_position_z", "obj_position_x",
@@ -179,7 +185,8 @@ class SolarSystemAssociationTask(pipeBase.Task):
             unAssocDiaSources=diaSourceCatalog[~assocMask].reset_index(drop=True),
             nTotalSsObjects=nSolarSystemObjects,
             nAssociatedSsObjects=nFound,
-            ssSourceData=Table.from_pandas(ssSourceData))
+            associatedSsSources=Table.from_pandas(ssSourceData),
+            unassociatedSsObjects=maskedObjects[~maskedObjects['associated']])
 
     def _maskToCcdRegion(self, solarSystemObjects, exposure, marginArcsec):
         """Mask the input SolarSystemObjects to only those in the exposure
@@ -242,13 +249,14 @@ class SolarSystemAssociationTask(pipeBase.Task):
 
         return vectors
 
-    def _return_empty(self, diaSourceCatalog):
+    def _return_empty(self, diaSourceCatalog, emptySolarSystemObjects):
         self.log.info("No SolarSystemObjects found in detector bounding box.")
         return pipeBase.Struct(
             ssoAssocDiaSources=Table(names=diaSourceCatalog.columns),
             unAssocDiaSources=diaSourceCatalog,
             nTotalSsObjects=0,
             nAssociatedSsObjects=0,
-            ssSourceData=Table(names=["ssObjectId", "ra", "dec", "obs_position", "obj_position",
-                                      "residual_ras", "residual_decs"])
+            associatedSsSources=Table(names=["ssObjectId", "ra", "dec", "obs_position", "obj_position",
+                                      "residual_ras", "residual_decs"]),
+            unassociatedSsObjects=Table(names=emptySolarSystemObjects.columns)
         )
