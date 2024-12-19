@@ -197,7 +197,10 @@ funcs:
         args: ip_diffim_DipoleFit_chi2dof
     isDipole:
         functor: Column
-        args: ip_diffim_DipoleFit_flag_classification
+        args: ip_diffim_DipoleFit_classification
+    dipoleFitAttempted:
+        functor: Column
+        args: ip_diffim_DipoleFit_classificationAttempted
     dipoleNdata:
         functor: Column
         args: ip_diffim_DipoleFit_nData
