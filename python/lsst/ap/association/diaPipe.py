@@ -1163,7 +1163,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             mergedCatalog = pd.concat([originalCatalog], sort=True)
         return mergedCatalog.loc[:, originalCatalog.columns]
 
-    def updateObjectTable(self, diaObjects, diaSources):
+    @staticmethod
+    def updateObjectTable(diaObjects, diaSources):
         """Update the diaObject table with the new diaSource records.
 
         Parameters
