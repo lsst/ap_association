@@ -20,3 +20,4 @@ pytest_session.txt
 tests/.tests
 version.py
 _build.*
+python/*.dist-info/
