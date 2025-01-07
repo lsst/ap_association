@@ -1,5 +1,5 @@
 .cache
-.coverage
+.coverage*
 .pytest_cache
 .sconsign.dblite
 .sconf_temp
@@ -20,3 +20,4 @@ pytest_session.txt
 tests/.tests
 version.py
 _build.*
+python/*.dist-info/
