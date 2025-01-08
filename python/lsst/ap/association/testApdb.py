@@ -240,7 +240,11 @@ class TestApdbTask(LoadDiaCatalogsTask):
         # Merge associated diaSources
         mergedDiaObjects = self.mergeAssociatedCatalogs(associatedDiaSources, diaObjects, newDiaObjects)
         diaForcedSources = self.runForcedMeasurement(mergedDiaObjects, idGenForced, visit, detector)
-        DiaPipelineTask.writeToApdb(self, mergedDiaObjects, associatedDiaSources, diaForcedSources)
+        finalDiaObjects = convertTableToSdmSchema(self.schema, mergedDiaObjects, tableName="DiaObject")
+        finalDiaSources = convertTableToSdmSchema(self.schema, associatedDiaSources, tableName="DiaSource")
+        finalDiaForcedSources = convertTableToSdmSchema(self.schema, diaForcedSources,
+                                                        tableName="DiaForcedSource")
+        DiaPipelineTask.writeToApdb(self, finalDiaObjects, finalDiaSources, finalDiaForcedSources)
 
     def createDiaSources(self, raVals, decVals, idGenerator, diaObjectIds=None):
         """Create diaSources with the supplied coordinates.
