@@ -789,7 +789,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diaForcedSourceStore)
         self.log.info("APDB updated.")
 
-    def testDataFrameIndex(self, df):
+    @staticmethod
+    def testDataFrameIndex(df):
         """Test the sorted DataFrame index for duplicates.
 
         Wrapped as a separate function to allow for mocking of the this task
