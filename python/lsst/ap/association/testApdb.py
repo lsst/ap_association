@@ -219,7 +219,7 @@ class TestApdbTask(LoadDiaCatalogsTask):
         xS, yS = randomCircleXY(self.radiusMax, self.config.sky_seed, n=self.nReal)
         diaObjIds = np.arange(self.config.objId_start, self.nReal + self.config.objId_start)
         inds = (xS > x0) & (xS < x1) & (yS > y0) & (yS < y1)
-        nSim = np.count_nonzero(inds)
+        nSim = np.sum(inds)
         diaObjIds = diaObjIds[inds]
         self.log.info(f"{nSim} sources made the spatial cut")
         diaSourcesReal = self.createDiaSources(*stereographicXY2RaDec(xS[inds], yS[inds]),
