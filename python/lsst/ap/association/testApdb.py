@@ -53,6 +53,14 @@ class TestApdbConnections(
     """Butler connections for TestApdbTask.
     """
 
+    apdbTestMarker = pipeBase.connectionTypes.Output(
+        doc="Marker dataset storing the configuration of the Apdb for each "
+            "visit/detector. Used to signal the completion of the pipeline.",
+        name="apdbTest_marker",
+        storageClass="Config",
+        dimensions=("instrument", "visit", "detector"),
+    )
+
 
 class TestApdbConfig(pipeBase.PipelineTaskConfig,
                      pipelineConnections=TestApdbConnections):
@@ -244,6 +252,8 @@ class TestApdbTask(LoadDiaCatalogsTask):
         finalDiaForcedSources = convertTableToSdmSchema(self.schema, diaForcedSources,
                                                         tableName="DiaForcedSource")
         DiaPipelineTask.writeToApdb(self, finalDiaObjects, finalDiaSources, finalDiaForcedSources)
+        marker = pexConfig.Config()
+        return pipeBase.Struct(apdbTestMarker=marker)
 
     def createDiaSources(self, raVals, decVals, idGenerator, diaObjectIds=None):
         """Create diaSources with the supplied coordinates.
