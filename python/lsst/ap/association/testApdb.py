@@ -160,10 +160,9 @@ class TestApdbTask(LoadDiaCatalogsTask):
         # Calculate the angle from the pole needed to cover `survey_area` square
         #  degrees of a sphere
         if sphereFraction < 0.5:
-            thetaMax = np.arcsin(survey_area/(2*np.pi))
+            declinationMax = np.arcsin(1 - survey_area/(2*np.pi))
         else:
-            thetaMax = np.pi - np.arcsin((4*np.pi - survey_area)/(2*np.pi))
-        declinationMax = np.pi/2 - thetaMax
+            declinationMax = np.pi - np.arcsin(1 - (4*np.pi - survey_area)/(2*np.pi))
         self.radiusMax = stereographicRaDec2XY(0, declinationMax)[0]
         self.nReal = int(self.config.survey_area*self.config.stellar_density)
         # Radius of the focal plane, in radians
