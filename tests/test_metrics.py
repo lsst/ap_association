@@ -304,7 +304,6 @@ class TestTotalUnassociatedObjects(ApdbMetricTestCase):
     @classmethod
     def makeTask(cls):
         config = TotalUnassociatedDiaObjectsMetricTask.ConfigClass()
-        config.doReadMarker = False
         config.apdb_config_url = "dummy/path.yaml"
         return TotalUnassociatedDiaObjectsMetricTask(config=config)
 

@@ -60,7 +60,6 @@ class TestDiaPipelineTask(unittest.TestCase):
     @classmethod
     def _makeDefaultConfig(cls, config_file, **kwargs):
         config = DiaPipelineTask.ConfigClass()
-        config.doConfigureApdb = False
         config.apdb_config_url = config_file
         config.update(**kwargs)
         return config
@@ -88,41 +87,6 @@ class TestDiaPipelineTask(unittest.TestCase):
         self.config_file = tempfile.NamedTemporaryFile()
         self.addCleanup(self.config_file.close)
         apdb_config.save(self.config_file.name)
-
-    # TODO: remove on DM-43419
-    def testConfigApdbNestedOk(self):
-        config = DiaPipelineTask.ConfigClass()
-        config.doConfigureApdb = True
-        with self.assertWarns(FutureWarning):
-            config.apdb.db_url = "sqlite://"
-            config.freeze()
-            config.validate()
-
-    # TODO: remove on DM-43419
-    def testConfigApdbNestedInvalid(self):
-        config = DiaPipelineTask.ConfigClass()
-        config.doConfigureApdb = True
-        # Don't set db_url
-        config.freeze()
-        with self.assertRaises(pexConfig.FieldValidationError):
-            config.validate()
-
-    # TODO: remove on DM-43419
-    def testConfigApdbFileOk(self):
-        config = DiaPipelineTask.ConfigClass()
-        config.doConfigureApdb = False
-        config.apdb_config_url = "some/file/path.yaml"
-        config.freeze()
-        config.validate()
-
-    # TODO: remove on DM-43419
-    def testConfigApdbFileInvalid(self):
-        config = DiaPipelineTask.ConfigClass()
-        config.doConfigureApdb = False
-        # Don't set apdb_config_url
-        config.freeze()
-        with self.assertRaises(pexConfig.FieldValidationError):
-            config.validate()
 
     def testRun(self):
         """Test running while creating and packaging alerts.
