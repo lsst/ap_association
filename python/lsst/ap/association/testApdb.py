@@ -147,7 +147,7 @@ class TestApdbTask(LoadDiaCatalogsTask):
         self.run(**inputs)
         # Note that the commented-out code below is intentionally omitted
         # We don't want this to write anything to the Butler!
-        # butlerQC.put(outputs, outputRefs)
+        butlerQC.put(pipeBase.Struct(), outputRefs)
 
     def prepareSurvey(self):
         """Prepare survey parameters common to all observations
