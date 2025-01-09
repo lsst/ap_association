@@ -121,6 +121,12 @@ class TestApdbConfig(pipeBase.PipelineTaskConfig,
         default=1,
         doc="Starting diaObject ID number of real objects.",
     )
+    maximum_table_length = pexConfig.Field(
+        dtype=int,
+        default=65535,
+        doc="Maximum length of tables allowed to be written in one operation"
+            " to the Cassandra APDB",
+    )
 
     idGenerator = DetectorVisitIdGeneratorConfig.make_field()
     idGeneratorFakes = DetectorVisitIdGeneratorConfig.make_field()
@@ -233,10 +239,17 @@ class TestApdbTask(LoadDiaCatalogsTask):
         diaSourcesReal = self.createDiaSources(*stereographicXY2RaDec(xS[inds], yS[inds]),
                                                idGenerator=idGen,
                                                diaObjectIds=diaObjIds)
-        diaSourcesBogus = self.createDiaSources(*self.generateFalseDetections(x0, x1, y0, y1, nSim,
-                                                                              seed=seed),
+
+        rng = np.random.RandomState(seed)
+        scale = nSim*self.config.false_positive_ratio/self.config.false_positive_variability
+        nBogus = int(rng.standard_gamma(scale)*self.config.false_positive_variability)
+
+        if nSim + nBogus > self.config.maximum_table_length:
+            nBogus = self.config.maximum_table_length - nSim
+        diaSourcesBogus = self.createDiaSources(*self.generateFalseDetections(x0, x1, y0, y1, nBogus, seed),
                                                 idGenerator=idGenFakes)
         diaSourcesRaw = pd.concat([diaSourcesReal, diaSourcesBogus])
+
         diaSources = convertTableToSdmSchema(self.schema, diaSourcesRaw, tableName="DiaSource")
 
         diaObjects = self.loadDiaObjects(region, self.schema)
@@ -289,7 +302,7 @@ class TestApdbTask(LoadDiaCatalogsTask):
         # diaSources.set_index("diaSourceId", inplace=True)
         return diaSources
 
-    def generateFalseDetections(self, x0, x1, y0, y1, nReal, seed=None):
+    def generateFalseDetections(self, x0, x1, y0, y1, nBogus, seed):
         """Generate random coordinates within the ranges provided.
 
         Parameters
@@ -302,9 +315,9 @@ class TestApdbTask(LoadDiaCatalogsTask):
             Minimum projected y coordinate
         y1 : `int`
             Maximum projected y coordinate
-        nReal : `int`
-            Number of "real" sources within the region.
-        seed : `int`, optional
+        nBogus : `int`
+            Number of "fake" sources within the region.
+        rng : `int`
             Seed value for the random number generator to provide repeatable results.
 
         Returns
@@ -312,10 +325,8 @@ class TestApdbTask(LoadDiaCatalogsTask):
         ra, dec : `numpy.ndarray`
             Coordinates matching the randomly generated locations.
         """
-        rng = np.random.RandomState(seed)
-        scale = nReal*self.config.false_positive_ratio/self.config.false_positive_variability
-        nBogus = int(rng.standard_gamma(scale)*self.config.false_positive_variability)
         self.log.info(f"Simulating {nBogus} false detections within region.")
+        rng = np.random.RandomState(seed)
         x = rng.random_sample(nBogus)*(x1 - x0) + x0
         y = rng.random_sample(nBogus)*(y1 - y0) + y0
         return stereographicXY2RaDec(x, y)
