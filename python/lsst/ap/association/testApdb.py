@@ -31,6 +31,7 @@ __all__ = ("TestApdbConfig",
 import numpy as np
 import pandas as pd
 
+from lsst.daf.base import DateTime
 import lsst.dax.apdb as daxApdb
 import lsst.geom
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, IdGenerator
@@ -43,6 +44,7 @@ from lsst.ap.association.utils import (
     readSchemaFromApdb,
     column_dtype,
     make_empty_catalog,
+    dropEmptyColumns,
 )
 import lsst.sphgeom
 
@@ -244,8 +246,6 @@ class TestApdbTask(LoadDiaCatalogsTask):
         scale = nSim*self.config.false_positive_ratio/self.config.false_positive_variability
         nBogus = int(rng.standard_gamma(scale)*self.config.false_positive_variability)
 
-        if nSim + nBogus > self.config.maximum_table_length:
-            nBogus = self.config.maximum_table_length - nSim
         diaSourcesBogus = self.createDiaSources(*self.generateFalseDetections(x0, x1, y0, y1, nBogus, seed),
                                                 idGenerator=idGenFakes)
         diaSourcesRaw = pd.concat([diaSourcesReal, diaSourcesBogus])
@@ -256,15 +256,32 @@ class TestApdbTask(LoadDiaCatalogsTask):
 
         # Associate DiaSources with DiaObjects
         associatedDiaSources, newDiaObjects = self.associateDiaSources(diaSources, diaObjects)
+        # Merge new and preloaded diaObjects
+        mergedDiaObjects = self.mergeAssociatedCatalogs(diaObjects, newDiaObjects)
 
-        # Merge associated diaSources
-        mergedDiaObjects = self.mergeAssociatedCatalogs(associatedDiaSources, diaObjects, newDiaObjects)
-        diaForcedSources = self.runForcedMeasurement(mergedDiaObjects, idGenForced, visit, detector)
-        finalDiaObjects = convertTableToSdmSchema(self.schema, mergedDiaObjects, tableName="DiaObject")
-        finalDiaSources = convertTableToSdmSchema(self.schema, associatedDiaSources, tableName="DiaSource")
-        finalDiaForcedSources = convertTableToSdmSchema(self.schema, diaForcedSources,
-                                                        tableName="DiaForcedSource")
-        DiaPipelineTask.writeToApdb(self, finalDiaObjects, finalDiaSources, finalDiaForcedSources)
+        nObj = len(mergedDiaObjects)
+        nSrc = len(associatedDiaSources)
+        dateTime = DateTime.now().toAstropy()
+        ind = 0
+        # Note that nObj must always be equal to or greater than nSrc
+        for start in range(0, nObj, self.config.maximum_table_length):
+            end = min(start + self.config.maximum_table_length, nObj)
+            diaObjectsChunk = mergedDiaObjects.iloc[start:end]
+            self.log.info(f"Writing diaObject chunk {ind} of length {len(diaObjectsChunk)} to the APDB")
+            srcEnd = min(start + self.config.maximum_table_length, nSrc)
+            if srcEnd <= start:
+                finalDiaSources = None
+            else:
+                diaSourcesChunk = associatedDiaSources.iloc[start:srcEnd]
+                finalDiaSources = convertTableToSdmSchema(self.schema, diaSourcesChunk, tableName="DiaSource")
+                self.log.info(f"Writing diaOSource chunk {ind} of length {len(diaSourcesChunk)} to the APDB")
+            diaForcedSources = self.runForcedMeasurement(diaObjectsChunk, idGenForced, visit, detector)
+
+            finalDiaObjects = convertTableToSdmSchema(self.schema, diaObjectsChunk, tableName="DiaObject")
+            finalDiaForcedSources = convertTableToSdmSchema(self.schema, diaForcedSources,
+                                                            tableName="DiaForcedSource")
+            self.writeToApdb(finalDiaObjects, finalDiaSources, finalDiaForcedSources, dateTime)
+            ind += 1
         marker = pexConfig.Config()
         return pipeBase.Struct(apdbTestMarker=marker)
 
@@ -456,14 +473,12 @@ class TestApdbTask(LoadDiaCatalogsTask):
                                newDiaObjects=newDiaObjects,
                                nNewDiaObjects=len(newDiaObjects))
 
-    def mergeAssociatedCatalogs(self, associatedDiaSources, diaObjects, newDiaObjects):
+    def mergeAssociatedCatalogs(self, diaObjects, newDiaObjects):
         """Merge the associated diaObjects to their previous history.
         Also update the index of associatedDiaSources in place.
 
         Parameters
         ----------
-        associatedDiaSources : `pandas.DataFrame`
-            Associated DiaSources with DiaObjects.
         diaObjects : `pandas.DataFrame`
             Table of  DiaObjects from preloaded DiaObjects.
         newDiaObjects : `pandas.DataFrame`
@@ -538,6 +553,38 @@ class TestApdbTask(LoadDiaCatalogsTask):
                                                    tableName="DiaForcedSource",
                                                    )
         return diaForcedSources
+
+    def writeToApdb(self, updatedDiaObjects, associatedDiaSources, diaForcedSources, dateTime):
+        """Write to the Alert Production Database (Apdb).
+
+        Store DiaSources, updated DiaObjects, and DiaForcedSources in the
+        Alert Production Database (Apdb).
+
+        Parameters
+        ----------
+        updatedDiaObjects : `pandas.DataFrame`
+            Catalog of updated DiaObjects.
+        associatedDiaSources : `pandas.DataFrame`
+            Associated DiaSources with DiaObjects.
+        diaForcedSources : `pandas.DataFrame`
+            Catalog of calibrated forced photometered fluxes on both the
+            difference and direct images at DiaObject locations.
+        """
+        # Store DiaSources, updated DiaObjects, and DiaForcedSources in the
+        # Apdb.
+        # Drop empty columns that are nullable in the APDB.
+        diaObjectStore = dropEmptyColumns(self.schema, updatedDiaObjects, tableName="DiaObject")
+        if associatedDiaSources is None:
+            diaSourceStore = None
+        else:
+            diaSourceStore = dropEmptyColumns(self.schema, associatedDiaSources, tableName="DiaSource")
+        diaForcedSourceStore = dropEmptyColumns(self.schema, diaForcedSources, tableName="DiaForcedSource")
+        self.apdb.store(
+            dateTime,
+            diaObjectStore,
+            diaSourceStore,
+            diaForcedSourceStore)
+        self.log.info("APDB updated.")
 
 
 def randomCircleXY(radius, seed, n=None):
