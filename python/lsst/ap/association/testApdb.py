@@ -558,6 +558,8 @@ class TestApdbTask(LoadDiaCatalogsTask):
         preserveColumns.append("visit")
         baseForcedSources["detector"] = detector
         preserveColumns.append("detector")
+        baseForcedSources["band"] = 'noBand'
+        preserveColumns.append("band")
         baseForcedSources["diaForcedSourceId"] = [idGenerator() for i in range(len(baseForcedSources))]
         preserveColumns.append("diaForcedSourceId")
         # Fill the forced sources for each diaObject with random data
@@ -595,10 +597,7 @@ class TestApdbTask(LoadDiaCatalogsTask):
             diaSourceStore = None
         else:
             diaSourceStore = dropEmptyColumns(self.schema, associatedDiaSources, tableName="DiaSource")
-        if diaForcedSources.empty:
-            diaForcedSourceStore = None
-        else:
-            diaForcedSourceStore = dropEmptyColumns(self.schema, diaForcedSources, tableName="DiaForcedSource")
+        diaForcedSourceStore = dropEmptyColumns(self.schema, diaForcedSources, tableName="DiaForcedSource")
         self.apdb.store(
             dateTime,
             diaObjectStore,
