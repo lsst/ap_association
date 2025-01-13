@@ -595,7 +595,10 @@ class TestApdbTask(LoadDiaCatalogsTask):
             diaSourceStore = None
         else:
             diaSourceStore = dropEmptyColumns(self.schema, associatedDiaSources, tableName="DiaSource")
-        diaForcedSourceStore = dropEmptyColumns(self.schema, diaForcedSources, tableName="DiaForcedSource")
+        if diaForcedSources.empty:
+            diaForcedSourceStore = None
+        else:
+            diaForcedSourceStore = dropEmptyColumns(self.schema, diaForcedSources, tableName="DiaForcedSource")
         self.apdb.store(
             dateTime,
             diaObjectStore,
