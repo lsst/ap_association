@@ -590,22 +590,17 @@ class TestApdbTask(LoadDiaCatalogsTask):
         # Store DiaSources, updated DiaObjects, and DiaForcedSources in the
         # Apdb.
         # Drop empty columns that are nullable in the APDB.
-        # diaObjectStore = dropEmptyColumns(self.schema, updatedDiaObjects, tableName="DiaObject")
-        # if associatedDiaSources is None:
-        #     diaSourceStore = None
-        # else:
-        #     diaSourceStore = dropEmptyColumns(self.schema, associatedDiaSources, tableName="DiaSource")
-        # diaForcedSourceStore = dropEmptyColumns(self.schema, diaForcedSources, tableName="DiaForcedSource")
-        # self.apdb.store(
-        #     dateTime,
-        #     diaObjectStore,
-        #     diaSourceStore,
-        #     diaForcedSourceStore)
+        diaObjectStore = dropEmptyColumns(self.schema, updatedDiaObjects, tableName="DiaObject")
+        if associatedDiaSources is None:
+            diaSourceStore = None
+        else:
+            diaSourceStore = dropEmptyColumns(self.schema, associatedDiaSources, tableName="DiaSource")
+        diaForcedSourceStore = dropEmptyColumns(self.schema, diaForcedSources, tableName="DiaForcedSource")
         self.apdb.store(
             dateTime,
-            updatedDiaObjects,
-            associatedDiaSources,
-            diaForcedSources)
+            diaObjectStore,
+            diaSourceStore,
+            diaForcedSourceStore)
         self.log.info("APDB updated.")
 
 
