@@ -262,10 +262,13 @@ class TestApdbTask(LoadDiaCatalogsTask):
             self.log.info(f"diaObjects contain {np.min(nDiaSources)} to {np.max(nDiaSources)} diaSources")
 
         # Associate DiaSources with DiaObjects
-        associatedDiaSources, newDiaObjects = self.associateDiaSources(diaSources, diaObjects,
-                                                                       diaSourcesReal, diaSourcesBogus)
+        associatedDiaSources, newDiaObjects, associatedDiaObjects = self.associateDiaSources(diaSources,
+                                                                                             diaObjects,
+                                                                                             diaSourcesReal,
+                                                                                             diaSourcesBogus,
+                                                                                             )
         # Merge new and preloaded diaObjects
-        mergedDiaObjects = self.mergeAssociatedCatalogs(diaObjects, newDiaObjects)
+        mergedDiaObjects = self.mergeAssociatedCatalogs(associatedDiaObjects, newDiaObjects)
 
         nObj = len(mergedDiaObjects)
         nSrc = len(associatedDiaSources)
@@ -402,6 +405,7 @@ class TestApdbTask(LoadDiaCatalogsTask):
                                matchedDiaSources=matchedDiaSources.reset_index(),
                                nUpdatedDiaObjects=len(matchedDiaSources),
                                nUnassociatedDiaObjects=len(unAssocDiaSources),
+                               matchedDiaObjects=diaObjects.loc[matchedDiaObjectInds],
                                )
 
     def associateDiaSources(self, diaSourceTable, diaObjects, diaSourcesReal, diaSourcesBogus):
@@ -452,7 +456,7 @@ class TestApdbTask(LoadDiaCatalogsTask):
                                         "diaSourceId"],
                                        drop=False,
                                        inplace=True)
-        return (associatedDiaSources, createResults.newDiaObjects)
+        return (associatedDiaSources, createResults.newDiaObjects, assocResults.matchedDiaObjects)
 
     def createNewDiaObjects(self, unAssocDiaSources):
         """Loop through the set of DiaSources and create new DiaObjects
