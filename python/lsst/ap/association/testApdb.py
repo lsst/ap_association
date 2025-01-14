@@ -358,7 +358,7 @@ class TestApdbTask(LoadDiaCatalogsTask):
         y = rng.random_sample(nBogus)*(y1 - y0) + y0
         return stereographicXY2RaDec(x, y)
 
-    def simpleMatch(self, diaSourceTable, diaObjects):
+    def simpleMatch(self, diaSourceTable, diaObjects, updateNdiaSources=True):
         """Match by pre-defined ID.
 
         Parameters
@@ -392,7 +392,7 @@ class TestApdbTask(LoadDiaCatalogsTask):
         unAssocDiaSources = diaSourceTable.loc[diaSourceTable.index.difference(diaObjects.index)]
 
         matchedDiaObjectInds = diaObjects.index.intersection(diaSourceTable.index)
-        if not diaObjects.empty:
+        if not diaObjects.empty and updateNdiaSources:
             nDiaSources = diaObjects.loc[matchedDiaObjectInds, "nDiaSources"] + 1
             diaObjects.loc[matchedDiaObjectInds, "nDiaSources"] = nDiaSources
 
@@ -422,9 +422,9 @@ class TestApdbTask(LoadDiaCatalogsTask):
             Table of new DiaObjects after association.
         """
         # Associate new DiaSources with existing DiaObjects.
-        assocResults = self.simpleMatch(diaSourceTable, diaObjects)
-        assocReal = self.simpleMatch(diaSourcesReal, diaObjects)
-        assocBogus = self.simpleMatch(diaSourcesBogus, diaObjects)
+        assocResults = self.simpleMatch(diaSourceTable, diaObjects, updateNdiaSources=True)
+        assocReal = self.simpleMatch(diaSourcesReal, diaObjects, updateNdiaSources=False)
+        assocBogus = self.simpleMatch(diaSourcesBogus, diaObjects, updateNdiaSources=False)
 
         toAssociate = []
 
