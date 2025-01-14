@@ -30,6 +30,7 @@ __all__ = ("TestApdbConfig",
 
 import numpy as np
 import pandas as pd
+import time
 
 from lsst.daf.base import DateTime
 import lsst.dax.apdb as daxApdb
@@ -210,6 +211,7 @@ class TestApdbTask(LoadDiaCatalogsTask):
         idGeneratorForced : `lsst.meas.base,IdGenerator`, optional
             ID generator for forced sources at existing diaObject locations.
         """
+        t_sim0 = time.time()
         idGen = idGenerator.make_table_id_factory()
         idGenFakes = idGeneratorFakes.make_table_id_factory()
         idGenForced = idGeneratorForced.make_table_id_factory()
@@ -252,11 +254,16 @@ class TestApdbTask(LoadDiaCatalogsTask):
         diaSourcesRaw = pd.concat([diaSourcesReal, diaSourcesBogus])
 
         diaSources = convertTableToSdmSchema(self.schema, diaSourcesRaw, tableName="DiaSource")
+        t_sim1 = time.time()
+        self.log.info("Simulated source timing: %.2fs", t_sim1 - t_sim0)
 
+        t_load0 = time.time()
         diaObjects = self.loadDiaObjects(region.getBoundingCircle(), self.schema)
+        t_load1 = time.time()
+        self.log.info("diaObject load timing: %.2fs", t_load1 - t_load0)
 
         if diaObjects.empty:
-            self.log.info(f"diaObjects contain 0 diaSources (empty)")
+            self.log.info("diaObjects contain 0 diaSources (empty)")
         else:
             nDiaSources = diaObjects.nDiaSources
             self.log.info(f"diaObjects contain {np.min(nDiaSources)} to {np.max(nDiaSources)} diaSources")
@@ -274,18 +281,21 @@ class TestApdbTask(LoadDiaCatalogsTask):
         nSrc = len(associatedDiaSources)
         dateTime = DateTime.now().toAstropy()
         ind = 0
+        t_write0 = time.time()
         # Note that nObj must always be equal to or greater than nSrc
         for start in range(0, nObj, self.config.maximum_table_length):
             end = min(start + self.config.maximum_table_length, nObj)
             diaObjectsChunk = mergedDiaObjects.iloc[start:end]
-            self.log.info(f"Writing diaObject chunk {ind} of length {len(diaObjectsChunk)} to the APDB")
+            nObjChunk = len(diaObjectsChunk)
+            self.log.info(f"Writing diaObject chunk {ind} of length {nObjChunk} (of {nObj}) to the APDB")
             srcEnd = min(start + self.config.maximum_table_length, nSrc)
             if srcEnd <= start:
                 finalDiaSources = None
             else:
                 diaSourcesChunk = associatedDiaSources.iloc[start:srcEnd]
                 finalDiaSources = convertTableToSdmSchema(self.schema, diaSourcesChunk, tableName="DiaSource")
-                self.log.info(f"Writing diaSource chunk {ind} of length {len(diaSourcesChunk)} to the APDB")
+                nSrcChunk = len(diaSourcesChunk)
+                self.log.info(f"Writing diaSource chunk {ind} of length {nSrcChunk} (of {nSrc}) to the APDB")
             diaForcedSources = self.runForcedMeasurement(diaObjectsChunk, idGenForced, visit, detector)
 
             finalDiaObjects = convertTableToSdmSchema(self.schema, diaObjectsChunk, tableName="DiaObject")
@@ -295,6 +305,8 @@ class TestApdbTask(LoadDiaCatalogsTask):
                           f" {len(finalDiaForcedSources)} to the APDB")
             self.writeToApdb(finalDiaObjects, finalDiaSources, finalDiaForcedSources, dateTime)
             ind += 1
+        t_write1 = time.time()
+        self.log.info("APDB write timing: %.2fs", t_write1 - t_write0)
         marker = pexConfig.Config()
         return pipeBase.Struct(apdbTestMarker=marker)
 
