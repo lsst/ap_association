@@ -558,7 +558,7 @@ class TestApdbTask(LoadDiaCatalogsTask):
         preserveColumns.append("visit")
         baseForcedSources["detector"] = detector
         preserveColumns.append("detector")
-        baseForcedSources["band"] = 'noBand'
+        baseForcedSources["band"] = 'A'
         preserveColumns.append("band")
         baseForcedSources["diaForcedSourceId"] = [idGenerator() for i in range(len(baseForcedSources))]
         preserveColumns.append("diaForcedSourceId")
