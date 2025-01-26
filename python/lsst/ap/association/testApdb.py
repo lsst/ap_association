@@ -99,7 +99,7 @@ class TestApdbConfig(pipeBase.PipelineTaskConfig,
     )
     false_positive_ratio = pexConfig.Field(
         dtype=float,
-        default=4,
+        default=2,
         doc="Average ratio of false detections to real sources."
             "These will be detected in random locations.",
     )
