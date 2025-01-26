@@ -509,8 +509,12 @@ class TestApdbTask(LoadDiaCatalogsTask):
             # For this simulation we are using custom diaObjectIds,
             #  and need to preserve them.
             # unAssocDiaSources["diaObjectId"] = unAssocDiaSources["diaSourceId"]
-            newDiaObjects = convertTableToSdmSchema(self.schema, unAssocDiaSources,
-                                                    tableName="DiaObject")
+            preserveColumns = ["diaObjectId", ]
+
+            # Fill the forced sources for each diaObject with random data
+            newDiaObjects = fillRandomTable(self.schema, unAssocDiaSources,
+                                            tableName="DiaObject",
+                                            preserveColumns=preserveColumns)
             newDiaObjects.nDiaSources = 1
         return pipeBase.Struct(diaSources=unAssocDiaSources,
                                newDiaObjects=newDiaObjects,
