@@ -243,6 +243,8 @@ class TestApdbTask(LoadDiaCatalogsTask):
         self.log.info(f"{nSim} sources made the spatial cut")
         diaSourcesReal = self.createDiaSources(*stereographicXY2RaDec(xS[inds], yS[inds]),
                                                idGenerator=idGen,
+                                               visit=visit,
+                                               detector=detector,
                                                diaObjectIds=diaObjIds)
 
         rng = np.random.RandomState(seed)
@@ -250,6 +252,8 @@ class TestApdbTask(LoadDiaCatalogsTask):
         nBogus = int(rng.standard_gamma(scale)*self.config.false_positive_variability)
 
         diaSourcesBogus = self.createDiaSources(*self.generateFalseDetections(x0, x1, y0, y1, nBogus, seed),
+                                                visit=visit,
+                                                detector=detector,
                                                 idGenerator=idGenFakes)
         diaSourcesRaw = pd.concat([diaSourcesReal, diaSourcesBogus])
 
@@ -310,7 +314,7 @@ class TestApdbTask(LoadDiaCatalogsTask):
         marker = pexConfig.Config()
         return pipeBase.Struct(apdbTestMarker=marker)
 
-    def createDiaSources(self, raVals, decVals, idGenerator, diaObjectIds=None):
+    def createDiaSources(self, raVals, decVals, idGenerator, visit, detector, diaObjectIds=None):
         """Create diaSources with the supplied coordinates.
 
         Parameters
@@ -339,7 +343,14 @@ class TestApdbTask(LoadDiaCatalogsTask):
             diaObjectId = pd.Series(diaSourceId, name='diaObjectId')
         else:
             diaObjectId = pd.Series(diaObjectIds, name='diaObjectId')
-        diaSources = pd.concat([diaSourceId, diaObjectId, ra, dec], axis=1)
+        baseSources = pd.concat([diaSourceId, diaObjectId, ra, dec], axis=1)
+        baseSources["visit"] = visit
+        baseSources["detector"] = detector
+        preserveColumns = ["diaSourceId", "diaObjectId", "ra", "dec", "visit", "detector"]
+
+        diaSources = fillRandomTable(self.schema, baseSources,
+                                     tableName="DiaSource",
+                                     preserveColumns=preserveColumns)
         # Do *not* set the index to the diaSourceId. It will need to be diaObjectId for matching (later)
         # diaSources.set_index("diaSourceId", inplace=True)
         return diaSources
