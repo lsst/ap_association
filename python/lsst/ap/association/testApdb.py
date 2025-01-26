@@ -598,9 +598,6 @@ class TestApdbTask(LoadDiaCatalogsTask):
                                            tableName="DiaForcedSource",
                                            preserveColumns=preserveColumns)
         self.log.info(f"Updating {len(diaForcedSources)} diaForcedSources in the APDB")
-        diaForcedSources = convertTableToSdmSchema(self.schema, diaForcedSources,
-                                                   tableName="DiaForcedSource",
-                                                   )
         return diaForcedSources
 
     @timeMethod
@@ -761,4 +758,6 @@ def fillRandomTable(apdbSchema, sourceTable, tableName, preserveColumns=None):
             except (TypeError, ValueError):
                 dataInit = np.zeros(nSrc, dtype=column_dtype(columnDef.datatype))
             data[columnDef.name] = pd.Series(dataInit, index=sourceTable.index)
-    return pd.DataFrame(data)
+
+    df = convertTableToSdmSchema(apdbSchema, pd.DataFrame(data), tableName=tableName)
+    return df
