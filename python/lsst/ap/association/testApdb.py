@@ -346,7 +346,9 @@ class TestApdbTask(LoadDiaCatalogsTask):
         baseSources = pd.concat([diaSourceId, diaObjectId, ra, dec], axis=1)
         baseSources["visit"] = visit
         baseSources["detector"] = detector
-        preserveColumns = ["diaSourceId", "diaObjectId", "ra", "dec", "visit", "detector"]
+
+        baseSources["band"] = 'A'
+        preserveColumns = ["diaSourceId", "diaObjectId", "ra", "dec", "visit", "detector", "band"]
 
         diaSources = fillRandomTable(self.schema, baseSources,
                                      tableName="DiaSource",
