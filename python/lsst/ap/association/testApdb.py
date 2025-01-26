@@ -511,7 +511,9 @@ class TestApdbTask(LoadDiaCatalogsTask):
             # For this simulation we are using custom diaObjectIds,
             #  and need to preserve them.
             # unAssocDiaSources["diaObjectId"] = unAssocDiaSources["diaSourceId"]
-            preserveColumns = ["diaObjectId", ]
+            preserveColumns = ["diaObjectId", "nearbyLowzGal"]
+            # Needs to be set for correct database formatting
+            unAssocDiaSources["nearbyLowzGal"] = None
 
             # Fill the forced sources for each diaObject with random data
             newDiaObjects = fillRandomTable(self.schema, unAssocDiaSources,
