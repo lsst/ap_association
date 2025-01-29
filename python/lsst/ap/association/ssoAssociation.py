@@ -28,6 +28,7 @@ from astropy.table import Table
 from astropy.coordinates import SkyCoord
 import healpy as hp
 import numpy as np
+from numpy.polynomial.chebyshev import Chebyshev, chebval
 import pandas as pd
 from scipy.spatial import cKDTree
 
@@ -104,24 +105,63 @@ class SolarSystemAssociationTask(pipeBase.Task):
         ref_time = mjd_midpoint - solarSystemObjects["tmin"].values[0]
 
         solarSystemObjects['obs_position'] = solarSystemObjects.apply(lambda row: np.array([
-            np.polynomial.chebyshev.chebval(ref_time, row['obs_x_poly']),
-            np.polynomial.chebyshev.chebval(ref_time, row['obs_y_poly']),
-            np.polynomial.chebyshev.chebval(ref_time, row['obs_z_poly'])
+            chebval(ref_time, row['obs_x_poly']),
+            chebval(ref_time, row['obs_y_poly']),
+            chebval(ref_time, row['obs_z_poly'])
         ]), axis=1)
-
+        solarSystemObjects['obs_velocity'] = solarSystemObjects.apply(lambda row: np.array([
+            chebval(ref_time, Chebyshev(row['obs_x_poly']).deriv().coef),
+            chebval(ref_time, Chebyshev(row['obs_y_poly']).deriv().coef),
+            chebval(ref_time, Chebyshev(row['obs_z_poly']).deriv().coef),
+        ]), axis=1)
         solarSystemObjects['obj_position'] = solarSystemObjects.apply(lambda row: np.array([
-            np.polynomial.chebyshev.chebval(ref_time, row['obj_x_poly']),
-            np.polynomial.chebyshev.chebval(ref_time, row['obj_y_poly']),
-            np.polynomial.chebyshev.chebval(ref_time, row['obj_z_poly'])
+            chebval(ref_time, row['obj_x_poly']),
+            chebval(ref_time, row['obj_y_poly']),
+            chebval(ref_time, row['obj_z_poly'])
         ]), axis=1)
-
+        solarSystemObjects['obj_velocity'] = solarSystemObjects.apply(lambda row: np.array([
+            chebval(ref_time, Chebyshev(row['obj_x_poly']).deriv().coef),
+            chebval(ref_time, Chebyshev(row['obj_y_poly']).deriv().coef),
+            chebval(ref_time, Chebyshev(row['obj_z_poly']).deriv().coef),
+        ]), axis=1)
         vector = np.vstack(solarSystemObjects['obj_position'].values
                            - solarSystemObjects['obs_position'].values)
         solarSystemObjects[['ra', 'dec']] = np.vstack(hp.vec2ang(vector, lonlat=True)).T
         solarSystemObjects['obs_position_x'], solarSystemObjects['obs_position_y'], \
             solarSystemObjects['obs_position_z'] = np.array(list(solarSystemObjects['obs_position'].values)).T
-        solarSystemObjects['obj_position_x'], solarSystemObjects['obj_position_y'], \
-            solarSystemObjects['obj_position_z'] = np.array(list(solarSystemObjects['obj_position'].values)).T
+        solarSystemObjects['heliocentricX'], solarSystemObjects['heliocentricY'], \
+            solarSystemObjects['heliocentricZ'] = np.array(list(solarSystemObjects['obj_position'].values)).T
+        solarSystemObjects['obs_velocity_x'], solarSystemObjects['obs_velocity_y'], \
+            solarSystemObjects['obs_velocity_z'] = np.array(list(solarSystemObjects['obs_velocity'].values)).T
+        solarSystemObjects['heliocentricVX'], solarSystemObjects['heliocentricVY'], \
+            solarSystemObjects['heliocentricVZ'] = np.array(list(solarSystemObjects['obj_velocity'].values)).T
+        solarSystemObjects['topocentric_position'], solarSystemObjects['topocentric_velocity'] = (
+            solarSystemObjects['obj_position'] - solarSystemObjects['obs_position'],
+            solarSystemObjects['obj_velocity'] - solarSystemObjects['obs_velocity'],
+        )
+        solarSystemObjects['topocentricX'], solarSystemObjects['topocentricY'], \
+            solarSystemObjects['topocentricZ'] = (
+                np.array(list(solarSystemObjects['topocentric_position'].values)).T
+        )
+        solarSystemObjects['topocentricVX'], solarSystemObjects['topocentricVY'], \
+            solarSystemObjects['topocentricVZ'] = (
+                np.array(list(solarSystemObjects['topocentric_velocity'].values)).T
+        )
+        solarSystemObjects['heliocentricVX'], solarSystemObjects['heliocentricVY'], \
+            solarSystemObjects['heliocentricVZ'] = np.array(list(solarSystemObjects['obj_velocity'].values)).T
+        solarSystemObjects['heliocentricDist'], solarSystemObjects['topocentricDist'] = (
+            solarSystemObjects['obj_position'].apply(np.linalg.norm),
+            solarSystemObjects['topocentric_position'].apply(np.linalg.norm)
+        )
+        solarSystemObjects['phaseAngle'] = (
+            (solarSystemObjects['obj_position'] * solarSystemObjects['topocentric_position']
+             / solarSystemObjects['heliocentricDist'] / solarSystemObjects['topocentricDist'])
+            .apply(np.sum).apply(np.arccos).apply(np.degrees)
+        )
+
+        stateVectorColumns = ['heliocentricX', 'heliocentricY', 'heliocentricZ', 'heliocentricVX',
+                              'heliocentricVY', 'heliocentricVZ', 'topocentricX', 'topocentricY',
+                              'topocentricZ', 'topocentricVX', 'topocentricVY', 'topocentricVZ']
 
         maskedObjects = self._maskToCcdRegion(
             solarSystemObjects,
@@ -147,6 +187,9 @@ class SolarSystemAssociationTask(pipeBase.Task):
         ssSourceData = []
         ras, decs, residual_ras, residual_decs, dia_ids = [], [], [], [], []
         diaSourceCatalog["ssObjectId"] = 0
+        source_column = 'id'
+        if 'diaSourceId' in diaSourceCatalog.columns:
+            source_column = 'diaSourceId'
         for index, ssObject in maskedObjects.iterrows():
             ssoVect = self._radec_to_xyz(ssObject["ra"], ssObject["dec"])
             # Which DIA Sources fall within r?
@@ -154,12 +197,11 @@ class SolarSystemAssociationTask(pipeBase.Task):
             if len(idx) == 1 and np.isfinite(dist[0]):
                 nFound += 1
                 diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "ssObjectId"] = ssObject["ssObjectId"]
-                ssSourceData.append(ssObject[["ssObjectId", "obs_position_x", "obs_position_y",
-                                              "obs_position_z", "obj_position_x", "obj_position_y",
-                                              "obj_position_z"]].values)
+                ssSourceData.append(ssObject[["ssObjectId", "phaseAngle", "heliocentricDist",
+                                              "topocentricDist"] + stateVectorColumns].values)
                 dia_ra = diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "ra"]
                 dia_dec = diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "dec"]
-                dia_id = diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "diaSourceId"]
+                dia_id = diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], source_column]
                 ras.append(dia_ra)
                 decs.append(dia_dec)
                 dia_ids.append(dia_id)
@@ -174,24 +216,26 @@ class SolarSystemAssociationTask(pipeBase.Task):
         self.metadata['nExpectedSsObjects'] = nSolarSystemObjects
         assocSourceMask = diaSourceCatalog["ssObjectId"] != 0
         unAssocObjectMask = np.logical_not(maskedObjects['associated'].values)
-        ssSourceData = pd.DataFrame(ssSourceData, columns=["ssObjectId", "obs_position_x", "obs_position_y",
-                                                           "obs_position_z", "obj_position_x",
-                                                           "obj_position_y", "obj_position_z"])
+        ssSourceData = pd.DataFrame(ssSourceData,
+                                    columns=[
+                                        "ssObjectId", "phaseAngle", "heliocentricDist", "topocentricDist"
+                                    ] + stateVectorColumns)
         ssSourceData["ra"] = ras
         ssSourceData["dec"] = decs
         ssSourceData["residualRa"] = residual_ras
         ssSourceData["residualDec"] = residual_decs
-        ssSourceData["diaSourceId"] = dia_ids
+        ssSourceData[source_column] = dia_ids
         coords = SkyCoord(ra=ssSourceData['ra'].values * u.deg, dec=ssSourceData['dec'].values * u.deg)
-        ssSourceData['galacitcL'] = coords.galactic.l.deg
+        ssSourceData['galacticL'] = coords.galactic.l.deg
         ssSourceData['galacticB'] = coords.galactic.b.deg
         ssSourceData['eclipticLambda'] = coords.barycentrictrueecliptic.lon.deg
         ssSourceData['eclipticBeta'] = coords.barycentrictrueecliptic.lat.deg
-        unassociatedObjects = maskedObjects[unAssocObjectMask].drop(columns=['obs_x_poly', 'obs_y_poly',
-                                                                             'obs_z_poly', 'obj_x_poly',
-                                                                             'obj_y_poly', 'obj_z_poly',
-                                                                             'obs_position', 'obj_position',
-                                                                             'associated'])
+        columns_to_drop = [
+            "obs_position", "obs_velocity", "obj_position", "obj_velocity", "topocentric_position",
+            "topocentric_velocity", "obs_x_poly", "obs_y_poly", "obs_z_poly", "obj_x_poly", "obj_y_poly",
+            "obj_z_poly", "associated"
+        ]
+        unassociatedObjects = maskedObjects[unAssocObjectMask].drop(columns=columns_to_drop)
         return pipeBase.Struct(
             ssoAssocDiaSources=diaSourceCatalog[assocSourceMask].reset_index(drop=True),
             unAssocDiaSources=diaSourceCatalog[~assocSourceMask].reset_index(drop=True),
