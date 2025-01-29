@@ -74,6 +74,7 @@ class TestSolarSystemAssociation(unittest.TestCase):
                                         pd.DataFrame([[45, 45]], columns=["ra", "dec"])],
                                         ignore_index=True)
         self.testDiaSources["ssObjectId"] = 0
+        self.testDiaSources["diaSourceId"] = [i for i in range(len(self.testDiaSources))]
 
         # Grab a subset to treat as solar system objects
         self.testSsObjects = pd.DataFrame()

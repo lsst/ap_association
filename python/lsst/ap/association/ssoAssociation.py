@@ -25,6 +25,7 @@ __all__ = ["SolarSystemAssociationConfig", "SolarSystemAssociationTask"]
 
 from astropy import units as u
 from astropy.table import Table
+from astropy.coordinates import SkyCoord
 import healpy as hp
 import numpy as np
 import pandas as pd
@@ -144,7 +145,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
         # picks the DiaSource with the shortest distance. We can do something
         # fancier later.
         ssSourceData = []
-        ras, decs, expected_ras, expected_decs = [], [], [], []
+        ras, decs, residual_ras, residual_decs, dia_ids = [], [], [], [], []
         diaSourceCatalog["ssObjectId"] = 0
         for index, ssObject in maskedObjects.iterrows():
             ssoVect = self._radec_to_xyz(ssObject["ra"], ssObject["dec"])
@@ -158,10 +159,12 @@ class SolarSystemAssociationTask(pipeBase.Task):
                                               "obj_position_z"]].values)
                 dia_ra = diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "ra"]
                 dia_dec = diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "dec"]
+                dia_id = diaSourceCatalog.loc[diaSourceCatalog.index[idx[0]], "diaSourceId"]
                 ras.append(dia_ra)
                 decs.append(dia_dec)
-                expected_ras.append(ssObject["ra"])
-                expected_decs.append(ssObject["dec"])
+                dia_ids.append(dia_id)
+                residual_ras.append(dia_ra - ssObject["ra"])
+                residual_decs.append(dia_dec - ssObject["dec"])
                 maskedObjects.loc[index, 'associated'] = True
             else:
                 maskedObjects.loc[index, 'associated'] = False
@@ -176,8 +179,14 @@ class SolarSystemAssociationTask(pipeBase.Task):
                                                            "obj_position_y", "obj_position_z"])
         ssSourceData["ra"] = ras
         ssSourceData["dec"] = decs
-        ssSourceData["expected_ra"] = expected_ras
-        ssSourceData["expected_dec"] = expected_decs
+        ssSourceData["residualRa"] = residual_ras
+        ssSourceData["residualDec"] = residual_decs
+        ssSourceData["diaSourceId"] = dia_ids
+        coords = SkyCoord(ra=ssSourceData['ra'].values * u.deg, dec=ssSourceData['dec'].values * u.deg)
+        ssSourceData['galacitcL'] = coords.galactic.l.deg
+        ssSourceData['galacticB'] = coords.galactic.b.deg
+        ssSourceData['eclipticLambda'] = coords.barycentrictrueecliptic.lon.deg
+        ssSourceData['eclipticBeta'] = coords.barycentrictrueecliptic.lat.deg
         unassociatedObjects = maskedObjects[unAssocObjectMask].drop(columns=['obs_x_poly', 'obs_y_poly',
                                                                              'obs_z_poly', 'obj_x_poly',
                                                                              'obj_y_poly', 'obj_z_poly',
