@@ -30,3 +30,4 @@ from .utils import *
 from .version import *
 from .mpSkyEphemerisQuery import *
 from .ssSingleFrameAssociation import *
+from .testApdb import *
