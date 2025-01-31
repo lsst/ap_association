@@ -47,7 +47,7 @@ from lsst.ap.association.utils import convertTableToSdmSchema, readSchemaFromApd
 from lsst.daf.base import DateTime
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
     DiaObjectCalculationTask
-from lsst.utils.timer import timeMethod
+from lsst.utils.timer import timeMethod, duration_from_timeMethod
 
 
 class DiaPipelineConnections(
@@ -487,6 +487,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         # Write results to Alert Production Database (APDB)
         self.writeToApdb(updatedDiaObjects, associatedDiaSources, diaForcedSources)
+        self.metadata["writeToApdbDuration"] = duration_from_timeMethod(self.metadata, "writeToApdb")
 
         # Package alerts
         if self.config.doPackageAlerts:

@@ -33,7 +33,7 @@ import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
 import lsst.sphgeom
 
-from lsst.utils.timer import timeMethod
+from lsst.utils.timer import timeMethod, duration_from_timeMethod
 
 from lsst.ap.association.utils import convertTableToSdmSchema, readSchemaFromApdb, getMidpointFromTimespan
 
@@ -153,6 +153,7 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
 
         # This is the first database query.
         diaObjects = self.loadDiaObjects(region, schema)
+        self.metadata["loadDiaObjectsDuration"] = duration_from_timeMethod(self.metadata, "loadDiaObjects")
 
         # Load diaSources and forced sources up to the time of the exposure
         # The timespan may include significant padding, so use the midpoint to
@@ -160,11 +161,15 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
         visitTime = getMidpointFromTimespan(regionTime.timespan)
 
         diaSources = self.loadDiaSources(diaObjects, region, visitTime, schema)
+        self.metadata["loadDiaSourcesDuration"] = duration_from_timeMethod(self.metadata, "loadDiaSources")
 
         if self.config.doLoadForcedSources:
             diaForcedSources = self.loadDiaForcedSources(diaObjects, region, visitTime, schema)
+            self.metadata["loadDiaForcedSourcesDuration"] = duration_from_timeMethod(self.metadata,
+                                                                                     "loadDiaForcedSources")
         else:
             diaForcedSources = pd.DataFrame(columns=["diaObjectId", "diaForcedSourceId"])
+            self.metadata["loadDiaForcedSourcesDuration"] = -1
 
         return pipeBase.Struct(
             diaObjects=diaObjects,
