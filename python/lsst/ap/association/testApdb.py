@@ -131,6 +131,13 @@ class TestApdbConfig(pipeBase.PipelineTaskConfig,
         doc="Maximum length of tables allowed to be written in one operation"
             " to the Cassandra APDB",
     )
+    raise_on_associated_fakes = pexConfig.Field(
+        dtype=bool,
+        default=True,
+        doc="Raise a RuntimeError if any fake sources are associated"
+        " with existing DiaObjects. This is likely due to restarting"
+        " the simulation after partial writes to the APDB",
+    )
 
     idGenerator = DetectorVisitIdGeneratorConfig.make_field()
     idGeneratorFakes = DetectorVisitIdGeneratorConfig.make_field()
@@ -474,6 +481,10 @@ class TestApdbTask(LoadDiaCatalogsTask):
         self.log.info(f"{assocBogus.nUpdatedDiaObjects} fake sources associated"
                       f" and {assocBogus.nUnassociatedDiaObjects} not associated")
 
+        if self.config.raise_on_associated_fakes & assocBogus.nUpdatedDiaObjects > 0:
+            raise RuntimeError("Fake sources were associated with real DiaObjects."
+                               " This is likely due to restarting the simulation"
+                               " after partial writes to the APDB")
         # Index the DiaSource catalog for this visit after all associations
         # have been made.
         associatedDiaSources.set_index(["diaObjectId",
