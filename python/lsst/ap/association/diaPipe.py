@@ -309,6 +309,16 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         doc="Pad the image by this many pixels before removing off-image "
             "diaObjects for association.",
     )
+    maximumTableLength = pexConfig.RangeField(
+        dtype=int,
+        default=500,
+        min=0,
+        max=65535,
+        doc="Maximum length of tables allowed to be written in one operation"
+            " to the APDB. Set to 0 to disable."
+            "The maximum is the hard limit on the number of records in the"
+            " Cassandra APDB that can be updated in one transaction",
+    )
     idGenerator = DetectorVisitIdGeneratorConfig.make_field()
 
     def setDefaults(self):
@@ -782,11 +792,56 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         diaObjectStore = dropEmptyColumns(self.schema, updatedDiaObjects, tableName="DiaObject")
         diaSourceStore = dropEmptyColumns(self.schema, associatedDiaSources, tableName="DiaSource")
         diaForcedSourceStore = dropEmptyColumns(self.schema, diaForcedSources, tableName="DiaForcedSource")
-        self.apdb.store(
-            DateTime.now().toAstropy(),
-            diaObjectStore,
-            diaSourceStore,
-            diaForcedSourceStore)
+
+        nObject = len(diaObjectStore)
+        nSource = len(diaSourceStore)
+        nForced = len(diaForcedSourceStore)
+        nRecords = max(nObject, nSource, nForced)
+        nWritten = 0
+        start = 0
+        if self.config.maximumTableLength > 0:
+            maximumTableLength = self.config.maximumTableLength
+        else: 
+            maximumTableLength = nRecords
+        end = min(nRecords, maximumTableLength)
+        time = DateTime.now().toAstropy()
+        while nWritten < nRecords:
+            srcEnd = min(start + maximumTableLength, nSource)
+            if srcEnd <= start:
+                finalDiaSources = None
+                nSourceChunk = 0
+            else:
+                finalDiaSources = diaSourceStore.iloc[start:srcEnd].copy()
+                nSourceChunk = srcEnd - start
+
+            fSrcEnd = min(start + maximumTableLength, nForced)
+            if fSrcEnd <= start:
+                finalForcedSources = None
+                nForcedChunk = 0
+            else:
+                finalForcedSources = diaForcedSourceStore.iloc[start:fSrcEnd].copy()
+                nForcedChunk = fSrcEnd - start
+            objEnd = min(start + maximumTableLength, nObject)
+            if objEnd <= start:
+                finalDiaObjects = None
+                nObjectChunk = 0
+            else:
+                finalDiaObjects = diaObjectStore.iloc[start:end].copy()
+                nObjectChunk = fSrcEnd - start
+            
+            self.log.info("Writing %i/%i diaObjects, %i/%i diaSources and %i/%i diaForcedSources to the APDB",
+                          nObjectChunk, nObject,
+                          nSourceChunk, nSource,
+                          nForcedChunk, nForced,
+                          )
+            self.apdb.store(
+                time,
+                finalDiaObjects,
+                finalDiaSources,
+                finalForcedSources)
+            nWritten += end - start
+            start = end + 1
+            end = min(nRecords, start + maximumTableLength)
         self.log.info("APDB updated.")
 
     def testDataFrameIndex(self, df):
