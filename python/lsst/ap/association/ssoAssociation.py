@@ -32,6 +32,7 @@ from numpy.polynomial.chebyshev import Chebyshev, chebval
 import pandas as pd
 from scipy.spatial import cKDTree
 
+from lsst.afw.image.exposure.exposureUtils import bbox_contains_sky_coords
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 from lsst.utils.timer import timeMethod
@@ -67,7 +68,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
     _DefaultName = "ssoAssociation"
 
     @timeMethod
-    def run(self, diaSourceCatalog, solarSystemObjects, exposure):
+    def run(self, diaSourceCatalog, solarSystemObjects, visitInfo, bbox, wcs):
         """Create a searchable tree of unassociated DiaSources and match
         to the nearest ssoObject.
 
@@ -79,9 +80,12 @@ class SolarSystemAssociationTask(pipeBase.Task):
         solarSystemObjects : `pandas.DataFrame`
             Set of solar system objects that should be within the footprint
             of the current visit.
-        exposure : `lsst.afw.image.ExposureF`
-            Exposure where the DiaSources in ``diaSourceCatalog`` were
-            detected in.
+        visitInfo : `lsst.afw.image.VisitInfo`
+            TODO
+        bbox : `lsst.geom.Box2I`
+            TODO
+        wcs : `lsst.afw.geom.SkyWcs`
+            TODO
 
         Returns
         -------
@@ -101,7 +105,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
         if nSolarSystemObjects <= 0:
             return self._return_empty(diaSourceCatalog, solarSystemObjects)
 
-        mjd_midpoint = exposure.visitInfo.date.toAstropy().tai.mjd
+        mjd_midpoint = visitInfo.date.toAstropy().tai.mjd
         ref_time = mjd_midpoint - solarSystemObjects["tmin"].values[0]
 
         solarSystemObjects['obs_position'] = solarSystemObjects.apply(lambda row: np.array([
@@ -165,7 +169,8 @@ class SolarSystemAssociationTask(pipeBase.Task):
 
         maskedObjects = self._maskToCcdRegion(
             solarSystemObjects,
-            exposure,
+            bbox,
+            wcs,
             solarSystemObjects["Err(arcsec)"].max()).copy()
         nSolarSystemObjects = len(maskedObjects)
         if nSolarSystemObjects <= 0:
@@ -244,7 +249,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
             associatedSsSources=Table.from_pandas(ssSourceData),
             unassociatedSsObjects=Table.from_pandas(unassociatedObjects))
 
-    def _maskToCcdRegion(self, solarSystemObjects, exposure, marginArcsec):
+    def _maskToCcdRegion(self, solarSystemObjects, bbox, wcs, marginArcsec):
         """Mask the input SolarSystemObjects to only those in the exposure
         bounding box.
 
@@ -252,8 +257,10 @@ class SolarSystemAssociationTask(pipeBase.Task):
         ----------
         solarSystemObjects : `pandas.DataFrame`
             SolarSystemObjects to mask to ``exposure``.
-        exposure : `lsst.afw.image.ExposureF`
-            Exposure to mask to.
+        bbox :
+            TODO
+        wcs :
+            TODO
         marginArcsec : `float`
             Maximum possible matching radius to pad onto the exposure bounding
             box. If greater than ``maxPixelMargin``, ``maxPixelMargin`` will
@@ -266,12 +273,13 @@ class SolarSystemAssociationTask(pipeBase.Task):
         """
         if len(solarSystemObjects) == 0:
             return solarSystemObjects
-        wcs = exposure.getWcs()
         padding = min(
-            int(np.ceil(marginArcsec / wcs.getPixelScale(exposure.getBBox().getCenter()).asArcseconds())),
+            int(np.ceil(marginArcsec / wcs.getPixelScale(bbox.getCenter()).asArcseconds())),
             self.config.maxPixelMargin)
 
-        return solarSystemObjects[exposure.containsSkyCoords(
+        return solarSystemObjects[bbox_contains_sky_coords(
+            bbox,
+            wcs,
             solarSystemObjects['ra'].to_numpy() * u.degree,
             solarSystemObjects['dec'].to_numpy() * u.degree,
             padding)]

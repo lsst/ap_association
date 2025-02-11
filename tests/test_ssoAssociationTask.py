@@ -98,7 +98,9 @@ class TestSolarSystemAssociation(unittest.TestCase):
         ssAssocTask = SolarSystemAssociationTask()
         results = ssAssocTask.run(self.testDiaSources,
                                   self.testSsObjects,
-                                  self.exposure)
+                                  self.exposure.visitInfo,
+                                  self.exposure.getBBox(),
+                                  self.exposure.wcs)
         self.assertEqual(len(results.ssoAssocDiaSources), 1)
         self.assertEqual(results.ssoAssocDiaSources['ra'][0], 45.0)
         self.assertEqual(results.ssoAssocDiaSources['dec'][0], 45.0)
@@ -110,7 +112,8 @@ class TestSolarSystemAssociation(unittest.TestCase):
         ssAssocTask = SolarSystemAssociationTask()
         # Test will all inside ccd
         maskedObjects = ssAssocTask._maskToCcdRegion(self.testSsObjects,
-                                                     self.exposure,
+                                                     self.exposure.getBBox(),
+                                                     self.exposure.wcs,
                                                      1.0)
         self.assertEqual(len(maskedObjects), len(self.testSsObjects))
 
@@ -127,7 +130,8 @@ class TestSolarSystemAssociation(unittest.TestCase):
         testObjects.loc[2, "dec"] = 45.001331943391406
         maskedObjects = ssAssocTask._maskToCcdRegion(
             pd.concat([self.testSsObjects, testObjects]),
-            self.exposure,
+            self.exposure.getBBox(),
+            self.exposure.wcs,
             1.0)
         self.assertEqual(len(maskedObjects), len(self.testSsObjects))
 
