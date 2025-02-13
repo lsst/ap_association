@@ -28,6 +28,7 @@ Will compute the location for of known SSObjects within a visit-detector combina
 __all__ = ["MPSkyEphemerisQueryConfig", "MPSkyEphemerisQueryTask"]
 
 
+from astropy.table import Table
 import os
 import pandas as pd
 import pyarrow as pa
@@ -56,7 +57,7 @@ class MPSkyEphemerisQueryConnections(PipelineTaskConnections,
     ssObjects = connectionTypes.Output(
         doc="MPSky-provided Solar System objects observable in this detector-visit",
         name="preloaded_SsObjects",
-        storageClass="DataFrame",
+        storageClass="ArrowAstropy",
         dimensions=("instrument", "group", "detector"),
     )
 
@@ -110,8 +111,8 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         result : `lsst.pipe.base.Struct`
             Results struct with components:
 
-            - ``ssObjects`` : `pandas.DataFrame`
-                DataFrame containing Solar System Objects near the detector
+            - ``ssObjects`` : `astropy.table.Table`
+                Table containing Solar System Objects near the detector
                 footprint as retrieved by MPSky. The columns are as follows:
 
                 ``Name``
@@ -141,7 +142,7 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         mpSkySsObjects = self._mpSkyConeSearch(expCenter, expMidPointEPOCH,
                                                expRadius + self.config.queryBufferRadiusDegrees, mpSkyURL)
         return Struct(
-            ssObjects=mpSkySsObjects,
+            ssObjects=Table.from_astropy(mpSkySsObjects),
         )
 
     def read_mp_sky_response(self, response):
