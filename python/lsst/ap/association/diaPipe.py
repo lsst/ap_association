@@ -35,12 +35,15 @@ import lsst.dax.apdb as daxApdb
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
+
+from astropy.table import Table
 import numpy as np
 import pandas as pd
 from lsst.ap.association import (
     AssociationTask,
     DiaForcedSourceTask,
     PackageAlertsTask)
+
 from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
 from lsst.ap.association.utils import convertTableToSdmSchema, readSchemaFromApdb, dropEmptyColumns, \
     make_empty_catalog, makeEmptyForcedSourceTable
@@ -66,7 +69,7 @@ class DiaPipelineConnections(
         doc="Catalog of SolarSolarSystem objects expected to be observable in "
             "this detectorVisit.",
         name="preloaded_SsObjects",
-        storageClass="DataFrame",
+        storageClass="ArrowAstropy",
         dimensions=("instrument", "group", "detector"),
         minimum=0,
     )
@@ -125,7 +128,7 @@ class DiaPipelineConnections(
     associatedSsSources = connTypes.Output(
         doc="Optional output storing ssSource data computed during association.",
         name="{fakesType}{coaddName}Diff_associatedSsSources",
-        storageClass="DataFrame",
+        storageClass="ArrowAstropy",
         dimensions=("instrument", "visit", "detector"),
     )
     unassociatedSsObjects = connTypes.Output(
@@ -405,7 +408,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             The band in which the new DiaSources were detected.
         idGenerator : `lsst.meas.base.IdGenerator`
             Object that generates source IDs and random number generator seeds.
-        solarSystemObjectTable : `pandas.DataFrame`
+        solarSystemObjectTable : `astropy.table.Table`
             Preloaded Solar System objects expected to be visible in the image.
 
         Returns
@@ -431,7 +434,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         """
         # Accept either legacySolarSystemTable or optional solarSystemObjectTable.
         if legacySolarSystemTable is not None and solarSystemObjectTable is None:
-            solarSystemObjectTable = legacySolarSystemTable
+            solarSystemObjectTable = Table.from_pandas(legacySolarSystemTable)
 
         if not preloadedDiaObjects.empty:
             # Include a small buffer outside the image so that we can associate sources near the edge
@@ -577,13 +580,13 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         ----------
         diaSourceTable : `pandas.DataFrame`
             Newly detected DiaSources.
-        solarSystemObjectTable : `pandas.DataFrame`
+        solarSystemObjectTable : `astropy.table.Table`
             Preloaded Solar System objects expected to be visible in the image.
         diffIm : `lsst.afw.image.ExposureF`
             Difference image exposure in which the sources in ``diaSourceCat``
             were detected.
         diaObjects : `pandas.DataFrame`
-            Table of  DiaObjects from preloaded DiaObjects.
+            Table of DiaObjects from preloaded DiaObjects.
 
         Returns
         -------
@@ -591,7 +594,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             Associated DiaSources with DiaObjects.
         newDiaObjects : `pandas.DataFrame`
             Table of new DiaObjects after association.
-        associatedSsSources : `pandas.DataFrame`
+        associatedSsSources : `astropy.table.Table`
             Table of new ssSources after association.
         """
         # Associate new DiaSources with existing DiaObjects.
@@ -600,9 +603,12 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         toAssociate = []
         if self.config.doSolarSystemAssociation and solarSystemObjectTable is not None:
             ssoAssocResult = self.solarSystemAssociator.run(
-                assocResults.unAssocDiaSources,
+                Table.from_pandas(assocResults.unAssocDiaSources),
                 solarSystemObjectTable,
-                diffIm)
+                diffIm.visitInfo,
+                diffIm.getBBox(),
+                diffIm.wcs
+            )
             # Create new DiaObjects from unassociated diaSources.
             createResults = self.createNewDiaObjects(ssoAssocResult.unAssocDiaSources)
             if len(ssoAssocResult.ssoAssocDiaSources) > 0:
