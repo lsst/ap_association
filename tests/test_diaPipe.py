@@ -146,7 +146,8 @@ class TestDiaPipelineTask(unittest.TestCase):
 
         # Mock out the run() methods of these two Tasks to ensure they
         # return data in the correct form.
-        def solarSystemAssociator_run(unAssocDiaSources, solarSystemObjectTable, diffIm):
+        def solarSystemAssociator_run(unAssocDiaSources, solarSystemObjectTable, visitInfo,
+                                      bbox, wcs):
             return lsst.pipe.base.Struct(nTotalSsObjects=42,
                                          nAssociatedSsObjects=30,
                                          ssoAssocDiaSources=_makeMockDataFrame(),

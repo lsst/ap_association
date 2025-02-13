@@ -80,11 +80,11 @@ class SolarSystemAssociationTask(pipeBase.Task):
             Set of solar system objects that should be within the footprint
             of the current visit.
         visitInfo : `lsst.afw.image.VisitInfo`
-            TODO
+            visitInfo of exposure used for exposure time
         bbox : `lsst.geom.Box2I`
-            TODO
+            bbox of exposure used for masking
         wcs : `lsst.afw.geom.SkyWcs`
-            TODO
+            wcs of exposure used for masking
 
         Returns
         -------
@@ -105,28 +105,8 @@ class SolarSystemAssociationTask(pipeBase.Task):
             return self._return_empty(diaSourceCatalog, solarSystemObjects)
 
         mjd_midpoint = visitInfo.date.toAstropy().tai.mjd
-        ref_time = mjd_midpoint - solarSystemObjects["tmin"].value[0] # all tmin should be identical
+        ref_time = mjd_midpoint - solarSystemObjects["tmin"].value[0]  # all tmin should be identical
 
-#        solarSystemObjects['obs_position'] = solarSystemObjects.apply(lambda row: np.array([
-#            chebval(ref_time, row['obs_x_poly']),
-#            chebval(ref_time, row['obs_y_poly']),
-#            chebval(ref_time, row['obs_z_poly'])
-#        ]), axis=1)
-#        solarSystemObjects['obs_velocity'] = solarSystemObjects.apply(lambda row: np.array([
-#            chebval(ref_time, Chebyshev(row['obs_x_poly']).deriv().coef),
-#            chebval(ref_time, Chebyshev(row['obs_y_poly']).deriv().coef),
-#            chebval(ref_time, Chebyshev(row['obs_z_poly']).deriv().coef),
-#        ]), axis=1)
-#        solarSystemObjects['obj_position'] = solarSystemObjects.apply(lambda row: np.array([
-#            chebval(ref_time, row['obj_x_poly']),
-#            chebval(ref_time, row['obj_y_poly']),
-#            chebval(ref_time, row['obj_z_poly'])
-#        ]), axis=1)
-#        solarSystemObjects['obj_velocity'] = solarSystemObjects.apply(lambda row: np.array([
-#            chebval(ref_time, Chebyshev(row['obj_x_poly']).deriv().coef),
-#            chebval(ref_time, Chebyshev(row['obj_y_poly']).deriv().coef),
-#            chebval(ref_time, Chebyshev(row['obj_z_poly']).deriv().coef),
-#        ]), axis=1)
         solarSystemObjects['obs_position'] = [
             np.array([chebval(ref_time, row['obs_x_poly']),
                       chebval(ref_time, row['obs_y_poly']),
@@ -175,13 +155,12 @@ class SolarSystemAssociationTask(pipeBase.Task):
         solarSystemObjects['heliocentricVX'], solarSystemObjects['heliocentricVY'], \
             solarSystemObjects['heliocentricVZ'] = np.array(list(solarSystemObjects['obj_velocity'].value)).T
         solarSystemObjects['heliocentricDist'] = np.linalg.norm(solarSystemObjects['obj_position'], axis=1)
-        solarSystemObjects['topocentricDist'] =  np.linalg.norm(solarSystemObjects['topocentric_position'], 
-                                                                axis=1)
+        solarSystemObjects['topocentricDist'] = np.linalg.norm(solarSystemObjects['topocentric_position'],
+                                                               axis=1)
         solarSystemObjects['phaseAngle'] = np.degrees(np.arccos(np.sum(
             solarSystemObjects['obj_position'].T * solarSystemObjects['topocentric_position'].T
             / solarSystemObjects['heliocentricDist'] / solarSystemObjects['topocentricDist'], axis=0
         )))
-        
 
         stateVectorColumns = ['heliocentricX', 'heliocentricY', 'heliocentricZ', 'heliocentricVX',
                               'heliocentricVY', 'heliocentricVZ', 'topocentricX', 'topocentricY',
@@ -225,7 +204,7 @@ class SolarSystemAssociationTask(pipeBase.Task):
                 nFound += 1
                 diaSourceCatalog[idx[0]]["ssObjectId"] = ssObject["ssObjectId"]
                 ssSourceData.append(list(ssObject[["ssObjectId", "phaseAngle", "heliocentricDist",
-                                              "topocentricDist"] + stateVectorColumns].values()))
+                                                   "topocentricDist"] + stateVectorColumns].values()))
                 dia_ra = diaSourceCatalog[idx[0]]["ra"]
                 dia_dec = diaSourceCatalog[idx[0]]["dec"]
                 dia_id = diaSourceCatalog[idx[0]][source_column]
@@ -282,9 +261,9 @@ class SolarSystemAssociationTask(pipeBase.Task):
         solarSystemObjects : `astropy.table.Table`
             SolarSystemObjects to mask to ``exposure``.
         bbox :
-            TODO
+            Exposure bbox used for masking
         wcs :
-            TODO
+            Exposure wcs used for masking
         marginArcsec : `float`
             Maximum possible matching radius to pad onto the exposure bounding
             box. If greater than ``maxPixelMargin``, ``maxPixelMargin`` will
