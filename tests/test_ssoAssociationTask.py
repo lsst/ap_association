@@ -24,7 +24,7 @@ from astropy.table import Table
 import astropy.table as tb
 import unittest
 
-from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
+from lsst.pipe.tasks.ssoAssociation import SolarSystemAssociationTask
 import astshim as ast
 import lsst.geom as geom
 import lsst.afw.geom as afwGeom
