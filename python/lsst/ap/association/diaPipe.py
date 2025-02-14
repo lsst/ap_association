@@ -44,12 +44,12 @@ from lsst.ap.association import (
     DiaForcedSourceTask,
     PackageAlertsTask)
 
-from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
 from lsst.ap.association.utils import convertTableToSdmSchema, readSchemaFromApdb, dropEmptyColumns, \
     make_empty_catalog, makeEmptyForcedSourceTable
 from lsst.daf.base import DateTime
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
     DiaObjectCalculationTask
+from lsst.pipe.tasks.ssoAssociation import SolarSystemAssociationTask
 from lsst.utils.timer import timeMethod, duration_from_timeMethod
 
 
