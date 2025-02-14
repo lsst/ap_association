@@ -33,9 +33,10 @@ import pandas as pd
 import pyarrow as pa
 import requests
 
-from lsst.ap.association.utils import getMidpointFromTimespan, objID_to_ssObjectID
+from lsst.ap.association.utils import getMidpointFromTimespan
 from lsst.geom import SpherePoint
 import lsst.pex.config as pexConfig
+from lsst.pipe.tasks.associationUtils import obj_id_to_ss_object_id
 from lsst.utils.timer import timeMethod
 
 from lsst.pipe.base import connectionTypes, NoWorkFound, PipelineTask, \
@@ -235,7 +236,7 @@ class MPSkyEphemerisQueryTask(PipelineTask):
             mpSkySsObjects['tmax'] = tmax
             mpSkySsObjects['dec'] = dec
             mpSkySsObjects['Err(arcsec)'] = 2
-            mpSkySsObjects['ssObjectId'] = [objID_to_ssObjectID(v) for v in mpSkySsObjects['ObjID'].values]
+            mpSkySsObjects['ssObjectId'] = [obj_id_to_ss_object_id(v) for v in mpSkySsObjects['ObjID'].values]
             nFound = len(mpSkySsObjects)
 
             if nFound == 0:

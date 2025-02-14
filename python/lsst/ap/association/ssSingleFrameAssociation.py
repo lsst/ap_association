@@ -32,7 +32,7 @@ from astropy.units import deg
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
-from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
+from lsst.pipe.tasks.ssoAssociation import SolarSystemAssociationTask
 from lsst.utils.timer import timeMethod
 
 
