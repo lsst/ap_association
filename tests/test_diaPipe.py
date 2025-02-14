@@ -146,7 +146,8 @@ class TestDiaPipelineTask(unittest.TestCase):
 
         # Mock out the run() methods of these two Tasks to ensure they
         # return data in the correct form.
-        def solarSystemAssociator_run(unAssocDiaSources, solarSystemObjectTable, diffIm):
+        def solarSystemAssociator_run(unAssocDiaSources, solarSystemObjectTable, visitInfo,
+                                      bbox, wcs):
             return lsst.pipe.base.Struct(nTotalSsObjects=42,
                                          nAssociatedSsObjects=30,
                                          ssoAssocDiaSources=_makeMockDataFrame(),
@@ -170,7 +171,7 @@ class TestDiaPipelineTask(unittest.TestCase):
                   side_effect=updateObjectTableMock), \
             patch('lsst.ap.association.association.AssociationTask.run',
                   side_effect=associator_run) as mainRun, \
-            patch('lsst.ap.association.ssoAssociation.SolarSystemAssociationTask.run',
+            patch('lsst.pipe.tasks.ssoAssociation.SolarSystemAssociationTask.run',
                   side_effect=solarSystemAssociator_run) as ssRun:
 
             result = task.run(diaSrc,

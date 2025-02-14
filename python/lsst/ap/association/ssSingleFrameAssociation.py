@@ -32,7 +32,7 @@ from astropy.units import deg
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
-from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
+from lsst.pipe.tasks.ssoAssociation import SolarSystemAssociationTask
 from lsst.utils.timer import timeMethod
 
 
@@ -58,7 +58,7 @@ class SsSingleFrameAssociationConnections(
         doc="Optional catalog of SolarSolarSystem objects expected to be"
             "observable in this detectorVisit.",
         name="preloaded_SsObjects",
-        storageClass="DataFrame",
+        storageClass="ArrowAstropy",
         dimensions=("instrument", "group", "detector"),
         minimum=0,
     )
@@ -132,7 +132,7 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
             Newly detected sources.
         band : `str`
             The band in which the new DiaSources were detected.
-        solarSystemObjectTable : `pandas.DataFrame` or `None`
+        solarSystemObjectTable : `astropy.table.Table` or `None`
             Preloaded Solar System objects expected to be visible in the image.
 
         Returns
@@ -142,7 +142,7 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
             - ``ssoAssocDiaSources`` : DiaSources that were associated with
               solar system objects in this visit. (`Astropy.table.Table`)
             - ``unAssocDiaSources`` : Set of DiaSources that were not
-              associated with any solar system object. (`pandas.DataFrame`)
+              associated with any solar system object. (`astropy.table.Table`)
             - ``nTotalSsObjects`` : Total number of SolarSystemObjects
               contained in the CCD footprint. (`int`)
             - ``nAssociatedSsObjects`` : Number of SolarSystemObjects
@@ -162,5 +162,5 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
         sourceTable = sourceTable.asAstropy()
         sourceTable['ra'] = sourceTable['coord_ra'].to(deg).value
         sourceTable['dec'] = sourceTable['coord_dec'].to(deg).value
-        return self.solarSystemAssociator.run(sourceTable.to_pandas(),
-                                              solarSystemObjectTable, exposure)
+        return self.solarSystemAssociator.run(sourceTable, solarSystemObjectTable,
+                                              exposure.visitInfo, exposure.getBBox(), exposure.wcs)

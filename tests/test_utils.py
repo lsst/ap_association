@@ -27,7 +27,7 @@ import pandas as pd
 import lsst.daf.butler as dafButler
 
 from lsst.ap.association.utils import readSdmSchemaFile, make_empty_catalog, convertTableToSdmSchema, \
-    getMidpointFromTimespan, objID_to_ssObjectID, ssObjectID_to_objID
+    getMidpointFromTimespan
 from utils_tests import makeExposure, makeRegionTime
 
 
@@ -94,47 +94,3 @@ class TestUtils(unittest.TestCase):
             getMidpointFromTimespan(timespan_none_both, allowUnbounded=True)
         with self.assertRaises(ValueError):
             getMidpointFromTimespan(timespan_none_both, allowUnbounded=False)
-
-    def test_ssObjectID_to_objID_and_objID_to_ssObjectID(self):
-        """Convert between ssObjectIDs and MPC packed designations
-        """
-        allowed_strings = ['J95X00A', 'J95X01L', 'J95F13B', 'J98SA8Q', 'J98SC7V', 'J98SG2S'] \
-            + ['K99AJ3Z', 'K08Aa0A', 'K07Tf8A', 'PLS2040', 'T1S3138', 'T2S1010', 'T3S4101'] \
-            + ['       ', '\x00\x00\x00\x00\x00\x00\x00']
-        allowed_flags = [i for i in range(0, 256)]
-        allowed_ssObjectIDs = [0, 1 << 64 - 1] + [1 << n for n in range(64)]
-        for allowed_string in allowed_strings:
-            for allowed_flag in allowed_flags:
-                returned_string, returned_flag = ssObjectID_to_objID(
-                    objID_to_ssObjectID(allowed_string, allowed_flag))
-                self.assertEqual((allowed_string, allowed_flag), (returned_string, returned_flag))
-        for allowed_ssObjectID in allowed_ssObjectIDs:
-            returned_ssObjectID = objID_to_ssObjectID(*ssObjectID_to_objID(allowed_ssObjectID))
-            self.assertEqual(allowed_ssObjectID, returned_ssObjectID)
-
-    def test_invalid_ssObjectID_to_objID_and_objID_to_ssObjectID(self):
-        """Convert between ssObjectIDs and MPC packed designations
-        """
-        allowed_strings = ['J95X00A', 'J95X01L', 'J95F13B', 'J98SA8Q', 'J98SC7V', 'J98SG2S'] \
-            + ['K99AJ3Z', 'K08Aa0A', 'K07Tf8A', 'PLS2040', 'T1S3138', 'T2S1010', 'T3S4101']
-        allowed_flags = [i for i in range(0, 256)]
-        disallowed_flags = [-999999999, -512, -256, -255, -1, 256, 512, 99999999]
-        disallowed_strings = [''] + [ch for ch in 'ABCDEFGHIJKMNOPQRSTUVWXYZ0123456789 -'] \
-            + ['A' * i for i in range(2, 7)] + ['Z' * i for i in range(2, 7)] \
-            + ['Ā', '🔭', 'A' * 8, ' ' * 8, 'A' * 128]
-        disallowed_ssObjectIDs = [-1, 1 << 64, 1 << 64 + 1, 2 << 65]
-        for allowed_string in allowed_strings:
-            for disallowed_flag in disallowed_flags:
-                with self.assertRaises(ValueError):
-                    objID_to_ssObjectID(allowed_string, disallowed_flag)
-        for disallowed_string in disallowed_strings:
-            for allowed_flag in allowed_flags:
-                with self.assertRaises(ValueError):
-                    objID_to_ssObjectID(disallowed_string, allowed_flag)
-        for disallowed_string in disallowed_strings:
-            for disallowed_flag in disallowed_flags:
-                with self.assertRaises(ValueError):
-                    objID_to_ssObjectID(disallowed_string, disallowed_flag)
-        for disallowed_ssObjectID in disallowed_ssObjectIDs:
-            with self.assertRaises(ValueError):
-                ssObjectID_to_objID(disallowed_ssObjectID)

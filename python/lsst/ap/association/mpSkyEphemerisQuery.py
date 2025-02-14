@@ -33,9 +33,10 @@ import pandas as pd
 import pyarrow as pa
 import requests
 
-from lsst.ap.association.utils import getMidpointFromTimespan, objID_to_ssObjectID
+from lsst.ap.association.utils import getMidpointFromTimespan
 from lsst.geom import SpherePoint
 import lsst.pex.config as pexConfig
+from lsst.pipe.tasks.associationUtils import objID_to_ssObjectID
 from lsst.utils.timer import timeMethod
 
 from lsst.pipe.base import connectionTypes, NoWorkFound, PipelineTask, \
