@@ -171,7 +171,7 @@ class TestDiaPipelineTask(unittest.TestCase):
                   side_effect=updateObjectTableMock), \
             patch('lsst.ap.association.association.AssociationTask.run',
                   side_effect=associator_run) as mainRun, \
-            patch('lsst.ap.association.ssoAssociation.SolarSystemAssociationTask.run',
+            patch('lsst.pipe.tasks.ssoAssociation.SolarSystemAssociationTask.run',
                   side_effect=solarSystemAssociator_run) as ssRun:
 
             result = task.run(diaSrc,
