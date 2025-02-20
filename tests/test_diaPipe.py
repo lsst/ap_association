@@ -26,6 +26,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
+import astropy.table as tb
 
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
@@ -53,6 +54,21 @@ def _makeMockDataFrame():
         # automatically adapt to any removals.
         warnings.simplefilter("ignore", category=DeprecationWarning)
         return MagicMock(spec=pd.DataFrame())
+
+
+def _makeMockTable():
+    """Create a new mock of a Table.
+
+    Returns
+    -------
+    mock : `unittest.mock.Mock`
+        A mock guaranteed to accept all operations used by `astropy.table.Table`.
+    """
+    with warnings.catch_warnings():
+        # spec triggers deprecation warnings on DataFrame, but will
+        # automatically adapt to any removals.
+        warnings.simplefilter("ignore", category=DeprecationWarning)
+        return MagicMock(spec=tb.Table())
 
 
 class TestDiaPipelineTask(unittest.TestCase):
@@ -125,7 +141,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         exposure = Mock(spec=afwImage.ExposureF)
         template = Mock(spec=afwImage.ExposureF)
         diaSrc = _makeMockDataFrame()
-        ssObjects = _makeMockDataFrame()
+        ssObjects = _makeMockTable()
 
         # Each of these subtasks should be called once during diaPipe
         # execution. We use mocks here to check they are being executed
@@ -150,10 +166,10 @@ class TestDiaPipelineTask(unittest.TestCase):
                                       bbox, wcs):
             return lsst.pipe.base.Struct(nTotalSsObjects=42,
                                          nAssociatedSsObjects=30,
-                                         ssoAssocDiaSources=_makeMockDataFrame(),
-                                         unAssocDiaSources=_makeMockDataFrame(),
-                                         associatedSsSources=_makeMockDataFrame(),
-                                         unassociatedSsObjects=_makeMockDataFrame())
+                                         ssoAssocDiaSources=_makeMockTable(),
+                                         unAssocDiaSources=_makeMockTable(),
+                                         associatedSsSources=_makeMockTable(),
+                                         unassociatedSsObjects=_makeMockTable())
 
         def associator_run(table, diaObjects):
             return lsst.pipe.base.Struct(nUpdatedDiaObjects=2, nUnassociatedDiaObjects=3,

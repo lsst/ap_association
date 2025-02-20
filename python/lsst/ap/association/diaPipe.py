@@ -610,9 +610,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 diffIm.wcs
             )
             # Create new DiaObjects from unassociated diaSources.
-            createResults = self.createNewDiaObjects(ssoAssocResult.unAssocDiaSources)
+            createResults = self.createNewDiaObjects(ssoAssocResult.unAssocDiaSources.to_pandas())
             if len(ssoAssocResult.ssoAssocDiaSources) > 0:
-                toAssociate.append(ssoAssocResult.ssoAssocDiaSources)
+                toAssociate.append(ssoAssocResult.ssoAssocDiaSources.to_pandas())
             nTotalSsObjects = ssoAssocResult.nTotalSsObjects
             nAssociatedSsObjects = ssoAssocResult.nAssociatedSsObjects
             associatedSsSources = ssoAssocResult.associatedSsSources
