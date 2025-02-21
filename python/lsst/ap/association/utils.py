@@ -23,7 +23,7 @@
 """
 __all__ = ("convertTableToSdmSchema", "readSdmSchemaFile", "readSchemaFromApdb",
            "dropEmptyColumns", "make_empty_catalog", "getMidpointFromTimespan",
-           "makeEmptyForcedSourceTable", "objID_to_ssObjectID", "ssObjectID_to_objID")
+           "makeEmptyForcedSourceTable")
 
 from collections.abc import Mapping
 import os
@@ -262,74 +262,6 @@ def getMidpointFromTimespan(timespan, allowUnbounded=True):
                 raise ValueError("Cannot compute midpoint: unbounded timespan.") from e
         else:
             raise ValueError("Cannot compute midpoint: unbounded timespan.") from e
-
-
-def objID_to_ssObjectID(objID, flags=0):
-    """Convert from Minor Planet Center packed provisional object ID to
-    Rubin ssObjectID.
-
-    Parameters
-    ----------
-    objID : `str`
-        Minor Planet Center packed provisional designation for a small solar
-        system object. Must be fewer than eight characters.
-    flags : `int`, optional
-        Eight free bits to enable future decoupling between Minor Planet Center
-        and Rubin. Zero by default, should not be changed unless we need to
-        move away from a 1:1 mapping with the MPC. Must be within [0, 255].
-
-    Returns
-    -------
-    ssObjectID : `int`
-        Rubin ssObjectID
-
-    Raises
-    ------
-    ValueError
-        Raised if either objID is longer than 7 characters or flags is greater
-        than 255 or less than 0.
-    """
-    if len(objID) > 7:
-        raise ValueError(f'objID longer than 7 characters: "{objID}"')
-    if len(objID) < 7:
-        raise ValueError(f'objID shorter than 7 characters: "{objID}"')
-    if flags < 0 or flags > 255:
-        raise ValueError(f'Flags ({flags}) outside [0, 255].')
-    if any([ord(c) > 255 for c in objID]):
-        raise ValueError(f'{[c for c in objID if ord(c) > 255]} not legal objID characters (ascii [1, 255])')
-
-    ssObjectID = flags
-    for character in objID:
-        ssObjectID <<= 8
-        ssObjectID += ord(character)
-    return ssObjectID
-
-
-def ssObjectID_to_objID(ssObjectID):
-    """Convert from Rubin ssObjectID to Minor Planet Center packed provisional
-    object ID.
-
-    Parameters
-    ----------
-    ssObjectID : `int`
-        Rubin ssObjectID
-
-    Returns
-    -------
-    objID : `str`
-        Minor Planet Center packed provisional designation.
-
-    flags : `int`
-        Rubin flags (not yet defined, but usable in case we decouple from MPC).
-
-    Raises
-    ------
-    """
-    if ssObjectID < 0 or ssObjectID >= (1 << 64):
-        raise ValueError(f'ssObjectID ({ssObjectID}) outside [0, 2^64 - 1].')
-
-    objID = ''.join([chr((ssObjectID >> (8 * i)) % 256) for i in reversed(range(0, 7))])
-    return objID, ssObjectID >> (8 * 7) % 256
 
 
 def makeEmptyForcedSourceTable(schema):

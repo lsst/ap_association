@@ -20,10 +20,11 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import numpy as np
-import pandas as pd
+from astropy.table import Table
+import astropy.table as tb
 import unittest
 
-from lsst.ap.association.ssoAssociation import SolarSystemAssociationTask
+from lsst.pipe.tasks.ssoAssociation import SolarSystemAssociationTask
 import astshim as ast
 import lsst.geom as geom
 import lsst.afw.geom as afwGeom
@@ -64,20 +65,16 @@ class TestSolarSystemAssociation(unittest.TestCase):
         ))
 
         # Convert to task required format
-        self.testDiaSources = catalog.asAstropy().to_pandas()
-        self.testDiaSources.rename(columns={"coord_ra": "ra",
-                                            "coord_dec": "dec"},
-                                   inplace=True,)
-        self.testDiaSources.loc[:, "ra"] = np.rad2deg(self.testDiaSources["ra"])
-        self.testDiaSources.loc[:, "dec"] = np.rad2deg(self.testDiaSources["dec"])
-        self.testDiaSources = pd.concat([self.testDiaSources,
-                                        pd.DataFrame([[45, 45]], columns=["ra", "dec"])],
-                                        ignore_index=True)
+        self.testDiaSources = catalog.asAstropy()
+        self.testDiaSources.rename_columns(["coord_ra", "coord_dec"], ["ra", "dec"])
+        self.testDiaSources["ra"] = np.rad2deg(self.testDiaSources["ra"])
+        self.testDiaSources["dec"] = np.rad2deg(self.testDiaSources["dec"])
+        self.testDiaSources = tb.vstack([self.testDiaSources, Table([[45], [45]], names=["ra", "dec"])])
         self.testDiaSources["ssObjectId"] = 0
         self.testDiaSources["diaSourceId"] = [i for i in range(len(self.testDiaSources))]
 
         # Grab a subset to treat as solar system objects
-        self.testSsObjects = pd.DataFrame()
+        self.testSsObjects = Table()
         self.testSsObjects["ObjID"] = ["test_ob"]
         self.testSsObjects["ssObjectId"] = [1234]
         self.testSsObjects["ra"] = [45]
@@ -98,7 +95,9 @@ class TestSolarSystemAssociation(unittest.TestCase):
         ssAssocTask = SolarSystemAssociationTask()
         results = ssAssocTask.run(self.testDiaSources,
                                   self.testSsObjects,
-                                  self.exposure)
+                                  self.exposure.visitInfo,
+                                  self.exposure.getBBox(),
+                                  self.exposure.wcs)
         self.assertEqual(len(results.ssoAssocDiaSources), 1)
         self.assertEqual(results.ssoAssocDiaSources['ra'][0], 45.0)
         self.assertEqual(results.ssoAssocDiaSources['dec'][0], 45.0)
@@ -110,24 +109,26 @@ class TestSolarSystemAssociation(unittest.TestCase):
         ssAssocTask = SolarSystemAssociationTask()
         # Test will all inside ccd
         maskedObjects = ssAssocTask._maskToCcdRegion(self.testSsObjects,
-                                                     self.exposure,
+                                                     self.exposure.getBBox(),
+                                                     self.exposure.wcs,
                                                      1.0)
         self.assertEqual(len(maskedObjects), len(self.testSsObjects))
 
         # Add a new SolarSystemObjects outside of the bbox and test that it
         # is excluded.
-        testObjects = self.testSsObjects.loc[:2].reset_index(drop=True)
-        testObjects.loc[0, "ra"] = 150
-        testObjects.loc[0, "dec"] = 80
-        testObjects.loc[1, "ra"] = 150
-        testObjects.loc[1, "dec"] = -80
+        testObjects = tb.vstack([self.testSsObjects[:1] for i in range(3)])
+        testObjects[0]["ra"] = 150
+        testObjects[0]["dec"] = 80
+        testObjects[1]["ra"] = 150
+        testObjects[1]["dec"] = -80
         # Coordinates are chosen so that the inverse WCS erroneously maps them
         # to inside the box (to (74.5, 600.6) instead of around (1745, 600.6)).
-        testObjects.loc[2, "ra"] = 44.91215199831453
-        testObjects.loc[2, "dec"] = 45.001331943391406
+        testObjects[2]["ra"] = 44.91215199831453
+        testObjects[2]["dec"] = 45.001331943391406
         maskedObjects = ssAssocTask._maskToCcdRegion(
-            pd.concat([self.testSsObjects, testObjects]),
-            self.exposure,
+            tb.vstack([self.testSsObjects, testObjects]),
+            self.exposure.getBBox(),
+            self.exposure.wcs,
             1.0)
         self.assertEqual(len(maskedObjects), len(self.testSsObjects))
 
