@@ -312,6 +312,16 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         doc="Pad the image by this many pixels before removing off-image "
             "diaObjects for association.",
     )
+    maximumTableLength = pexConfig.RangeField(
+        dtype=int,
+        default=500,
+        min=0,
+        max=65535,
+        doc="Maximum length of tables allowed to be written in one operation"
+            " to the APDB. Set to 0 to disable."
+            "The maximum is the hard limit on the number of records in the"
+            " Cassandra APDB that can be updated in one transaction",
+    )
     idGenerator = DetectorVisitIdGeneratorConfig.make_field()
 
     def setDefaults(self):
@@ -792,7 +802,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             DateTime.now().toAstropy(),
             diaObjectStore,
             diaSourceStore,
-            diaForcedSourceStore)
+            diaForcedSourceStore,
+            maximum_table_length=self.config.maximumTableLength)
         self.log.info("APDB updated.")
 
     def testDataFrameIndex(self, df):
