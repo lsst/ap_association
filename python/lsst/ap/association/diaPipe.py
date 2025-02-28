@@ -45,7 +45,7 @@ from lsst.ap.association import (
     PackageAlertsTask)
 
 from lsst.ap.association.utils import convertTableToSdmSchema, readSchemaFromApdb, dropEmptyColumns, \
-    make_empty_catalog, makeEmptyForcedSourceTable
+    make_empty_catalog, makeEmptyForcedSourceTable, checkSdmSchemaColumns
 from lsst.daf.base import DateTime
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
     DiaObjectCalculationTask
@@ -436,6 +436,15 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             self.makeSubtask("alertPackager")
         if self.config.doSolarSystemAssociation:
             self.makeSubtask("solarSystemAssociator")
+        if self.config.filterUnAssociatedSources:
+            columns = [self.config.newObjectFluxField,
+                       self.config.newObjectErrField,
+                       self.config.newObjectReliabilityField]
+            columns += self.config.newObjectBadFlags
+
+            for colName in columns:
+                if not checkSdmSchemaColumns(self.schema, colName, "DiaSource"):
+                    raise pipeBase.InvalidQuantumError("Field %s not in the DiaSource schema" % colName)
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
