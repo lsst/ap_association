@@ -23,7 +23,7 @@
 """
 __all__ = ("convertTableToSdmSchema", "readSdmSchemaFile", "readSchemaFromApdb",
            "dropEmptyColumns", "make_empty_catalog", "getMidpointFromTimespan",
-           "makeEmptyForcedSourceTable")
+           "makeEmptyForcedSourceTable", "checkSdmSchemaColumns")
 
 from collections.abc import Mapping
 import os
@@ -132,6 +132,33 @@ def readSchemaFromApdb(apdb: Apdb) -> dict[str, schema_model.Table | None]:
         A dict of the schemas in the given table defined in the specified file.
     """
     return {table.table_name(): apdb.tableDef(table) for table in ApdbTables}
+
+
+def checkSdmSchemaColumns(apdbSchema, colNames, tableName):
+    """Check if supplied column names exists in the schema.
+
+    Parameters
+    ----------
+    apdbSchema : `dict` [`str`, `lsst.dax.apdb.schema_model.Table`]
+        Schema from ``sdm_schemas`` containing the table definition to use.
+    colNames : `list` of ``str`
+        Names of the columns to check for in the table.
+    tableName : `str`
+        Name of the table in the schema to use.
+
+    Returns
+    -------
+    missing : `list` of `str`
+        All column names that are not in the schema
+    """
+    table = apdbSchema[tableName]
+    missing = []
+
+    names = [columnDef.name for columnDef in table.columns]
+    for col in colNames:
+        if col not in names:
+            missing.append(col)
+    return missing
 
 
 def convertTableToSdmSchema(apdbSchema, sourceTable, tableName):
