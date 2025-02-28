@@ -37,6 +37,7 @@ import lsst.utils.tests
 from lsst.pipe.base.testUtils import assertValidOutput
 
 from lsst.ap.association import DiaPipelineTask
+from lsst.ap.association.utils import convertTableToSdmSchema
 from utils_tests import makeExposure, makeDiaObjects, makeDiaSources, makeDiaForcedSources, \
     makeSolarSystemSources
 
@@ -223,15 +224,15 @@ class TestDiaPipelineTask(unittest.TestCase):
         """Test that creating new DiaObjects works as expected.
         """
         nSources = 5
+        config = self._makeDefaultConfig(config_file=self.config_file.name, doPackageAlerts=False)
+        task = DiaPipelineTask(config=config)
         diaSources = pd.DataFrame(data=[
             {"ra": 0.04*idx, "dec": 0.04*idx,
              "diaSourceId": idx + 1 + nSources, "diaObjectId": 0,
              "ssObjectId": 0}
             for idx in range(nSources)])
 
-        config = self._makeDefaultConfig(config_file=self.config_file.name, doPackageAlerts=False)
-        task = DiaPipelineTask(config=config)
-        result = task.createNewDiaObjects(diaSources)
+        result = task.createNewDiaObjects(convertTableToSdmSchema(task.schema, diaSources, "DiaSource"))
         self.assertEqual(nSources, len(result.newDiaObjects))
         self.assertTrue(np.all(np.equal(
             result.diaSources["diaObjectId"].to_numpy(),
