@@ -672,13 +672,32 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                nNewDiaObjects=len(newDiaObjects),
                                marginalDiaSources=marginalDiaSources)
 
-    def filterSources(self, sources):
+    def filterSources(self, sources, snrThreshold=None, snrThresholdMultiplier=None,
+                      reliabilityThreshold=None, lowSnrReliabilityThreshold=None, badFlags=None):
         """Select good sources out of a catalog.
 
         Parameters
         ----------
         sources : `pandas.DataFrame`
             Set of DiaSources to check.
+        snrThreshold : `float`, optional
+            The minimum signal to noise diaSource to make a new diaObject.
+            Included for unit tests. Uses the task config value if not set.
+        snrThresholdMultiplier : `float`, optional
+            Use ``lowSnrReliabilityThreshold`` as the reliability threshold for
+            diaSources with ``snrThreshold`` < SNR < ``snrThreshold``*``snrThresholdMultiplier``
+            Included for unit tests. Uses the task config value if not set.
+        reliabilityThreshold : `float`, optional
+            The minimum reliability score diaSource to make a new diaObject
+            Included for unit tests. Uses the task config value if not set.
+        lowSnrReliabilityThreshold : `float`, optional
+            Use ``lowSnrReliabilityThreshold`` as the reliability threshold for
+            diaSources with ``snrThreshold`` < SNR < ``snrThreshold``*``snrThresholdMultiplier``
+            Included for unit tests. Uses the task config value if not set.
+        badFlags : `list` of `str`, optional
+            Do not create new diaObjects for any diaSource with any of these
+            flags set.
+            Included for unit tests. Uses the task config value if not set.
 
         Returns
         -------
@@ -690,40 +709,50 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             - badSources : `pandas.DataFrame`
                 Subset of the input sources that fail any check.
         """
-        self.config.newObjectReliabilityThreshold = 0.1
-        detectionThreshold2 = self.config.newObjectSnrThreshold*self.config.newObjectSnrThresholdMultiplier
-        flagged = np.ndarray(len(sources), dtype=bool)
-        for flag in self.config.newObjectBadFlags:
+        if snrThreshold is None:
+            snrThreshold = self.config.newObjectSnrThreshold
+        if snrThresholdMultiplier is None:
+            snrThresholdMultiplier = self.config.newObjectSnrThresholdMultiplier
+        if reliabilityThreshold is None:
+            reliabilityThreshold = self.config.newObjectReliabilityThreshold
+        if lowSnrReliabilityThreshold is None:
+            lowSnrReliabilityThreshold = self.config.newObjectLowSnrReliabilityThreshold
+        if badFlags is None:
+            badFlags = self.config.newObjectBadFlags
+        detectionThreshold2 = snrThreshold*snrThresholdMultiplier
+        flagged = np.zeros(len(sources), dtype=bool)
+        fluxField = self.config.newObjectFluxField
+        fluxErrField = self.config.newObjectErrField
+        signalToNoise = np.abs(np.array(sources[fluxField]/sources[fluxErrField]))
+        reliability = np.array(sources['reliability'])
+        for flag in badFlags:
             flagged += sources[flag].values
-        nFlagged = np.sum(flagged)
-        self.log.info("Not creating new diaObjects for %i unassociated diaSources due to flags", nFlagged)
+        nFlagged = np.count_nonzero(flagged)
+        if nFlagged > 0:
+            self.log.info("Not creating new diaObjects for %i unassociated diaSources due to flags", nFlagged)
 
-        if self.config.newObjectSnrThreshold > 0:
-            fluxField = self.config.newObjectFluxField
-            fluxErrField = self.config.newObjectErrField
-            signalToNoise = np.abs(sources[fluxField]/sources[fluxErrField])
-            snr_flag = signalToNoise < self.config.newObjectSnrThreshold
+        if snrThreshold > 0:
+            snr_flag = signalToNoise < snrThreshold
             self.log.info("Not creating new diaObjects for %i unassociated diaSources due to %sFlux"
                           " signal to noise < %d",
-                          np.sum(snr_flag), fluxField, self.config.newObjectSnrThreshold)
+                          np.sum(snr_flag), fluxField, snrThreshold)
             flagged += snr_flag
-        if self.config.newObjectReliabilityThreshold > 0:
-            reliability = sources['reliability']
-            reliability_flag = reliability < self.config.newObjectReliabilityThreshold
+        if reliabilityThreshold > 0:
+            reliability_flag = reliability < reliabilityThreshold
             self.log.info("Not creating new diaObjects for %i unassociated diaSources due to "
                           "reliability<%d",
-                          np.sum(reliability_flag), self.config.newObjectReliabilityThreshold)
+                          np.sum(reliability_flag), reliabilityThreshold)
             flagged += reliability_flag
-        if min(detectionThreshold2, self.config.newObjectLowSnrReliabilityThreshold) > 0:
+        if min(detectionThreshold2, lowSnrReliabilityThreshold) > 0:
             # Only run the combined test if both thresholds are greater than zero
             lowSnrReliability_flag = ((signalToNoise < detectionThreshold2)
-                                      & (reliability < self.config.newObjectLowSnrReliabilityThreshold))
+                                      & (reliability < lowSnrReliabilityThreshold))
             self.log.info("Not creating new diaObjects for %i unassociated diaSources due to %sFlux"
                           " signal to noise < %d combined with reliability< %d",
                           np.sum(lowSnrReliability_flag),
                           fluxField,
                           detectionThreshold2,
-                          self.config.newObjectLowSnrReliabilityThreshold)
+                          lowSnrReliabilityThreshold)
             flagged += lowSnrReliability_flag
 
         if np.count_nonzero(~flagged) > 0:
