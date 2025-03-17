@@ -99,9 +99,11 @@ class TestDiaPipelineTask(unittest.TestCase):
         self.ssSources = makeSolarSystemSources(
             20, self.diaObjects["diaObjectId"].to_numpy(), self.exposure, rng)
 
-        apdb_config = daxApdb.ApdbSql.init_database(db_url="sqlite://")
+        sqlite_file = tempfile.NamedTemporaryFile()
+        self.addCleanup(sqlite_file.close)
         self.config_file = tempfile.NamedTemporaryFile()
         self.addCleanup(self.config_file.close)
+        apdb_config = daxApdb.ApdbSql.init_database(db_url=f"sqlite:///{sqlite_file.name}")
         apdb_config.save(self.config_file.name)
 
     def testRun(self):
