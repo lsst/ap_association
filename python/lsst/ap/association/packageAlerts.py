@@ -382,6 +382,7 @@ class PackageAlertsTask(pipeBase.Task):
             extent = geom.Extent2I(bboxSize, bboxSize)
         return extent
 
+    @timeMethod
     def produceAlerts(self, alerts, visit, detector, midpoint_unix, exposure_time):
         """Serialize alerts and send them to the alert stream using
         confluent_kafka's producer.
