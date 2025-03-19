@@ -491,6 +491,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Write results to Alert Production Database (APDB)
         self.writeToApdb(updatedDiaObjects, associatedDiaSources, diaForcedSources)
         self.metadata["writeToApdbDuration"] = duration_from_timeMethod(self.metadata, "writeToApdb")
+        # A single log message is easier for Loki to parse than timeMethod's start+end pairs.
+        self.log.debug("writeToApdb: Took %.4f seconds", self.metadata["writeToApdbDuration"])
 
         # Package alerts
         if self.config.doPackageAlerts:
