@@ -838,10 +838,14 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             nAssociatedSsObjects = 0
             associatedSsSources = None
             unassociatedSsObjects = None
-        if len(assocResults.matchedDiaSources) > 0:
+        if not assocResults.matchedDiaSources.empty:
             toAssociate.append(assocResults.matchedDiaSources)
-        toAssociate.append(createResults.diaSources)
-        associatedDiaSources = pd.concat(toAssociate)
+        if not createResults.diaSources.empty:
+            toAssociate.append(createResults.diaSources)
+        if len(toAssociate) == 0:
+            associatedDiaSources = make_empty_catalog(self.schema, tableName="DiaSource")
+        else:
+            associatedDiaSources = pd.concat(toAssociate)
 
         self._add_association_meta_data(assocResults.nUpdatedDiaObjects,
                                         assocResults.nUnassociatedDiaObjects,
