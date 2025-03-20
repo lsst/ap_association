@@ -149,6 +149,8 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
         """
         region = self._paddedRegion(regionTime.region,
                                     lsst.sphgeom.Angle.fromDegrees(self.config.angleMargin/3600.))
+        # HACK for the APDB simulation to move southern hemisphere visits to the north
+        region = lsst.sphgeom.ConvexPolygon([-r for r in region.getVertices()])
         schema = readSchemaFromApdb(self.apdb)
 
         # This is the first database query.
@@ -226,6 +228,7 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
             by ``pixelRanges``.
         """
         diaObjects = self.apdb.getDiaObjects(region)
+        mirror_catalog(diaObjects)
 
         diaObjects.set_index("diaObjectId", drop=False, inplace=True)
         if diaObjects.index.has_duplicates:
@@ -264,6 +267,7 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
             by ``pixelRange`` and associated with ``diaObjects``.
         """
         diaSources = self.apdb.getDiaSources(region, diaObjects.loc[:, "diaObjectId"], dateTime)
+        mirror_catalog(diaSources)
 
         diaSources.set_index(["diaObjectId", "band", "diaSourceId"],
                              drop=False,
@@ -314,6 +318,7 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
                 region,
                 diaObjects.loc[:, "diaObjectId"],
                 dateTime)
+            mirror_catalog(diaForcedSources)
 
         diaForcedSources.set_index(["diaObjectId", "diaForcedSourceId"],
                                    drop=False,
@@ -333,3 +338,8 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
         self.log.info("Loaded %i DiaForcedSources from %i visits", len(diaForcedSources), nVisits)
 
         return convertTableToSdmSchema(schema, diaForcedSources, tableName="DiaForcedSource")
+
+
+def mirror_catalog(catalog):
+    catalog.dec = -catalog.dec
+    catalog.ra = 360 - catalog.ra

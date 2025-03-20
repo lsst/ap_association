@@ -788,6 +788,10 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         diaObjectStore = dropEmptyColumns(self.schema, updatedDiaObjects, tableName="DiaObject")
         diaSourceStore = dropEmptyColumns(self.schema, associatedDiaSources, tableName="DiaSource")
         diaForcedSourceStore = dropEmptyColumns(self.schema, diaForcedSources, tableName="DiaForcedSource")
+        # HACK the coordinates to match the simulated APDB coverage
+        mirror_catalog(diaObjectStore)
+        mirror_catalog(diaSourceStore)
+        mirror_catalog(diaForcedSourceStore)
         self.apdb.store(
             DateTime.now().toAstropy(),
             diaObjectStore,
@@ -948,3 +952,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         del diaObjects["nDiaSources"]
         updatedDiaObjects = diaObjects.join(nDiaSources, how="left")
         return updatedDiaObjects
+
+
+def mirror_catalog(catalog):
+    catalog.dec = -catalog.dec
+    catalog.ra = 360 - catalog.ra
