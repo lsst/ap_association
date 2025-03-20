@@ -37,6 +37,7 @@ import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
 
 from astropy.table import Table
+from astropy.time import TimeDelta
 import numpy as np
 import pandas as pd
 from lsst.ap.association import (
@@ -790,8 +791,15 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         diaObjectStore = dropEmptyColumns(self.schema, updatedDiaObjects, tableName="DiaObject")
         diaSourceStore = dropEmptyColumns(self.schema, associatedDiaSources, tableName="DiaSource")
         diaForcedSourceStore = dropEmptyColumns(self.schema, diaForcedSources, tableName="DiaForcedSource")
+        # HACK the coordinates to match the simulated APDB coverage
+        mirror_catalog(diaObjectStore)
+        mirror_catalog(diaSourceStore)
+        mirror_catalog(diaForcedSourceStore)
+        time_hack = DateTime.now().toAstropy()
+        time_hack -= TimeDelta(int(time_hack.mjd), format='jd')
+        time_hack += TimeDelta(1, format='jd')
         self.apdb.store(
-            DateTime.now().toAstropy(),
+            time_hack,
             diaObjectStore,
             diaSourceStore,
             diaForcedSourceStore)
@@ -950,3 +958,16 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         del diaObjects["nDiaSources"]
         updatedDiaObjects = diaObjects.join(nDiaSources, how="left")
         return updatedDiaObjects
+
+
+def mirror_catalog(catalog):
+    catalog.dec = -catalog.dec
+    catalog.ra = (catalog.ra + 180) % 360
+
+    if 'midpointMjdTai' in catalog.columns:
+        # HACK to set any present-day MJD values to the same epoch as the simulation (which has MJD 0 to 1)
+        filtered_values = catalog.loc[catalog['midpointMjdTai'] > 50000, 'midpointMjdTai']
+
+        if not filtered_values.empty:
+            min_value = int(filtered_values.min())
+            catalog['midpointMjdTai'] = catalog['midpointMjdTai'] - min_value + 1
