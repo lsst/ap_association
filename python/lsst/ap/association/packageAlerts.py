@@ -382,6 +382,7 @@ class PackageAlertsTask(pipeBase.Task):
             extent = geom.Extent2I(bboxSize, bboxSize)
         return extent
 
+    @timeMethod
     def produceAlerts(self, alerts, visit, detector, midpoint_unix, exposure_time):
         """Serialize alerts and send them to the alert stream using
         confluent_kafka's producer.
@@ -424,6 +425,9 @@ class PackageAlertsTask(pipeBase.Task):
         self.metadata['produce_start_timestamp'] = produce_start_timestamp
         self.metadata['alert_timing_since_shutter_close'] = total_time
         self.metadata['total_alerts'] = total_alerts
+        # A single log message is easier for Loki to parse than timeMethod's start+end pairs.
+        self.log.debug("Producing alerts: Took %.4f seconds",
+                       produce_end_timestamp - produce_start_timestamp)
 
         self.log.info(f"Total time since shutter close to produce alerts for"
                       f" visit {visit} detector {detector}: {total_time} seconds")
