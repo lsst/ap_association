@@ -64,14 +64,12 @@ funcs:
             - slot_ApFlux_instFlux
             - slot_ApFlux_instFluxErr
             - base_LocalPhotoCalib
-            - base_LocalPhotoCalibErr
     apFluxErr:
         functor: LocalNanojanskyErr
         args:
             - slot_ApFlux_instFlux
             - slot_ApFlux_instFluxErr
             - base_LocalPhotoCalib
-            - base_LocalPhotoCalibErr
     snr:
         functor: Column
         args: snr
@@ -81,14 +79,12 @@ funcs:
             - slot_PsfFlux_instFlux
             - slot_PsfFlux_instFluxErr
             - base_LocalPhotoCalib
-            - base_LocalPhotoCalibErr
     psfFluxErr:
         functor: LocalNanojanskyErr
         args:
             - slot_PsfFlux_instFlux
             - slot_PsfFlux_instFluxErr
             - base_LocalPhotoCalib
-            - base_LocalPhotoCalibErr
     # psfFlux_psfRa_cov not implemented
     # psfFlux_psfDec_cov not implemented
     # psfLnl not implemented
@@ -104,7 +100,6 @@ funcs:
             - ext_trailedSources_Naive_flux
             - slot_ApFlux_instFluxErr  # Place holder; arg not actually used
             - base_LocalPhotoCalib
-            - base_LocalPhotoCalibErr
     trailRa:
         functor: Column
         args: ext_trailedSources_Naive_ra
@@ -139,7 +134,6 @@ funcs:
             - ip_diffim_DipoleFit_pos_instFluxErr
             - ip_diffim_DipoleFit_neg_instFluxErr
             - base_LocalPhotoCalib
-            - base_LocalPhotoCalibErr
     dipoleMeanFluxErr:
         functor: LocalDipoleMeanFluxErr
         args:
@@ -148,7 +142,6 @@ funcs:
             - ip_diffim_DipoleFit_pos_instFluxErr
             - ip_diffim_DipoleFit_neg_instFluxErr
             - base_LocalPhotoCalib
-            - base_LocalPhotoCalibErr
     dipoleFluxDiff:
         functor: LocalDipoleDiffFlux
         args:
@@ -157,7 +150,6 @@ funcs:
             - ip_diffim_DipoleFit_pos_instFluxErr
             - ip_diffim_DipoleFit_neg_instFluxErr
             - base_LocalPhotoCalib
-            - base_LocalPhotoCalibErr
     dipoleFluxDiffErr:
         functor: LocalDipoleDiffFluxErr
         args:
@@ -166,7 +158,6 @@ funcs:
             - ip_diffim_DipoleFit_pos_instFluxErr
             - ip_diffim_DipoleFit_neg_instFluxErr
             - base_LocalPhotoCalib
-            - base_LocalPhotoCalibErr
     # dipoleRa not implemented
     # dipoleDec not implemented
     # TODO: the below statement is false! Previously, position was from the
@@ -210,14 +201,12 @@ funcs:
             - ip_diffim_forced_PsfFlux_instFlux
             - ip_diffim_forced_PsfFlux_instFluxErr
             - base_LocalPhotoCalib
-            - base_LocalPhotoCalibErr
     scienceFluxErr:
         functor: LocalNanojanskyErr
         args:
             - ip_diffim_forced_PsfFlux_instFlux
             - ip_diffim_forced_PsfFlux_instFluxErr
             - base_LocalPhotoCalib
-            - base_LocalPhotoCalibErr
     # snapDiffFlux not implemented and likely dropped due to no snaps.
     # snapDiffFluxErr not implemented and likely dropped due to no snaps.
     # fpBkgd not measured yet. DM-
