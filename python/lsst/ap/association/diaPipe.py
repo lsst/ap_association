@@ -341,7 +341,12 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     )
     newObjectBadFlags = pexConfig.ListField(
         dtype=str,
-        default=(),
+        default=("pixelFlags_crCenter",
+                 "pixelFlags_nodataCenter",
+                 "pixelFlags_interpolatedCenter",
+                 "pixelFlags_saturatedCenter",
+                 "pixelFlags_suspectCenter",
+                 "pixelFlags_streakCenter"),
         doc="If `filterUnAssociatedSources` is set, exclude diaSources with "
         "these flags set before creating new diaObjects.",
     )
