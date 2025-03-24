@@ -352,7 +352,7 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     )
     newObjectSnrThreshold = pexConfig.RangeField(
         dtype=float,
-        default=2,
+        default=0.25,
         min=0,
         doc="If `filterUnAssociatedSources` is set, exclude diaSources with "
         "Abs(flux/fluxErr) less than this threshold before creating new "
@@ -377,7 +377,7 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     )
     newObjectLowSnrReliabilityThreshold = pexConfig.RangeField(
         dtype=float,
-        default=0.25,
+        default=0.2,
         min=0,
         max=1,
         doc="If `filterUnAssociatedSources` is set, exclude diaSources with "
