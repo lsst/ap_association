@@ -20,6 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import unittest
+import numpy as np
 
 from lsst.ap.association.filterDiaSourceCatalog import (FilterDiaSourceCatalogConfig,
                                                         FilterDiaSourceCatalogTask)
@@ -33,8 +34,12 @@ import lsst.daf.base as dafBase
 class TestFilterDiaSourceCatalogTask(unittest.TestCase):
 
     def setUp(self):
-        self.nSources = 15
+        self.config = FilterDiaSourceCatalogConfig()
+
         self.nSkySources = 5
+        self.nNegativeSources = 7
+        self.nTrailedSources = 10
+        self.nSources = self.nSkySources + self.nNegativeSources + self.nTrailedSources
         self.yLoc = 100
         self.expId = 4321
         self.bbox = geom.Box2I(geom.Point2I(0, 0),
@@ -44,6 +49,11 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
             dataset.addSource(10000.0, geom.Point2D(srcIdx, self.yLoc))
         schema = dataset.makeMinimalSchema()
         schema.addField("sky_source", type="Flag", doc="Sky objects.")
+        schema.addField("scienceFlux", type="F",
+                        doc="Forced photometry flux for a point source model measured on the visit image "
+                        "centered at DiaSource position.")
+        schema.addField("scienceFluxErr", type="F",
+                        doc="Estimated uncertainty of scienceFlux.")
         schema.addField('ext_trailedSources_Naive_flag_off_image', type="Flag",
                         doc="Trail extends off image")
         schema.addField('ext_trailedSources_Naive_flag_suspect_long_trail',
@@ -55,23 +65,35 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         schema.addField('ext_trailedSources_Naive_length', type="F",
                         doc="Length of the source trail")
         _, self.diaSourceCat = dataset.realize(10.0, schema, randomSeed=1234)
+
+        # set the sky_source flag for the first set
         self.diaSourceCat[0:self.nSkySources]["sky_source"] = True
+
+        # create increasingly negative scienceFlux/scienceFluxErr
+        self.nRemovedNegativeSources = 0
+        for i, srcIdx in enumerate(range(self.nSkySources, self.nSkySources+self.nNegativeSources)):
+            self.diaSourceCat[srcIdx]["scienceFlux"] = -0.5 * i
+            self.diaSourceCat[srcIdx]["scienceFluxErr"] = 1.01
+            if (-0.5 * i)/1.01 < self.config.minAllowedDirectSnr:
+                self.nRemovedNegativeSources += 1
+
         # The last 10 sources will all contained trail length measurements,
         # increasing in size by 1.5 arcseconds. Only the last three will have
         # lengths which are too long and will be filtered out.
         self.nFilteredTrailedSources = 0
-        for srcIdx in range(5, 15):
-            self.diaSourceCat[srcIdx]["ext_trailedSources_Naive_length"] = 1.5*(srcIdx-4)
-            if 1.5*(srcIdx-4) > 36000/3600.0/24.0 * 30.0:
+        trail_offset = self.nSkySources + self.nNegativeSources
+        for i, srcIdx in enumerate(range(trail_offset, trail_offset+self.nTrailedSources)):
+            self.diaSourceCat[srcIdx]["ext_trailedSources_Naive_length"] = 1.5*(i+1)
+            if 1.5*(i+1) > 36000/3600.0/24.0 * 30.0:
                 self.nFilteredTrailedSources += 1
         # Setting a combination of flags for filtering in tests
-        self.diaSourceCat[5]["ext_trailedSources_Naive_flag_off_image"] = True
-        self.diaSourceCat[6]["ext_trailedSources_Naive_flag_suspect_long_trail"] = True
-        self.diaSourceCat[6]["ext_trailedSources_Naive_flag_edge"] = True
+        self.diaSourceCat[trail_offset+1]["ext_trailedSources_Naive_flag_off_image"] = True
+        self.diaSourceCat[trail_offset+2]["ext_trailedSources_Naive_flag_suspect_long_trail"] = True
+        self.diaSourceCat[trail_offset+2]["ext_trailedSources_Naive_flag_edge"] = True
         # As only two of these flags are set, the total number of filtered
         # sources will be self.nFilteredTrailedSources + 2
         self.nFilteredTrailedSources += 2
-        self.config = FilterDiaSourceCatalogConfig()
+
         mjd = 57071.0
         self.utc_jd = mjd + 2_400_000.5 - 35.0 / (24.0 * 60.0 * 60.0)
 
@@ -90,6 +112,7 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         are returned.
         """
         self.config.doRemoveSkySources = False
+        self.config.doRemoveNegativeDirectImageSources = False
         self.config.doWriteRejectedSkySources = False
         self.config.doTrailedSourceFilter = False
         filterDiaSourceCatalogTask = FilterDiaSourceCatalogTask(config=self.config)
@@ -104,6 +127,7 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         catalog and the rest are returned.
         """
         self.config.doRemoveSkySources = True
+        self.config.doRemoveNegativeDirectImageSources = False
         self.config.doWriteRejectedSkySources = True
         self.config.doTrailedSourceFilter = False
         filterDiaSourceCatalogTask = FilterDiaSourceCatalogTask(config=self.config)
@@ -115,6 +139,44 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         self.assertEqual(len(result.rejectedDiaSources), self.nSkySources)
         self.assertEqual(len(self.diaSourceCat), self.nSources)
 
+    def test_run_with_filter_negative_only(self):
+        """Test that when only the negative filter is turned on then
+        sources which below the negtive snr cut are filtered out of the
+        catalog and the rest are returned.
+        """
+        self.config.doRemoveSkySources = False
+        self.config.doRemoveNegativeDirectImageSources = True
+        self.config.doWriteRejectedSkySources = True
+        self.config.doTrailedSourceFilter = False
+        filterDiaSourceCatalogTask = FilterDiaSourceCatalogTask(config=self.config)
+        result = filterDiaSourceCatalogTask.run(self.diaSourceCat, self.visitInfo)
+        nExpectedFilteredSources = self.nSources - self.nRemovedNegativeSources
+        self.assertEqual(len(result.filteredDiaSourceCat), nExpectedFilteredSources)
+        self.assertEqual(len(result.rejectedDiaSources), self.nRemovedNegativeSources)
+        self.assertEqual(len(self.diaSourceCat), self.nSources)
+        self.assertEqual(np.sum(result.filteredDiaSourceCat['scienceFlux']
+                                / result.filteredDiaSourceCat['scienceFluxErr']
+                                < self.config.minAllowedDirectSnr), 0)
+        self.assertEqual(np.sum(result.rejectedDiaSources['scienceFlux']
+                                / result.rejectedDiaSources['scienceFluxErr']
+                                < self.config.minAllowedDirectSnr),
+                         self.nRemovedNegativeSources)
+
+    def test_run_with_filter_negative_and_sky(self):
+        """Test concatenating rejects when both sky and negative filtering
+        are on.
+        """
+        self.config.doRemoveSkySources = True
+        self.config.doRemoveNegativeDirectImageSources = True
+        self.config.doWriteRejectedSkySources = True
+        self.config.doTrailedSourceFilter = False
+        filterDiaSourceCatalogTask = FilterDiaSourceCatalogTask(config=self.config)
+        result = filterDiaSourceCatalogTask.run(self.diaSourceCat, self.visitInfo)
+        nExpectedFilteredSources = self.nSources - self.nSkySources - self.nRemovedNegativeSources
+        self.assertEqual(len(result.filteredDiaSourceCat), nExpectedFilteredSources)
+        self.assertEqual(len(result.rejectedDiaSources), self.nSkySources + self.nRemovedNegativeSources)
+        self.assertEqual(len(self.diaSourceCat), self.nSources)
+
     def test_run_with_filter_trailed_sources_only(self):
         """Test that when only the trail filter is turned on the correct number
         of sources are filtered out. The filtered sources should be the last
@@ -123,6 +185,7 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         set. All sky objects should remain in the catalog.
         """
         self.config.doRemoveSkySources = False
+        self.config.doRemoveNegativeDirectImageSources = False
         self.config.doWriteRejectedSkySources = False
         self.config.doTrailedSourceFilter = True
         filterDiaSourceCatalogTask = FilterDiaSourceCatalogTask(config=self.config)
@@ -136,16 +199,19 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         should remain in the catalog after filtering.
         """
         self.config.doRemoveSkySources = True
+        self.config.doRemoveNegativeDirectImageSources = True
         self.config.doWriteRejectedSkySources = True
         self.config.doTrailedSourceFilter = True
         filterDiaSourceCatalogTask = FilterDiaSourceCatalogTask(config=self.config)
         result = filterDiaSourceCatalogTask.run(self.diaSourceCat, self.visitInfo)
-        nExpectedFilteredSources = self.nSources - self.nSkySources - self.nFilteredTrailedSources
+        nExpectedFilteredSources = (self.nSources - self.nSkySources
+                                    - self.nFilteredTrailedSources
+                                    - self.nRemovedNegativeSources)
         # 5 filtered out sky sources
         # 4 filtered out trailed sources, 2 with long trails 2 with flags
         # 6 sources left
         self.assertEqual(len(result.filteredDiaSourceCat), nExpectedFilteredSources)
-        self.assertEqual(len(result.rejectedDiaSources), self.nSkySources)
+        self.assertEqual(len(result.rejectedDiaSources), self.nSkySources + self.nRemovedNegativeSources)
         self.assertEqual(len(self.diaSourceCat), self.nSources)
 
 
