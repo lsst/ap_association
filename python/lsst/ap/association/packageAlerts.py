@@ -426,8 +426,8 @@ class PackageAlertsTask(pipeBase.Task):
         self.metadata['alert_timing_since_shutter_close'] = total_time
         self.metadata['total_alerts'] = total_alerts
         # A single log message is easier for Loki to parse than timeMethod's start+end pairs.
-        self.log.debug("Producing alerts: Took %.4f seconds",
-                       produce_end_timestamp - produce_start_timestamp)
+        self.log.verbose("Producing alerts: Took %.4f seconds",
+                         produce_end_timestamp - produce_start_timestamp)
 
         self.log.info(f"Total time since shutter close to produce alerts for"
                       f" visit {visit} detector {detector}: {total_time} seconds")
