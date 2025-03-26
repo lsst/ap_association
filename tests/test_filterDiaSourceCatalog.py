@@ -49,11 +49,11 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
             dataset.addSource(10000.0, geom.Point2D(srcIdx, self.yLoc))
         schema = dataset.makeMinimalSchema()
         schema.addField("sky_source", type="Flag", doc="Sky objects.")
-        schema.addField("scienceFlux", type="F",
+        schema.addField("ip_diffim_forced_PsfFlux_instFlux", type="F",
                         doc="Forced photometry flux for a point source model measured on the visit image "
                         "centered at DiaSource position.")
-        schema.addField("scienceFluxErr", type="F",
-                        doc="Estimated uncertainty of scienceFlux.")
+        schema.addField("ip_diffim_forced_PsfFlux_instFluxErr", type="F",
+                        doc="Estimated uncertainty of ip_diffim_forced_PsfFlux_instFlux.")
         schema.addField('ext_trailedSources_Naive_flag_off_image', type="Flag",
                         doc="Trail extends off image")
         schema.addField('ext_trailedSources_Naive_flag_suspect_long_trail',
@@ -69,11 +69,11 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         # set the sky_source flag for the first set
         self.diaSourceCat[0:self.nSkySources]["sky_source"] = True
 
-        # create increasingly negative scienceFlux/scienceFluxErr
+        # create increasingly negative ip_diffim_forced_PsfFlux_instFlux/ip_diffim_forced_PsfFlux_instFluxErr
         self.nRemovedNegativeSources = 0
         for i, srcIdx in enumerate(range(self.nSkySources, self.nSkySources+self.nNegativeSources)):
-            self.diaSourceCat[srcIdx]["scienceFlux"] = -0.5 * i
-            self.diaSourceCat[srcIdx]["scienceFluxErr"] = 1.01
+            self.diaSourceCat[srcIdx]["ip_diffim_forced_PsfFlux_instFlux"] = -0.5 * i
+            self.diaSourceCat[srcIdx]["ip_diffim_forced_PsfFlux_instFluxErr"] = 1.01
             if (-0.5 * i)/1.01 < self.config.minAllowedDirectSnr:
                 self.nRemovedNegativeSources += 1
 
@@ -154,11 +154,11 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         self.assertEqual(len(result.filteredDiaSourceCat), nExpectedFilteredSources)
         self.assertEqual(len(result.rejectedDiaSources), self.nRemovedNegativeSources)
         self.assertEqual(len(self.diaSourceCat), self.nSources)
-        self.assertEqual(np.sum(result.filteredDiaSourceCat['scienceFlux']
-                                / result.filteredDiaSourceCat['scienceFluxErr']
+        self.assertEqual(np.sum(result.filteredDiaSourceCat['ip_diffim_forced_PsfFlux_instFlux']
+                                / result.filteredDiaSourceCat['ip_diffim_forced_PsfFlux_instFluxErr']
                                 < self.config.minAllowedDirectSnr), 0)
-        self.assertEqual(np.sum(result.rejectedDiaSources['scienceFlux']
-                                / result.rejectedDiaSources['scienceFluxErr']
+        self.assertEqual(np.sum(result.rejectedDiaSources['ip_diffim_forced_PsfFlux_instFlux']
+                                / result.rejectedDiaSources['ip_diffim_forced_PsfFlux_instFluxErr']
                                 < self.config.minAllowedDirectSnr),
                          self.nRemovedNegativeSources)
 
