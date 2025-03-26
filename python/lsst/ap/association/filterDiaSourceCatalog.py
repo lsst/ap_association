@@ -181,7 +181,8 @@ class FilterDiaSourceCatalogTask(pipeBase.PipelineTask):
             self.log.info(f"Filtered {num_sky_sources} sky sources.")
 
         if self.config.doRemoveNegativeDirectImageSources:
-            direct_snr = diaSourceCat["scienceFlux"]/diaSourceCat["scienceFluxErr"]
+            direct_snr = (diaSourceCat["ip_diffim_forced_PsfFlux_instFlux"]
+                          / diaSourceCat["ip_diffim_forced_PsfFlux_instFluxErr"])
             too_negative = direct_snr < self.config.minAllowedDirectSnr
             rejectedNegative = diaSourceCat[too_negative].copy(deep=True)
             diaSourceCat = diaSourceCat[~too_negative].copy(deep=True)
