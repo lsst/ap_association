@@ -24,6 +24,7 @@ __all__ = ("TransformDiaSourceCatalogConnections",
            "TransformDiaSourceCatalogTask",
            "UnpackApdbFlags")
 
+import datetime
 import os
 import yaml
 
@@ -242,7 +243,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             diaSourceDf = diaSourceDf[~diaSourceDf["sky_source"]]
             diaSourceCat = diaSourceCat[~diaSourceCat["sky_source"]]
 
-        diaSourceDf["time_processed"] = DateTime.now().toPython()
+        diaSourceDf["time_processed"] = datetime.datetime.now(tz=datetime.UTC)
         diaSourceDf["snr"] = getSignificance(diaSourceCat)
         diaSourceDf["bboxSize"] = self.computeBBoxSizes(diaSourceCat)
         diaSourceDf["visit"] = diffIm.visitInfo.id
