@@ -352,19 +352,18 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     )
     newObjectSnrThreshold = pexConfig.RangeField(
         dtype=float,
-        default=0.25,
+        default=2,
         min=0,
         doc="If `filterUnAssociatedSources` is set, exclude diaSources with "
         "Abs(flux/fluxErr) less than this threshold before creating new "
         "diaObjects.",
     )
-    newObjectSnrThresholdMultiplier = pexConfig.Field(
+    newObjectLowReliabilitySnrThreshold = pexConfig.Field(
         dtype=float,
         default=4,
         doc="If `filterUnAssociatedSources` is set, exclude diaSources with "
-        "signal-to-noise ratios less than this multiplier times the "
-        "`newObjectSnrThreshold` and low reliability scores before creating "
-        "new diaObjects.",
+        "signal-to-noise ratios less than this threshold if they have"
+        " low reliability scores before creating new diaObjects.",
     )
     newObjectReliabilityThreshold = pexConfig.RangeField(
         dtype=float,
@@ -674,12 +673,13 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             unassociatedDiaSources["diaObjectId"] = unassociatedDiaSources["diaSourceId"]
             newDiaObjects = convertTableToSdmSchema(self.schema, unassociatedDiaSources,
                                                     tableName="DiaObject")
+        self.metadata["nRejectedNewDiaObjects"] = len(marginalDiaSources)
         return pipeBase.Struct(diaSources=unassociatedDiaSources,
                                newDiaObjects=newDiaObjects,
                                nNewDiaObjects=len(newDiaObjects),
                                marginalDiaSources=marginalDiaSources)
 
-    def filterSources(self, sources, snrThreshold=None, snrThresholdMultiplier=None,
+    def filterSources(self, sources, snrThreshold=None, lowReliabilitySnrThreshold=None,
                       reliabilityThreshold=None, lowSnrReliabilityThreshold=None, badFlags=None):
         """Select good sources out of a catalog.
 
@@ -690,16 +690,16 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         snrThreshold : `float`, optional
             The minimum signal to noise diaSource to make a new diaObject.
             Included for unit tests. Uses the task config value if not set.
-        snrThresholdMultiplier : `float`, optional
+        lowReliabilitySnrThreshold : `float`, optional
             Use ``lowSnrReliabilityThreshold`` as the reliability threshold for
-            diaSources with ``snrThreshold`` < SNR < ``snrThreshold``*``snrThresholdMultiplier``
+            diaSources with ``snrThreshold`` < SNR < ``lowReliabilitySnrThreshold``
             Included for unit tests. Uses the task config value if not set.
         reliabilityThreshold : `float`, optional
             The minimum reliability score diaSource to make a new diaObject
             Included for unit tests. Uses the task config value if not set.
         lowSnrReliabilityThreshold : `float`, optional
             Use ``lowSnrReliabilityThreshold`` as the reliability threshold for
-            diaSources with ``snrThreshold`` < SNR < ``snrThreshold``*``snrThresholdMultiplier``
+            diaSources with ``snrThreshold`` < SNR < ``lowReliabilitySnrThreshold``
             Included for unit tests. Uses the task config value if not set.
         badFlags : `list` of `str`, optional
             Do not create new diaObjects for any diaSource with any of these
@@ -718,15 +718,14 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         """
         if snrThreshold is None:
             snrThreshold = self.config.newObjectSnrThreshold
-        if snrThresholdMultiplier is None:
-            snrThresholdMultiplier = self.config.newObjectSnrThresholdMultiplier
+        if lowReliabilitySnrThreshold is None:
+            lowReliabilitySnrThreshold = self.config.newObjectLowReliabilitySnrThreshold
         if reliabilityThreshold is None:
             reliabilityThreshold = self.config.newObjectReliabilityThreshold
         if lowSnrReliabilityThreshold is None:
             lowSnrReliabilityThreshold = self.config.newObjectLowSnrReliabilityThreshold
         if badFlags is None:
             badFlags = self.config.newObjectBadFlags
-        detectionThreshold2 = snrThreshold*snrThresholdMultiplier
         flagged = np.zeros(len(sources), dtype=bool)
         fluxField = self.config.newObjectFluxField
         fluxErrField = self.config.newObjectErrField
@@ -750,15 +749,15 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                           "reliability<%f",
                           np.sum(reliability_flag), reliabilityThreshold)
             flagged += reliability_flag
-        if min(detectionThreshold2, lowSnrReliabilityThreshold) > 0:
+        if min(lowReliabilitySnrThreshold, lowSnrReliabilityThreshold) > 0:
             # Only run the combined test if both thresholds are greater than zero
-            lowSnrReliability_flag = ((signalToNoise < detectionThreshold2)
+            lowSnrReliability_flag = ((signalToNoise < lowReliabilitySnrThreshold)
                                       & (reliability < lowSnrReliabilityThreshold))
             self.log.info("Not creating new diaObjects for %i unassociated diaSources due to %sFlux"
                           " signal to noise < %f combined with reliability< %f",
                           np.sum(lowSnrReliability_flag),
                           fluxField,
-                          detectionThreshold2,
+                          lowReliabilitySnrThreshold,
                           lowSnrReliabilityThreshold)
             flagged += lowSnrReliability_flag
 
