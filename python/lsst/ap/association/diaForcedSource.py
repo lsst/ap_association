@@ -252,7 +252,8 @@ class DiaForcedSourceTask(pipeBase.Task):
         output_catalog["detector"] = direct_exp.detector.getId()
         output_catalog["midpointMjdTai"] = midpointMjdTai
         output_catalog["band"] = diff_exp.getFilter().bandLabel
-        output_catalog["time_processed"] = datetime.datetime.now(tz=datetime.UTC)
+        # Pandas requires a naive UTC datetime.
+        output_catalog["time_processed"] = datetime.datetime.now(tz=datetime.UTC).replace(tzinfo=None)
         # TODO: propagate actual flags (DM-42355)
 
         return output_catalog

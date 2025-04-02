@@ -243,7 +243,9 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             diaSourceDf = diaSourceDf[~diaSourceDf["sky_source"]]
             diaSourceCat = diaSourceCat[~diaSourceCat["sky_source"]]
 
-        diaSourceDf["time_processed"] = datetime.datetime.now(tz=datetime.UTC)
+        # Need UTC time but without a timezone because pandas requires a
+        # naive datetime.
+        diaSourceDf["time_processed"] = datetime.datetime.now(tz=datetime.UTC).replace(tzinfo=None)
         diaSourceDf["snr"] = getSignificance(diaSourceCat)
         diaSourceDf["bboxSize"] = self.computeBBoxSizes(diaSourceCat)
         diaSourceDf["visit"] = diffIm.visitInfo.id
