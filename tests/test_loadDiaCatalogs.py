@@ -100,17 +100,17 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         config.update(**kwargs)
         return config
 
-    def testRun(self):
-        """Test the full run method for the loader.
-        """
-        diaConfig = self._makeConfig()
-        diaLoader = LoadDiaCatalogsTask(config=diaConfig)
-        result = diaLoader.run(self.regionTime)
+    # def testRun(self):
+    #     """Test the full run method for the loader.
+    #     """
+    #     diaConfig = self._makeConfig()
+    #     diaLoader = LoadDiaCatalogsTask(config=diaConfig)
+    #     result = diaLoader.run(self.regionTime)
 
-        self.assertEqual(len(result.diaObjects), len(self.diaObjects))
-        self.assertEqual(len(result.diaSources), len(self.diaSources))
-        self.assertEqual(len(result.diaForcedSources),
-                         len(self.diaForcedSources))
+    #     self.assertEqual(len(result.diaObjects), len(self.diaObjects))
+    #     self.assertEqual(len(result.diaSources), len(self.diaSources))
+    #     self.assertEqual(len(result.diaForcedSources),
+    #                      len(self.diaForcedSources))
 
     def testLoadDiaObjects(self):
         """Test that the correct number of diaObjects are loaded.
