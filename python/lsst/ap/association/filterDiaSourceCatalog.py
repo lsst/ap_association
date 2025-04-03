@@ -104,6 +104,19 @@ class FilterDiaSourceCatalogConfig(
         "sky sources."
     )
 
+    doRemoveNegativeDirectImageSources = pexConfig.Field(
+        dtype=bool,
+        default=True,
+        doc="Remove DIASources with negative scienceFlux/scienceFluxErr "
+        "according to a configurable threshold.",
+    )
+
+    minAllowedDirectSnr = pexConfig.Field(
+        dtype=float,
+        doc="Minimum allowed ratio of scienceFlux/scienceFluxErr.",
+        default=-2.0,
+    )
+
     doTrailedSourceFilter = pexConfig.Field(
         doc="Run trailedSourceFilter to remove long trailed sources from the"
             "diaSource output catalog.",
@@ -130,14 +143,14 @@ class FilterDiaSourceCatalogConfig(
 
 
 class FilterDiaSourceCatalogTask(pipeBase.PipelineTask):
-    """Filter out sky sources from a DiaSource catalog."""
+    """Filter sources from a DiaSource catalog."""
 
     ConfigClass = FilterDiaSourceCatalogConfig
     _DefaultName = "filterDiaSourceCatalog"
 
     @timeMethod
     def run(self, diaSourceCat, diffImVisitInfo):
-        """Filter sky sources from the supplied DiaSource catalog.
+        """Filter sources from the supplied DiaSource catalog.
 
         Parameters
         ----------
@@ -153,21 +166,38 @@ class FilterDiaSourceCatalogTask(pipeBase.PipelineTask):
             ``filteredDiaSourceCat`` : `lsst.afw.table.SourceCatalog`
                 The catalog of filtered sources.
             ``rejectedDiaSources`` : `lsst.afw.table.SourceCatalog`
-                The catalog of rejected sky sources.
+                The catalog of rejected sources.
             ``longTrailedDiaSources`` : `astropy.table.Table`
                 DiaSources which have trail lengths greater than
                 max_trail_length*exposure_time.
         """
-        rejectedSkySources = None
+        rejectedSources = None
         exposure_time = diffImVisitInfo.exposureTime
         if self.config.doRemoveSkySources:
             sky_source_column = diaSourceCat["sky_source"]
             num_sky_sources = np.sum(sky_source_column)
-            rejectedSkySources = diaSourceCat[sky_source_column].copy(deep=True)
+            rejectedSources = diaSourceCat[sky_source_column].copy(deep=True)
             diaSourceCat = diaSourceCat[~sky_source_column].copy(deep=True)
             self.log.info(f"Filtered {num_sky_sources} sky sources.")
-        if not rejectedSkySources:
-            rejectedSkySources = SourceCatalog(diaSourceCat.getSchema())
+
+        if self.config.doRemoveNegativeDirectImageSources:
+            direct_snr = (diaSourceCat["ip_diffim_forced_PsfFlux_instFlux"]
+                          / diaSourceCat["ip_diffim_forced_PsfFlux_instFluxErr"])
+            too_negative = direct_snr < self.config.minAllowedDirectSnr
+            rejectedNegative = diaSourceCat[too_negative].copy(deep=True)
+            diaSourceCat = diaSourceCat[~too_negative].copy(deep=True)
+            self.log.info(f"Filtered {np.sum(too_negative)} negative direct sources.")
+            if rejectedSources is None:
+                rejectedSources = rejectedNegative
+            else:
+                rejectedSkySources = rejectedSources
+                rejectedSources = SourceCatalog(diaSourceCat.getSchema())
+                rejectedSources.reserve(len(rejectedSkySources) + len(rejectedNegative))
+                rejectedSources.extend(rejectedSkySources, deep=True)
+                rejectedSources.extend(rejectedNegative, deep=True)
+
+        if rejectedSources is None:
+            rejectedSources = SourceCatalog(diaSourceCat.getSchema())
 
         if self.config.doTrailedSourceFilter:
             trail_mask = self._check_dia_source_trail(diaSourceCat, exposure_time)
@@ -181,15 +211,15 @@ class FilterDiaSourceCatalogTask(pipeBase.PipelineTask):
 
             if self.config.doWriteTrailedSources:
                 filterResults = pipeBase.Struct(filteredDiaSourceCat=diaSourceCat,
-                                                rejectedDiaSources=rejectedSkySources,
+                                                rejectedDiaSources=rejectedSources,
                                                 longTrailedSources=longTrailedDiaSources.asAstropy())
             else:
                 filterResults = pipeBase.Struct(filteredDiaSourceCat=diaSourceCat,
-                                                rejectedDiaSources=rejectedSkySources)
+                                                rejectedDiaSources=rejectedSources)
 
         else:
             filterResults = pipeBase.Struct(filteredDiaSourceCat=diaSourceCat,
-                                            rejectedDiaSources=rejectedSkySources)
+                                            rejectedDiaSources=rejectedSources)
 
         return filterResults
 
