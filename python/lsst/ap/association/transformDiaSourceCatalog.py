@@ -41,6 +41,9 @@ from lsst.utils.timer import timeMethod
 
 from .utils import convertTableToSdmSchema, readSdmSchemaFile
 
+from astropy.utils.iers import conf
+conf.auto_max_age = None
+
 
 class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
                                            dimensions=("instrument", "visit", "detector"),

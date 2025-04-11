@@ -52,6 +52,9 @@ from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
 from lsst.pipe.tasks.ssoAssociation import SolarSystemAssociationTask
 from lsst.utils.timer import timeMethod, duration_from_timeMethod
 
+from astropy.utils.iers import conf
+conf.auto_max_age = None
+
 
 class DiaPipelineConnections(
         pipeBase.PipelineTaskConnections,

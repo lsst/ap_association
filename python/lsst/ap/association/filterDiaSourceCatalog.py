@@ -32,6 +32,9 @@ import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
 from lsst.utils.timer import timeMethod
 
+from astropy.utils.iers import conf
+conf.auto_max_age = None
+
 
 class FilterDiaSourceCatalogConnections(
     pipeBase.PipelineTaskConnections,
