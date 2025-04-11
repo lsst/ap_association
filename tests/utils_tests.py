@@ -47,6 +47,8 @@ def makeDiaObjects(nObjects, exposure, rng):
         Number of objects to create.
     exposure : `lsst.afw.image.Exposure`
         Exposure to create objects over.
+    rng : `numpy.random.Generator`
+        A NumPy random number generator initialized with a fixed seed for reproducibility.
 
     Returns
     -------
@@ -89,6 +91,8 @@ def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False
         Integer Ids of diaobjects to "associate" with the DiaSources.
     exposure : `lsst.afw.image.Exposure`
         Exposure to create sources over.
+    rng : `numpy.random.Generator`
+        A NumPy random number generator initialized with a fixed seed for reproducibility.
     randomizeObjects : `bool`, optional
         If True, randomly draw from `diaObjectIds` to generate the ids in the
         output catalog, otherwise just iterate through them, repeating as
@@ -151,6 +155,8 @@ def makeSolarSystemSources(nSources, diaObjectIds, exposure, rng, randomizeObjec
         Integer Ids of diaobjects to "associate" with the DiaSources.
     exposure : `lsst.afw.image.Exposure`
         Exposure to create sources over.
+    rng : `numpy.random.Generator`
+        A NumPy random number generator initialized with a fixed seed for reproducibility.
     randomizeObjects : `bool`, optional
         If True, randomly draw from `diaObjectIds` to generate the ids in the
         output catalog, otherwise just iterate through them, repeating as
@@ -179,6 +185,8 @@ def makeDiaForcedSources(nForcedSources, diaObjectIds, exposure, rng, randomizeO
         Integer Ids of diaobjects to "associate" with the DiaSources.
     exposure : `lsst.afw.image.Exposure`
         Exposure to create sources over.
+    rng : `numpy.random.Generator`
+        A NumPy random number generator initialized with a fixed seed for reproducibility.
     randomizeObjects : `bool`, optional
         If True, randomly draw from `diaObjectIds` to generate the ids in the
         output catalog, otherwise just iterate through them.
