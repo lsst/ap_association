@@ -33,10 +33,12 @@ import lsst.afw.table as afwTable
 import lsst.dax.apdb as daxApdb
 from lsst.meas.base import IdGenerator
 import lsst.pex.config as pexConfig
+import lsst.pipe.base as pipeBase
 import lsst.utils.tests
 from lsst.pipe.base.testUtils import assertValidOutput
 
 from lsst.ap.association import DiaPipelineTask
+from lsst.ap.association.utils import convertTableToSdmSchema
 from utils_tests import makeExposure, makeDiaObjects, makeDiaSources, makeDiaForcedSources, \
     makeSolarSystemSources
 
@@ -223,15 +225,15 @@ class TestDiaPipelineTask(unittest.TestCase):
         """Test that creating new DiaObjects works as expected.
         """
         nSources = 5
+        config = self._makeDefaultConfig(config_file=self.config_file.name, doPackageAlerts=False)
+        task = DiaPipelineTask(config=config)
         diaSources = pd.DataFrame(data=[
             {"ra": 0.04*idx, "dec": 0.04*idx,
              "diaSourceId": idx + 1 + nSources, "diaObjectId": 0,
              "ssObjectId": 0}
             for idx in range(nSources)])
 
-        config = self._makeDefaultConfig(config_file=self.config_file.name, doPackageAlerts=False)
-        task = DiaPipelineTask(config=config)
-        result = task.createNewDiaObjects(diaSources)
+        result = task.createNewDiaObjects(convertTableToSdmSchema(task.schema, diaSources, "DiaSource"))
         self.assertEqual(nSources, len(result.newDiaObjects))
         self.assertTrue(np.all(np.equal(
             result.diaSources["diaObjectId"].to_numpy(),
@@ -303,6 +305,97 @@ class TestDiaPipelineTask(unittest.TestCase):
         self.assertFalse(set(diaObjectIds1).issuperset(objIds))
         # Some IDs should have been removed
         self.assertLess(len(objIds), len(diaObjectIds0))
+
+    def test_filterDiaObjects(self):
+        """Unassociated diaSources that are filtered should have good reliability and SNR.
+        """
+
+        config = self._makeDefaultConfig(config_file=self.config_file.name,
+                                         doPackageAlerts=False,
+                                         filterUnAssociatedSources=True)
+
+        configBadFilter = self._makeDefaultConfig(config_file=self.config_file.name,
+                                                  doPackageAlerts=False,
+                                                  filterUnAssociatedSources=True,
+                                                  newObjectFluxField="notAFlux")
+        configBadFlag = self._makeDefaultConfig(config_file=self.config_file.name,
+                                                doPackageAlerts=False,
+                                                filterUnAssociatedSources=True,
+                                                newObjectBadFlags=("junkSource", "notUsed"))
+        with self.assertRaises(pipeBase.InvalidQuantumError):
+            DiaPipelineTask(config=configBadFilter)
+        with self.assertRaises(pipeBase.InvalidQuantumError):
+            DiaPipelineTask(config=configBadFlag)
+        task = DiaPipelineTask(config=config)
+        nUnassociatedDiaSources = 234
+
+        # Create diaSources
+        diaSources = makeDiaSources(nUnassociatedDiaSources,
+                                    np.zeros(nUnassociatedDiaSources),
+                                    self.exposure,
+                                    self.rng,
+                                    flagList=task.config.newObjectBadFlags)
+        reliability = self.rng.random(nUnassociatedDiaSources)
+        flux = (self.rng.random(nUnassociatedDiaSources)**2)*100
+        fluxErr = np.sqrt(flux)
+        diaSources["reliability"] = reliability
+        diaSources[config.newObjectFluxField] = flux
+        diaSources[config.newObjectFluxField + "Err"] = fluxErr
+        badFlagName = task.config.newObjectBadFlags[0]
+        badFlags = np.zeros(nUnassociatedDiaSources, dtype=bool)
+        nBadFlags = 20
+        badFlags[0:nBadFlags] = True
+        diaSources[badFlagName] = badFlags
+
+        def runAndCheckFilter(diaSources, snrThreshold=None, lowReliabilitySnrThreshold=None,
+                              reliabilityThreshold=None, lowSnrReliabilityThreshold=None,
+                              badFlags=None,
+                              ):
+
+            filterResults = task.filterSources(
+                diaSources.copy(deep=True),
+                snrThreshold=snrThreshold,
+                lowReliabilitySnrThreshold=lowReliabilitySnrThreshold,
+                reliabilityThreshold=reliabilityThreshold,
+                lowSnrReliabilityThreshold=lowSnrReliabilityThreshold,
+                badFlags=badFlags,
+            )
+            self.assertEqual(len(filterResults.goodSources) + len(filterResults.badSources),
+                             nUnassociatedDiaSources)
+            goodFlux = filterResults.goodSources[config.newObjectFluxField]
+            goodFluxErr = filterResults.goodSources[config.newObjectFluxField + "Err"]
+            goodSnr = np.array(goodFlux/goodFluxErr)
+            self.assertTrue(np.all(goodSnr > snrThreshold))
+            goodReliability = np.array(filterResults.goodSources["reliability"])
+            self.assertTrue(np.all(goodReliability > reliabilityThreshold))
+            goodLowSnrFlag = goodSnr < lowReliabilitySnrThreshold
+            lowSnrReliability = goodReliability[goodLowSnrFlag]
+            self.assertTrue(np.all(lowSnrReliability > lowSnrReliabilityThreshold))
+
+        # No sources should be removed if the thresholds are turned off
+        runAndCheckFilter(diaSources,
+                          snrThreshold=0, lowReliabilitySnrThreshold=0,
+                          reliabilityThreshold=0, lowSnrReliabilityThreshold=0)
+        runAndCheckFilter(diaSources,
+                          snrThreshold=0, lowReliabilitySnrThreshold=0,
+                          reliabilityThreshold=0, lowSnrReliabilityThreshold=0,
+                          badFlags=[badFlagName])
+        runAndCheckFilter(diaSources,
+                          snrThreshold=2, lowReliabilitySnrThreshold=8,
+                          reliabilityThreshold=0, lowSnrReliabilityThreshold=0)
+        runAndCheckFilter(diaSources,
+                          snrThreshold=2, lowReliabilitySnrThreshold=8,
+                          reliabilityThreshold=0, lowSnrReliabilityThreshold=0.5)
+        runAndCheckFilter(diaSources,
+                          snrThreshold=0, lowReliabilitySnrThreshold=0,
+                          reliabilityThreshold=0.1, lowSnrReliabilityThreshold=0.5)
+        runAndCheckFilter(diaSources,
+                          snrThreshold=2, lowReliabilitySnrThreshold=8,
+                          reliabilityThreshold=0.1, lowSnrReliabilityThreshold=0.5)
+        runAndCheckFilter(diaSources,
+                          snrThreshold=2, lowReliabilitySnrThreshold=8,
+                          reliabilityThreshold=0.1, lowSnrReliabilityThreshold=0.5,
+                          badFlags=[badFlagName])
 
     def test_mergeEmptyCatalog(self):
         """Test that a catalog is unchanged if it is merged with an empty
