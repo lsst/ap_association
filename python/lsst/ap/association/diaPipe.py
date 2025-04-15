@@ -153,14 +153,14 @@ class DiaPipelineConnections(
     newDiaSources = connTypes.Output(
         doc="New diaSources not associated with an existing diaObject that"
         " were used to create a new diaObject",
-        name="{fakesType}{coaddName}newDiaSources",
+        name="{fakesType}new_dia_source",
         storageClass="ArrowAstropy",
         dimensions=("instrument", "visit", "detector"),
     )
     marginalDiaSources = connTypes.Output(
         doc="Low SNR diaSources not associated with an existing diaObject that"
         " were rejected instead of creating a new diaObject",
-        name="{fakesType}{coaddName}marginalDiaSources",
+        name="{fakesType}marginal_new_dia_source",
         storageClass="ArrowAstropy",
         dimensions=("instrument", "visit", "detector"),
     )
@@ -334,7 +334,7 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     )
     filterUnAssociatedSources = pexConfig.Field(
         dtype=bool,
-        default=False,
+        default=True,
         doc="Check unassociated diaSources for quality before creating new ."
         "diaObjects. DiaSources that are associated with existing diaObjects "
         "will not be affected."
