@@ -153,14 +153,14 @@ class DiaPipelineConnections(
     newDiaSources = connTypes.Output(
         doc="New diaSources not associated with an existing diaObject that"
         " were used to create a new diaObject",
-        name="newDiaSources",
+        name="{fakesType}{coaddName}newDiaSources",
         storageClass="ArrowAstropy",
         dimensions=("instrument", "visit", "detector"),
     )
     marginalDiaSources = connTypes.Output(
         doc="Low SNR diaSources not associated with an existing diaObject that"
         " were rejected instead of creating a new diaObject",
-        name="marginalDiaSources",
+        name="{fakesType}{coaddName}marginalDiaSources",
         storageClass="ArrowAstropy",
         dimensions=("instrument", "visit", "detector"),
     )
