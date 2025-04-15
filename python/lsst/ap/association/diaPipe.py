@@ -334,7 +334,7 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     )
     filterUnAssociatedSources = pexConfig.Field(
         dtype=bool,
-        default=False,
+        default=True,
         doc="Check unassociated diaSources for quality before creating new ."
         "diaObjects. DiaSources that are associated with existing diaObjects "
         "will not be affected."
