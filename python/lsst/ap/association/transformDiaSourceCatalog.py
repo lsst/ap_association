@@ -71,7 +71,7 @@ class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
     diaSourceTable = connTypes.Output(
         doc=".",
         name="{fakesType}{coaddName}Diff_diaSrcTable",
-        storageClass="DataFrame",
+        storageClass="ArrowAstropy",
         dimensions=("instrument", "visit", "detector"),
     )
 

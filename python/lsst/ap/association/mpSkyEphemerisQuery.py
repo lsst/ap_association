@@ -57,7 +57,7 @@ class MPSkyEphemerisQueryConnections(PipelineTaskConnections,
     ssObjects = connectionTypes.Output(
         doc="MPSky-provided Solar System objects observable in this detector-visit",
         name="preloaded_SsObjects",
-        storageClass="DataFrame",
+        storageClass="ArrowAstropy",
         dimensions=("instrument", "group", "detector"),
     )
 
