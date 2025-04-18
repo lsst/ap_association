@@ -51,19 +51,19 @@ class LoadDiaCatalogsConnections(pipeBase.PipelineTaskConnections,
     diaObjects = connTypes.Output(
         doc="DiaObjects preloaded from the APDB.",
         name="preloaded_diaObjects",
-        storageClass="DataFrame",
+        storageClass="ArrowAstropy",
         dimensions=("instrument", "group", "detector"),
     )
     diaSources = connTypes.Output(
         doc="DiaSources preloaded from the APDB.",
         name="preloaded_diaSources",
-        storageClass="DataFrame",
+        storageClass="ArrowAstropy",
         dimensions=("instrument", "group", "detector"),
     )
     diaForcedSources = connTypes.Output(
         doc="DiaForcedSources preloaded from the APDB.",
         name="preloaded_diaForcedSources",
-        storageClass="DataFrame",
+        storageClass="ArrowAstropy",
         dimensions=("instrument", "group", "detector"),
     )
 

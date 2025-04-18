@@ -122,7 +122,7 @@ class DiaPipelineConnections(
         doc="Optional output storing the DiaSource catalog after matching, "
             "calibration, and standardization for insertion into the Apdb.",
         name="{fakesType}{coaddName}Diff_assocDiaSrc",
-        storageClass="DataFrame",
+        storageClass="ArrowAstropy",
         dimensions=("instrument", "visit", "detector"),
     )
     associatedSsSources = connTypes.Output(
@@ -141,13 +141,13 @@ class DiaPipelineConnections(
     diaForcedSources = connTypes.Output(
         doc="Optional output storing the forced sources computed at the diaObject positions.",
         name="{fakesType}{coaddName}Diff_diaForcedSrc",
-        storageClass="DataFrame",
+        storageClass="ArrowAstropy",
         dimensions=("instrument", "visit", "detector"),
     )
     diaObjects = connTypes.Output(
         doc="Optional output storing the updated diaObjects associated to these sources.",
         name="{fakesType}{coaddName}Diff_diaObject",
-        storageClass="DataFrame",
+        storageClass="ArrowAstropy",
         dimensions=("instrument", "visit", "detector"),
     )
     newDiaSources = connTypes.Output(
