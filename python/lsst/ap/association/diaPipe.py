@@ -526,6 +526,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Accept either legacySolarSystemTable or optional solarSystemObjectTable.
         if legacySolarSystemTable is not None and solarSystemObjectTable is None:
             solarSystemObjectTable = Table.from_pandas(legacySolarSystemTable)
+        self.checkTableIndex(preloadedDiaSources, index=["diaObjectId", "band", "diaSourceId"])
+        self.checkTableIndex(preloadedDiaObjects, index="diaObjectId")
+        self.checkTableIndex(preloadedDiaForcedSources, index=["diaObjectId", "diaForcedSourceId"])
 
         if not preloadedDiaObjects.empty:
             # Include a small buffer outside the image so that we can associate sources near the edge
@@ -1174,3 +1177,11 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         del diaObjects["nDiaSources"]
         updatedDiaObjects = diaObjects.join(nDiaSources, how="left")
         return updatedDiaObjects
+
+    @staticmethod
+    def checkTableIndex(dataFrame, index):
+        if dataFrame.index.name is None:
+            # The expected index may or may not be set, depending on whether
+            # the table was written originally as a DataFrame or something else
+            # Parquet-friendly.
+            dataFrame.set_index(index, drop=False, inplace=True)
