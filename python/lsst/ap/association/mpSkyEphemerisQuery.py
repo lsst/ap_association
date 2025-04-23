@@ -138,7 +138,11 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         expMidPointEPOCH = getMidpointFromTimespan(timespan, allowUnbounded=False).mjd
 
         # MPSky service query
-        mpSkyURL = os.environ.get('MP_SKY_URL', self.config.mpSkyFallbackURL)
+        try:
+            mpSkyURL = os.environ['MP_SKY_URL']
+        except KeyError:
+            self.log.warning("MP_SKY_URL is not defined. Falling back to %s.", self.config.mpSkyFallbackURL)
+            mpSkyURL = self.config.mpSkyFallbackURL
         mpSkySsObjects = self._mpSkyConeSearch(expCenter, expMidPointEPOCH,
                                                expRadius + self.config.queryBufferRadiusDegrees, mpSkyURL)
         return Struct(
