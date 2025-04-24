@@ -654,7 +654,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 Newly created DiaObjects from the unassociated DiaSources.
             - nNewDiaObjects : `int`
                 Number of newly created diaObjects.
-            - marginalDiaSources : `astropy.table.Table`
+            - marginalDiaSources : `pandas.DataFrame`
                 Unassociated diaSources with low signal-to-noise and/or
                 reliability, which are excluded from the new DiaObjects.
         """
@@ -673,7 +673,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         return pipeBase.Struct(diaSources=unassociatedDiaSources,
                                newDiaObjects=newDiaObjects,
                                nNewDiaObjects=len(newDiaObjects),
-                               marginalDiaSources=Table.from_pandas(marginalDiaSources))
+                               marginalDiaSources=marginalDiaSources)
 
     def filterSources(self, sources, snrThreshold=None, lowReliabilitySnrThreshold=None,
                       reliabilityThreshold=None, lowSnrReliabilityThreshold=None, badFlags=None):
@@ -809,7 +809,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             - newDiaSources : `pandas.DataFrame`
                 Subset of `associatedDiaSources` consisting of only the
                 unassociated diaSources that were added as new diaObjects.
-            - marginalDiaSources : `astropy.table.Table`
+            - marginalDiaSources : `pandas.DataFrame`
                 Unassociated diaSources with marginal detections, which were
                 removed from `associatedDiaSources` and were not added as new
                 diaObjects.
