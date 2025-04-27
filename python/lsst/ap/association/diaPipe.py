@@ -1024,7 +1024,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diaForcedSourceStore)
         self.log.info("APDB updated.")
 
-    def testDataFrameIndex(self, df):
+    @staticmethod
+    def testDataFrameIndex(df):
         """Test the sorted DataFrame index for duplicates.
 
         Wrapped as a separate function to allow for mocking of the this task
@@ -1157,7 +1158,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             mergedCatalog = pd.concat([originalCatalog], sort=True)
         return mergedCatalog.loc[:, originalCatalog.columns]
 
-    def updateObjectTable(self, diaObjects, diaSources):
+    @staticmethod
+    def updateObjectTable(diaObjects, diaSources):
         """Update the diaObject table with the new diaSource records.
 
         Parameters
