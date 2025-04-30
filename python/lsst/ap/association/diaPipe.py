@@ -827,7 +827,12 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 diffIm.wcs
             )
             # Create new DiaObjects from unassociated diaSources.
-            createResults = self.createNewDiaObjects(ssoAssocResult.unAssocDiaSources.to_pandas())
+            if len(ssoAssocResult.unAssocDiaSources) > 0:
+                # If the table is empty then converting time fields to pandas
+                # will raise an error. Pass in an empty Dataframe in that case.
+                createResults = self.createNewDiaObjects(ssoAssocResult.unAssocDiaSources.to_pandas())
+            else:
+                createResults = self.createNewDiaObjects(pd.DataFrame())
             if len(ssoAssocResult.ssoAssocDiaSources) > 0:
                 toAssociate.append(ssoAssocResult.ssoAssocDiaSources.to_pandas())
             nTotalSsObjects = ssoAssocResult.nTotalSsObjects
