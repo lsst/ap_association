@@ -47,6 +47,13 @@ class FilterDiaSourceCatalogConnections(
         dimensions=("instrument", "visit", "detector"),
     )
 
+    diffImVisitInfo = connTypes.Input(
+        doc="VisitInfo of diffIm.",
+        name="{fakesType}{coaddName}Diff_differenceExp.visitInfo",
+        storageClass="VisitInfo",
+        dimensions=("instrument", "visit", "detector"),
+    )
+
     filteredDiaSourceCat = connTypes.Output(
         doc="Output catalog of DiaSources after filtering.",
         name="{fakesType}{coaddName}Diff_candidateDiaSrc",
@@ -59,13 +66,6 @@ class FilterDiaSourceCatalogConnections(
         name="{fakesType}{coaddName}Diff_rejectedDiaSrc",
         storageClass="SourceCatalog",
         dimensions={"instrument", "visit", "detector"},
-    )
-
-    diffImVisitInfo = connTypes.Input(
-        doc="VisitInfo of diffIm.",
-        name="{fakesType}{coaddName}Diff_differenceExp.visitInfo",
-        storageClass="VisitInfo",
-        dimensions=("instrument", "visit", "detector"),
     )
 
     longTrailedSources = connTypes.Output(
