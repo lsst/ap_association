@@ -140,6 +140,12 @@ class FilterDiaSourceCatalogConfig(
             "0.416 arcseconds per second.",
         default=36000/3600.0/24.0,
     )
+    estimatedPixelScale = pexConfig.Field(
+        dtype=float,
+        doc="Approximate plate scale, in arcseconds/pixel."
+            "Used to convert trail length if the catalog calculation fails.",
+        default=0.2,
+    )
 
 
 class FilterDiaSourceCatalogTask(pipeBase.PipelineTask):
@@ -251,10 +257,57 @@ class FilterDiaSourceCatalogTask(pipeBase.PipelineTask):
             detector (off_image set). Also checks if both
             suspect_long_trail and edge are set and masks those sources out.
         """
+        pixelScale = self._estimate_pixel_scale(dia_sources)
         trail_mask = (dia_sources["ext_trailedSources_Naive_length"]
-                      >= (self.config.max_trail_length*exposure_time))
+                      >= (self.config.max_trail_length*exposure_time/pixelScale))
         trail_mask |= dia_sources['ext_trailedSources_Naive_flag_off_image']
         trail_mask |= (dia_sources['ext_trailedSources_Naive_flag_suspect_long_trail']
                        & dia_sources['ext_trailedSources_Naive_flag_edge'])
 
         return trail_mask
+
+    def _estimate_pixel_scale(self, catalog):
+        """Quickly calculate the pixel scale from catalog values
+
+        Will return a fallback value from the task config if there is any error
+
+        Parameters
+        ----------
+        catalog : `lsst.afw.table.SourceCatalog`
+            Catalog of sources measured on the difference image.
+
+        Returns
+        -------
+        scale : `float`
+            Pixel scale of the catalog, in arcseconds/pixel
+        """
+        nSrc = len(catalog)
+        if nSrc < 2:
+            return self.config.estimatedPixelScale
+        try:
+            coordKey = catalog.getCoordKey()
+            decVals = catalog[coordKey.getDec()]  # in radians
+            raVals = catalog[coordKey.getRa()]  # in radians
+            xVals = catalog.getX()
+            yVals = catalog.getY()
+            # Find two points that are well separated for the calculation
+            # Start with a point near one edge, and find the furthest point
+            #  from there
+            iMin = np.argmin(xVals)
+            dist = np.sqrt((xVals[iMin] - xVals)**2 + (yVals[iMin] - yVals)**2)
+            iMax = np.argmax(dist)
+            # Use the spherical law of cosines:
+            t1 = np.sin(decVals[iMin])*np.sin(decVals[iMax])
+            t2 = np.cos(decVals[iMin])*np.cos(decVals[iMax])*np.cos(raVals[iMin] - raVals[iMax])
+            separation = np.arccos(t1 + t2)  # in radians
+            scale = separation/max(dist)*3600*180/np.pi  # convert to arcseconds/pixel
+        except Exception as e:
+            self.log.warning("Error encountered estimating the pixel scale from the catalog: %s", e)
+            return self.config.estimatedPixelScale
+        else:
+            if abs(scale - self.config.estimatedPixelScale)/self.config.estimatedPixelScale > 0.1:
+                self.log.warning(f"Calculated pixel scale of {scale} too different from estimated value "
+                                 f"{self.config.estimatedPixelScale}. Falling back on estimate.")
+                return self.config.estimatedPixelScale
+            else:
+                return scale
