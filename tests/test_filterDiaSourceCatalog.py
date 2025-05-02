@@ -39,6 +39,7 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         self.nSkySources = 5
         self.nNegativeSources = 7
         self.nTrailedSources = 10
+        self.pixelScale = 0.2  # arcseconds/pixel
         self.nSources = self.nSkySources + self.nNegativeSources + self.nTrailedSources
         self.yLoc = 100
         self.expId = 4321
@@ -83,7 +84,7 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         self.nFilteredTrailedSources = 0
         trail_offset = self.nSkySources + self.nNegativeSources
         for i, srcIdx in enumerate(range(trail_offset, trail_offset+self.nTrailedSources)):
-            self.diaSourceCat[srcIdx]["ext_trailedSources_Naive_length"] = 1.5*(i+1)
+            self.diaSourceCat[srcIdx]["ext_trailedSources_Naive_length"] = 1.5*(i+1)/self.pixelScale
             if 1.5*(i+1) > 36000/3600.0/24.0 * 30.0:
                 self.nFilteredTrailedSources += 1
         # Setting a combination of flags for filtering in tests
@@ -213,6 +214,23 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         self.assertEqual(len(result.filteredDiaSourceCat), nExpectedFilteredSources)
         self.assertEqual(len(result.rejectedDiaSources), self.nSkySources + self.nRemovedNegativeSources)
         self.assertEqual(len(self.diaSourceCat), self.nSources)
+
+    def test_pixelScale_calculation(self):
+        """Check the calculation of the pixel scale from the input catalog.
+        """
+        self.config.doTrailedSourceFilter = True
+        filterDiaSourceCatalogTask = FilterDiaSourceCatalogTask(config=self.config)
+        scale = filterDiaSourceCatalogTask._estimate_pixel_scale(self.diaSourceCat)
+        # Should be almost but not actually equal
+        self.assertNotEqual(self.config.estimatedPixelScale, scale)
+        self.assertAlmostEqual(self.config.estimatedPixelScale, scale)
+
+        # If the estimatedPixelScale is very different, that value should be
+        #  used exactly and it should not raise an error.
+        self.config.estimatedPixelScale = 1.2
+        filterDiaSourceCatalogTask = FilterDiaSourceCatalogTask(config=self.config)
+        scale = filterDiaSourceCatalogTask._estimate_pixel_scale(self.diaSourceCat)
+        self.assertEqual(self.config.estimatedPixelScale, scale)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
