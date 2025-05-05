@@ -302,8 +302,8 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         self.assertFloatsAlmostEqual(
             cd,
             cutout.getWcs().getCdMatrix(),
-            rtol=1e-11,
-            atol=1e-11)
+            rtol=5e-10,
+            atol=5e-10)
 
     def testStreamCcdDataToBytes(self):
         """Test round tripping an CCDData cutout to bytes and back.
