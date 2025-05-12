@@ -212,7 +212,7 @@ class FilterDiaSourceCatalogTask(pipeBase.PipelineTask):
 
             self.log.info("%i DiaSources exceed max_trail_length %f arcseconds per second, "
                           "dropping from source catalog."
-                          % (self.config.max_trail_length, len(diaSourceCat)))
+                          % (len(longTrailedDiaSources), self.config.max_trail_length))
             self.metadata.add("num_filtered", len(longTrailedDiaSources))
 
             if self.config.doWriteTrailedSources:
