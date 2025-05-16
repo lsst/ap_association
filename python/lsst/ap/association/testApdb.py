@@ -188,7 +188,7 @@ class TestApdbTask(LoadDiaCatalogsTask):
             declinationMax = np.arcsin(1 - survey_area/(2*np.pi))
         else:
             declinationMax = np.pi - np.arcsin(1 - (4*np.pi - survey_area)/(2*np.pi))
-        self.radiusMax = stereographicRaDec2XY(0, declinationMax)[0]
+        self.radiusMax = stereographicRaDec2XY(0, declinationMax, south=False)[0]
         self.nReal = int(self.config.survey_area*self.config.stellar_density)
         # Radius of the focal plane, in radians
         self.fpRadius = np.radians(np.sqrt(self.config.fov/np.pi))
@@ -676,7 +676,7 @@ def randomCircleXY(radius, seed, n=None):
     return (x, y)
 
 
-def stereographicXY2RaDec(x, y):
+def stereographicXY2RaDec(x, y, south=True):
     """Convert from a grid-like stereographic projection to RA and Dec
 
     Notes
@@ -691,6 +691,8 @@ def stereographicXY2RaDec(x, y):
         Column index of the stereographic grid.
     y : `float`
         Row index of the stereographic grid.
+    south : `bool`, optional
+        Use the Southern hemisphere.
 
     Returns
     -------
@@ -700,10 +702,12 @@ def stereographicXY2RaDec(x, y):
     r = np.sqrt(x**2 + y**2)
     dec = np.pi/2 - 2*np.arctan(r/2)
     ra = np.arctan2(y, x)
+    if south:
+        dec *= -1
     return (ra, dec)
 
 
-def stereographicRaDec2XY(ra, dec):
+def stereographicRaDec2XY(ra, dec, south=True):
     """Convert from Ra, Dec to a grid-like stereographic projection
 
     Notes
@@ -718,13 +722,18 @@ def stereographicRaDec2XY(ra, dec):
         Right Ascension (RA) in radians.
     dec : `float`
         Declination (Dec) in radians.
+    south : `bool`, optional
+        Use the Southern hemisphere.
 
     Returns
     -------
     x, y : `float`
         Grid coordinates of the stereographic projection
     """
-    r = 2*np.cos(dec)/(1 + np.sin(dec))
+    if south:
+        r = 2*np.cos(dec)/(1 + np.sin(-dec))
+    else:
+        r = 2*np.cos(dec)/(1 + np.sin(dec))
     x = r*np.cos(ra)
     y = r*np.sin(ra)
     return (x, y)
