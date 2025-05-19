@@ -279,12 +279,12 @@ class TestApdbTask(LoadDiaCatalogsTask):
         schema = readSchemaFromApdb(self.apdb)
 
         t_load0b = time.time()
-        diaSources = self.loadDiaSources(diaObjects, region.getBoundingCircle(), dateTime, schema)
+        self.loadDiaSources(diaObjects, region.getBoundingCircle(), dateTime, schema)
         t_load1b = time.time()
         self.log.info("diaSource load timing: %.2fs", t_load1b - t_load0b)
 
         t_load0c = time.time()
-        diaForcedSources = self.loadDiaForcedSources(diaObjects, region, dateTime, schema)
+        self.loadDiaForcedSources(diaObjects, region, dateTime, schema)
         t_load1c = time.time()
         self.log.info("diaForcedSource load timing: %.2fs", t_load1c - t_load0c)
 
