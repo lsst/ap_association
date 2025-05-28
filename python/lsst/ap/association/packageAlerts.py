@@ -399,38 +399,42 @@ class PackageAlertsTask(pipeBase.Task):
         # Serialize and send alerts with the producer timestamp.
         total_alerts = 0
         produce_start_timestamp = time.time()
-        for alert in alerts:
-            alertBytes = self._serializeAlert(alert, schema=self.alertSchema.definition, schema_id=schema_id)
-            try:
-                timestamp = time.time()*1000  # Current time in milliseconds
-                headers = [("producer_timestamp", str(timestamp).encode('utf-8'))]
-                self.producer.produce(self.kafkaTopic, alertBytes, callback=self._delivery_callback,
-                                      headers=headers)
-                self.producer.flush()
-                total_alerts += 1
+        try:
+            for alert in alerts:
+                alertBytes = self._serializeAlert(alert,
+                                                  schema=self.alertSchema.definition, schema_id=schema_id)
+                try:
+                    timestamp = time.time()*1000  # Current time in milliseconds
+                    headers = [("producer_timestamp", str(timestamp).encode('utf-8'))]
+                    self.producer.produce(self.kafkaTopic, alertBytes, callback=self._delivery_callback,
+                                          headers=headers)
+                    self.producer.flush()
+                    total_alerts += 1
 
-            except KafkaException as e:
-                self.log.warning('Kafka error: {}, message was {} bytes'.format(e, sys.getsizeof(alertBytes)))
+                except KafkaException as e:
+                    self.log.warning('Kafka error: %s, message was %s bytes',
+                                     e, sys.getsizeof(alertBytes))
 
-                if self.config.doWriteFailedAlerts:
-                    with open(os.path.join(self.config.alertWriteLocation,
-                                           f"{visit}_{detector}_{alert['alertId']}.avro"), "wb") as f:
-                        f.write(alertBytes)
+                    if self.config.doWriteFailedAlerts:
+                        with open(os.path.join(self.config.alertWriteLocation,
+                                               f"{visit}_{detector}_{alert['alertId']}.avro"), "wb") as f:
+                            f.write(alertBytes)
 
-        self.producer.flush()
-        produce_end_timestamp = time.time()  # Current time in seconds
-        total_time = produce_end_timestamp - (midpoint_unix + exposure_time/2.0)
-        self.metadata['visit_midpoint'] = midpoint_unix
-        self.metadata['produce_end_timestamp'] = produce_end_timestamp
-        self.metadata['produce_start_timestamp'] = produce_start_timestamp
-        self.metadata['alert_timing_since_shutter_close'] = total_time
-        self.metadata['total_alerts'] = total_alerts
-        # A single log message is easier for Loki to parse than timeMethod's start+end pairs.
-        self.log.verbose("Producing alerts: Took %.4f seconds",
-                         produce_end_timestamp - produce_start_timestamp)
+            self.producer.flush()
+        finally:
+            produce_end_timestamp = time.time()  # Current time in seconds
+            total_time = produce_end_timestamp - (midpoint_unix + exposure_time/2.0)
+            self.metadata['visit_midpoint'] = midpoint_unix
+            self.metadata['produce_end_timestamp'] = produce_end_timestamp
+            self.metadata['produce_start_timestamp'] = produce_start_timestamp
+            self.metadata['alert_timing_since_shutter_close'] = total_time
+            self.metadata['total_alerts'] = total_alerts
+            # A single log message is easier for Loki to parse than timeMethod's start+end pairs.
+            self.log.verbose("Producing alerts: Took %.4f seconds",
+                             produce_end_timestamp - produce_start_timestamp)
 
-        self.log.info(f"Total time since shutter close to produce alerts for"
-                      f" visit {visit} detector {detector}: {total_time} seconds")
+            self.log.info(f"Total time since shutter close to produce alerts for"
+                          f" visit {visit} detector {detector}: {total_time} seconds")
 
     def createCcdDataCutout(self, image, skyCenter, pixelCenter, extent, photoCalib, srcId, averagePsf=None):
         """Grab an image as a cutout and return a calibrated CCDData image.

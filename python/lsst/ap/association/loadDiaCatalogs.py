@@ -152,21 +152,29 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
         schema = readSchemaFromApdb(self.apdb)
 
         # This is the first database query.
-        diaObjects = self.loadDiaObjects(region, schema)
-        self.metadata["loadDiaObjectsDuration"] = duration_from_timeMethod(self.metadata, "loadDiaObjects")
+        try:
+            diaObjects = self.loadDiaObjects(region, schema)
+        finally:
+            self.metadata["loadDiaObjectsDuration"] = duration_from_timeMethod(
+                self.metadata, "loadDiaObjects")
 
         # Load diaSources and forced sources up to the time of the exposure
         # The timespan may include significant padding, so use the midpoint to
         #  avoid missing valid recent diaSources.
         visitTime = getMidpointFromTimespan(regionTime.timespan)
 
-        diaSources = self.loadDiaSources(diaObjects, region, visitTime, schema)
-        self.metadata["loadDiaSourcesDuration"] = duration_from_timeMethod(self.metadata, "loadDiaSources")
+        try:
+            diaSources = self.loadDiaSources(diaObjects, region, visitTime, schema)
+        finally:
+            self.metadata["loadDiaSourcesDuration"] = duration_from_timeMethod(
+                self.metadata, "loadDiaSources")
 
         if self.config.doLoadForcedSources:
-            diaForcedSources = self.loadDiaForcedSources(diaObjects, region, visitTime, schema)
-            self.metadata["loadDiaForcedSourcesDuration"] = duration_from_timeMethod(self.metadata,
-                                                                                     "loadDiaForcedSources")
+            try:
+                diaForcedSources = self.loadDiaForcedSources(diaObjects, region, visitTime, schema)
+            finally:
+                self.metadata["loadDiaForcedSourcesDuration"] = duration_from_timeMethod(
+                    self.metadata, "loadDiaForcedSources")
         else:
             diaForcedSources = pd.DataFrame(columns=["diaObjectId", "diaForcedSourceId"])
             self.metadata["loadDiaForcedSourcesDuration"] = -1
