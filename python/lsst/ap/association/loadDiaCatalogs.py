@@ -157,6 +157,7 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
         finally:
             self.metadata["loadDiaObjectsDuration"] = duration_from_timeMethod(
                 self.metadata, "loadDiaObjects")
+            self.log.verbose("DiaObjects: Took %.4f seconds", self.metadata["loadDiaObjectsDuration"])
 
         # Load diaSources and forced sources up to the time of the exposure
         # The timespan may include significant padding, so use the midpoint to
@@ -168,6 +169,7 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
         finally:
             self.metadata["loadDiaSourcesDuration"] = duration_from_timeMethod(
                 self.metadata, "loadDiaSources")
+            self.log.verbose("DiaSources: Took %.4f seconds", self.metadata["loadDiaSourcesDuration"])
 
         if self.config.doLoadForcedSources:
             try:
@@ -175,6 +177,8 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
             finally:
                 self.metadata["loadDiaForcedSourcesDuration"] = duration_from_timeMethod(
                     self.metadata, "loadDiaForcedSources")
+                self.log.verbose("DiaForcedSources: Took %.4f seconds",
+                                 self.metadata["loadDiaForcedSourcesDuration"])
         else:
             diaForcedSources = pd.DataFrame(columns=["diaObjectId", "diaForcedSourceId"])
             self.metadata["loadDiaForcedSourcesDuration"] = -1
