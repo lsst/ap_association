@@ -151,37 +151,45 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
                                     lsst.sphgeom.Angle.fromDegrees(self.config.angleMargin/3600.))
         schema = readSchemaFromApdb(self.apdb)
 
-        # This is the first database query.
         try:
-            diaObjects = self.loadDiaObjects(region, schema)
-        finally:
-            self.metadata["loadDiaObjectsDuration"] = duration_from_timeMethod(
-                self.metadata, "loadDiaObjects")
-            self.log.verbose("DiaObjects: Took %.4f seconds", self.metadata["loadDiaObjectsDuration"])
-
-        # Load diaSources and forced sources up to the time of the exposure
-        # The timespan may include significant padding, so use the midpoint to
-        #  avoid missing valid recent diaSources.
-        visitTime = getMidpointFromTimespan(regionTime.timespan)
-
-        try:
-            diaSources = self.loadDiaSources(diaObjects, region, visitTime, schema)
-        finally:
-            self.metadata["loadDiaSourcesDuration"] = duration_from_timeMethod(
-                self.metadata, "loadDiaSources")
-            self.log.verbose("DiaSources: Took %.4f seconds", self.metadata["loadDiaSourcesDuration"])
-
-        if self.config.doLoadForcedSources:
+            # This is the first database query.
             try:
-                diaForcedSources = self.loadDiaForcedSources(diaObjects, region, visitTime, schema)
+                diaObjects = self.loadDiaObjects(region, schema)
             finally:
-                self.metadata["loadDiaForcedSourcesDuration"] = duration_from_timeMethod(
-                    self.metadata, "loadDiaForcedSources")
-                self.log.verbose("DiaForcedSources: Took %.4f seconds",
-                                 self.metadata["loadDiaForcedSourcesDuration"])
-        else:
-            diaForcedSources = pd.DataFrame(columns=["diaObjectId", "diaForcedSourceId"])
-            self.metadata["loadDiaForcedSourcesDuration"] = -1
+                self.metadata["loadDiaObjectsDuration"] = duration_from_timeMethod(
+                    self.metadata, "loadDiaObjects")
+                self.log.verbose("DiaObjects: Took %.4f seconds", self.metadata["loadDiaObjectsDuration"])
+
+            # Load diaSources and forced sources up to the time of the exposure
+            # The timespan may include significant padding, so use the midpoint to
+            #  avoid missing valid recent diaSources.
+            visitTime = getMidpointFromTimespan(regionTime.timespan)
+
+            try:
+                diaSources = self.loadDiaSources(diaObjects, region, visitTime, schema)
+            finally:
+                self.metadata["loadDiaSourcesDuration"] = duration_from_timeMethod(
+                    self.metadata, "loadDiaSources")
+                self.log.verbose("DiaSources: Took %.4f seconds", self.metadata["loadDiaSourcesDuration"])
+
+            if self.config.doLoadForcedSources:
+                try:
+                    diaForcedSources = self.loadDiaForcedSources(diaObjects, region, visitTime, schema)
+                finally:
+                    self.metadata["loadDiaForcedSourcesDuration"] = duration_from_timeMethod(
+                        self.metadata, "loadDiaForcedSources")
+                    self.log.verbose("DiaForcedSources: Took %.4f seconds",
+                                     self.metadata["loadDiaForcedSourcesDuration"])
+            else:
+                diaForcedSources = pd.DataFrame(columns=["diaObjectId", "diaForcedSourceId"])
+                self.metadata["loadDiaForcedSourcesDuration"] = -1
+        finally:
+            # Loki can add up the three individual times, but a combined log puts less load on the server.
+            self.log.verbose("All catalogs: Took %.4f seconds",
+                             self.metadata.get("loadDiaObjectsDuration", 0)
+                             + self.metadata.get("loadDiaSourcesDuration", 0)
+                             + max(0, self.metadata.get("loadDiaForcedSourcesDuration", 0))
+                             )
 
         return pipeBase.Struct(
             diaObjects=diaObjects,
