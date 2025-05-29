@@ -585,10 +585,12 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             forcedSourceHistoryThreshold = 0
 
         # Write results to Alert Production Database (APDB)
-        self.writeToApdb(updatedDiaObjects, assocResults.associatedDiaSources, diaForcedSources)
-        self.metadata["writeToApdbDuration"] = duration_from_timeMethod(self.metadata, "writeToApdb")
-        # A single log message is easier for Loki to parse than timeMethod's start+end pairs.
-        self.log.verbose("writeToApdb: Took %.4f seconds", self.metadata["writeToApdbDuration"])
+        try:
+            self.writeToApdb(updatedDiaObjects, assocResults.associatedDiaSources, diaForcedSources)
+        finally:
+            self.metadata["writeToApdbDuration"] = duration_from_timeMethod(self.metadata, "writeToApdb")
+            # A single log message is easier for Loki to parse than timeMethod's start+end pairs.
+            self.log.verbose("writeToApdb: Took %.4f seconds", self.metadata["writeToApdbDuration"])
 
         # Package alerts
         if self.config.doPackageAlerts:
