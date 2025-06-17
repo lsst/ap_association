@@ -30,6 +30,7 @@ __all__ = ("DiaPipelineConfig",
            "DiaPipelineTask",
            "DiaPipelineConnections")
 
+import os
 
 import lsst.dax.apdb as daxApdb
 import lsst.pex.config as pexConfig
@@ -588,9 +589,12 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         try:
             self.writeToApdb(updatedDiaObjects, assocResults.associatedDiaSources, diaForcedSources)
         finally:
-            self.metadata["writeToApdbDuration"] = duration_from_timeMethod(self.metadata, "writeToApdb")
-            # A single log message is easier for Loki to parse than timeMethod's start+end pairs.
-            self.log.verbose("writeToApdb: Took %.4f seconds", self.metadata["writeToApdbDuration"])
+            if "LSST_UTILS_DISABLE_TIMER" not in os.environ:
+                self.metadata["writeToApdbDuration"] = duration_from_timeMethod(self.metadata, "writeToApdb")
+                # A single log message is easier for Loki to parse than timeMethod's start+end pairs.
+                self.log.verbose("writeToApdb: Took %.4f seconds", self.metadata["writeToApdbDuration"])
+            else:
+                self.metadata["writeToApdbDuration"] = 0
 
         # Package alerts
         if self.config.doPackageAlerts:
