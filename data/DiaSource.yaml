@@ -98,7 +98,14 @@ funcs:
         functor: LocalNanojansky
         args:
             - ext_trailedSources_Naive_flux
-            - slot_ApFlux_instFluxErr  # Place holder; arg not actually used
+            - ext_trailedSources_Naive_fluxErr
+            - base_LocalPhotoCalib
+            - base_LocalPhotoCalibErr
+    trailFluxErr:
+        functor: LocalNanojansky
+        args:
+            - ext_trailedSources_Naive_flux
+            - ext_trailedSources_Naive_fluxErr
             - base_LocalPhotoCalib
     trailRa:
         functor: Column
