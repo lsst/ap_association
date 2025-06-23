@@ -157,7 +157,7 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
                 diaObjects = self.loadDiaObjects(region, schema)
             finally:
                 self.metadata["loadDiaObjectsDuration"] = duration_from_timeMethod(
-                    self.metadata, "loadDiaObjects")
+                    self.metadata, "loadDiaObjects", clock="Utc")
                 self.log.verbose("DiaObjects: Took %.4f seconds", self.metadata["loadDiaObjectsDuration"])
 
             # Load diaSources and forced sources up to the time of the exposure
@@ -169,7 +169,7 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
                 diaSources = self.loadDiaSources(diaObjects, region, visitTime, schema)
             finally:
                 self.metadata["loadDiaSourcesDuration"] = duration_from_timeMethod(
-                    self.metadata, "loadDiaSources")
+                    self.metadata, "loadDiaSources", clock="Utc")
                 self.log.verbose("DiaSources: Took %.4f seconds", self.metadata["loadDiaSourcesDuration"])
 
             if self.config.doLoadForcedSources:
@@ -177,7 +177,7 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
                     diaForcedSources = self.loadDiaForcedSources(diaObjects, region, visitTime, schema)
                 finally:
                     self.metadata["loadDiaForcedSourcesDuration"] = duration_from_timeMethod(
-                        self.metadata, "loadDiaForcedSources")
+                        self.metadata, "loadDiaForcedSources", clock="Utc")
                     self.log.verbose("DiaForcedSources: Took %.4f seconds",
                                      self.metadata["loadDiaForcedSourcesDuration"])
             else:

@@ -588,7 +588,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         try:
             self.writeToApdb(updatedDiaObjects, assocResults.associatedDiaSources, diaForcedSources)
         finally:
-            self.metadata["writeToApdbDuration"] = duration_from_timeMethod(self.metadata, "writeToApdb")
+            self.metadata["writeToApdbDuration"] = duration_from_timeMethod(self.metadata, "writeToApdb",
+                                                                            clock="Utc")
             # A single log message is easier for Loki to parse than timeMethod's start+end pairs.
             self.log.verbose("writeToApdb: Took %.4f seconds", self.metadata["writeToApdbDuration"])
 
