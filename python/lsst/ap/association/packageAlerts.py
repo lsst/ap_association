@@ -32,6 +32,8 @@ from astropy.nddata import CCDData, VarianceUncertainty
 import pandas as pd
 import struct
 import fastavro
+from confluent_kafka.cimpl import KafkaError
+
 # confluent_kafka is not in the standard Rubin environment as it is a third
 # party package and is only needed when producing alerts.
 try:
@@ -690,7 +692,12 @@ class PackageAlertsTask(pipeBase.Task):
 
     def _delivery_callback(self, err, msg):
         if err:
-            self.log.warning('Message failed delivery: %s\n' % err)
+            if err.code() == KafkaError.UNKNOWN_TOPIC_OR_PART:
+                topic = msg.topic() if msg and hasattr(msg,
+                                                       'topic') else 'unknown'
+                self.log.warning(
+                    'Message failed delivery. Topic %s unknown: %s',
+                    topic, err)
         else:
             self.log.debug('Message delivered to %s [%d] @ %d', msg.topic(), msg.partition(), msg.offset())
 
@@ -711,6 +718,11 @@ class PackageAlertsTask(pipeBase.Task):
 
         if not topics:
             raise RuntimeError()
+        if self.kafkaTopic not in topics:
+            raise RuntimeError(
+                f"Topic '{self.kafkaTopic}' not found on the Kafka server. "
+                f"Check that the correct topic has been provided and exists "
+                f"on the Kafka server.")
 
     def _computePsf(self, exposure, pixelCenter, srcId=None):
         """Compute the PSF at a location and catch errors.
