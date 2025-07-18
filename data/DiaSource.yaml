@@ -269,3 +269,6 @@ funcs:
     reliability:
         functor: Column
         args: reliability
+    trailed_glint:
+        functor: Column
+        args: trailed_glint
