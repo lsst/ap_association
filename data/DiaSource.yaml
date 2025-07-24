@@ -269,3 +269,6 @@ funcs:
     reliability:
         functor: Column
         args: reliability
+    glint_trail:
+        functor: Column
+        args: glint_trail
