@@ -53,6 +53,26 @@ from lsst.pipe.tasks.ssoAssociation import SolarSystemAssociationTask
 from lsst.utils.timer import timeMethod, duration_from_timeMethod
 
 
+class TooManyDiaObjectsError(pipeBase.AlgorithmError):
+    """Raised if there are an unusually large number of unassociated DiaSources.
+    This is usually indicative of an image subtraction error, and needs to be
+    caught before updating the APDB with a large number of spurious entries.
+    """
+    def __init__(self, *, nNewDiaObjects, threshold):
+        msg = ("Aborting processing before writing to the APDB."
+               f" {nNewDiaObjects} new DiaObjects would be created, which exceeds the"
+               f" configured maximum of {threshold}")
+        super().__init__(msg)
+        self.nNewDiaObjects = nNewDiaObjects
+        self.threshold = threshold
+
+    @property
+    def metadata(self):
+        return {"nNewDiaObjects": self.nNewDiaObjects,
+                "threshold": self.threshold
+                }
+
+
 class DiaPipelineConnections(
         pipeBase.PipelineTaskConnections,
         dimensions=("instrument", "visit", "detector"),
@@ -349,6 +369,13 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
                  "pixelFlags_streakCenter"),
         doc="If `filterUnAssociatedSources` is set, exclude diaSources with "
         "these flags set before creating new diaObjects.",
+    )
+    maxNewDiaObjects = pexConfig.RangeField(
+        dtype=float,
+        default=0,
+        min=0,
+        doc="Maximum number of new DiaObjects to create before raising an error."
+        "Set to zero to disable.",
     )
     newObjectSnrThreshold = pexConfig.RangeField(
         dtype=float,
@@ -870,6 +897,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                       createResults.nNewDiaObjects,
                       len(createResults.marginalDiaSources),
                       )
+        if createResults.nNewDiaObjects > self.config.maxNewDiaObjects > 0:
+            raise TooManyDiaObjectsError(nNewDiaObjects=createResults.nNewDiaObjects,
+                                         threshold=self.config.maxNewDiaObjects)
         return pipeBase.Struct(associatedDiaSources=associatedDiaSources,
                                newDiaObjects=createResults.newDiaObjects,
                                associatedSsSources=associatedSsSources,
