@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import contextlib
 import tempfile
 import unittest
 from unittest.mock import patch, Mock, MagicMock, DEFAULT
@@ -220,6 +221,34 @@ class TestDiaPipelineTask(unittest.TestCase):
                 ssRun.assert_called_once()
             else:
                 ssRun.assert_not_called()
+
+    def test_tooManyDiaObjectsError(self):
+        maxNewDiaObjects = 100
+
+        nDiaSources = maxNewDiaObjects + 1
+        diaSources = makeDiaSources(nDiaSources, np.zeros(nDiaSources), self.exposure, self.rng)
+
+        def runAndTestWithContextManager(threshold):
+            config = self._makeDefaultConfig(config_file=self.config_file.name,
+                                             doSolarSystemAssociation=False,
+                                             filterUnAssociatedSources=False,
+                                             maxNewDiaObjects=threshold,
+                                             )
+            task = DiaPipelineTask(config=config)
+            contextManager = self.assertRaises(pipeBase.AlgorithmError) if nDiaSources > threshold > 0 \
+                else contextlib.nullcontext()
+            with contextManager:
+                task.associateDiaSources(
+                    diaSources,
+                    None,
+                    None,
+                    self.diaObjects,
+                )
+        # Test cases at, above, and below the threshold as well as at 0.
+        runAndTestWithContextManager(0)
+        runAndTestWithContextManager(maxNewDiaObjects - 1)
+        runAndTestWithContextManager(maxNewDiaObjects)
+        runAndTestWithContextManager(maxNewDiaObjects + 1)
 
     def test_createDiaObjects(self):
         """Test that creating new DiaObjects works as expected.
