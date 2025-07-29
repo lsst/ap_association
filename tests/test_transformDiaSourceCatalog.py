@@ -62,20 +62,14 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         schema.addField("base_PixelFlags_flag", type="Flag")
         schema.addField("base_PixelFlags_flag_offimage", type="Flag")
         schema.addField("sky_source", type="Flag", doc="Sky objects.")
+        schema.addField("reliability", doc="real/bogus score of this source", type=float)
         self.exposure, self.inputCatalog = dataset.realize(10.0, schema, randomSeed=1234)
         self.inputCatalog[0]['sky_source'] = True
         # Create schemas for use in initializing the TransformDiaSourceCatalog task.
         self.initInputs = {"diaSourceSchema": Struct(schema=schema)}
         self.initInputsBadFlags = {"diaSourceSchema": Struct(schema=dataset.makeMinimalSchema())}
 
-        # Separate real/bogus score table, indexed on the above catalog ids.
-        reliabilitySchema = lsst.afw.table.Schema()
-        reliabilitySchema.addField(self.inputCatalog.schema["id"].asField())
-        reliabilitySchema.addField("score", doc="real/bogus score of this source", type=float)
-        self.reliability = lsst.afw.table.BaseCatalog(reliabilitySchema)
-        self.reliability.resize(len(self.inputCatalog))
-        self.reliability["id"] = self.inputCatalog["id"]
-        self.reliability["score"] = rng.random(len(self.inputCatalog), dtype=np.float32)
+        self.inputCatalog["reliability"] = rng.random(self.nSources, dtype=np.float32)
 
         self.expId = 4321
         self.date = dafBase.DateTime(nsecs=1400000000 * 10**9)
@@ -157,16 +151,6 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         # Have to use allclose because assert_array_equal doesn't support equal_nan.
         np.testing.assert_allclose(result.diaSourceTable["snr"], expect_snr, equal_nan=True, rtol=0)
 
-    def test_run_with_reliability(self):
-        self.config.doIncludeReliability = True
-        transformTask = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
-                                                      config=self.config)
-        result = transformTask.run(self.inputCatalog,
-                                   self.exposure,
-                                   self.band,
-                                   reliability=self.reliability)
-        self.assertEqual(len(result.diaSourceTable), len(self.inputCatalog))
-        np.testing.assert_array_equal(result.diaSourceTable["reliability"], self.reliability["score"])
 
     def test_run_doSkySources(self):
         """Test that we get the correct output with doSkySources=True; the one
