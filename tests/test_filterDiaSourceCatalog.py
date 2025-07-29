@@ -23,11 +23,14 @@ import unittest
 import numpy as np
 
 from lsst.ap.association.filterDiaSourceCatalog import (FilterDiaSourceCatalogConfig,
-                                                        FilterDiaSourceCatalogTask)
+                                                        FilterDiaSourceCatalogTask,
+                                                        FilterDiaSourceReliabilityConfig,
+                                                        FilterDiaSourceReliabilityTask)
 import lsst.geom as geom
 import lsst.meas.base.tests as measTests
 import lsst.utils.tests
 import lsst.afw.image as afwImage
+import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
 
 
@@ -65,6 +68,8 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
                         doc="One or more trail coordinates are missing")
         schema.addField('ext_trailedSources_Naive_length', type="F",
                         doc="Length of the source trail")
+        schema.addField("reliability", type="F",
+                        doc="Reliability of the source")
         _, self.diaSourceCat = dataset.realize(10.0, schema, randomSeed=1234)
 
         # set the sky_source flag for the first set
@@ -177,6 +182,36 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         self.assertEqual(len(result.filteredDiaSourceCat), nExpectedFilteredSources)
         self.assertEqual(len(result.rejectedDiaSources), self.nSkySources + self.nRemovedNegativeSources)
         self.assertEqual(len(self.diaSourceCat), self.nSources)
+
+    def test_run_with_filter_reliability_only(self):
+        """Test that when only the reliability filter is turned on,
+        sources below the reliability threshold are filtered out."""
+
+        reliability_threshold = 0.7
+        config = FilterDiaSourceReliabilityConfig()
+        config.minReliability = reliability_threshold
+
+        schema = afwTable.SourceTable.makeMinimalSchema()
+        schema.addField("score", type="F",
+                        doc="Reliability of the source")
+        reliabilityCat = afwTable.SourceCatalog(schema)
+        reliabilityCat.reserve(self.nSources)
+
+        # Set reliability: first half below threshold, second half above
+        for srcIdx in range(self.nSources):
+            reliabilityCat.addNew()
+            if srcIdx < self.nSources // 2:
+                reliabilityCat[srcIdx]["score"] = 0.25
+            else:
+                reliabilityCat[srcIdx]["score"] = 0.95
+        reliabilityCat['id'] = self.diaSourceCat['id']
+        nLowReliability = np.sum(reliabilityCat["score"] < 0.5)
+        filterDiaSourceCatalogTask = FilterDiaSourceReliabilityTask(config=config)
+        result = filterDiaSourceCatalogTask.run(self.diaSourceCat, reliabilityCat)
+        self.assertEqual(len(result.filteredDiaSources), self.nSources - nLowReliability)
+        self.assertEqual(len(result.rejectedDiaSources), nLowReliability)
+        self.assertTrue(np.all(result.filteredDiaSources["reliability"] >= reliability_threshold))
+        self.assertTrue(np.all(result.rejectedDiaSources["reliability"] < reliability_threshold))
 
     def test_run_with_filter_trailed_sources_only(self):
         """Test that when only the trail filter is turned on the correct number
