@@ -22,6 +22,8 @@
 __all__ = (
     "FilterDiaSourceCatalogConfig",
     "FilterDiaSourceCatalogTask",
+    "FilterDiaSourceReliabilityConfig",
+    "FilterDiaSourceReliabilityTask"
 )
 
 import numpy as np
@@ -311,3 +313,100 @@ class FilterDiaSourceCatalogTask(pipeBase.PipelineTask):
                 return self.config.estimatedPixelScale
             else:
                 return scale
+
+
+class FilterDiaSourceReliabilityConnections(
+    pipeBase.PipelineTaskConnections,
+    dimensions=("instrument", "visit", "detector"),
+    defaultTemplates={"coaddName": "deep", "fakesType": ""}
+):
+    diaSourceCat = connTypes.Input(
+        doc="Catalog of DiaSources produced during image differencing.",
+        name="{fakesType}{coaddName}Diff_candidateDiaSrc",
+        storageClass="SourceCatalog",
+        dimensions=("instrument", "visit", "detector"),
+    )
+    reliability = connTypes.Input(
+        doc="Reliability (e.g. real/bogus) classificiation of diaSourceCat sources.",
+        name="{fakesType}{coaddName}RealBogusSources",
+        storageClass="Catalog",
+        dimensions=("instrument", "visit", "detector"),
+    )
+    filteredDiaSources = connTypes.Output(
+        doc="Accepted diaSource catalog filtered by reliability score.",
+        name="dia_source_high_reliability",
+        storageClass="SourceCatalog",
+        dimensions=("instrument", "visit", "detector"),
+    )
+    rejectedDiaSources = connTypes.Output(
+        doc="Rejected diaSource catalog with low reliability scores.",
+        name="dia_source_low_reliability",
+        storageClass="SourceCatalog",
+        dimensions=("instrument", "visit", "detector"),
+    )
+
+
+class FilterDiaSourceReliabilityConfig(
+    pipeBase.PipelineTaskConfig, pipelineConnections=FilterDiaSourceReliabilityConnections
+):
+    """Configuration for the FilterDiaSourceReliabilityTask."""
+    minReliability = pexConfig.Field(
+        doc="Minimum reliability score to keep a source in the DiaSource catalog.",
+        dtype=float,
+        default=0.0,
+    )
+
+
+class FilterDiaSourceReliabilityTask(pipeBase.PipelineTask):
+    """Filter DiaSource catalog by reliability score.
+
+    Parameters
+    ----------
+    diaSourceSchema: `lsst.afw.table.Schema`
+        Schema for the input DiaSource catalog.
+    diaSourceCat : `lsst.afw.table.SourceCatalog`
+        Catalog of DiaSources produced during image differencing.
+    reliability : `lsst.afw.table.SourceCatalog`, optional
+        Reliability (e.g. real/bogus) classification of the sources in `diaSourceCat`.
+
+    Returns
+    -------
+    filteredResults : `lsst.pipe.base.Struct`
+
+        ``filteredDiaSources`` : `lsst.afw.table.SourceCatalog`
+            Catalog of unstandardized DiaSources filtered by reliability score.
+        ``rejectedDiaSources`` : `lsst.afw.table.SourceCatalog`
+            Catalog of unstandardized DiaSources that were rejected due to low
+            reliability scores.
+    """
+
+    ConfigClass = FilterDiaSourceReliabilityConfig
+    _DefaultName = "filterDiaSourceReliability"
+
+    def runQuantum(self, butlerQC, inputRefs, outputRefs):
+        inputs = butlerQC.get(inputRefs)
+        outputs = self.run(**inputs)
+        butlerQC.put(outputs, outputRefs)
+
+    def run(self, diaSourceCat, reliability):
+        """Run the task to filter DiaSources by reliability."""
+
+        # Copy the scores in the output catalog
+        if np.all(diaSourceCat['id'] == reliability['id']):
+            diaSourceCat['reliability'] = reliability['score']
+        else:
+            # If the identifiers do not match, we cannot filter reliably.
+            raise ValueError(
+                "Reliability ids do not match DiaSource ids.")
+
+        # Filter the DiaSource catalog by reliability score
+        low_reliability = diaSourceCat["reliability"] < self.config.minReliability
+        rejectedDiaSources = diaSourceCat[low_reliability].copy(deep=True)
+        filteredDiaSources = diaSourceCat[~low_reliability].copy(deep=True)
+
+        self.log.info(f"Filtered {np.sum(low_reliability)} sources with low reliability.")
+
+        return pipeBase.Struct(
+            filteredDiaSources=filteredDiaSources,
+            rejectedDiaSources=rejectedDiaSources
+        )
