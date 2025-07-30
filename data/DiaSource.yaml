@@ -181,6 +181,9 @@ funcs:
     isDipole:
         functor: Column
         args: ip_diffim_DipoleFit_classification
+    isNegative:
+        functor: Column
+        args: is_negative
     dipoleFitAttempted:
         functor: Column
         args: ip_diffim_DipoleFit_classificationAttempted
@@ -247,9 +250,6 @@ funcs:
             - base_LocalWcs_CDMatrix_1_2
             - base_LocalWcs_CDMatrix_2_1
             - base_LocalWcs_CDMatrix_2_2
-    is_negative:
-        functor: Column
-        args: is_negative
     extendedness:
         functor: Column
         args: base_ClassificationSizeExtendedness_value
