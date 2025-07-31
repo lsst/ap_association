@@ -44,7 +44,6 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         # Create an instance of random generator with fixed seed.
         rng = np.random.default_rng(1234)
 
-        # The first source will be a sky source.
         self.nSources = 10
         # Default PSF size (psfDim in makeEmptyExposure) in TestDataset results
         # in an 18 pixel wide source box.
@@ -62,20 +61,13 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         schema.addField("base_PixelFlags_flag", type="Flag")
         schema.addField("base_PixelFlags_flag_offimage", type="Flag")
         schema.addField("sky_source", type="Flag", doc="Sky objects.")
+        schema.addField("reliability", doc="real/bogus score of this source", type=float)
         self.exposure, self.inputCatalog = dataset.realize(10.0, schema, randomSeed=1234)
-        self.inputCatalog[0]['sky_source'] = True
         # Create schemas for use in initializing the TransformDiaSourceCatalog task.
         self.initInputs = {"diaSourceSchema": Struct(schema=schema)}
         self.initInputsBadFlags = {"diaSourceSchema": Struct(schema=dataset.makeMinimalSchema())}
 
-        # Separate real/bogus score table, indexed on the above catalog ids.
-        reliabilitySchema = lsst.afw.table.Schema()
-        reliabilitySchema.addField(self.inputCatalog.schema["id"].asField())
-        reliabilitySchema.addField("score", doc="real/bogus score of this source", type=float)
-        self.reliability = lsst.afw.table.BaseCatalog(reliabilitySchema)
-        self.reliability.resize(len(self.inputCatalog))
-        self.reliability["id"] = self.inputCatalog["id"]
-        self.reliability["score"] = rng.random(len(self.inputCatalog), dtype=np.float32)
+        self.inputCatalog["reliability"] = rng.random(self.nSources, dtype=np.float32)
 
         self.expId = 4321
         self.date = dafBase.DateTime(nsecs=1400000000 * 10**9)
@@ -154,40 +146,6 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         expect_snr.append(np.nan)
         # Downcast to single precision to match `sdm_schemas`
         expect_snr = np.array(expect_snr, dtype=np.float32)
-        # Have to use allclose because assert_array_equal doesn't support equal_nan.
-        np.testing.assert_allclose(result.diaSourceTable["snr"], expect_snr, equal_nan=True, rtol=0)
-
-    def test_run_with_reliability(self):
-        self.config.doIncludeReliability = True
-        transformTask = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
-                                                      config=self.config)
-        result = transformTask.run(self.inputCatalog,
-                                   self.exposure,
-                                   self.band,
-                                   reliability=self.reliability)
-        self.assertEqual(len(result.diaSourceTable), len(self.inputCatalog))
-        np.testing.assert_array_equal(result.diaSourceTable["reliability"], self.reliability["score"])
-
-    def test_run_doSkySources(self):
-        """Test that we get the correct output with doSkySources=True; the one
-        sky source should be missing, but the other records should be the same.
-
-        We only test the fields here that could be different, not the ones that
-        are the same for all sources.
-        """
-        # Make the sky source have a different significance value, to distinguish it.
-        self.inputCatalog[0].getFootprint().updatePeakSignificance(5.0)
-
-        self.config.doRemoveSkySources = True
-        task = TransformDiaSourceCatalogTask(initInputs=self.initInputs, config=self.config)
-        result = task.run(self.inputCatalog, self.exposure, self.band)
-
-        self.assertEqual(len(result.diaSourceTable), self.nSources-1)
-        # 0th source was removed, so x positions of the remaining sources are at x=1,2,3...
-        np.testing.assert_array_equal(result.diaSourceTable["x"], np.arange(self.nSources-1)+1)
-        # The final snr value should be NaN because it doesn't have a peak significance field.
-        expect_snr = [397.887353515625]*8
-        expect_snr.append(np.nan)
         # Have to use allclose because assert_array_equal doesn't support equal_nan.
         np.testing.assert_allclose(result.diaSourceTable["snr"], expect_snr, equal_nan=True, rtol=0)
 

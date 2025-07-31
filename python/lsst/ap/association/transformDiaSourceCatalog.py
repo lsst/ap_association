@@ -29,7 +29,6 @@ import os
 import yaml
 
 import numpy as np
-import pandas as pd
 
 from lsst.daf.base import DateTime
 import lsst.pex.config as pexConfig
@@ -62,23 +61,12 @@ class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
         storageClass="ExposureF",
         dimensions=("instrument", "visit", "detector"),
     )
-    reliability = connTypes.Input(
-        doc="Reliability (e.g. real/bogus) classificiation of diaSourceCat sources (optional).",
-        name="{fakesType}{coaddName}RealBogusSources",
-        storageClass="Catalog",
-        dimensions=("instrument", "visit", "detector"),
-    )
     diaSourceTable = connTypes.Output(
         doc=".",
         name="{fakesType}{coaddName}Diff_diaSrcTable",
         storageClass="ArrowAstropy",
         dimensions=("instrument", "visit", "detector"),
     )
-
-    def __init__(self, *, config=None):
-        super().__init__(config=config)
-        if not self.config.doIncludeReliability:
-            self.inputs.remove("reliability")
 
 
 class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
@@ -101,7 +89,8 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
         dtype=bool,
         default=False,
         doc="Input DiaSource catalog contains SkySources that should be "
-            "removed before storing the output DiaSource catalog."
+            "removed before storing the output DiaSource catalog.",
+        deprecated="This field is no longer used. Will be removed after v29."
     )
     # TODO: remove on DM-41532
     doPackFlags = pexConfig.Field(
@@ -114,7 +103,8 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
     doIncludeReliability = pexConfig.Field(
         dtype=bool,
         default=False,
-        doc="Include the reliability (e.g. real/bogus) classifications in the output."
+        doc="Include the reliability (e.g. real/bogus) classifications in the output.",
+        deprecated="This field is no longer used. Will be removed after v29."
     )
     doUseApdbSchema = pexConfig.Field(
         dtype=bool,
@@ -256,18 +246,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         diaSourceDf["diaObjectId"] = 0
         diaSourceDf["ssObjectId"] = 0
 
-        if self.config.doIncludeReliability:
-            reliabilityDf = reliability.asAstropy().to_pandas()
-            # This uses the pandas index to match scores with diaSources
-            # but it will silently fill with NaNs if they don't match.
-            diaSourceDf = pd.merge(diaSourceDf, reliabilityDf,
-                                   how="left", on="id", validate="1:1")
-            diaSourceDf = diaSourceDf.rename(columns={"score": "reliability"})
-            if np.sum(diaSourceDf["reliability"].isna()) == len(diaSourceDf):
-                self.log.warning("Reliability identifiers did not match diaSourceIds")
-        else:
-            diaSourceDf["reliability"] = np.float32(np.nan)
-
+        # TODO: this has been formally deprecated and should be removed too
         if self.config.doPackFlags:
             # either bitpack the flags
             self.bitPackFlags(diaSourceDf)
