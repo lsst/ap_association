@@ -361,7 +361,8 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     )
     newObjectBadFlags = pexConfig.ListField(
         dtype=str,
-        default=("pixelFlags_crCenter",
+        default=("centroid_flag",
+                 "pixelFlags_crCenter",
                  "pixelFlags_nodataCenter",
                  "pixelFlags_interpolatedCenter",
                  "pixelFlags_saturatedCenter",
