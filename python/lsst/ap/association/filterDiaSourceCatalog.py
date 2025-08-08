@@ -106,6 +106,12 @@ class FilterDiaSourceCatalogConfig(
         "sky sources."
     )
 
+    doRemoveCrCenter = pexConfig.Field(
+        dtype=bool,
+        default=True,
+        doc="Remove DIASources that have cosmic ray detections.",
+    )
+
     doRemoveNegativeDirectImageSources = pexConfig.Field(
         dtype=bool,
         default=True,
@@ -187,6 +193,13 @@ class FilterDiaSourceCatalogTask(pipeBase.PipelineTask):
             rejectedSources = diaSourceCat[sky_source_column].copy(deep=True)
             diaSourceCat = diaSourceCat[~sky_source_column].copy(deep=True)
             self.log.info(f"Filtered {num_sky_sources} sky sources.")
+
+        if self.config.doRemoveCrCenter:
+            crCenter_mask = diaSourceCat["pixelFlags_crCenter"]
+            num_crCenters = np.sum(crCenter_mask)
+            rejectedSources = diaSourceCat[crCenter_mask].copy(deep=True)
+            diaSourceCat = diaSourceCat[~crCenter_mask].copy(deep=True)
+            self.log.info(f"Filtered {num_crCenters} sources with cosmic ray detections.")
 
         if self.config.doRemoveNegativeDirectImageSources:
             direct_snr = (diaSourceCat["ip_diffim_forced_PsfFlux_instFlux"]
