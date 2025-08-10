@@ -436,7 +436,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         task = DiaPipelineTask(config=config)
         # Include some but not all columns that should be in diaSourcesBase, and some that are mis-matched
         diaSourcesEmpty = pd.DataFrame(columns=["ra", "dec", "foo"])
-        diaSourcesTest = task.mergeCatalogs(diaSourcesBase, diaSourcesEmpty, "diaSourcesTest")
+        diaSourcesTest = task.mergeCatalogs(diaSourcesBase, diaSourcesEmpty, tableName="DiaSource")
         self.assertTrue(diaSourcesBase.equals(diaSourcesTest))
 
     def test_mergeCatalogs(self):
@@ -450,7 +450,7 @@ class TestDiaPipelineTask(unittest.TestCase):
                                        self.rng)
         config = self._makeDefaultConfig(config_file=self.config_file.name, doPackageAlerts=False)
         task = DiaPipelineTask(config=config)
-        diaSourcesTest = task.mergeCatalogs(diaSourcesBase, diaSourcesNew, "diaSourcesTest")
+        diaSourcesTest = task.mergeCatalogs(diaSourcesBase, diaSourcesNew, tableName="DiaSource")
         self.assertEqual(len(diaSourcesTest), nBase + nNew)
         diaSourcesExtract1 = diaSourcesTest.iloc[:nBase]
         diaSourcesExtract2 = diaSourcesTest.iloc[nBase:]
