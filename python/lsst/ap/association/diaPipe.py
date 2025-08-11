@@ -758,13 +758,11 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             lowSnrReliabilityThreshold = self.config.newObjectLowSnrReliabilityThreshold
         if badFlags is None:
             badFlags = self.config.newObjectBadFlags
-        flagged = np.zeros(len(sources), dtype=bool)
+        flagged = sources[badFlags].fillna(False).any(axis=1)
         fluxField = self.config.newObjectFluxField
         fluxErrField = fluxField + "Err"
         signalToNoise = np.abs(np.array(sources[fluxField]/sources[fluxErrField]))
         reliability = np.array(sources['reliability'])
-        for flag in badFlags:
-            flagged += sources[flag].values
         nFlagged = np.count_nonzero(flagged)
         if nFlagged > 0:
             self.log.info("Not creating new diaObjects for %i unassociated diaSources due to flags", nFlagged)
