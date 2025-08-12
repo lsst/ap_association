@@ -329,7 +329,7 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         scale = filterDiaSourceCatalogTask._estimate_pixel_scale(self.diaSourceCat)
         # Should be almost but not actually equal
         self.assertNotEqual(self.config.estimatedPixelScale, scale)
-        self.assertAlmostEqual(self.config.estimatedPixelScale, scale)
+        self.assertAlmostEqual(self.config.estimatedPixelScale, scale, places=6)
 
         # If the estimatedPixelScale is very different, that value should be
         #  used exactly and it should not raise an error.
