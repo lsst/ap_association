@@ -442,21 +442,23 @@ class TestDiaPipelineTask(unittest.TestCase):
     def test_mergeCatalogs(self):
         """Test that a merged catalog is concatenated correctly.
         """
-        diaSourcesBase = self.diaSources
+        config = self._makeDefaultConfig(config_file=self.config_file.name, doPackageAlerts=False)
+        task = DiaPipelineTask(config=config)
+
+        diaSourcesBase = convertTableToSdmSchema(task.schema, self.diaSources, "DiaSource")
         nBase = len(diaSourcesBase)
         nNew = int(nBase/2)
 
         diaSourcesNew = makeDiaSources(nNew, self.diaObjects["diaObjectId"].to_numpy(), self.exposure,
                                        self.rng)
-        config = self._makeDefaultConfig(config_file=self.config_file.name, doPackageAlerts=False)
-        task = DiaPipelineTask(config=config)
+        diaSourcesNew = convertTableToSdmSchema(task.schema, diaSourcesNew, "DiaSource")
         diaSourcesTest = task.mergeCatalogs(diaSourcesBase, diaSourcesNew, tableName="DiaSource")
         self.assertEqual(len(diaSourcesTest), nBase + nNew)
         diaSourcesExtract1 = diaSourcesTest.iloc[:nBase]
         diaSourcesExtract2 = diaSourcesTest.iloc[nBase:]
 
-        self.assertTrue(diaSourcesBase.equals(diaSourcesExtract1))
-        self.assertTrue(diaSourcesNew.equals(diaSourcesExtract2))
+        pd.testing.assert_frame_equal(diaSourcesBase, diaSourcesExtract1)
+        pd.testing.assert_frame_equal(diaSourcesNew, diaSourcesExtract2)
 
     def test_updateObjectTable(self):
         """Test that the diaObject record is updated with the number of
