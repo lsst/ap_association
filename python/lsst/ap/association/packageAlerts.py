@@ -601,8 +601,6 @@ class PackageAlertsTask(pipeBase.Task):
 
         alert['diaObject'] = diaObject.to_dict()
 
-        alert['ssObject'] = None
-
         if diffImCutout is None:
             alert['cutoutDifference'] = None
         else:
