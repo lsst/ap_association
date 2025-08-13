@@ -367,7 +367,8 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
                  "pixelFlags_interpolatedCenter",
                  "pixelFlags_saturatedCenter",
                  "pixelFlags_suspectCenter",
-                 "pixelFlags_streakCenter"),
+                 "pixelFlags_streakCenter",
+                 "glint_trail"),
         doc="If `filterUnAssociatedSources` is set, exclude diaSources with "
         "these flags set before creating new diaObjects.",
     )

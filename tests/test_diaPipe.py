@@ -337,6 +337,7 @@ class TestDiaPipelineTask(unittest.TestCase):
 
     def test_filterDiaObjects(self):
         """Unassociated diaSources that are filtered should have good reliability and SNR.
+        Glint trail sources should also be filtered out.
         """
 
         config = self._makeDefaultConfig(config_file=self.config_file.name,
@@ -367,9 +368,12 @@ class TestDiaPipelineTask(unittest.TestCase):
         reliability = self.rng.random(nUnassociatedDiaSources)
         flux = (self.rng.random(nUnassociatedDiaSources)**2)*100
         fluxErr = np.sqrt(flux)
+        glint_trail = np.zeros(nUnassociatedDiaSources, dtype=bool)
+        glint_trail[12:16] = True  # add 4 glint trail sources
         diaSources["reliability"] = reliability
         diaSources[config.newObjectFluxField] = flux
         diaSources[config.newObjectFluxField + "Err"] = fluxErr
+        diaSources["glint_trail"] = glint_trail
         badFlagName = task.config.newObjectBadFlags[0]
         badFlags = np.zeros(nUnassociatedDiaSources, dtype=bool)
         nBadFlags = 20
@@ -400,6 +404,8 @@ class TestDiaPipelineTask(unittest.TestCase):
             goodLowSnrFlag = goodSnr < lowReliabilitySnrThreshold
             lowSnrReliability = goodReliability[goodLowSnrFlag]
             self.assertTrue(np.all(lowSnrReliability > lowSnrReliabilityThreshold))
+            glintTrailSources = np.array(filterResults.goodSources["glint_trail"])
+            self.assertTrue(not any(glintTrailSources))
 
         # No sources should be removed if the thresholds are turned off
         runAndCheckFilter(diaSources,
