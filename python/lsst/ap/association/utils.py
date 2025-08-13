@@ -38,24 +38,27 @@ from lsst.daf.butler import Timespan
 import lsst.dax.apdb as daxApdb
 
 
-_dtype_map: Mapping[felis.datamodel.DataType | daxApdb.schema_model.ExtraDataTypes, type | str] = {
-    felis.datamodel.DataType.double: np.float64,
-    felis.datamodel.DataType.float: np.float32,
-    felis.datamodel.DataType.timestamp: "datetime64[ms]",
-    felis.datamodel.DataType.long: np.int64,
-    felis.datamodel.DataType.int: np.int32,
-    felis.datamodel.DataType.short: np.int16,
-    felis.datamodel.DataType.byte: np.int8,
-    felis.datamodel.DataType.binary: object,
-    felis.datamodel.DataType.char: object,
-    felis.datamodel.DataType.text: object,
-    felis.datamodel.DataType.string: object,
-    felis.datamodel.DataType.unicode: object,
-    felis.datamodel.DataType.boolean: bool,
+# The first entry in the returned mapping is for nullable columns,
+# the second entry is for non-nullable columns.
+_dtype_map: Mapping[felis.datamodel.DataType, tuple[str, str]] = {
+    felis.datamodel.DataType.double: ("float64", "float64"),  # Cassandra utilities need np.nan not pd.NA
+    felis.datamodel.DataType.float: ("float32", "float32"),  # Cassandra utilities need np.nan not pd.NA
+    felis.datamodel.DataType.timestamp: ("datetime64[ms]", "datetime64[ms]"),
+    felis.datamodel.DataType.long: ("Int64", "int64"),
+    felis.datamodel.DataType.int: ("Int32", "int32"),
+    felis.datamodel.DataType.short: ("Int16", "int16"),
+    felis.datamodel.DataType.byte: ("Int8", "int8"),
+    felis.datamodel.DataType.binary: ("object", "object"),
+    felis.datamodel.DataType.char: ("object", "object"),
+    felis.datamodel.DataType.text: ("object", "object"),
+    felis.datamodel.DataType.string: ("object", "object"),
+    felis.datamodel.DataType.unicode: ("object", "object"),
+    felis.datamodel.DataType.boolean: ("boolean", "bool"),
 }
 
 
-def column_dtype(felis_type: felis.datamodel.DataType | daxApdb.schema_model.ExtraDataTypes) -> type | str:
+def column_dtype(felis_type: felis.datamodel.DataType | daxApdb.schema_model.ExtraDataTypes,
+                 nullable=False) -> str:
     """Return Pandas data type for a given Felis column type.
 
     Parameters
@@ -74,7 +77,7 @@ def column_dtype(felis_type: felis.datamodel.DataType | daxApdb.schema_model.Ext
         Raised if type is cannot be handled.
     """
     try:
-        return _dtype_map[felis_type]
+        return _dtype_map[felis_type][0] if nullable else _dtype_map[felis_type][1]
     except KeyError:
         raise TypeError(f"Unexpected Felis type: {felis_type}")
 
@@ -182,23 +185,26 @@ def convertTableToSdmSchema(apdbSchema, sourceTable, tableName):
         A table with the correct schema for the APDB and data copied from
         the input ``sourceTable``.
     """
+    if sourceTable.empty:
+        make_empty_catalog(apdbSchema, tableName)
     table = apdbSchema[tableName]
 
     data = {}
     nSrc = len(sourceTable)
 
     for columnDef in table.columns:
+        dtype = column_dtype(columnDef.datatype, nullable=columnDef.nullable)
         if columnDef.name in sourceTable.columns:
-            dtype = column_dtype(columnDef.datatype)
-            data[columnDef.name] = pd.Series(sourceTable[columnDef.name], dtype=dtype)
+            data[columnDef.name] = pd.Series(sourceTable[columnDef.name], dtype=dtype,
+                                             index=sourceTable.index)
         else:
-            dataInit = np.zeros(nSrc, dtype=column_dtype(columnDef.datatype))
             if columnDef.nullable:
                 try:
-                    dataInit.fill(None)
-                except (TypeError, ValueError):
-                    pass
-            data[columnDef.name] = pd.Series(dataInit, index=sourceTable.index)
+                    data[columnDef.name] = pd.Series([pd.NA]*nSrc, dtype=dtype, index=sourceTable.index)
+                except TypeError:
+                    data[columnDef.name] = pd.Series([np.nan]*nSrc, dtype=dtype, index=sourceTable.index)
+            else:
+                data[columnDef.name] = pd.Series([0]*nSrc, dtype=dtype, index=sourceTable.index)
     return pd.DataFrame(data)
 
 
@@ -244,7 +250,7 @@ def make_empty_catalog(apdbSchema, tableName):
     table = apdbSchema[tableName]
 
     data = {
-        columnDef.name: pd.Series(dtype=column_dtype(columnDef.datatype))
+        columnDef.name: pd.Series(dtype=column_dtype(columnDef.datatype, nullable=columnDef.nullable))
         for columnDef in table.columns
     }
     return pd.DataFrame(data)

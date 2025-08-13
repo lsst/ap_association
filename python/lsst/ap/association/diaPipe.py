@@ -567,8 +567,13 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diaObjects = preloadedDiaObjects
 
         # Associate DiaSources with DiaObjects
-
         assocResults = self.associateDiaSources(diaSourceTable, solarSystemObjectTable, diffIm, diaObjects)
+
+        # Set unassociated diaObjectIds and ssObjectIds to NULL, and convert to SDM schema format
+        standardizedAssociatedDiaSources = self.standardizeDiaSources(
+            assocResults.associatedDiaSources,
+            nullColumns=["diaObjectId", "ssObjectId"]
+        )
 
         # Merge associated diaSources
         mergedDiaSourceHistory, mergedDiaObjects, updatedDiaObjectIds = self.mergeAssociatedCatalogs(
@@ -614,7 +619,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         # Write results to Alert Production Database (APDB)
         try:
-            self.writeToApdb(updatedDiaObjects, assocResults.associatedDiaSources, diaForcedSources)
+            self.writeToApdb(updatedDiaObjects, standardizedAssociatedDiaSources, diaForcedSources)
         finally:
             self.metadata["writeToApdbDuration"] = duration_from_timeMethod(self.metadata, "writeToApdb",
                                                                             clock="Utc")
@@ -625,7 +630,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         if self.config.doPackageAlerts:
             # Append new forced sources to the full history
             diaForcedSourcesFull = self.mergeCatalogs(preloadedDiaForcedSources, diaForcedSources,
-                                                      "preloadedDiaForcedSources")
+                                                      tableName="DiaForcedSource")
             if self.testDataFrameIndex(diaForcedSources):
                 self.log.warning(
                     "Duplicate DiaForcedSources created after merge with "
@@ -753,13 +758,11 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             lowSnrReliabilityThreshold = self.config.newObjectLowSnrReliabilityThreshold
         if badFlags is None:
             badFlags = self.config.newObjectBadFlags
-        flagged = np.zeros(len(sources), dtype=bool)
+        flagged = sources[badFlags].fillna(False).any(axis=1)
         fluxField = self.config.newObjectFluxField
         fluxErrField = fluxField + "Err"
         signalToNoise = np.abs(np.array(sources[fluxField]/sources[fluxErrField]))
         reliability = np.array(sources['reliability'])
-        for flag in badFlags:
-            flagged += sources[flag].values
         nFlagged = np.count_nonzero(flagged)
         if nFlagged > 0:
             self.log.info("Not creating new diaObjects for %i unassociated diaSources due to flags", nFlagged)
@@ -909,6 +912,35 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                marginalDiaSources=createResults.marginalDiaSources
                                )
 
+    def standardizeDiaSources(self, associatedDiaSources, nullColumns=None):
+        """Convert the DiaSource catalog to SDM schema format with NULL ID values
+
+        Parameters
+        ----------
+        associatedDiaSources : `pandas.DataFrame`
+            The DiaSource catalog to convert
+        nullColumns : `list` of `str`, optional
+            List of column names to check for default values of 0 that should be
+            replaced with `NULL`.
+
+        Returns
+        -------
+        standardizedAssociatedDiaSources : pandas.DataFrame
+            The standardized DiaSource catalog
+        """
+        standardizedAssociatedDiaSources = convertTableToSdmSchema(self.schema,
+                                                                   associatedDiaSources,
+                                                                   tableName="DiaSource")
+
+        def _setNullColumn(dataframe, colName):
+            """Set specified columns with default values of 0 to NULL."""
+            dataframe.loc[dataframe[colName] == 0, colName] = pd.NA
+
+        if nullColumns is not None:
+            for colName in nullColumns:
+                _setNullColumn(standardizedAssociatedDiaSources, colName)
+        return standardizedAssociatedDiaSources
+
     @timeMethod
     def mergeAssociatedCatalogs(self, preloadedDiaSources, associatedDiaSources, diaObjects, newDiaObjects,
                                 diffIm):
@@ -975,7 +1007,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 "DiaObjects and should be reported. Exiting.")
 
         mergedDiaSourceHistory = self.mergeCatalogs(preloadedDiaSources, associatedDiaSources,
-                                                    "preloadedDiaSources")
+                                                    tableName="DiaSource")
 
         # Test for DiaSource duplication first. If duplicates are found,
         # this likely means this is duplicate data being processed and sent
@@ -1155,9 +1187,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             self.log.warning("Error attempting to check diaObject history: %s", e)
         return diaObjCat, diaObjectIds
 
-    def mergeCatalogs(self, originalCatalog, newCatalog, catalogName):
-        """Combine two catalogs, ensuring that the columns of the new catalog
-        have the same dtype as the original.
+    def mergeCatalogs(self, originalCatalog, newCatalog, tableName):
+        """Combine two catalogs, ensuring that the new catalog conforms to the schema.
 
         Parameters
         ----------
@@ -1165,8 +1196,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             The original catalog to be added to.
         newCatalog : `pandas.DataFrame`
             The new catalog to append to `originalCatalog`
-        catalogName : `str`, optional
-            The name of the catalog to use for logging messages.
+        tableName : `str`
+            Name of the table in the schema to use.
 
         Returns
         -------
@@ -1175,21 +1206,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             ordered before the rows of ``newCatalog``
         """
         if len(newCatalog) > 0:
-            catalog = newCatalog.copy(deep=True)
-            # We need to coerce the types of `newCatalog`
-            # to be the same as `originalCatalog`, thanks to pandas
-            # datetime issues (DM-41100). And we may as well coerce
-            # all the columns to ensure consistency for future compatibility.
-            for name, dtype in originalCatalog.dtypes.items():
-                if name in newCatalog.columns and newCatalog[name].dtype != dtype:
-                    self.log.debug(
-                        "Coercing %s column %s from %s to %s",
-                        catalogName,
-                        name,
-                        str(newCatalog[name].dtype),
-                        str(dtype),
-                    )
-                    catalog[name] = newCatalog[name].astype(dtype)
+            catalog = convertTableToSdmSchema(self.schema, newCatalog,
+                                              tableName=tableName,
+                                              )
 
             mergedCatalog = pd.concat([originalCatalog, catalog], sort=True)
         else:
