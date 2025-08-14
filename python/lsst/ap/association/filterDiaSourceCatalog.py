@@ -28,7 +28,6 @@ __all__ = (
 
 import numpy as np
 
-from lsst.afw.table import SourceCatalog
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
@@ -106,6 +105,14 @@ class FilterDiaSourceCatalogConfig(
         "sky sources."
     )
 
+    badFlagList = pexConfig.ListField(
+        dtype=str,
+        default=[
+            "base_PixelFlags_flag_crCenter",
+        ],
+        doc="List of flags which cause a source to be removed.",
+    )
+
     doRemoveNegativeDirectImageSources = pexConfig.Field(
         dtype=bool,
         default=True,
@@ -181,36 +188,30 @@ class FilterDiaSourceCatalogTask(pipeBase.PipelineTask):
         """
         rejectedSources = None
         exposure_time = diffImVisitInfo.exposureTime
+        rejected_mask = np.zeros(len(diaSourceCat), dtype=bool)
         if self.config.doRemoveSkySources:
             sky_source_column = diaSourceCat["sky_source"]
-            num_sky_sources = np.sum(sky_source_column)
-            rejectedSources = diaSourceCat[sky_source_column].copy(deep=True)
-            diaSourceCat = diaSourceCat[~sky_source_column].copy(deep=True)
-            self.log.info(f"Filtered {num_sky_sources} sky sources.")
+            self.log.info(f"Filtered {np.sum(sky_source_column & ~rejected_mask)} sky sources.")
+            rejected_mask |= sky_source_column
+
+        for flag in self.config.badFlagList:
+            flag_mask = diaSourceCat[flag]
+            self.log.info(f"Filtered {np.sum(flag_mask & ~rejected_mask)} sources with flag {flag}.")
+            rejected_mask |= flag_mask
 
         if self.config.doRemoveNegativeDirectImageSources:
             direct_snr = (diaSourceCat["ip_diffim_forced_PsfFlux_instFlux"]
                           / diaSourceCat["ip_diffim_forced_PsfFlux_instFluxErr"])
             too_negative = direct_snr < self.config.minAllowedDirectSnr
-            rejectedNegative = diaSourceCat[too_negative].copy(deep=True)
-            diaSourceCat = diaSourceCat[~too_negative].copy(deep=True)
-            self.log.info(f"Filtered {np.sum(too_negative)} negative direct sources.")
-            if rejectedSources is None:
-                rejectedSources = rejectedNegative
-            else:
-                rejectedSkySources = rejectedSources
-                rejectedSources = SourceCatalog(diaSourceCat.getSchema())
-                rejectedSources.reserve(len(rejectedSkySources) + len(rejectedNegative))
-                rejectedSources.extend(rejectedSkySources, deep=True)
-                rejectedSources.extend(rejectedNegative, deep=True)
-
-        if rejectedSources is None:
-            rejectedSources = SourceCatalog(diaSourceCat.getSchema())
+            self.log.info(f"Filtered {np.sum(too_negative & ~rejected_mask)} negative direct sources.")
+            rejected_mask |= too_negative
 
         if self.config.doTrailedSourceFilter:
             trail_mask = self._check_dia_source_trail(diaSourceCat, exposure_time)
             longTrailedDiaSources = diaSourceCat[trail_mask].copy(deep=True)
-            diaSourceCat = diaSourceCat[~trail_mask]
+            rejectedSources = diaSourceCat[rejected_mask].copy(deep=True)
+            rejected_mask |= trail_mask
+            diaSourceCat = diaSourceCat[~rejected_mask].copy(deep=True)
 
             self.log.info("%i DiaSources exceed max_trail_length %f arcseconds per second, "
                           "dropping from source catalog."
@@ -224,11 +225,11 @@ class FilterDiaSourceCatalogTask(pipeBase.PipelineTask):
             else:
                 filterResults = pipeBase.Struct(filteredDiaSourceCat=diaSourceCat,
                                                 rejectedDiaSources=rejectedSources)
-
         else:
+            rejectedSources = diaSourceCat[rejected_mask].copy(deep=True)
+            diaSourceCat = diaSourceCat[~rejected_mask].copy(deep=True)
             filterResults = pipeBase.Struct(filteredDiaSourceCat=diaSourceCat,
                                             rejectedDiaSources=rejectedSources)
-
         return filterResults
 
     def _check_dia_source_trail(self, dia_sources, exposure_time):

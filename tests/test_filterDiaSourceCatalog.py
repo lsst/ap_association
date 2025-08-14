@@ -40,10 +40,13 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         self.config = FilterDiaSourceCatalogConfig()
 
         self.nSkySources = 5
+        self.nCrCenterSources = 6
+        self.nFakeFlagSources = 4
         self.nNegativeSources = 7
         self.nTrailedSources = 10
         self.pixelScale = 0.2  # arcseconds/pixel
-        self.nSources = self.nSkySources + self.nNegativeSources + self.nTrailedSources
+        self.nSources = (self.nSkySources + self.nCrCenterSources + self.nFakeFlagSources
+                         + self.nNegativeSources + self.nTrailedSources)
         self.yLoc = 100
         self.expId = 4321
         self.bbox = geom.Box2I(geom.Point2I(0, 0),
@@ -53,6 +56,10 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
             dataset.addSource(10000.0, geom.Point2D(srcIdx, self.yLoc))
         schema = dataset.makeMinimalSchema()
         schema.addField("sky_source", type="Flag", doc="Sky objects.")
+        schema.addField("base_PixelFlags_flag_crCenter", type="Flag", doc="A cosmic ray was detected "
+                        "and interpolated in this object's center.")
+        schema.addField("fakeBadFlag", type="Flag", doc="A fake flag to test a badFlagList longer "
+                        "than one item.")
         schema.addField("ip_diffim_forced_PsfFlux_instFlux", type="F",
                         doc="Forced photometry flux for a point source model measured on the visit image "
                         "centered at DiaSource position.")
@@ -75,9 +82,23 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         # set the sky_source flag for the first set
         self.diaSourceCat[0:self.nSkySources]["sky_source"] = True
 
+        # set the pixelFlags_crCenter flag
+        crCenter_offset = self.nSkySources
+        self.diaSourceCat[crCenter_offset:crCenter_offset+self.nCrCenterSources][
+            "base_PixelFlags_flag_crCenter"
+        ] = True
+
+        # set the fakeBadFlag flag
+        fakeFlag_offset = crCenter_offset + self.nCrCenterSources
+        self.diaSourceCat[fakeFlag_offset:fakeFlag_offset+self.nFakeFlagSources][
+            "fakeBadFlag"
+        ] = True
+
         # create increasingly negative ip_diffim_forced_PsfFlux_instFlux/ip_diffim_forced_PsfFlux_instFluxErr
         self.nRemovedNegativeSources = 0
-        for i, srcIdx in enumerate(range(self.nSkySources, self.nSkySources+self.nNegativeSources)):
+        negativeSources_offset = fakeFlag_offset + self.nFakeFlagSources
+        for i, srcIdx in enumerate(range(negativeSources_offset,
+                                         negativeSources_offset+self.nNegativeSources)):
             self.diaSourceCat[srcIdx]["ip_diffim_forced_PsfFlux_instFlux"] = -0.5 * i
             self.diaSourceCat[srcIdx]["ip_diffim_forced_PsfFlux_instFluxErr"] = 1.01
             if (-0.5 * i)/1.01 < self.config.minAllowedDirectSnr:
@@ -87,7 +108,7 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         # increasing in size by 1.5 arcseconds. Only the last three will have
         # lengths which are too long and will be filtered out.
         self.nFilteredTrailedSources = 0
-        trail_offset = self.nSkySources + self.nNegativeSources
+        trail_offset = negativeSources_offset + self.nNegativeSources
         for i, srcIdx in enumerate(range(trail_offset, trail_offset+self.nTrailedSources)):
             self.diaSourceCat[srcIdx]["ext_trailedSources_Naive_length"] = 1.5*(i+1)/self.pixelScale
             if 1.5*(i+1) > 36000/3600.0/24.0 * 30.0:
@@ -118,6 +139,7 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         are returned.
         """
         self.config.doRemoveSkySources = False
+        self.config.badFlagList = []
         self.config.doRemoveNegativeDirectImageSources = False
         self.config.doWriteRejectedSkySources = False
         self.config.doTrailedSourceFilter = False
@@ -133,6 +155,7 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         catalog and the rest are returned.
         """
         self.config.doRemoveSkySources = True
+        self.config.badFlagList = []
         self.config.doRemoveNegativeDirectImageSources = False
         self.config.doWriteRejectedSkySources = True
         self.config.doTrailedSourceFilter = False
@@ -145,12 +168,50 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         self.assertEqual(len(result.rejectedDiaSources), self.nSkySources)
         self.assertEqual(len(self.diaSourceCat), self.nSources)
 
+    def test_run_with_filter_defaultBadFlagList_only(self):
+        """Test that when only the CR center filter is turned on the six sources which are flagged
+        as base_PixelFlags_flag_crCenter are filtered out of the catalog and the rest are returned.
+        """
+        self.config.doRemoveSkySources = False
+        self.config.doRemoveNegativeDirectImageSources = False
+        self.config.doWriteRejectedSkySources = False
+        self.config.doTrailedSourceFilter = False
+        filterDiaSourceCatalogTask = FilterDiaSourceCatalogTask(config=self.config)
+        result = filterDiaSourceCatalogTask.run(self.diaSourceCat, self.visitInfo)
+        nExpectedFilteredSources = self.nSources - self.nCrCenterSources
+        self.assertEqual(len(result.filteredDiaSourceCat),
+                         len(self.diaSourceCat[~self.diaSourceCat['base_PixelFlags_flag_crCenter']]))
+        self.assertEqual(len(result.filteredDiaSourceCat), nExpectedFilteredSources)
+        self.assertEqual(len(result.rejectedDiaSources), self.nCrCenterSources)
+        self.assertEqual(len(self.diaSourceCat), self.nSources)
+
+    def test_run_with_filter_nonDefaultBadFlagList_only(self):
+        """Test that the badFlagList filters appropriately when it is not when the default configuration.
+        The six sources flagged base_PixelFlags_flag_crCenter and the four sources flagged fakeBadFlag
+        should be filtered out of the catalog and the rest are returned.
+        """
+        self.config.doRemoveSkySources = False
+        self.config.badFlagList = ["base_PixelFlags_flag_crCenter", "fakeBadFlag"]
+        self.config.doRemoveNegativeDirectImageSources = False
+        self.config.doWriteRejectedSkySources = False
+        self.config.doTrailedSourceFilter = False
+        filterDiaSourceCatalogTask = FilterDiaSourceCatalogTask(config=self.config)
+        result = filterDiaSourceCatalogTask.run(self.diaSourceCat, self.visitInfo)
+        nExpectedFilteredSources = self.nSources - self.nCrCenterSources - self.nFakeFlagSources
+        self.assertEqual(len(result.filteredDiaSourceCat),
+                         len(self.diaSourceCat[~self.diaSourceCat['base_PixelFlags_flag_crCenter']
+                             & ~self.diaSourceCat['fakeBadFlag']]))
+        self.assertEqual(len(result.filteredDiaSourceCat), nExpectedFilteredSources)
+        self.assertEqual(len(result.rejectedDiaSources), self.nCrCenterSources + self.nFakeFlagSources)
+        self.assertEqual(len(self.diaSourceCat), self.nSources)
+
     def test_run_with_filter_negative_only(self):
         """Test that when only the negative filter is turned on then
         sources which below the negtive snr cut are filtered out of the
         catalog and the rest are returned.
         """
         self.config.doRemoveSkySources = False
+        self.config.badFlagList = []
         self.config.doRemoveNegativeDirectImageSources = True
         self.config.doWriteRejectedSkySources = True
         self.config.doTrailedSourceFilter = False
@@ -173,6 +234,7 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         are on.
         """
         self.config.doRemoveSkySources = True
+        self.config.badFlagList = []
         self.config.doRemoveNegativeDirectImageSources = True
         self.config.doWriteRejectedSkySources = True
         self.config.doTrailedSourceFilter = False
@@ -221,6 +283,7 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         set. All sky objects should remain in the catalog.
         """
         self.config.doRemoveSkySources = False
+        self.config.badFlagList = []
         self.config.doRemoveNegativeDirectImageSources = False
         self.config.doWriteRejectedSkySources = False
         self.config.doTrailedSourceFilter = True
@@ -231,7 +294,7 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         self.assertEqual(len(self.diaSourceCat), self.nSources)
 
     def test_run_with_all_filters(self):
-        """Test that all sources are filtered out correctly. Only six sources
+        """Test that all sources are filtered out correctly. Only 15 sources
         should remain in the catalog after filtering.
         """
         self.config.doRemoveSkySources = True
@@ -241,13 +304,21 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         filterDiaSourceCatalogTask = FilterDiaSourceCatalogTask(config=self.config)
         result = filterDiaSourceCatalogTask.run(self.diaSourceCat, self.visitInfo)
         nExpectedFilteredSources = (self.nSources - self.nSkySources
+                                    - self.nCrCenterSources
                                     - self.nFilteredTrailedSources
                                     - self.nRemovedNegativeSources)
+        nExpectedRejectedSources = (self.nSkySources
+                                    + self.nCrCenterSources
+                                    + self.nRemovedNegativeSources)
+        # 32 total sources
         # 5 filtered out sky sources
+        # 6 filtered out sources with cosmic ray detections
+        # 2 filtered out negative sources
         # 4 filtered out trailed sources, 2 with long trails 2 with flags
-        # 6 sources left
+        # 15 sources left
         self.assertEqual(len(result.filteredDiaSourceCat), nExpectedFilteredSources)
-        self.assertEqual(len(result.rejectedDiaSources), self.nSkySources + self.nRemovedNegativeSources)
+        # 17 sources rejected, 4 trailed sources not included, 13 rejected sources in catalog.
+        self.assertEqual(len(result.rejectedDiaSources), nExpectedRejectedSources)
         self.assertEqual(len(self.diaSourceCat), self.nSources)
 
     def test_pixelScale_calculation(self):
@@ -258,7 +329,7 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         scale = filterDiaSourceCatalogTask._estimate_pixel_scale(self.diaSourceCat)
         # Should be almost but not actually equal
         self.assertNotEqual(self.config.estimatedPixelScale, scale)
-        self.assertAlmostEqual(self.config.estimatedPixelScale, scale)
+        self.assertAlmostEqual(self.config.estimatedPixelScale, scale, places=6)
 
         # If the estimatedPixelScale is very different, that value should be
         #  used exactly and it should not raise an error.
