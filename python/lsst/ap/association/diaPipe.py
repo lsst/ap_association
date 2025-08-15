@@ -430,13 +430,10 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
                                        "ap_nDiaSources",
                                        "ap_meanFlux",
                                        "ap_sigmaFlux",
-                                       "ap_chi2Flux",
-                                       "ap_skewFlux",
                                        "ap_minMaxFlux",
                                        "ap_maxSlopeFlux",
                                        "ap_meanErrFlux",
-                                       "ap_meanTotFlux",
-                                       "ap_sigmaTotFlux"]
+                                       "ap_meanTotFlux"]
 
 
 class DiaPipelineTask(pipeBase.PipelineTask):
