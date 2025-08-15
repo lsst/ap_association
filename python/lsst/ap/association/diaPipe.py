@@ -620,6 +620,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             # A single log message is easier for Loki to parse than timeMethod's start+end pairs.
             self.log.verbose("writeToApdb: Took %.4f seconds", self.metadata["writeToApdbDuration"])
 
+        associatedSsSources = assocResults.associatedSsSources
         # Package alerts
         if self.config.doPackageAlerts:
             # Append new forced sources to the full history
@@ -640,6 +641,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                     ["diaObjectId", "diaForcedSourceId"],
                     drop=False,
                     inplace=True)
+
             self.alertPackager.run(assocResults.associatedDiaSources,
                                    diaCalResult.diaObjectCat,
                                    preloadedDiaSources,
@@ -647,9 +649,15 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                    diffIm,
                                    exposure,
                                    template,
+                                   ssSrc=associatedSsSources,
                                    doRunForcedMeasurement=self.config.doRunForcedMeasurement,
                                    forcedSourceHistoryThreshold=forcedSourceHistoryThreshold,
                                    )
+        # Although we passed the solar system object orbits to alerts,
+        # we don't want them in the associatedSsSources data product.
+        if associatedSsSources is not None:
+            mpcorbColumns = [col for col in associatedSsSources.columns if col[:7] == 'MPCORB_']
+            associatedSsSources.remove_columns(mpcorbColumns)
 
         # For historical reasons, apdbMarker is a Config even if it's not meant to be read.
         # A default Config is the cheapest way to satisfy the storage class.
@@ -844,7 +852,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         """
         # Associate new DiaSources with existing DiaObjects.
         assocResults = self.associator.run(diaSourceTable, diaObjects)
-
+        # TODO: work out how to mark asteroid-diaObj overlaps as contaminated
         toAssociate = []
         if self.config.doSolarSystemAssociation and solarSystemObjectTable is not None:
             ssoAssocResult = self.solarSystemAssociator.run(
@@ -867,6 +875,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             nAssociatedSsObjects = ssoAssocResult.nAssociatedSsObjects
             associatedSsSources = ssoAssocResult.associatedSsSources
             unassociatedSsObjects = ssoAssocResult.unassociatedSsObjects
+
         else:
             # Create new DiaObjects from unassociated diaSources.
             createResults = self.createNewDiaObjects(assocResults.unAssocDiaSources)
