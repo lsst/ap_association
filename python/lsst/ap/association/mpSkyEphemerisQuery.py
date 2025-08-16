@@ -42,6 +42,11 @@ from lsst.utils.timer import timeMethod
 from lsst.pipe.base import connectionTypes, NoWorkFound, PipelineTask, \
     PipelineTaskConfig, PipelineTaskConnections, Struct
 
+ELEMENTS_LIST = "q,e,inc,node,argPeri,t_p_MJD_TDB,epochMJD_TDB".split(',')
+ELEMENTS_FORMAT = " ".join(["{:> 11f}"] * len(ELEMENTS_LIST))
+NAMING_MAP = {'inc': 'incl', 'argPeri': 'peri', 't_p_MJD_TDB': 't_p', 'epochMJD_TDB': 'epoch',
+              'q': 'q', 'e': 'e', 'node': 'node'}
+
 
 class MPSkyEphemerisQueryConnections(PipelineTaskConnections,
                                      dimensions=("instrument",
@@ -86,6 +91,11 @@ class MPSkyEphemerisQueryConfig(
         dtype=str,
         doc="mpSky default URL if MP_SKY_URL environment variable unset",
         default="http://sdfiana014.sdf.slac.stanford.edu:3666/ephemerides/"
+    )
+    mpcorb_prefix = pexConfig.Field(
+        dtype=str,
+        doc="Column prefix to indicate MPCORB columns for downstream tasks.",
+        default="MPCORB_"
     )
 
 
@@ -143,8 +153,12 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         except KeyError:
             self.log.warning("MP_SKY_URL is not defined. Falling back to %s.", self.config.mpSkyFallbackURL)
             mpSkyURL = self.config.mpSkyFallbackURL
-        mpSkySsObjects = self._mpSkyConeSearch(expCenter, expMidPointEPOCH,
-                                               expRadius + self.config.queryBufferRadiusDegrees, mpSkyURL)
+        mpSkySsObjects, elements = self._mpSkyConeSearch(expCenter, expMidPointEPOCH,
+                                                         expRadius + self.config.queryBufferRadiusDegrees,
+                                                         mpSkyURL)
+        for element in ELEMENTS_LIST:
+            mpSkySsObjects[self.config.mpcorb_prefix + NAMING_MAP[element]] = elements[element]
+        # ssObjectId and mpcDesignation are also in the MPCORB schema so let's add them here.
         return Struct(
             ssObjects=mpSkySsObjects,
         )
@@ -175,18 +189,25 @@ class MPSkyEphemerisQueryTask(PipelineTask):
             Upper time bound for polynomials
 
         """
-        with pa.input_stream(memoryview(response.content)) as stream:
-            stream.seek(0)
-            object_polynomial = pa.ipc.read_tensor(stream).to_numpy()
-            observer_polynomial = pa.ipc.read_tensor(stream).to_numpy()
-            with pa.ipc.open_stream(stream) as reader:
-                columns = next(reader)
-        objID = columns["name"].to_numpy(zero_copy_only=False)
-        ra = columns["ra"].to_numpy()
-        dec = columns["dec"].to_numpy()
-        t_min = columns["tmin"].to_numpy()
-        t_max = columns["tmax"].to_numpy()
-        return objID, ra, dec, object_polynomial, observer_polynomial, t_min, t_max
+        with pa.input_stream(memoryview(response.content)) as fp:
+            fp.seek(0)
+            p = pa.ipc.read_tensor(fp)
+            op = pa.ipc.read_tensor(fp)
+            with pa.ipc.open_stream(fp) as reader:
+                schema = reader.schema
+                r = next(reader)
+
+        # construct an elements pandas dataframe
+        if "q" in schema.names:
+            cols = {col: r[col].to_numpy() for col in ELEMENTS_LIST}
+            elements = pd.DataFrame(cols)
+        else:
+            elements = None
+
+        return (
+            r["name"].to_numpy(zero_copy_only=False), r["ra"].to_numpy(), r["dec"].to_numpy(),
+            p.to_numpy(), op.to_numpy(), r["tmin"].to_numpy(), r["tmax"].to_numpy(), elements
+        )
 
     def _mpSkyConeSearch(self, expCenter, epochMJD, queryRadius, mpSkyURL):
         """Query MPSky ephemeris service for objects near the expected detector position
@@ -215,14 +236,15 @@ class MPSkyEphemerisQueryTask(PipelineTask):
             "t": epochMJD,
             "ra": fieldRA,
             "dec": fieldDec,
-            "radius": queryRadius
+            "radius": queryRadius,
+            "return_elements": True
         }
 
         try:
             response = requests.get(mpSkyURL, params=params, timeout=self.config.mpSkyRequestTimeoutSeconds)
             response.raise_for_status()
             response = self.read_mp_sky_response(response)
-            objID, ra, dec, object_polynomial, observer_polynomial, tmin, tmax = response
+            objID, ra, dec, object_polynomial, observer_polynomial, tmin, tmax, elements = response
 
             mpSkySsObjects = pd.DataFrame()
             mpSkySsObjects['ObjID'] = objID
@@ -250,4 +272,4 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         except requests.RequestException as e:
             raise NoWorkFound(f"Failed to connect to the remote ephemerides service: {e}") from e
 
-        return mpSkySsObjects
+        return mpSkySsObjects, elements

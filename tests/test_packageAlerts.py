@@ -363,7 +363,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                 ccdCutout,
                 ccdCutout,
                 ccdCutout)
-            self.assertEqual(len(alert), 9)
+            self.assertEqual(len(alert), 10)
 
             self.assertEqual(alert["diaSourceId"], dia_source_id)
             self.assertEqual(alert["diaSource"], diaSource.to_dict())
