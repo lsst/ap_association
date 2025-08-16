@@ -59,19 +59,12 @@ def makeDiaObjects(nObjects, exposure, rng):
     rand_x = rng.uniform(bbox.getMinX(), bbox.getMaxX(), size=nObjects)
     rand_y = rng.uniform(bbox.getMinY(), bbox.getMaxY(), size=nObjects)
 
-    midpointMjdTai = exposure.visitInfo.date.get(system=dafBase.DateTime.MJD)
-
     data = []
     for idx, (x, y) in enumerate(zip(rand_x, rand_y)):
         coord = exposure.wcs.pixelToSky(x, y)
         newObject = {"ra": coord.getRa().asDegrees(),
                      "dec": coord.getDec().asDegrees(),
-                     "radecMjdTai": midpointMjdTai,
                      "diaObjectId": idx + 1,
-                     "pmParallaxNdata": 0,
-                     "nearbyObj1": 0,
-                     "nearbyObj2": 0,
-                     "nearbyObj3": 0,
                      "nDiaSources": 5}
         for f in ["u", "g", "r", "i", "z", "y"]:
             newObject["%s_psfFluxNdata" % f] = 0

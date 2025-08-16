@@ -429,18 +429,11 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         self.diaCalculation.plugins = ["ap_meanPosition",
                                        "ap_nDiaSources",
                                        "ap_meanFlux",
-                                       "ap_percentileFlux",
                                        "ap_sigmaFlux",
-                                       "ap_chi2Flux",
-                                       "ap_madFlux",
-                                       "ap_skewFlux",
                                        "ap_minMaxFlux",
                                        "ap_maxSlopeFlux",
                                        "ap_meanErrFlux",
-                                       "ap_linearFit",
-                                       "ap_stetsonJ",
-                                       "ap_meanTotFlux",
-                                       "ap_sigmaTotFlux"]
+                                       "ap_meanTotFlux"]
 
 
 class DiaPipelineTask(pipeBase.PipelineTask):

@@ -321,10 +321,8 @@ class PackageAlertsTask(pipeBase.Task):
                 diaSource["diaSourceId"],
                 averagePsf=templatePsf)
 
-            # TODO: Create alertIds DM-24858
-            alertId = diaSource["diaSourceId"]
             alerts.append(
-                self.makeAlertDict(alertId,
+                self.makeAlertDict(diaSource["diaSourceId"],
                                    diaSource,
                                    diaObject,
                                    objSourceHistory,
@@ -419,7 +417,7 @@ class PackageAlertsTask(pipeBase.Task):
 
                     if self.config.doWriteFailedAlerts:
                         with open(os.path.join(self.config.alertWriteLocation,
-                                               f"{visit}_{detector}_{alert['alertId']}.avro"), "wb") as f:
+                                               f"{visit}_{detector}_{alert['diaSourceId']}.avro"), "wb") as f:
                             f.write(alertBytes)
 
             self.producer.flush()
@@ -554,7 +552,7 @@ class PackageAlertsTask(pipeBase.Task):
         return localMatrix / 3600
 
     def makeAlertDict(self,
-                      alertId,
+                      diaSourceId,
                       diaSource,
                       diaObject,
                       objDiaSrcHistory,
@@ -566,6 +564,8 @@ class PackageAlertsTask(pipeBase.Task):
 
         Parameters
         ----------
+        diaSourceId : `int`
+            Unique identifier of the triggering diaSource
         diaSource : `pandas.DataFrame`
             New single DiaSource to package.
         diaObject : `pandas.DataFrame`
@@ -585,7 +585,7 @@ class PackageAlertsTask(pipeBase.Task):
             with a min size set by the ``cutoutSize`` configurable.
         """
         alert = dict()
-        alert['alertId'] = alertId
+        alert['diaSourceId'] = diaSourceId
         alert['diaSource'] = diaSource.to_dict()
 
         if objDiaSrcHistory is None:
@@ -600,8 +600,6 @@ class PackageAlertsTask(pipeBase.Task):
         alert['prvDiaNondetectionLimits'] = None
 
         alert['diaObject'] = diaObject.to_dict()
-
-        alert['ssObject'] = None
 
         if diffImCutout is None:
             alert['cutoutDifference'] = None
