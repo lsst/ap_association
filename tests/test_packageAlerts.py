@@ -160,7 +160,7 @@ def mock_ss_alert(dia_source_id, ss_object_id):
         'heliocentricDist': np.float32(3.141592),  # a float-typed field
     }
     return alert
- 
+
 
 def _deserialize_alert(alert_bytes):
     """Deserialize an alert message from Kafka.

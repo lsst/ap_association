@@ -32,6 +32,7 @@ from lsst.dax.apdb import Apdb, ApdbTables, schema_model
 import felis.datamodel
 import numpy as np
 import pandas as pd
+from astropy.table import Table
 import yaml
 
 from lsst.daf.butler import Timespan
@@ -206,6 +207,47 @@ def convertDataFrameToSdmSchema(apdbSchema, sourceTable, tableName):
             else:
                 data[columnDef.name] = pd.Series([0]*nSrc, dtype=dtype, index=sourceTable.index)
     return pd.DataFrame(data)
+
+
+def convertTableToSdmSchema(apdbSchema, sourceTable, tableName):
+    """Force a table to conform to the schema defined by the APDB.
+
+    This method uses the table definitions in ``sdm_schemas`` to
+    load the schema of the APDB, and does not actually connect to the APDB.
+
+    Parameters
+    ----------
+    apdbSchema : `dict` [`str`, `lsst.dax.apdb.schema_model.Table`]
+        Schema from ``sdm_schemas`` containing the table definition to use.
+    sourceTable : `astropy.table.Table`
+        The input table to convert.
+    tableName : `str`
+        Name of the table in the schema to use.
+
+    Returns
+    -------
+    `astropy.table.Table`
+        A table with the correct schema for the APDB and data copied from
+        the input ``sourceTable``.
+    """
+    table = apdbSchema[tableName]
+
+    data = {}
+    nSrc = len(sourceTable)
+
+    for columnDef in table.columns:
+        dtype = column_dtype(columnDef.datatype, nullable=columnDef.nullable)
+        if columnDef.name in sourceTable.columns:
+            data[columnDef.name] = Table.Column(sourceTable[columnDef.name], dtype=dtype.lower())
+        else:
+            if columnDef.nullable:
+                try:
+                    data[columnDef.name] = Table.Column([pd.NA]*nSrc, dtype=object)
+                except TypeError:
+                    data[columnDef.name] = pd.Series([np.nan]*nSrc, dtype=dtype)
+            else:
+                data[columnDef.name] = pd.Series([0]*nSrc, dtype=dtype)
+    return Table(data)
 
 
 def dropEmptyColumns(apdbSchema, sourceTable, tableName):

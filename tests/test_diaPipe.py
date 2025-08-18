@@ -483,6 +483,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         updatedDiaObjects = task.updateObjectTable(diaObjects, diaSources)
         self.assertTrue(np.all(updatedDiaObjects.nDiaSources.values == expectedSourcesPerObject))
 
+
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass
 
