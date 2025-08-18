@@ -26,7 +26,7 @@ import pandas as pd
 
 import lsst.daf.butler as dafButler
 
-from lsst.ap.association.utils import readSdmSchemaFile, make_empty_catalog, convertTableToSdmSchema, \
+from lsst.ap.association.utils import readSdmSchemaFile, make_empty_catalog, convertDataFrameToSdmSchema, \
     getMidpointFromTimespan
 from utils_tests import makeExposure, makeRegionTime
 
@@ -52,8 +52,8 @@ class TestUtils(unittest.TestCase):
 
             emptyDf = pd.DataFrame(columns=["diaObjectId",])
             emptyDf.set_index("diaObjectId")
-            convertedEmptyDiaObjects = convertTableToSdmSchema(schema, emptyDf, tableName=tableName)
-            # TODO: we have no tests of convertTableToSdmSchema, so it's dangerous to use it as an oracle.
+            convertedEmptyDiaObjects = convertDataFrameToSdmSchema(schema, emptyDf, tableName=tableName)
+            # TODO: we have no tests of convertDataFrameToSdmSchema, so it's dangerous to use it as an oracle.
             emptyTypes = dict(zip(emptyDiaObjects.columns, emptyDiaObjects.dtypes))
             convertedEmptyTypes = dict(zip(convertedEmptyDiaObjects.columns, convertedEmptyDiaObjects.dtypes))
             self.assertEqual(emptyTypes, convertedEmptyTypes)

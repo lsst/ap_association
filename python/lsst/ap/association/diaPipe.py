@@ -44,8 +44,9 @@ from lsst.ap.association import (
     DiaForcedSourceTask,
     PackageAlertsTask)
 
-from lsst.ap.association.utils import convertTableToSdmSchema, readSchemaFromApdb, dropEmptyColumns, \
-    make_empty_catalog, makeEmptyForcedSourceTable, checkSdmSchemaColumns
+from lsst.ap.association.utils import convertDataFrameToSdmSchema, \
+    readSchemaFromApdb, dropEmptyColumns, make_empty_catalog, makeEmptyForcedSourceTable, \
+        checkSdmSchemaColumns
 from lsst.daf.base import DateTime
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
     DiaObjectCalculationTask
@@ -585,7 +586,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             mergedDiaSourceHistory,
             updatedDiaObjectIds,
             [band])
-        updatedDiaObjects = convertTableToSdmSchema(self.schema, diaCalResult.updatedDiaObjects,
+        updatedDiaObjects = convertDataFrameToSdmSchema(self.schema, diaCalResult.updatedDiaObjects,
                                                     tableName="DiaObject")
 
         # Test for duplication in the updated DiaObjects.
@@ -705,7 +706,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 unassociatedDiaSources = results.goodSources
                 marginalDiaSources = results.badSources
             unassociatedDiaSources["diaObjectId"] = unassociatedDiaSources["diaSourceId"]
-            newDiaObjects = convertTableToSdmSchema(self.schema, unassociatedDiaSources,
+            newDiaObjects = convertDataFrameToSdmSchema(self.schema, unassociatedDiaSources,
                                                     tableName="DiaObject")
         self.metadata["nRejectedNewDiaObjects"] = len(marginalDiaSources)
         return pipeBase.Struct(diaSources=unassociatedDiaSources,
@@ -931,7 +932,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         standardizedAssociatedDiaSources : pandas.DataFrame
             The standardized DiaSource catalog
         """
-        standardizedAssociatedDiaSources = convertTableToSdmSchema(self.schema,
+        standardizedAssociatedDiaSources = convertDataFrameToSdmSchema(self.schema,
                                                                    associatedDiaSources,
                                                                    tableName="DiaSource")
 
@@ -1063,7 +1064,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diffIm,
             idGenerator=idGenerator)
         self.log.info(f"Updating {len(diaForcedSources)} diaForcedSources in the APDB")
-        diaForcedSources = convertTableToSdmSchema(self.schema, diaForcedSources,
+        diaForcedSources = convertDataFrameToSdmSchema(self.schema, diaForcedSources,
                                                    tableName="DiaForcedSource",
                                                    )
         return diaForcedSources
@@ -1209,7 +1210,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             ordered before the rows of ``newCatalog``
         """
         if len(newCatalog) > 0:
-            catalog = convertTableToSdmSchema(self.schema, newCatalog,
+            catalog = convertDataFrameToSdmSchema(self.schema, newCatalog,
                                               tableName=tableName,
                                               )
 

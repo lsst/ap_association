@@ -21,7 +21,7 @@
 
 """Utilities for working with the APDB.
 """
-__all__ = ("convertTableToSdmSchema", "readSdmSchemaFile", "readSchemaFromApdb",
+__all__ = ("convertDataFrameToSdmSchema", "readSdmSchemaFile", "readSchemaFromApdb",
            "dropEmptyColumns", "make_empty_catalog", "getMidpointFromTimespan",
            "makeEmptyForcedSourceTable", "checkSdmSchemaColumns")
 
@@ -164,7 +164,7 @@ def checkSdmSchemaColumns(apdbSchema, colNames, tableName):
     return missing
 
 
-def convertTableToSdmSchema(apdbSchema, sourceTable, tableName):
+def convertDataFrameToSdmSchema(apdbSchema, sourceTable, tableName):
     """Force a table to conform to the schema defined by the APDB.
 
     This method uses the table definitions in ``sdm_schemas`` to
@@ -305,5 +305,5 @@ def makeEmptyForcedSourceTable(schema):
     diaForcedSources : `pandas.DataFrame`
         Empty dataframe.
     """
-    diaForcedSources = convertTableToSdmSchema(schema, pd.DataFrame(), tableName="DiaForcedSource")
+    diaForcedSources = convertDataFrameToSdmSchema(schema, pd.DataFrame(), tableName="DiaForcedSource")
     return diaForcedSources

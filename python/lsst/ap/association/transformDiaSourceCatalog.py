@@ -38,7 +38,7 @@ from lsst.pipe.tasks.postprocess import TransformCatalogBaseTask, TransformCatal
 from lsst.pipe.tasks.functors import Column
 from lsst.utils.timer import timeMethod
 
-from .utils import convertTableToSdmSchema, readSdmSchemaFile
+from .utils import convertDataFrameToSdmSchema, readSdmSchemaFile
 
 
 class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
@@ -262,7 +262,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
                             self.funcs,
                             dataId=None).df
         if self.config.doUseApdbSchema:
-            df = convertTableToSdmSchema(self.apdbSchema, df, tableName="DiaSource")
+            df = convertDataFrameToSdmSchema(self.apdbSchema, df, tableName="DiaSource")
 
         return pipeBase.Struct(
             diaSourceTable=df,
