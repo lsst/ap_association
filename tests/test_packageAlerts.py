@@ -144,6 +144,21 @@ def mock_alert(dia_source_id):
     }
 
 
+def mock_ss_alert(dia_source_id, ss_source_id):
+    """Generate a minimal mock alert.
+    """
+    alert = mock_alert(dia_source_id)
+    alert['MPCORB'] = {
+        'mpcDesignation': 'K20A11H',
+        'ssObjectId': 21165806086861128,
+    }
+    alert['ssSource'] = {
+        'ssObjectId': 21165806086861128,
+        'ssSourceId': ss_source_id,
+    }
+    return alert
+ 
+
 def _deserialize_alert(alert_bytes):
     """Deserialize an alert message from Kafka.
 
@@ -363,7 +378,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                 ccdCutout,
                 ccdCutout,
                 ccdCutout)
-            self.assertEqual(len(alert), 10)
+            self.assertEqual(len(alert), 11)
 
             self.assertEqual(alert["diaSourceId"], dia_source_id)
             self.assertEqual(alert["diaSource"], diaSource.to_dict())
@@ -439,7 +454,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         """
         packConfig = PackageAlertsConfig(doProduceAlerts=True)
         packageAlerts = PackageAlertsTask(config=packConfig)
-        alerts = [mock_alert(1), mock_alert(2)]
+        alerts = [mock_alert(1), mock_alert(2), mock_ss_alert(3, 3)]
 
         # Create a variable and assign it an instance of the patched kafka producer
         producer_instance = mock_producer.return_value
@@ -475,7 +490,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
 
         patcher = patch("builtins.open")
         patch_open = patcher.start()
-        alerts = [mock_alert(1), mock_alert(2), mock_alert(3)]
+        alerts = [mock_alert(1), mock_alert(2), mock_alert(3), mock_ss_alert(4, 4)]
         unix_midpoint = self.exposure.visitInfo.date.toAstropy().tai.unix
         exposure_time = self.exposure.visitInfo.exposureTime
 
