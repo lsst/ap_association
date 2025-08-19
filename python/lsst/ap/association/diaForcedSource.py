@@ -25,7 +25,6 @@ locations.
 
 __all__ = ["DiaForcedSourceTask", "DiaForcedSourcedConfig"]
 
-import datetime
 import numpy as np
 import pandas as pd
 
@@ -253,7 +252,7 @@ class DiaForcedSourceTask(pipeBase.Task):
         output_catalog["midpointMjdTai"] = midpointMjdTai
         output_catalog["band"] = diff_exp.getFilter().bandLabel
         # Pandas requires a naive UTC datetime.
-        output_catalog["time_processed"] = datetime.datetime.now(tz=datetime.UTC).replace(tzinfo=None)
+        output_catalog["timeProcessedMjdTai"] = DateTime.now().get(system=DateTime.MJD, scale=DateTime.TAI)
         # TODO: propagate actual flags (DM-42355)
 
         return output_catalog

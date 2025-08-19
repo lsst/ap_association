@@ -28,9 +28,9 @@ funcs:
     bboxSize:
         functor: Column
         args: bboxSize
-    time_processed:  # filled in automatically
+    timeProcessedMjdTai:  # filled in automatically
         functor: Column
-        args: time_processed
+        args: timeProcessedMjdTai
     flags:
         functor: Column
         args: flags

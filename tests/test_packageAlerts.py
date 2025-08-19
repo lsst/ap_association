@@ -41,7 +41,7 @@ import lsst.alert.packet as alertPack
 from lsst.ap.association import PackageAlertsConfig, PackageAlertsTask
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.image as afwImage
-import lsst.daf.base as dafBase
+from lsst.daf.base import DateTime
 from lsst.dax.apdb import Apdb, ApdbSql
 import lsst.geom as geom
 import lsst.meas.base.tests
@@ -139,7 +139,7 @@ def mock_alert(dia_source_id):
             "psfFluxErr": np.float32(90.0),
             # unlike in transformDiaSourceCatalog.py we need a timezone-aware
             # version because mock_alert does not go through pandas
-            "time_processed": datetime.datetime.now(tz=datetime.UTC)
+            "timeProcessedMjdTai": DateTime.now().get(system=DateTime.MJD, scale=DateTime.TAI)
         }
     }
 
@@ -210,8 +210,8 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         visit = afwImage.VisitInfo(
             id=VISIT,
             exposureTime=200.,
-            date=dafBase.DateTime("2014-05-13T17:00:00.000000000",
-                                  dafBase.DateTime.Timescale.TAI))
+            date=DateTime("2014-05-13T17:00:00.000000000",
+                          DateTime.Timescale.TAI))
         self.exposure.info.id = 1234
         self.exposure.info.setVisitInfo(visit)
 
