@@ -144,17 +144,20 @@ def mock_alert(dia_source_id):
     }
 
 
-def mock_ss_alert(dia_source_id, ss_source_id):
+def mock_ss_alert(dia_source_id, ss_object_id):
     """Generate a minimal mock alert.
     """
     alert = mock_alert(dia_source_id)
     alert['MPCORB'] = {
-        'mpcDesignation': 'K20A11H',
-        'ssObjectId': 21165806086861128,
+        'mpcDesignation': 'K20A11H',  # a string-typed field
+        'ssObjectId': ss_object_id,
+        'q': np.float64(0.99999),  # a double-typed field
+
     }
     alert['ssSource'] = {
-        'ssObjectId': 21165806086861128,
-        'ssSourceId': ss_source_id,
+        'ssObjectId': ss_object_id,
+        'eclipticLambda': np.float64(3.141592),  # a double-typed field
+        'heliocentricDist': np.float32(3.141592),  # a float-typed field
     }
     return alert
  
@@ -654,12 +657,15 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         packClass = PackageAlertsConfig()
         packageAlerts = PackageAlertsTask(config=packClass)
 
-        alert = mock_alert(1)
+        alert = mock_ss_alert(1, 1)
         serialized = PackageAlertsTask._serializeAlert(packageAlerts, alert)
         deserialized = _deserialize_alert(serialized)
+        print(alert.keys())
+        print(deserialized.keys())
+        for table in ['diaSource', 'ssSource', 'MPCORB']:
+            for field in alert[table]:
+                self.assertEqual(alert[table][field], deserialized[table][field])
 
-        for field in alert['diaSource']:
-            self.assertEqual(alert['diaSource'][field], deserialized['diaSource'][field])
         self.assertEqual(1, deserialized["diaSourceId"])
 
     @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
