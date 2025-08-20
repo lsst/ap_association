@@ -660,8 +660,6 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         alert = mock_ss_alert(1, 1)
         serialized = PackageAlertsTask._serializeAlert(packageAlerts, alert)
         deserialized = _deserialize_alert(serialized)
-        print(alert.keys())
-        print(deserialized.keys())
         for table in ['diaSource', 'ssSource', 'MPCORB']:
             for field in alert[table]:
                 self.assertEqual(alert[table][field], deserialized[table][field])

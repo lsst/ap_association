@@ -272,8 +272,8 @@ class PackageAlertsTask(pipeBase.Task):
         sciencePsf = self._computePsf(calexp, calexp.psf.getAveragePosition())
         templatePsf = self._computePsf(template, template.psf.getAveragePosition())
 
-        if ssSrc:
-            ssSrc.add_index('diaSourceId')
+        if ssSrc is not None:
+            ssSrc = ssSrc.set_index('diaSourceId')
 
         n_sources = len(diaSourceCat)
         self.log.info("Packaging alerts for %d DiaSources.", n_sources)
@@ -288,7 +288,7 @@ class PackageAlertsTask(pipeBase.Task):
                 diaObject = None
                 objSourceHistory = None
                 objDiaForcedSources = None
-                ssSource = ssSrc.loc[alertId]
+                ssSource = ssSrc.loc[[alertId]].to_dict("records")[0]
             else:
                 ssSource = None
                 diaObject = diaObjectCat.loc[srcIndex[0]]
@@ -626,11 +626,11 @@ class PackageAlertsTask(pipeBase.Task):
             alert['ssSource'] = None
             alert['MPCORB'] = None
         else:
-            mpcorbColumns = [col for col in ssSource.columns if col[:7] == 'MPCORB_']
+            mpcorbColumns = [col for col in ssSource if col[:7] == 'MPCORB_']
             mpcOrbit = {key[7:]: ssSource[key] for key in mpcorbColumns}
             mpcOrbit['ssObjectId'] = ssSource['ssObjectId']
             mpcOrbit['mpcDesignation'] = ss_object_id_to_obj_id(ssSource['ssObjectId'])[0]
-            ssSource = {key: ssSource[key] for key in ssSource.columns if key not in mpcorbColumns}
+            ssSource = {key: ssSource[key] for key in ssSource if key not in mpcorbColumns}
             alert['ssSource'] = ssSource
             alert['MPCORB'] = mpcOrbit
 

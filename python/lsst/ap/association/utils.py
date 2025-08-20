@@ -244,9 +244,9 @@ def convertTableToSdmSchema(apdbSchema, sourceTable, tableName):
                 try:
                     data[columnDef.name] = Table.Column([pd.NA]*nSrc, dtype=object)
                 except TypeError:
-                    data[columnDef.name] = pd.Series([np.nan]*nSrc, dtype=dtype)
+                    data[columnDef.name] = Table.Column([pd.nan]*nSrc, dtype=dtype)
             else:
-                data[columnDef.name] = pd.Series([0]*nSrc, dtype=dtype)
+                data[columnDef.name] = Table.Column([0]*nSrc, dtype=dtype)
     return Table(data)
 
 

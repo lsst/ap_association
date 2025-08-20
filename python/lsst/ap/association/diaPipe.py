@@ -44,9 +44,8 @@ from lsst.ap.association import (
     DiaForcedSourceTask,
     PackageAlertsTask)
 
-from lsst.ap.association.utils import convertDataFrameToSdmSchema, convertTableToSdmSchema, \
-    readSchemaFromApdb, dropEmptyColumns, make_empty_catalog, makeEmptyForcedSourceTable, \
-    checkSdmSchemaColumns
+from lsst.ap.association.utils import convertDataFrameToSdmSchema, checkSdmSchemaColumns, \
+    readSchemaFromApdb, dropEmptyColumns, make_empty_catalog, makeEmptyForcedSourceTable
 from lsst.daf.base import DateTime
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
     DiaObjectCalculationTask
@@ -623,7 +622,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             self.log.verbose("writeToApdb: Took %.4f seconds", self.metadata["writeToApdbDuration"])
 
         associatedSsSources = assocResults.associatedSsSources
-        if associatedSsSources:
+        if associatedSsSources is not None:
             associatedSsSources = self.standardizeTable(associatedSsSources, "SSSource", nullColumns=[])
         # Package alerts
         if self.config.doPackageAlerts:
@@ -661,7 +660,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # we don't want them in the associatedSsSources data product.
         if associatedSsSources is not None:
             mpcorbColumns = [col for col in associatedSsSources.columns if col[:7] == 'MPCORB_']
-            associatedSsSources.remove_columns(mpcorbColumns)
+            associatedSsSources = associatedSsSources.drop(columns=mpcorbColumns)
 
         # For historical reasons, apdbMarker is a Config even if it's not meant to be read.
         # A default Config is the cheapest way to satisfy the storage class.
@@ -970,22 +969,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         standardizedAssociatedDiaSources : pandas.DataFrame
             The standardized DiaSource catalog
         """
-        standardizedTable = convertTableToSdmSchema(self.schema,
-                                                    table, tableName=tableName)
-
-        def _setNullColumn(table, colName):
-            """Set specified columns with default values of 0 to NULL."""
-            def mapZeroToNA(x):
-                if x == 0:
-                    return pd.NA
-                else:
-                    return x
-            table[colName] = [mapZeroToNA(x) for x in table[colName]]
-
-        if nullColumns is not None:
-            for colName in nullColumns:
-                standardizedTable(standardizedTable, colName)
-        return standardizedTable
+        dataFrame = table.to_pandas()
+        standardizedDataFrame = self.standardizeDataFrame(dataFrame, tableName, nullColumns=nullColumns)
+        return standardizedDataFrame
 
     @timeMethod
     def mergeAssociatedCatalogs(self, preloadedDiaSources, associatedDiaSources, diaObjects, newDiaObjects,
