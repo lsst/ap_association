@@ -646,7 +646,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                     inplace=True)
 
             self.alertPackager.run(assocResults.associatedDiaSources,
-                                   diaCalResult.diaObjectCat,
+                                   diaCalResult.updatedDiaObjects,
                                    preloadedDiaSources,
                                    diaForcedSourcesFull,
                                    diffIm,
