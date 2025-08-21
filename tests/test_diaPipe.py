@@ -39,7 +39,7 @@ import lsst.utils.tests
 from lsst.pipe.base.testUtils import assertValidOutput
 
 from lsst.ap.association import DiaPipelineTask
-from lsst.ap.association.utils import convertTableToSdmSchema
+from lsst.ap.association.utils import convertDataFrameToSdmSchema
 from utils_tests import makeExposure, makeDiaObjects, makeDiaSources, makeDiaForcedSources, \
     makeSolarSystemSources
 
@@ -262,7 +262,7 @@ class TestDiaPipelineTask(unittest.TestCase):
              "ssObjectId": 0}
             for idx in range(nSources)])
 
-        result = task.createNewDiaObjects(convertTableToSdmSchema(task.schema, diaSources, "DiaSource"))
+        result = task.createNewDiaObjects(convertDataFrameToSdmSchema(task.schema, diaSources, "DiaSource"))
         self.assertEqual(nSources, len(result.newDiaObjects))
         self.assertTrue(np.all(np.equal(
             result.diaSources["diaObjectId"].to_numpy(),
@@ -451,13 +451,13 @@ class TestDiaPipelineTask(unittest.TestCase):
         config = self._makeDefaultConfig(config_file=self.config_file.name, doPackageAlerts=False)
         task = DiaPipelineTask(config=config)
 
-        diaSourcesBase = convertTableToSdmSchema(task.schema, self.diaSources, "DiaSource")
+        diaSourcesBase = convertDataFrameToSdmSchema(task.schema, self.diaSources, "DiaSource")
         nBase = len(diaSourcesBase)
         nNew = int(nBase/2)
 
         diaSourcesNew = makeDiaSources(nNew, self.diaObjects["diaObjectId"].to_numpy(), self.exposure,
                                        self.rng)
-        diaSourcesNew = convertTableToSdmSchema(task.schema, diaSourcesNew, "DiaSource")
+        diaSourcesNew = convertDataFrameToSdmSchema(task.schema, diaSourcesNew, "DiaSource")
         diaSourcesTest = task.mergeCatalogs(diaSourcesBase, diaSourcesNew, tableName="DiaSource")
         self.assertEqual(len(diaSourcesTest), nBase + nNew)
         diaSourcesExtract1 = diaSourcesTest.iloc[:nBase]

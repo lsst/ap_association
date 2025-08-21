@@ -144,6 +144,24 @@ def mock_alert(dia_source_id):
     }
 
 
+def mock_ss_alert(dia_source_id, ss_object_id):
+    """Generate a minimal mock alert.
+    """
+    alert = mock_alert(dia_source_id)
+    alert['MPCORB'] = {
+        'mpcDesignation': 'K20A11H',  # a string-typed field
+        'ssObjectId': ss_object_id,
+        'q': np.float64(0.99999),  # a double-typed field
+
+    }
+    alert['ssSource'] = {
+        'ssObjectId': ss_object_id,
+        'eclipticLambda': np.float64(3.141592),  # a double-typed field
+        'heliocentricDist': np.float32(3.141592),  # a float-typed field
+    }
+    return alert
+
+
 def _deserialize_alert(alert_bytes):
     """Deserialize an alert message from Kafka.
 
@@ -363,7 +381,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                 ccdCutout,
                 ccdCutout,
                 ccdCutout)
-            self.assertEqual(len(alert), 9)
+            self.assertEqual(len(alert), 11)
 
             self.assertEqual(alert["diaSourceId"], dia_source_id)
             self.assertEqual(alert["diaSource"], diaSource.to_dict())
@@ -439,7 +457,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         """
         packConfig = PackageAlertsConfig(doProduceAlerts=True)
         packageAlerts = PackageAlertsTask(config=packConfig)
-        alerts = [mock_alert(1), mock_alert(2)]
+        alerts = [mock_alert(1), mock_alert(2), mock_ss_alert(3, 3)]
 
         # Create a variable and assign it an instance of the patched kafka producer
         producer_instance = mock_producer.return_value
@@ -475,7 +493,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
 
         patcher = patch("builtins.open")
         patch_open = patcher.start()
-        alerts = [mock_alert(1), mock_alert(2), mock_alert(3)]
+        alerts = [mock_alert(1), mock_alert(2), mock_alert(3), mock_ss_alert(4, 4)]
         unix_midpoint = self.exposure.visitInfo.date.toAstropy().tai.unix
         exposure_time = self.exposure.visitInfo.exposureTime
 
@@ -639,12 +657,13 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         packClass = PackageAlertsConfig()
         packageAlerts = PackageAlertsTask(config=packClass)
 
-        alert = mock_alert(1)
+        alert = mock_ss_alert(1, 1)
         serialized = PackageAlertsTask._serializeAlert(packageAlerts, alert)
         deserialized = _deserialize_alert(serialized)
+        for table in ['diaSource', 'ssSource', 'MPCORB']:
+            for field in alert[table]:
+                self.assertEqual(alert[table][field], deserialized[table][field])
 
-        for field in alert['diaSource']:
-            self.assertEqual(alert['diaSource'][field], deserialized['diaSource'][field])
         self.assertEqual(1, deserialized["diaSourceId"])
 
     @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')

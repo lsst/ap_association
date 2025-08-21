@@ -44,8 +44,8 @@ from lsst.ap.association import (
     DiaForcedSourceTask,
     PackageAlertsTask)
 
-from lsst.ap.association.utils import convertTableToSdmSchema, readSchemaFromApdb, dropEmptyColumns, \
-    make_empty_catalog, makeEmptyForcedSourceTable, checkSdmSchemaColumns
+from lsst.ap.association.utils import convertDataFrameToSdmSchema, checkSdmSchemaColumns, \
+    readSchemaFromApdb, dropEmptyColumns, make_empty_catalog, makeEmptyForcedSourceTable
 from lsst.daf.base import DateTime
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
     DiaObjectCalculationTask
@@ -564,8 +564,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         assocResults = self.associateDiaSources(diaSourceTable, solarSystemObjectTable, diffIm, diaObjects)
 
         # Set unassociated diaObjectIds and ssObjectIds to NULL, and convert to SDM schema format
-        standardizedAssociatedDiaSources = self.standardizeDiaSources(
+        standardizedAssociatedDiaSources = self.standardizeDataFrame(
             assocResults.associatedDiaSources,
+            "DiaSource",
             nullColumns=["diaObjectId", "ssObjectId"]
         )
 
@@ -585,8 +586,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             mergedDiaSourceHistory,
             updatedDiaObjectIds,
             [band])
-        updatedDiaObjects = convertTableToSdmSchema(self.schema, diaCalResult.updatedDiaObjects,
-                                                    tableName="DiaObject")
+        updatedDiaObjects = convertDataFrameToSdmSchema(self.schema, diaCalResult.updatedDiaObjects,
+                                                        tableName="DiaObject")
 
         # Test for duplication in the updated DiaObjects.
         if self.testDataFrameIndex(diaCalResult.diaObjectCat):
@@ -620,6 +621,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             # A single log message is easier for Loki to parse than timeMethod's start+end pairs.
             self.log.verbose("writeToApdb: Took %.4f seconds", self.metadata["writeToApdbDuration"])
 
+        associatedSsSources = assocResults.associatedSsSources
+        if associatedSsSources is not None:
+            associatedSsSources = self.standardizeTable(associatedSsSources, "SSSource", nullColumns=[])
         # Package alerts
         if self.config.doPackageAlerts:
             # Append new forced sources to the full history
@@ -640,6 +644,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                     ["diaObjectId", "diaForcedSourceId"],
                     drop=False,
                     inplace=True)
+
             self.alertPackager.run(assocResults.associatedDiaSources,
                                    diaCalResult.diaObjectCat,
                                    preloadedDiaSources,
@@ -647,9 +652,15 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                    diffIm,
                                    exposure,
                                    template,
+                                   ssSrc=associatedSsSources,
                                    doRunForcedMeasurement=self.config.doRunForcedMeasurement,
                                    forcedSourceHistoryThreshold=forcedSourceHistoryThreshold,
                                    )
+        # Although we passed the solar system object orbits to alerts,
+        # we don't want them in the associatedSsSources data product.
+        if associatedSsSources is not None:
+            mpcorbColumns = [col for col in associatedSsSources.columns if col[:7] == 'MPCORB_']
+            associatedSsSources = associatedSsSources.drop(columns=mpcorbColumns)
 
         # For historical reasons, apdbMarker is a Config even if it's not meant to be read.
         # A default Config is the cheapest way to satisfy the storage class.
@@ -697,8 +708,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 unassociatedDiaSources = results.goodSources
                 marginalDiaSources = results.badSources
             unassociatedDiaSources["diaObjectId"] = unassociatedDiaSources["diaSourceId"]
-            newDiaObjects = convertTableToSdmSchema(self.schema, unassociatedDiaSources,
-                                                    tableName="DiaObject")
+            newDiaObjects = convertDataFrameToSdmSchema(self.schema, unassociatedDiaSources,
+                                                        tableName="DiaObject")
         self.metadata["nRejectedNewDiaObjects"] = len(marginalDiaSources)
         return pipeBase.Struct(diaSources=unassociatedDiaSources,
                                newDiaObjects=newDiaObjects,
@@ -844,7 +855,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         """
         # Associate new DiaSources with existing DiaObjects.
         assocResults = self.associator.run(diaSourceTable, diaObjects)
-
+        # TODO: work out how to mark asteroid-diaObj overlaps as contaminated
         toAssociate = []
         if self.config.doSolarSystemAssociation and solarSystemObjectTable is not None:
             ssoAssocResult = self.solarSystemAssociator.run(
@@ -867,6 +878,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             nAssociatedSsObjects = ssoAssocResult.nAssociatedSsObjects
             associatedSsSources = ssoAssocResult.associatedSsSources
             unassociatedSsObjects = ssoAssocResult.unassociatedSsObjects
+
         else:
             # Create new DiaObjects from unassociated diaSources.
             createResults = self.createNewDiaObjects(assocResults.unAssocDiaSources)
@@ -906,25 +918,28 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                marginalDiaSources=createResults.marginalDiaSources
                                )
 
-    def standardizeDiaSources(self, associatedDiaSources, nullColumns=None):
-        """Convert the DiaSource catalog to SDM schema format with NULL ID values
+    def standardizeDataFrame(self, dataFrame, tableName, nullColumns=None):
+        """Convert a catalog to SDM schema format with NULL ID values
 
         Parameters
         ----------
-        associatedDiaSources : `pandas.DataFrame`
-            The DiaSource catalog to convert
+        dataFrame : `pandas.DataFrame`
+            The catalog to standardize/convert
+        tableName : `str`
+            Schema name of table to which this dataFrame should be standardized
         nullColumns : `list` of `str`, optional
             List of column names to check for default values of 0 that should be
             replaced with `NULL`.
+
 
         Returns
         -------
         standardizedAssociatedDiaSources : pandas.DataFrame
             The standardized DiaSource catalog
         """
-        standardizedAssociatedDiaSources = convertTableToSdmSchema(self.schema,
-                                                                   associatedDiaSources,
-                                                                   tableName="DiaSource")
+        standardizedDataFrame = convertDataFrameToSdmSchema(self.schema,
+                                                            dataFrame,
+                                                            tableName=tableName)
 
         def _setNullColumn(dataframe, colName):
             """Set specified columns with default values of 0 to NULL."""
@@ -932,8 +947,31 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         if nullColumns is not None:
             for colName in nullColumns:
-                _setNullColumn(standardizedAssociatedDiaSources, colName)
-        return standardizedAssociatedDiaSources
+                _setNullColumn(standardizedDataFrame, colName)
+        return standardizedDataFrame
+
+    def standardizeTable(self, table, tableName, nullColumns=None):
+        """Convert a catalog to SDM schema format with NULL ID values
+
+        Parameters
+        ----------
+        table : `astropy.table.Table`
+            The catalog to standardize/convert
+        tableName : `str`
+            Schema name of table to which this dataFrame should be standardized
+        nullColumns : `list` of `str`, optional
+            List of column names to check for default values of 0 that should be
+            replaced with `NULL`.
+
+
+        Returns
+        -------
+        standardizedAssociatedDiaSources : pandas.DataFrame
+            The standardized DiaSource catalog
+        """
+        dataFrame = table.to_pandas()
+        standardizedDataFrame = self.standardizeDataFrame(dataFrame, tableName, nullColumns=nullColumns)
+        return standardizedDataFrame
 
     @timeMethod
     def mergeAssociatedCatalogs(self, preloadedDiaSources, associatedDiaSources, diaObjects, newDiaObjects,
@@ -1054,9 +1092,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diffIm,
             idGenerator=idGenerator)
         self.log.info(f"Updating {len(diaForcedSources)} diaForcedSources in the APDB")
-        diaForcedSources = convertTableToSdmSchema(self.schema, diaForcedSources,
-                                                   tableName="DiaForcedSource",
-                                                   )
+        diaForcedSources = convertDataFrameToSdmSchema(self.schema, diaForcedSources,
+                                                       tableName="DiaForcedSource")
         return diaForcedSources
 
     @timeMethod
@@ -1200,9 +1237,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             ordered before the rows of ``newCatalog``
         """
         if len(newCatalog) > 0:
-            catalog = convertTableToSdmSchema(self.schema, newCatalog,
-                                              tableName=tableName,
-                                              )
+            catalog = convertDataFrameToSdmSchema(self.schema, newCatalog,
+                                                  tableName=tableName)
 
             mergedCatalog = pd.concat([originalCatalog, catalog], sort=True)
         else:

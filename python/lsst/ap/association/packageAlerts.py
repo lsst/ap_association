@@ -50,6 +50,7 @@ import lsst.geom as geom
 import lsst.pex.config as pexConfig
 from lsst.pex.exceptions import InvalidParameterError
 import lsst.pipe.base as pipeBase
+from lsst.pipe.tasks.associationUtils import ss_object_id_to_obj_id
 import lsst.utils.logging
 from lsst.utils.timer import timeMethod
 
@@ -211,6 +212,7 @@ class PackageAlertsTask(pipeBase.Task):
             diffIm,
             calexp,
             template,
+            ssSrc=None,
             doRunForcedMeasurement=True,
             forcedSourceHistoryThreshold=0,
             ):
@@ -244,6 +246,8 @@ class PackageAlertsTask(pipeBase.Task):
             Calexp used to create the ``diffIm``.
         template : `lsst.afw.image.ExposureF` or `None`
             Template image used to create the ``diffIm``.
+        ssSrc : `astropy.table.Table`, optional
+            Solar system specific information for diaSources associated to ssObjects.
         doRunForcedMeasurement : `bool`, optional
             Flag to indicate whether forced measurement was run.
             This should only be turned off for debugging purposes.
@@ -253,6 +257,7 @@ class PackageAlertsTask(pipeBase.Task):
             Minimum number of detections of a diaObject required
             to run forced photometry. Set to 1 to include all diaObjects.
         """
+
         alerts = []
         self._patchDiaSources(diaSourceCat)
         self._patchDiaSources(diaSrcHistory)
@@ -267,6 +272,9 @@ class PackageAlertsTask(pipeBase.Task):
         sciencePsf = self._computePsf(calexp, calexp.psf.getAveragePosition())
         templatePsf = self._computePsf(template, template.psf.getAveragePosition())
 
+        if ssSrc is not None:
+            ssSrc = ssSrc.set_index('diaSourceId')
+
         n_sources = len(diaSourceCat)
         self.log.info("Packaging alerts for %d DiaSources.", n_sources)
         # Log every 10 seconds as proof of liveness.
@@ -274,21 +282,26 @@ class PackageAlertsTask(pipeBase.Task):
 
         for srcIndex, diaSource in diaSourceCat.iterrows():
             loop_logger.log("%s/%s sources have been packaged.", len(alerts), n_sources)
-            # Get all diaSources for the associated diaObject.
-            # TODO: DM-31992 skip DiaSources associated with Solar System
-            #       Objects for now.
+
+            alertId = diaSource["diaSourceId"]
             if srcIndex[0] == 0:
-                continue
-            diaObject = diaObjectCat.loc[srcIndex[0]]
-            if diaObject["nDiaSources"] > 1:
-                objSourceHistory = diaSrcHistory.loc[srcIndex[0]]
-            else:
+                diaObject = None
                 objSourceHistory = None
-            if doRunForcedMeasurement and diaObject["nDiaSources"] >= forcedSourceHistoryThreshold:
-                objDiaForcedSources = diaForcedSources.loc[srcIndex[0]]
+                objDiaForcedSources = None
+                ssSource = ssSrc.loc[[alertId]].to_dict("records")[0]
             else:
-                # Send empty table with correct columns
-                objDiaForcedSources = diaForcedSources.loc[[]]
+                ssSource = None
+                diaObject = diaObjectCat.loc[srcIndex[0]]
+                if diaObject["nDiaSources"] > 1:
+                    objSourceHistory = diaSrcHistory.loc[srcIndex[0]]
+                else:
+                    objSourceHistory = None
+                if doRunForcedMeasurement and diaObject["nDiaSources"] >= forcedSourceHistoryThreshold:
+                    objDiaForcedSources = diaForcedSources.loc[srcIndex[0]]
+                else:
+                    # Send empty table with correct columns
+                    objDiaForcedSources = diaForcedSources.loc[[]]
+
             sphPoint = geom.SpherePoint(diaSource["ra"],
                                         diaSource["dec"],
                                         geom.degrees)
@@ -329,7 +342,8 @@ class PackageAlertsTask(pipeBase.Task):
                                    objDiaForcedSources,
                                    diffImCutout,
                                    calexpCutout,
-                                   templateCutout))
+                                   templateCutout,
+                                   ssSource))
 
         if self.config.doProduceAlerts:
             self.log.info("Producing alerts to %s.", self.kafkaTopic)
@@ -559,7 +573,8 @@ class PackageAlertsTask(pipeBase.Task):
                       objDiaForcedSources,
                       diffImCutout,
                       calexpCutout,
-                      templateCutout):
+                      templateCutout,
+                      ssSource=None):
         """Convert data and package into a dictionary alert.
 
         Parameters
@@ -589,17 +604,35 @@ class PackageAlertsTask(pipeBase.Task):
         alert['diaSource'] = diaSource.to_dict()
 
         if objDiaSrcHistory is None:
-            alert['prvDiaSources'] = objDiaSrcHistory
+            alert['prvDiaSources'] = None
         else:
             alert['prvDiaSources'] = objDiaSrcHistory.to_dict("records")
 
         if isinstance(objDiaForcedSources, pd.Series):
             alert['prvDiaForcedSources'] = [objDiaForcedSources.to_dict()]
+        elif objDiaForcedSources is None:
+            alert['prvDiaForcedSources'] = None
         else:
             alert['prvDiaForcedSources'] = objDiaForcedSources.to_dict("records")
+
         alert['prvDiaNondetectionLimits'] = None
 
-        alert['diaObject'] = diaObject.to_dict()
+        if diaObject is None:
+            alert['diaObject'] = None
+        else:
+            alert['diaObject'] = diaObject.to_dict()
+
+        if ssSource is None:
+            alert['ssSource'] = None
+            alert['MPCORB'] = None
+        else:
+            mpcorbColumns = [col for col in ssSource if col[:7] == 'MPCORB_']
+            mpcOrbit = {key[7:]: ssSource[key] for key in mpcorbColumns}
+            mpcOrbit['ssObjectId'] = ssSource['ssObjectId']
+            mpcOrbit['mpcDesignation'] = ss_object_id_to_obj_id(ssSource['ssObjectId'])[0]
+            ssSource = {key: ssSource[key] for key in ssSource if key not in mpcorbColumns}
+            alert['ssSource'] = ssSource
+            alert['MPCORB'] = mpcOrbit
 
         if diffImCutout is None:
             alert['cutoutDifference'] = None
