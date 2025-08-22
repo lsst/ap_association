@@ -19,7 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import datetime
 import io
 import os
 
@@ -553,11 +552,8 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                         self.assertAlmostEqual(
                             1 - value / self.diaSources.iloc[idx][key],
                             0.)
-                elif isinstance(value, datetime.datetime):
-                    # TEMPORARY: avoid known failure
-                    # self.assertEqual(value, self.diaSources.iloc[idx][key].
-                    #                 replace(tzinfo=datetime.UTC).to_pydatetime())
-                    continue
+                elif value is None:
+                    self.assertTrue(pd.isna(self.diaSources.iloc[idx][key]))
                 else:
                     self.assertEqual(value, self.diaSources.iloc[idx][key])
             sphPoint = geom.SpherePoint(alert["diaSource"]["ra"],
@@ -613,11 +609,8 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                         self.assertAlmostEqual(
                             1 - value / self.diaSources.iloc[idx][key],
                             0.)
-                elif isinstance(value, datetime.datetime):
-                    # TEMPORARY: avoid known failure
-                    # self.assertEqual(value, self.diaSources.iloc[idx][key].
-                    #                 replace(tzinfo=datetime.UTC).to_pydatetime())
-                    continue
+                elif value is None:
+                    self.assertTrue(pd.isna(self.diaSources.iloc[idx][key]))
                 else:
                     self.assertEqual(value, self.diaSources.iloc[idx][key])
             sphPoint = geom.SpherePoint(alert["diaSource"]["ra"],
