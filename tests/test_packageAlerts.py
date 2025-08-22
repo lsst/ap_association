@@ -39,6 +39,7 @@ except ImportError:
 
 import lsst.alert.packet as alertPack
 from lsst.ap.association import PackageAlertsConfig, PackageAlertsTask
+from lsst.ap.association.utils import readSchemaFromApdb, convertDataFrameToSdmSchema
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.image as afwImage
 from lsst.daf.base import DateTime
@@ -107,6 +108,12 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
                          drop=False,
                          inplace=True)
     diaForcedSources.set_index(["diaObjectId"], drop=False, inplace=True)
+
+    # apply SDM type standardization to catch pandas typing issues
+    schema = readSchemaFromApdb(apdb)
+    diaObjects = convertDataFrameToSdmSchema(schema, diaObjects, tableName="DiaObject")
+    diaSources = convertDataFrameToSdmSchema(schema, diaSources, tableName="DiaSource")
+    diaForcedSources = convertDataFrameToSdmSchema(schema, diaForcedSources, tableName="DiaForcedSource")
 
     return (diaObjects, diaSources, diaForcedSources)
 
