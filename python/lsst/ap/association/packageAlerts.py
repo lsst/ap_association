@@ -272,8 +272,16 @@ class PackageAlertsTask(pipeBase.Task):
         sciencePsf = self._computePsf(calexp, calexp.psf.getAveragePosition())
         templatePsf = self._computePsf(template, template.psf.getAveragePosition())
 
+        # cast to object; works around pandas coercing Series to nullable
+        # Float64 type when selecting single rows below
+        diaSourceCat = diaSourceCat.astype('object')
+        diaObjectCat = diaObjectCat.astype('object')
+        diaSrcHistory = diaSrcHistory.astype('object')
+        diaForcedSources = diaForcedSources.astype('object')
+
         if ssSrc is not None:
             ssSrc = ssSrc.set_index('diaSourceId')
+            ssSrc = ssSrc.astype('object')
 
         n_sources = len(diaSourceCat)
         self.log.info("Packaging alerts for %d DiaSources.", n_sources)

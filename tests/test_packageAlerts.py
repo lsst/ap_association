@@ -19,7 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import datetime
 import io
 import os
 
@@ -39,9 +38,10 @@ except ImportError:
 
 import lsst.alert.packet as alertPack
 from lsst.ap.association import PackageAlertsConfig, PackageAlertsTask
+from lsst.ap.association.utils import readSchemaFromApdb, convertDataFrameToSdmSchema
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.image as afwImage
-import lsst.daf.base as dafBase
+from lsst.daf.base import DateTime
 from lsst.dax.apdb import Apdb, ApdbSql
 import lsst.geom as geom
 import lsst.meas.base.tests
@@ -108,6 +108,12 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
                          inplace=True)
     diaForcedSources.set_index(["diaObjectId"], drop=False, inplace=True)
 
+    # apply SDM type standardization to catch pandas typing issues
+    schema = readSchemaFromApdb(apdb)
+    diaObjects = convertDataFrameToSdmSchema(schema, diaObjects, tableName="DiaObject")
+    diaSources = convertDataFrameToSdmSchema(schema, diaSources, tableName="DiaSource")
+    diaForcedSources = convertDataFrameToSdmSchema(schema, diaForcedSources, tableName="DiaForcedSource")
+
     return (diaObjects, diaSources, diaForcedSources)
 
 
@@ -139,7 +145,7 @@ def mock_alert(dia_source_id):
             "psfFluxErr": np.float32(90.0),
             # unlike in transformDiaSourceCatalog.py we need a timezone-aware
             # version because mock_alert does not go through pandas
-            "time_processed": datetime.datetime.now(tz=datetime.UTC)
+            "timeProcessedMjdTai": DateTime.now().get(system=DateTime.MJD, scale=DateTime.TAI)
         }
     }
 
@@ -210,8 +216,8 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         visit = afwImage.VisitInfo(
             id=VISIT,
             exposureTime=200.,
-            date=dafBase.DateTime("2014-05-13T17:00:00.000000000",
-                                  dafBase.DateTime.Timescale.TAI))
+            date=DateTime("2014-05-13T17:00:00.000000000",
+                          DateTime.Timescale.TAI))
         self.exposure.info.id = 1234
         self.exposure.info.setVisitInfo(visit)
 
@@ -546,11 +552,8 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                         self.assertAlmostEqual(
                             1 - value / self.diaSources.iloc[idx][key],
                             0.)
-                elif isinstance(value, datetime.datetime):
-                    # TEMPORARY: avoid known failure
-                    # self.assertEqual(value, self.diaSources.iloc[idx][key].
-                    #                 replace(tzinfo=datetime.UTC).to_pydatetime())
-                    continue
+                elif value is None:
+                    self.assertTrue(pd.isna(self.diaSources.iloc[idx][key]))
                 else:
                     self.assertEqual(value, self.diaSources.iloc[idx][key])
             sphPoint = geom.SpherePoint(alert["diaSource"]["ra"],
@@ -606,11 +609,8 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                         self.assertAlmostEqual(
                             1 - value / self.diaSources.iloc[idx][key],
                             0.)
-                elif isinstance(value, datetime.datetime):
-                    # TEMPORARY: avoid known failure
-                    # self.assertEqual(value, self.diaSources.iloc[idx][key].
-                    #                 replace(tzinfo=datetime.UTC).to_pydatetime())
-                    continue
+                elif value is None:
+                    self.assertTrue(pd.isna(self.diaSources.iloc[idx][key]))
                 else:
                     self.assertEqual(value, self.diaSources.iloc[idx][key])
             sphPoint = geom.SpherePoint(alert["diaSource"]["ra"],

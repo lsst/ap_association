@@ -24,7 +24,6 @@ __all__ = ("TransformDiaSourceCatalogConnections",
            "TransformDiaSourceCatalogTask",
            "UnpackApdbFlags")
 
-import datetime
 import os
 import yaml
 
@@ -235,7 +234,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
 
         # Need UTC time but without a timezone because pandas requires a
         # naive datetime.
-        diaSourceDf["time_processed"] = datetime.datetime.now(tz=datetime.UTC).replace(tzinfo=None)
+        diaSourceDf["timeProcessedMjdTai"] = DateTime.now().get(system=DateTime.MJD, scale=DateTime.TAI)
         diaSourceDf["snr"] = getSignificance(diaSourceCat)
         diaSourceDf["bboxSize"] = self.computeBBoxSizes(diaSourceCat)
         diaSourceDf["visit"] = diffIm.visitInfo.id

@@ -614,7 +614,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         # Write results to Alert Production Database (APDB)
         try:
-            self.writeToApdb(updatedDiaObjects, standardizedAssociatedDiaSources, diaForcedSources)
+            validityStart = self.writeToApdb(updatedDiaObjects, standardizedAssociatedDiaSources,
+                                             diaForcedSources)
         finally:
             self.metadata["writeToApdbDuration"] = duration_from_timeMethod(self.metadata, "writeToApdb",
                                                                             clock="Utc")
@@ -624,6 +625,10 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         associatedSsSources = assocResults.associatedSsSources
         if associatedSsSources is not None:
             associatedSsSources = self.standardizeTable(associatedSsSources, "SSSource", nullColumns=[])
+
+        # patch the otherwise-empty validityStart field for the alerts
+        updatedDiaObjects['validityStartMjdTai'] = validityStart.get(system=DateTime.MJD, scale=DateTime.TAI)
+
         # Package alerts
         if self.config.doPackageAlerts:
             # Append new forced sources to the full history
@@ -1112,6 +1117,11 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         diaForcedSources : `pandas.DataFrame`
             Catalog of calibrated forced photometered fluxes on both the
             difference and direct images at DiaObject locations.
+
+        Returns
+        -------
+        validityStart : `lsst.daf.base.DateTime`
+            Time at which the APDB was updated.
         """
         # Store DiaSources, updated DiaObjects, and DiaForcedSources in the
         # Apdb.
@@ -1119,12 +1129,16 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         diaObjectStore = dropEmptyColumns(self.schema, updatedDiaObjects, tableName="DiaObject")
         diaSourceStore = dropEmptyColumns(self.schema, associatedDiaSources, tableName="DiaSource")
         diaForcedSourceStore = dropEmptyColumns(self.schema, diaForcedSources, tableName="DiaForcedSource")
+
+        validityStart = DateTime.now()
         self.apdb.store(
-            DateTime.now().toAstropy(),
+            validityStart.toAstropy(),
             diaObjectStore,
             diaSourceStore,
             diaForcedSourceStore)
         self.log.info("APDB updated.")
+
+        return validityStart
 
     def testDataFrameIndex(self, df):
         """Test the sorted DataFrame index for duplicates.

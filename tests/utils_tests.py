@@ -22,8 +22,6 @@
 """Helper functions for tests of DIA catalogs, including generating mock
 catalogs for simulated APDB access.
 """
-import datetime
-
 import astropy.units
 import pandas as pd
 import numpy as np
@@ -31,7 +29,7 @@ import numpy as np
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
-import lsst.daf.base as dafBase
+from lsst.daf.base import DateTime, PropertySet
 import lsst.daf.butler as dafButler
 import lsst.geom
 from lsst.pipe.base.utils import RegionTimeInfo
@@ -106,7 +104,7 @@ def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False
     else:
         objectIds = diaObjectIds[[i % len(diaObjectIds) for i in range(nSources)]]
 
-    midpointMjdTai = exposure.visitInfo.date.get(system=dafBase.DateTime.MJD)
+    midpointMjdTai = exposure.visitInfo.date.get(system=DateTime.MJD)
 
     data = []
     flags = {}
@@ -122,7 +120,8 @@ def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False
                      "y": y,
                      "visit": exposure.visitInfo.id,
                      "detector": exposure.detector.getId(),
-                     "time_processed": datetime.datetime.now(),
+                     "timeProcessedMjdTai": DateTime.now().get(system=DateTime.MJD,
+                                                               scale=DateTime.TAI),
                      "diaObjectId": objId,
                      "ssObjectId": 0,
                      "parentDiaSourceId": 0,
@@ -189,7 +188,7 @@ def makeDiaForcedSources(nForcedSources, diaObjectIds, exposure, rng, randomizeO
     diaForcedSources : `pandas.DataFrame`
         DiaForcedSources generated across the exposure.
     """
-    midpointMjdTai = exposure.visitInfo.date.get(system=dafBase.DateTime.MJD)
+    midpointMjdTai = exposure.visitInfo.date.get(system=DateTime.MJD)
     visit = exposure.visitInfo.id
     detector = exposure.detector.getId()
     if randomizeObjects:
@@ -212,7 +211,8 @@ def makeDiaForcedSources(nForcedSources, diaObjectIds, exposure, rng, randomizeO
                      "ra": coord.getRa().asDegrees(),
                      "dec": coord.getDec().asDegrees(),
                      "midpointMjdTai": midpointMjdTai + 1.0 * i,
-                     "time_processed": datetime.datetime.now(),
+                     "timeProcessedMjdTai": DateTime.now().get(system=DateTime.MJD,
+                                                               scale=DateTime.TAI),
                      "band": exposure.getFilter().bandLabel})
 
     return pd.DataFrame(data=data).set_index(["diaObjectId", "diaForcedSourceId"], drop=False)
@@ -236,7 +236,7 @@ def makeExposure(flipX=False, flipY=False):
     exposure : `lsst.afw.image.Exposure`
         Exposure with a valid bounding box and wcs.
     """
-    metadata = dafBase.PropertySet()
+    metadata = PropertySet()
 
     metadata.set("SIMPLE", "T")
     metadata.set("BITPIX", -32)
@@ -270,8 +270,8 @@ def makeExposure(flipX=False, flipY=False):
     detector = DetectorWrapper(id=23, bbox=exposure.getBBox()).detector
     visit = afwImage.VisitInfo(
         exposureTime=200.,
-        date=dafBase.DateTime("2014-05-13T17:00:00.000000000",
-                              dafBase.DateTime.Timescale.TAI))
+        date=DateTime("2014-05-13T17:00:00.000000000",
+                      DateTime.Timescale.TAI))
     exposure.info.id = 1234
     exposure.setDetector(detector)
     exposure.info.setVisitInfo(visit)
