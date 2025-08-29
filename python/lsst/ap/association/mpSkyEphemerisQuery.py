@@ -156,8 +156,9 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         mpSkySsObjects, elements = self._mpSkyConeSearch(expCenter, expMidPointEPOCH,
                                                          expRadius + self.config.queryBufferRadiusDegrees,
                                                          mpSkyURL)
-        for element in ELEMENTS_LIST:
-            mpSkySsObjects[self.config.mpcorb_prefix + NAMING_MAP[element]] = elements[element]
+        if elements is not None:
+            for element in ELEMENTS_LIST:
+                mpSkySsObjects[self.config.mpcorb_prefix + NAMING_MAP[element]] = elements[element]
         # ssObjectId and mpcDesignation are also in the MPCORB schema so let's add them here.
         return Struct(
             ssObjects=mpSkySsObjects,
@@ -187,7 +188,8 @@ class MPSkyEphemerisQueryTask(PipelineTask):
             Lower time bound for polynomials
         t_max : `np.ndarray`
             Upper time bound for polynomials
-
+        elements : `pandas.DataFrame` or `NoneType`
+            Orbital elements of ssObjects (to pass to alerts)
         """
         with pa.input_stream(memoryview(response.content)) as fp:
             fp.seek(0)
@@ -228,6 +230,8 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         mpSkySsObjects : `pandas.DataFrame`
             DataFrame with Solar System Object information and RA/DEC position
             within the visit.
+        elements : `pandas.DataFrame` or `None`
+            Orbital elements of ssObjects (to pass to alerts)
         """
         fieldRA = expCenter.getRa().asDegrees()
         fieldDec = expCenter.getDec().asDegrees()
