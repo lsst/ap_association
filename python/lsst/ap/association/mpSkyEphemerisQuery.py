@@ -230,9 +230,8 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         mpSkySsObjects : `pandas.DataFrame`
             DataFrame with Solar System Object information and RA/DEC position
             within the visit.
-        elements : `pandas.DataFrame` or `NoneType`
+        elements : `pandas.DataFrame` or `None`
             Orbital elements of ssObjects (to pass to alerts)
-
         """
         fieldRA = expCenter.getRa().asDegrees()
         fieldDec = expCenter.getDec().asDegrees()
