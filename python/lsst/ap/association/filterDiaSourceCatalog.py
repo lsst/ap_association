@@ -108,6 +108,7 @@ class FilterDiaSourceCatalogConfig(
     badFlagList = pexConfig.ListField(
         dtype=str,
         default=[
+            "base_PixelFlags_flag_cr",  # Temporarily filter all diaSources contaminated by CRs.
             "base_PixelFlags_flag_crCenter",
             "base_PixelFlags_flag_high_varianceCenterAll"
         ],
