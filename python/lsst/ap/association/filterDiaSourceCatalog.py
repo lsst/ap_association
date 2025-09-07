@@ -109,6 +109,7 @@ class FilterDiaSourceCatalogConfig(
         dtype=str,
         default=[
             "base_PixelFlags_flag_crCenter",
+            "base_PixelFlags_flag_high_varianceCenterAll"
         ],
         doc="List of flags which cause a source to be removed.",
     )
