@@ -58,6 +58,8 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         schema.addField("sky_source", type="Flag", doc="Sky objects.")
         schema.addField("base_PixelFlags_flag_crCenter", type="Flag", doc="A cosmic ray was detected "
                         "and interpolated in this object's center.")
+        schema.addField("base_PixelFlags_flag_cr", type="Flag", doc="A cosmic ray was detected "
+                        "and interpolated anywhere in this objects footprint.")
         schema.addField("base_PixelFlags_flag_high_varianceCenterAll", type="Flag", doc="The object was "
                         "detected in a region with exceptionally high template variance.")
         schema.addField("fakeBadFlag", type="Flag", doc="A fake flag to test a badFlagList longer "
