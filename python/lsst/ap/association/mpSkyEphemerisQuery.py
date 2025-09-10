@@ -274,6 +274,8 @@ class MPSkyEphemerisQueryTask(PipelineTask):
             else:
                 self.log.info("%d Solar System Objects in visit", nFound)
         except requests.RequestException as e:
-            raise NoWorkFound(f"Failed to connect to the remote ephemerides service: {e}") from e
+            message = f"Query to the remote ephemerides service failed. Got response {response.text}"
+            self.log.error(message)
+            raise NoWorkFound(f"{message}: {e}") from e
 
         return mpSkySsObjects, elements
