@@ -96,9 +96,8 @@ funcs:
             - ext_trailedSources_Naive_flux
             - ext_trailedSources_Naive_fluxErr
             - base_LocalPhotoCalib
-            - base_LocalPhotoCalibErr
     trailFluxErr:
-        functor: LocalNanojansky
+        functor: LocalNanojanskyErr
         args:
             - ext_trailedSources_Naive_flux
             - ext_trailedSources_Naive_fluxErr
