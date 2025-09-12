@@ -244,6 +244,7 @@ class MPSkyEphemerisQueryTask(PipelineTask):
             "return_elements": True
         }
 
+        response = None
         try:
             response = requests.get(mpSkyURL, params=params, timeout=self.config.mpSkyRequestTimeoutSeconds)
             response.raise_for_status()
@@ -274,7 +275,8 @@ class MPSkyEphemerisQueryTask(PipelineTask):
             else:
                 self.log.info("%d Solar System Objects in visit", nFound)
         except requests.RequestException as e:
-            message = f"Query to the remote ephemerides service failed. Got response {response.text}"
+            body = getattr(response, "text", "<No response>")
+            message = f"Query to the remote ephemerides service failed. Got response {body}"
             self.log.error(message)
             raise NoWorkFound(f"{message}: {e}") from e
 
