@@ -639,6 +639,7 @@ class PackageAlertsTask(pipeBase.Task):
             mpcOrbit['ssObjectId'] = ssSource['ssObjectId']
             mpcOrbit['mpcDesignation'] = ss_object_id_to_obj_id(ssSource['ssObjectId'])[0]
             ssSource = {key: ssSource[key] for key in ssSource if key not in mpcorbColumns}
+            ssSource['diaSourceId'] = diaSourceId
             alert['ssSource'] = ssSource
             alert['MPCORB'] = mpcOrbit
 
