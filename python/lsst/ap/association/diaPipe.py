@@ -623,8 +623,14 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             self.log.verbose("writeToApdb: Took %.4f seconds", self.metadata["writeToApdbDuration"])
 
         associatedSsSources = assocResults.associatedSsSources
+        associatedSsSourcesPlusMpcorb = None
         if associatedSsSources is not None:
+            mpcorbColumns = [col for col in associatedSsSources.columns if col[:7] == 'MPCORB_']
+            associatedSsSourceMpcorb = associatedSsSources[mpcorbColumns].copy()
             associatedSsSources = self.standardizeTable(associatedSsSources, "SSSource", nullColumns=[])
+            associatedSsSourcesPlusMpcorb = associatedSsSources.copy()
+            for mpcorbColumn in mpcorbColumns:
+                associatedSsSourcesPlusMpcorb[mpcorbColumn] = associatedSsSourceMpcorb[mpcorbColumn]
 
         # patch the otherwise-empty validityStart field for the alerts
         updatedDiaObjects['validityStartMjdTai'] = validityStart.get(system=DateTime.MJD, scale=DateTime.TAI)
@@ -657,15 +663,10 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                    diffIm,
                                    exposure,
                                    template,
-                                   ssSrc=associatedSsSources,
+                                   ssSrc=associatedSsSourcesPlusMpcorb,
                                    doRunForcedMeasurement=self.config.doRunForcedMeasurement,
                                    forcedSourceHistoryThreshold=forcedSourceHistoryThreshold,
                                    )
-        # Although we passed the solar system object orbits to alerts,
-        # we don't want them in the associatedSsSources data product.
-        if associatedSsSources is not None:
-            mpcorbColumns = [col for col in associatedSsSources.columns if col[:7] == 'MPCORB_']
-            associatedSsSources = associatedSsSources.drop(columns=mpcorbColumns)
 
         # For historical reasons, apdbMarker is a Config even if it's not meant to be read.
         # A default Config is the cheapest way to satisfy the storage class.
@@ -674,7 +675,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                associatedDiaSources=assocResults.associatedDiaSources,
                                diaForcedSources=diaForcedSources,
                                diaObjects=diaCalResult.diaObjectCat,
-                               associatedSsSources=assocResults.associatedSsSources,
+                               associatedSsSources=associatedSsSources,
                                unassociatedSsObjects=assocResults.unassociatedSsObjects,
                                newDiaSources=assocResults.newDiaSources,
                                marginalDiaSources=assocResults.marginalDiaSources
