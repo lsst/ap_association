@@ -47,6 +47,7 @@ import lsst.geom as geom
 import lsst.meas.base.tests
 from lsst.sphgeom import Box
 import lsst.utils.tests
+from lsst.pipe.tasks.functors import LocalWcs
 import utils_tests
 
 
@@ -217,7 +218,8 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             id=VISIT,
             exposureTime=200.,
             date=DateTime("2014-05-13T17:00:00.000000000",
-                          DateTime.Timescale.TAI))
+                          DateTime.Timescale.TAI),
+            boresightRotAngle=geom.Angle(0.785398))
         self.exposure.info.id = 1234
         self.exposure.info.setVisitInfo(visit)
 
@@ -373,7 +375,8 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                 pixelPoint,
                 geom.Extent2I(self.cutoutSize, self.cutoutSize),
                 cutout.getPhotoCalib(),
-                1234)
+                1234,
+                rotPa=cutout.visitInfo.boresightRotAngle.asDegrees())
             cutoutBytes = packageAlerts.streamCcdDataToBytes(
                 ccdCutout)
             objSources = self.diaSourceHistory.loc[srcIdx[0]]
@@ -397,6 +400,55 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                              cutoutBytes)
             self.assertEqual(alert["cutoutTemplate"],
                              cutoutBytes)
+            science_cutout = CCDData.read(io.BytesIO(alert["cutoutScience"]),
+                                          format="fits")
+            template_cutout = CCDData.read(io.BytesIO(alert["cutoutTemplate"]),
+                                           format="fits")
+            self.assertAlmostEqual(science_cutout.header["ROTPA"],
+                                   template_cutout.header["ROTPA"])
+
+    def testCutoutRotpa(self):
+        """Test that the ROTPA header keyword matches the boresightRotAngle from visitInfo.
+        """
+        packageAlerts = PackageAlertsTask()
+
+        # Create a cutout using existing test exposure
+        sphPoint = self.exposure.getWcs().pixelToSky(self.center)
+        cutout = self.exposure.getCutout(sphPoint,
+                                         geom.Extent2I(self.cutoutSize,
+                                                       self.cutoutSize))
+
+        # Create CCDData cutout
+        ccdCutout = packageAlerts.createCcdDataCutout(
+            cutout,
+            sphPoint,
+            self.center,
+            geom.Extent2I(self.cutoutSize, self.cutoutSize),
+            cutout.getPhotoCalib(),
+            1234,
+            rotPa=cutout.visitInfo.boresightRotAngle.asDegrees())
+
+        wcs = self.exposure.wcs
+        cd_matrix = wcs.getCdMatrix()  # This gets the CD matrix elements
+        angle_rad = LocalWcs.computePositionAngle([0],
+                                                  [cd_matrix[0, 0]],  # CD1_1
+                                                  [cd_matrix[0, 1]],  # CD1_2
+                                                  [cd_matrix[1, 0]],  # CD2_1
+                                                  [cd_matrix[1, 1]]  # CD2_2
+                                                  )
+        wcs_pa = geom.Angle(angle_rad, geom.radians).asDegrees()
+
+        cutoutBytes = packageAlerts.streamCcdDataToBytes(ccdCutout)
+        with io.BytesIO(cutoutBytes) as bytesIO:
+            cutoutFromBytes = CCDData.read(bytesIO, format="fits")
+
+        self.assertIn('ROTPA', cutoutFromBytes.header)
+        self.assertAlmostEqual(
+            cutoutFromBytes.header['ROTPA'],
+            self.exposure.visitInfo.boresightRotAngle.asDegrees())
+        self.assertAlmostEqual(
+            cutoutFromBytes.header['ROTPA'],
+            wcs_pa, places=4)
 
     @unittest.skipIf(confluent_kafka is None, 'Kafka is not enabled')
     def test_produceAlerts_empty_password(self):
@@ -569,7 +621,12 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                 pixelPoint,
                 geom.Extent2I(self.cutoutSize, self.cutoutSize),
                 cutout.getPhotoCalib(),
-                1234)
+                1234,
+                rotPa=cutout.visitInfo.boresightRotAngle.asDegrees())
+
+            self.assertEqual(alert["cutoutDifference"],
+                             packageAlerts.streamCcdDataToBytes(ccdCutout))
+
             self.assertEqual(alert["cutoutDifference"],
                              packageAlerts.streamCcdDataToBytes(ccdCutout))
 
@@ -626,7 +683,8 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                 pixelPoint,
                 geom.Extent2I(self.cutoutSize, self.cutoutSize),
                 cutout.getPhotoCalib(),
-                1234)
+                1234,
+                rotPa=cutout.visitInfo.boresightRotAngle.asDegrees())
             self.assertEqual(alert["cutoutDifference"],
                              packageAlerts.streamCcdDataToBytes(ccdCutout))
 

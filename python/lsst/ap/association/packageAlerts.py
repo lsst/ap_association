@@ -324,7 +324,8 @@ class PackageAlertsTask(pipeBase.Task):
                 cutoutExtent,
                 diffImPhotoCalib,
                 diaSource["diaSourceId"],
-                averagePsf=diffImPsf)
+                averagePsf=diffImPsf,
+                rotPa=diffIm.visitInfo.boresightRotAngle.asDegrees())
             calexpCutout = self.createCcdDataCutout(
                 calexp,
                 sphPoint,
@@ -332,7 +333,8 @@ class PackageAlertsTask(pipeBase.Task):
                 cutoutExtent,
                 calexpPhotoCalib,
                 diaSource["diaSourceId"],
-                averagePsf=sciencePsf)
+                averagePsf=sciencePsf,
+                rotPa=calexp.visitInfo.boresightRotAngle.asDegrees())
             templateCutout = self.createCcdDataCutout(
                 template,
                 sphPoint,
@@ -340,7 +342,8 @@ class PackageAlertsTask(pipeBase.Task):
                 cutoutExtent,
                 templatePhotoCalib,
                 diaSource["diaSourceId"],
-                averagePsf=templatePsf)
+                averagePsf=templatePsf,
+                rotPa=calexp.visitInfo.boresightRotAngle.asDegrees())
 
             alerts.append(
                 self.makeAlertDict(diaSource["diaSourceId"],
@@ -458,7 +461,8 @@ class PackageAlertsTask(pipeBase.Task):
             self.log.info(f"Total time since shutter close to produce alerts for"
                           f" visit {visit} detector {detector}: {total_time} seconds")
 
-    def createCcdDataCutout(self, image, skyCenter, pixelCenter, extent, photoCalib, srcId, averagePsf=None):
+    def createCcdDataCutout(self, image, skyCenter, pixelCenter, extent, photoCalib, srcId, averagePsf=None,
+                            rotPa=None):
         """Grab an image as a cutout and return a calibrated CCDData image.
 
         Parameters
@@ -479,6 +483,8 @@ class PackageAlertsTask(pipeBase.Task):
         averagePsf : `numpy.array`, optional
             Average PSF to attach to the cutout.
             Used if ``self.config.useAveragePsf`` is set.
+            cutoutType : str, optional
+        Type of cutout being created ('difference', 'template', or 'science')
 
         Returns
         -------
@@ -529,8 +535,7 @@ class PackageAlertsTask(pipeBase.Task):
         cutoutWcs.wcs.cd = self.makeLocalTransformMatrix(cutout.getWcs(),
                                                          center,
                                                          skyCenter)
-
-        return CCDData(
+        ccdData = CCDData(
             data=calibCutout.getImage().array,
             uncertainty=VarianceUncertainty(calibCutout.getVariance().array),
             flags=calibCutout.getMask().array,
@@ -539,6 +544,10 @@ class PackageAlertsTask(pipeBase.Task):
             meta={"cutMinX": cutOutMinX,
                   "cutMinY": cutOutMinY},
             unit=u.nJy)
+
+        ccdData.header['ROTPA'] = (rotPa, 'Pos angle in deg of focal plane +Y wrt North')
+
+        return ccdData
 
     def makeLocalTransformMatrix(self, wcs, center, skyCenter):
         """Create a local, linear approximation of the wcs transformation
