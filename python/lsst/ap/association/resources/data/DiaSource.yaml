@@ -124,6 +124,15 @@ funcs:
             - base_LocalWcs_CDMatrix_1_2
             - base_LocalWcs_CDMatrix_2_1
             - base_LocalWcs_CDMatrix_2_2
+    trailAngleErr:
+        functor: ConvertDetectorAngleErrToPositionAngleErr
+        args:
+            - ext_trailedSources_Naive_angle
+            - ext_trailedSources_Naive_angleErr
+            - base_LocalWcs_CDMatrix_1_1
+            - base_LocalWcs_CDMatrix_1_2
+            - base_LocalWcs_CDMatrix_2_1
+            - base_LocalWcs_CDMatrix_2_2
     # trailChi2 not implemented
     # trailNdata not implemented
     dipoleMeanFlux:
