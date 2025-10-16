@@ -99,12 +99,6 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
             "If False, instead produce one boolean column per flag.",
         deprecated="This field is no longer used. Will be removed after v28."
     )
-    doIncludeReliability = pexConfig.Field(
-        dtype=bool,
-        default=False,
-        doc="Include the reliability (e.g. real/bogus) classifications in the output.",
-        deprecated="This field is no longer used. Will be removed after v29."
-    )
     doUseApdbSchema = pexConfig.Field(
         dtype=bool,
         default=False,
