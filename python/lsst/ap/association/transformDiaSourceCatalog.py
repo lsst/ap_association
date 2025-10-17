@@ -89,7 +89,6 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
         default=False,
         doc="Input DiaSource catalog contains SkySources that should be "
             "removed before storing the output DiaSource catalog.",
-        deprecated="This field is no longer used. Will be removed after v29."
     )
     # TODO: remove on DM-41532
     doPackFlags = pexConfig.Field(
@@ -98,12 +97,6 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
         doc="Do pack the flags into one integer column named 'flags'."
             "If False, instead produce one boolean column per flag.",
         deprecated="This field is no longer used. Will be removed after v28."
-    )
-    doIncludeReliability = pexConfig.Field(
-        dtype=bool,
-        default=False,
-        doc="Include the reliability (e.g. real/bogus) classifications in the output.",
-        deprecated="This field is no longer used. Will be removed after v29."
     )
     doUseApdbSchema = pexConfig.Field(
         dtype=bool,
