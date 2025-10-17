@@ -128,7 +128,7 @@ funcs:
         functor: ConvertDetectorAngleErrToPositionAngleErr
         args:
             - ext_trailedSources_Naive_angle
-            - ext_trailedSources_Naive_angle_err
+            - ext_trailedSources_Naive_angleErr
             - base_LocalWcs_CDMatrix_1_1
             - base_LocalWcs_CDMatrix_1_2
             - base_LocalWcs_CDMatrix_2_1
