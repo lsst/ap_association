@@ -35,6 +35,8 @@ import lsst.geom
 from lsst.pipe.base.utils import RegionTimeInfo
 import lsst.sphgeom
 
+from lsst.ap.association.utils import getRegion
+
 
 def makeDiaObjects(nObjects, exposure, rng):
     """Make a test set of DiaObjects.
@@ -279,28 +281,6 @@ def makeExposure(flipX=False, flipY=False):
     exposure.setPhotoCalib(afwImage.PhotoCalib(1., 0., exposure.getBBox()))
 
     return exposure
-
-
-def getRegion(exposure):
-    """Calculate an enveloping region for an exposure.
-
-    Parameters
-    ----------
-    exposure : `lsst.afw.image.Exposure`
-        Exposure object with calibrated WCS.
-
-    Returns
-    -------
-    region : `lsst.sphgeom.Region`
-        Region enveloping an exposure.
-    """
-    # Bounding box needs to be a `Box2D` not a `Box2I` for `wcs.pixelToSky()`
-    bbox = lsst.geom.Box2D(exposure.getBBox())
-    wcs = exposure.getWcs()
-
-    region = lsst.sphgeom.ConvexPolygon([pp.getVector() for pp in wcs.pixelToSky(bbox.getCorners())])
-
-    return region
 
 
 def makeRegionTime(exposure=None, begin=None, end=None):
