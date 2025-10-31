@@ -23,7 +23,7 @@
 """
 __all__ = ("convertDataFrameToSdmSchema", "readSdmSchemaFile", "readSchemaFromApdb",
            "dropEmptyColumns", "make_empty_catalog", "getMidpointFromTimespan",
-           "makeEmptyForcedSourceTable", "checkSdmSchemaColumns")
+           "makeEmptyForcedSourceTable", "checkSdmSchemaColumns", "getRegion")
 
 from collections.abc import Mapping
 import os
@@ -37,6 +37,8 @@ import yaml
 
 from lsst.daf.butler import Timespan
 import lsst.dax.apdb as daxApdb
+import lsst.geom
+import lsst.sphgeom
 
 
 # The first entry in the returned mapping is for nullable columns,
@@ -349,3 +351,25 @@ def makeEmptyForcedSourceTable(schema):
     """
     diaForcedSources = convertDataFrameToSdmSchema(schema, pd.DataFrame(), tableName="DiaForcedSource")
     return diaForcedSources
+
+
+def getRegion(exposure):
+    """Calculate an enveloping region for an exposure.
+
+    Parameters
+    ----------
+    exposure : `lsst.afw.image.Exposure`
+        Exposure object with calibrated WCS.
+
+    Returns
+    -------
+    region : `lsst.sphgeom.Region`
+        Region enveloping an exposure.
+    """
+    # Bounding box needs to be a `Box2D` not a `Box2I` for `wcs.pixelToSky()`
+    bbox = lsst.geom.Box2D(exposure.getBBox())
+    wcs = exposure.getWcs()
+
+    region = lsst.sphgeom.ConvexPolygon([pp.getVector() for pp in wcs.pixelToSky(bbox.getCorners())])
+
+    return region
