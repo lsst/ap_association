@@ -45,7 +45,7 @@ from lsst.ap.association import (
     PackageAlertsTask)
 
 from lsst.ap.association.utils import convertDataFrameToSdmSchema, checkSdmSchemaColumns, \
-    readSchemaFromApdb, dropEmptyColumns, make_empty_catalog, makeEmptyForcedSourceTable
+    readSchemaFromApdb, dropEmptyColumns, make_empty_catalog, makeEmptyForcedSourceTable, getRegion
 from lsst.daf.base import DateTime
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
     DiaObjectCalculationTask
@@ -315,6 +315,13 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         target=DiaObjectCalculationTask,
         doc="Task to compute summary statistics for DiaObjects.",
     )
+    doReloadDiaObjects = pexConfig.Field(
+        dtype=bool,
+        default=False,
+        doc="Drop preloaded DiaObjects and reload them from the APDB?"
+            "Used in production when the very latest objects from the APDB "
+            "are needed.",
+    )
     doRunForcedMeasurement = pexConfig.Field(
         dtype=bool,
         default=True,
@@ -548,6 +555,22 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Accept either legacySolarSystemTable or optional solarSystemObjectTable.
         if legacySolarSystemTable is not None and solarSystemObjectTable is None:
             solarSystemObjectTable = Table.from_pandas(legacySolarSystemTable)
+        if self.config.doReloadDiaObjects:
+            try:
+                preloadedDiaObjects = self.loadRefreshedDiaObjects(getRegion(exposure), preloadedDiaObjects)
+            except Exception as e:
+                self.log.warning("Error encountered while attempting to load "
+                                 "the latest diaObjects from the APDB. Processing "
+                                 "will continue with only the diaObjects from "
+                                 "preload. Error:", e)
+            finally:
+                self.metadata["loadDiaObjectsDuration"] = duration_from_timeMethod(
+                    self.metadata, "loadDiaObjects", clock="Utc")
+                self.log.verbose("DiaObjects: Took %.4f seconds", self.metadata["loadDiaObjectsDuration"])
+
+        else:
+            self.metadata["loadDiaObjectsDuration"] = -1
+
         self.checkTableIndex(preloadedDiaSources, index=["diaObjectId", "band", "diaSourceId"])
         self.checkTableIndex(preloadedDiaObjects, index="diaObjectId")
         self.checkTableIndex(preloadedDiaForcedSources, index=["diaObjectId", "diaForcedSourceId"])
@@ -1101,6 +1124,52 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         diaForcedSources = convertDataFrameToSdmSchema(self.schema, diaForcedSources,
                                                        tableName="DiaForcedSource")
         return diaForcedSources
+
+    @timeMethod
+    def loadRefreshedDiaObjects(self, region, preloadedDiaObjects):
+        """Load DiaObjects from the Apdb based on their HTM location.
+
+        Parameters
+        ----------
+        region : `sphgeom.Region`
+            Region containing the current exposure to load diaObjects from the
+            APDB.
+        preloadedDiaObjects : `pandas.DataFrame`
+            Previously detected DiaObjects, loaded from the APDB.
+
+        Returns
+        -------
+        diaObjects : `pandas.DataFrame`
+            DiaObjects loaded from the Apdb that are within the area defined
+            by ``pixelRanges``.
+        """
+        diaObjects = self.apdb.getDiaObjects(region)
+
+        diaObjects.set_index("diaObjectId", drop=False, inplace=True)
+        if diaObjects.index.has_duplicates:
+            self.log.warning(
+                "Duplicate DiaObjects loaded from the Apdb. This may cause "
+                "downstream pipeline issues. Dropping duplicated rows")
+            # Drop duplicates via index and keep the first appearance.
+            diaObjects = diaObjects.groupby(diaObjects.index).first()
+        self.log.info("Loaded %i DiaObjects", len(diaObjects))
+        refreshedDiaObjects = convertDataFrameToSdmSchema(self.schema, diaObjects, tableName="DiaObject")
+
+        preloadedIsInRefreshed = preloadedDiaObjects.index.isin(refreshedDiaObjects.index)
+        refreshedIsInPreloaded = refreshedDiaObjects.index.isin(preloadedDiaObjects.index)
+        nUniquePreloaded = (~preloadedIsInRefreshed).sum()
+        if nUniquePreloaded > 0:
+            self.log.warning("Some preloaded diaObjects were missing when "
+                             "the diaObject table was reloaded from the APDB."
+                             "%d missing objects.", nUniquePreloaded)
+        nUniqueRefreshed = (~refreshedIsInPreloaded).sum()
+        if nUniqueRefreshed > 0:
+            self.log.info("Reloading the diaObject table during association yielded "
+                          "an additional %d objects over the %d preloaded diaObjects.",
+                          nUniqueRefreshed, len(preloadedDiaObjects))
+            return refreshedDiaObjects
+        else:
+            return preloadedDiaObjects
 
     @timeMethod
     def writeToApdb(self, updatedDiaObjects, associatedDiaSources, diaForcedSources):
