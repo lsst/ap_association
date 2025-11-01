@@ -565,7 +565,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                  "preload. Error:", e)
             finally:
                 self.metadata["loadDiaObjectsDuration"] = duration_from_timeMethod(
-                    self.metadata, "loadDiaObjects", clock="Utc")
+                    self.metadata, "loadRefreshedDiaObjects", clock="Utc")
                 self.log.verbose("DiaObjects: Took %.4f seconds", self.metadata["loadDiaObjectsDuration"])
 
         else:
