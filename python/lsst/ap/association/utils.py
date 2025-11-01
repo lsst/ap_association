@@ -23,13 +23,14 @@
 """
 __all__ = ("convertDataFrameToSdmSchema", "readSdmSchemaFile", "readSchemaFromApdb",
            "dropEmptyColumns", "make_empty_catalog", "getMidpointFromTimespan",
-           "makeEmptyForcedSourceTable", "checkSdmSchemaColumns", "getRegion")
+           "makeEmptyForcedSourceTable", "checkSdmSchemaColumns", "getRegion", "paddedRegion")
 
 from collections.abc import Mapping
 import os
 
 from lsst.dax.apdb import Apdb, ApdbTables, schema_model
 import felis.datamodel
+import math
 import numpy as np
 import pandas as pd
 from astropy.table import Table
@@ -373,3 +374,35 @@ def getRegion(exposure):
     region = lsst.sphgeom.ConvexPolygon([pp.getVector() for pp in wcs.pixelToSky(bbox.getCorners())])
 
     return region
+
+
+def paddedRegion(region, margin):
+    """Return a region that has been expanded by a buffer.
+
+    Parameters
+    ----------
+    region : `lsst.sphgeom.Region`
+        The region to pad.
+    margin : `lsst.sphgeom.Angle`
+        The amount by which to increase the region.
+
+    Returns
+    -------
+    padded : `lsst.sphgeom.Region`
+        An enlarged copy of ``region``.
+    """
+    # region is almost certainly a (padded) detector bounding box.
+    if isinstance(region, lsst.sphgeom.ConvexPolygon):
+        # This is an ad-hoc, approximate implementation. It should be good
+        # enough for catalog loading, but is not a general-purpose solution.
+        center = lsst.geom.SpherePoint(region.getCentroid())
+        corners = [lsst.geom.SpherePoint(c) for c in region.getVertices()]
+        # Approximate the region as a Euclidian square
+        # geom.Angle(sphgeom.Angle) converter not pybind-wrapped???
+        diagonal_margin = lsst.geom.Angle(margin.asRadians() * math.sqrt(2.0))
+        padded = [c.offset(center.bearingTo(c), diagonal_margin) for c in corners]
+        return lsst.sphgeom.ConvexPolygon.convexHull([c.getVector() for c in padded])
+    elif hasattr(region, "dilatedBy"):
+        return region.dilatedBy(margin)
+    else:
+        return region.getBoundingCircle().dilatedBy(margin)
