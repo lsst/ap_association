@@ -35,6 +35,7 @@ import lsst.dax.apdb as daxApdb
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
+import lsst.sphgeom
 
 from astropy.table import Table
 import numpy as np
@@ -45,7 +46,8 @@ from lsst.ap.association import (
     PackageAlertsTask)
 
 from lsst.ap.association.utils import convertDataFrameToSdmSchema, checkSdmSchemaColumns, \
-    readSchemaFromApdb, dropEmptyColumns, make_empty_catalog, makeEmptyForcedSourceTable, getRegion
+    readSchemaFromApdb, dropEmptyColumns, make_empty_catalog, makeEmptyForcedSourceTable, getRegion, \
+    paddedRegion
 from lsst.daf.base import DateTime
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
     DiaObjectCalculationTask
@@ -322,6 +324,12 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
             "Used in production when the very latest objects from the APDB "
             "are needed.",
     )
+    angleMargin = pexConfig.RangeField(
+        doc="Padding to add when loading diaObjects if `doReloadDiaObjects=True`",
+        dtype=float,
+        default=2,
+        min=0,
+    )
     doRunForcedMeasurement = pexConfig.Field(
         dtype=bool,
         default=True,
@@ -565,7 +573,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                  "preload. Error:", e)
             finally:
                 self.metadata["loadDiaObjectsDuration"] = duration_from_timeMethod(
-                    self.metadata, "loadDiaObjects", clock="Utc")
+                    self.metadata, "loadRefreshedDiaObjects", clock="Utc")
                 self.log.verbose("DiaObjects: Took %.4f seconds", self.metadata["loadDiaObjectsDuration"])
 
         else:
@@ -1143,7 +1151,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             DiaObjects loaded from the Apdb that are within the area defined
             by ``pixelRanges``.
         """
-        diaObjects = self.apdb.getDiaObjects(region)
+        angleMargin = lsst.sphgeom.Angle.fromDegrees(self.config.angleMargin/3600.)
+        diaObjects = self.apdb.getDiaObjects(paddedRegion(region, angleMargin))
 
         diaObjects.set_index("diaObjectId", drop=False, inplace=True)
         if diaObjects.index.has_duplicates:
@@ -1152,16 +1161,10 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 "downstream pipeline issues. Dropping duplicated rows")
             # Drop duplicates via index and keep the first appearance.
             diaObjects = diaObjects.groupby(diaObjects.index).first()
-        self.log.info("Loaded %i DiaObjects", len(diaObjects))
+        self.log.info("Loaded %d DiaObjects", len(diaObjects))
         refreshedDiaObjects = convertDataFrameToSdmSchema(self.schema, diaObjects, tableName="DiaObject")
 
-        preloadedIsInRefreshed = preloadedDiaObjects.index.isin(refreshedDiaObjects.index)
         refreshedIsInPreloaded = refreshedDiaObjects.index.isin(preloadedDiaObjects.index)
-        nUniquePreloaded = (~preloadedIsInRefreshed).sum()
-        if nUniquePreloaded > 0:
-            self.log.warning("Some preloaded diaObjects were missing when "
-                             "the diaObject table was reloaded from the APDB."
-                             "%d missing objects.", nUniquePreloaded)
         nUniqueRefreshed = (~refreshedIsInPreloaded).sum()
         if nUniqueRefreshed > 0:
             self.log.info("Reloading the diaObject table during association yielded "
