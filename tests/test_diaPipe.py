@@ -112,24 +112,40 @@ class TestDiaPipelineTask(unittest.TestCase):
     def testRun(self):
         """Test running while creating and packaging alerts.
         """
-        self._testRun(doPackageAlerts=True, doSolarSystemAssociation=True)
+        self._testRun(doPackageAlerts=True, doSolarSystemAssociation=True, doReloadDiaObjects=False)
 
     def testRunWithSolarSystemAssociation(self):
         """Test running while creating and packaging alerts.
         """
-        self._testRun(doPackageAlerts=False, doSolarSystemAssociation=True)
+        self._testRun(doPackageAlerts=False, doSolarSystemAssociation=True, doReloadDiaObjects=False)
 
     def testRunWithAlerts(self):
         """Test running while creating and packaging alerts.
         """
-        self._testRun(doPackageAlerts=True, doSolarSystemAssociation=False)
+        self._testRun(doPackageAlerts=True, doSolarSystemAssociation=False, doReloadDiaObjects=False)
 
     def testRunWithoutAlertsOrSolarSystem(self):
         """Test running without creating and packaging alerts.
         """
-        self._testRun(doPackageAlerts=False, doSolarSystemAssociation=False)
+        self._testRun(doPackageAlerts=False, doSolarSystemAssociation=False, doReloadDiaObjects=False)
 
-    def _testRun(self, doPackageAlerts=False, doSolarSystemAssociation=False, doRunForcedMeasurement=False):
+    def testRunWithReload(self):
+        """Test running with reloading DiaObjects.
+        """
+        self._testRun(doPackageAlerts=False, doSolarSystemAssociation=False, doReloadDiaObjects=True)
+
+    def testRunWithReloadAndSolarSystem(self):
+        """Test running with solar system association and reloading DiaObjects.
+        """
+        self._testRun(doPackageAlerts=False, doSolarSystemAssociation=True, doReloadDiaObjects=True)
+
+    def testRunWithReloadAndAlerts(self):
+        """Test running with reloading DiaObjects while creating and packaging alerts.
+        """
+        self._testRun(doPackageAlerts=True, doSolarSystemAssociation=False, doReloadDiaObjects=True)
+
+    def _testRun(self, doPackageAlerts=False, doSolarSystemAssociation=False, doRunForcedMeasurement=False,
+                 doReloadDiaObjects=False):
         """Test the normal workflow of each ap_pipe step.
         """
         config = self._makeDefaultConfig(
@@ -137,13 +153,13 @@ class TestDiaPipelineTask(unittest.TestCase):
             doPackageAlerts=doPackageAlerts,
             doSolarSystemAssociation=doSolarSystemAssociation,
             doRunForcedMeasurement=doRunForcedMeasurement,
+            doReloadDiaObjects=doReloadDiaObjects,
         )
         task = DiaPipelineTask(config=config)
         # Set DataFrame index testing to always return False. Mocks return
         # true for this check otherwise.
         task.testDataFrameIndex = lambda x: False
         diffIm = Mock(spec=afwImage.ExposureF)
-        exposure = Mock(spec=afwImage.ExposureF)
         template = Mock(spec=afwImage.ExposureF)
         diaSrc = _makeMockDataFrame()
         ssObjects = _makeMockTable()
@@ -165,7 +181,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         def concatMock(_data, **_kwargs):
             return _makeMockDataFrame()
 
-        # Mock out the run() methods of these two Tasks to ensure they
+        # Mock out the run() methods of these Tasks to ensure they
         # return data in the correct form.
         def solarSystemAssociator_run(unAssocDiaSources, solarSystemObjectTable, visitInfo,
                                       bbox, wcs):
@@ -181,6 +197,11 @@ class TestDiaPipelineTask(unittest.TestCase):
                                          matchedDiaSources=_makeMockDataFrame(),
                                          unAssocDiaSources=_makeMockDataFrame())
 
+        def loadObjects_run(region, preloadedDiaObjects):
+            task.metadata['loadRefreshedDiaObjectsStartUtc'] = 1.234
+            task.metadata['loadRefreshedDiaObjectsEndUtc'] = 5.678
+            return self.diaObjects
+
         def updateObjectTableMock(diaObjects, diaSources):
             pass
 
@@ -190,6 +211,8 @@ class TestDiaPipelineTask(unittest.TestCase):
             patch('lsst.ap.association.diaPipe.pd.concat', side_effect=concatMock), \
             patch('lsst.ap.association.diaPipe.DiaPipelineTask.updateObjectTable',
                   side_effect=updateObjectTableMock), \
+            patch('lsst.ap.association.diaPipe.DiaPipelineTask.loadRefreshedDiaObjects',
+                  side_effect=loadObjects_run), \
             patch('lsst.ap.association.association.AssociationTask.run',
                   side_effect=associator_run) as mainRun, \
             patch('lsst.pipe.tasks.ssoAssociation.SolarSystemAssociationTask.run',
@@ -198,7 +221,7 @@ class TestDiaPipelineTask(unittest.TestCase):
             result = task.run(diaSrc,
                               None,
                               diffIm,
-                              exposure,
+                              self.exposure,
                               template,
                               preloadedDiaObjects=self.diaObjects,
                               preloadedDiaSources=self.diaSources,
