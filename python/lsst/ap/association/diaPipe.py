@@ -319,7 +319,7 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     )
     doReloadDiaObjects = pexConfig.Field(
         dtype=bool,
-        default=False,
+        default=True,
         doc="Drop preloaded DiaObjects and reload them from the APDB?"
             "Used in production when the very latest objects from the APDB "
             "are needed.",
@@ -573,8 +573,10 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                  "preload. Error:", e)
             finally:
                 self.metadata["loadDiaObjectsDuration"] = duration_from_timeMethod(
-                    self.metadata, "loadRefreshedDiaObjects", clock="Utc")
-                self.log.verbose("DiaObjects: Took %.4f seconds", self.metadata["loadDiaObjectsDuration"])
+                    self.metadata, "loadRefreshedDiaObjects", clock="Utc"
+                )
+                self.log.verbose("Re-loading DiaObjects: Took %.4f seconds",
+                                 self.metadata["loadDiaObjectsDuration"])
 
         else:
             self.metadata["loadDiaObjectsDuration"] = -1
