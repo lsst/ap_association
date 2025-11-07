@@ -1167,14 +1167,23 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         refreshedDiaObjects = convertDataFrameToSdmSchema(self.schema, diaObjects, tableName="DiaObject")
 
         refreshedIsInPreloaded = refreshedDiaObjects.index.isin(preloadedDiaObjects.index)
+        preloadedIsInRefreshed = preloadedDiaObjects.index.isin(refreshedDiaObjects.index)
         nUniqueRefreshed = (~refreshedIsInPreloaded).sum()
+        nUniquePreloaded = (~preloadedIsInRefreshed).sum()
         if nUniqueRefreshed > 0:
             self.log.info("Reloading the diaObject table during association yielded "
                           "an additional %d objects over the %d preloaded diaObjects.",
                           nUniqueRefreshed, len(preloadedDiaObjects))
+        if nUniquePreloaded == 0:
             return refreshedDiaObjects
-        else:
+        elif nUniqueRefreshed == 0:
             return preloadedDiaObjects
+        else:
+            # We can get "preloaded" diaObjects that don't appear in the APDB with
+            # the CI datasets in ap_verify, since those are stored as a dataset and
+            # an empty APDB is created. In that case, combine the two catalogs.
+            # Precedence is given to the refreshed diaObject catalog.
+            return pd.concat([refreshedDiaObjects, preloadedDiaObjects.loc[~preloadedIsInRefreshed]])
 
     @timeMethod
     def writeToApdb(self, updatedDiaObjects, associatedDiaSources, diaForcedSources):
