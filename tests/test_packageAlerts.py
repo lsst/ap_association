@@ -38,7 +38,6 @@ except ImportError:
 
 import lsst.alert.packet as alertPack
 from lsst.ap.association import PackageAlertsConfig, PackageAlertsTask
-from lsst.ap.association.utils import readSchemaFromApdb, convertDataFrameToSdmSchema
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.image as afwImage
 from lsst.daf.base import DateTime
@@ -48,6 +47,7 @@ import lsst.meas.base.tests
 from lsst.sphgeom import Box
 import lsst.utils.tests
 from lsst.pipe.tasks.functors import LocalWcs
+from lsst.pipe.tasks.schemaUtils import readSchemaFromApdb, convertDataFrameToSdmSchema
 import utils_tests
 
 
