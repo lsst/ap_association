@@ -33,8 +33,8 @@ import lsst.sphgeom
 
 from lsst.utils.timer import timeMethod, duration_from_timeMethod
 
-from lsst.ap.association.utils import convertDataFrameToSdmSchema, readSchemaFromApdb, \
-    getMidpointFromTimespan, paddedRegion
+from lsst.ap.association.utils import getMidpointFromTimespan, paddedRegion
+from lsst.pipe.tasks.schemaUtils import convertDataFrameToSdmSchema, readSchemaFromApdb
 
 __all__ = ("LoadDiaCatalogsTask", "LoadDiaCatalogsConfig")
 

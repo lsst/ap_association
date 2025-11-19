@@ -19,44 +19,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import os
 import unittest
-
-import pandas as pd
 
 import lsst.daf.butler as dafButler
 
-from lsst.ap.association.utils import readSdmSchemaFile, make_empty_catalog, convertDataFrameToSdmSchema, \
-    getMidpointFromTimespan
+from lsst.ap.association.utils import getMidpointFromTimespan
 from utils_tests import makeExposure, makeRegionTime
 
 
 class TestUtils(unittest.TestCase):
-
-    def test_make_empty_catalog(self):
-        """Check that an empty catalog has the correct format.
-        """
-        schemaFile = os.path.join("${SDM_SCHEMAS_DIR}", "yml", "apdb.yaml")
-        schemaName = "ApdbSchema"
-        schema = readSdmSchemaFile(schemaFile, schemaName)
-
-        tableNames = ["DiaObject", "DiaSource", "DiaForcedSource"]
-        for tableName in tableNames:
-            emptyDiaObjects = make_empty_catalog(schema, tableName=tableName)
-            self.assertTrue(emptyDiaObjects.empty)
-
-            emptyColumns = set(emptyDiaObjects.columns)
-            self.assertIn("ra", emptyColumns)
-            self.assertIn("dec", emptyColumns)
-            self.assertIn("diaObjectId", emptyColumns)
-
-            emptyDf = pd.DataFrame(columns=["diaObjectId",])
-            emptyDf.set_index("diaObjectId")
-            convertedEmptyDiaObjects = convertDataFrameToSdmSchema(schema, emptyDf, tableName=tableName)
-            # TODO: we have no tests of convertDataFrameToSdmSchema, so it's dangerous to use it as an oracle.
-            emptyTypes = dict(zip(emptyDiaObjects.columns, emptyDiaObjects.dtypes))
-            convertedEmptyTypes = dict(zip(convertedEmptyDiaObjects.columns, convertedEmptyDiaObjects.dtypes))
-            self.assertEqual(emptyTypes, convertedEmptyTypes)
 
     def test_regionTime_timespan(self):
         """Check that the midpoint from a RegionTimeInfo matches the time from

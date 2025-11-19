@@ -37,7 +37,7 @@ from lsst.pipe.tasks.postprocess import TransformCatalogBaseTask, TransformCatal
 from lsst.pipe.tasks.functors import Column
 from lsst.utils.timer import timeMethod
 
-from .utils import convertDataFrameToSdmSchema, readSdmSchemaFile
+from lsst.pipe.tasks.schemaUtils import convertDataFrameToSdmSchema, readSdmSchemaFile
 
 
 class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
