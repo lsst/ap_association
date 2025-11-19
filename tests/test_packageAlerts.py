@@ -383,6 +383,8 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             objForcedSources = self.diaForcedSources.loc[srcIdx[0]]
             alert = packageAlerts.makeAlertDict(
                 dia_source_id,
+                self.exposure.visitInfo.getObservationReason(),
+                self.exposure.visitInfo.getObject(),
                 diaSource,
                 self.diaObjects.loc[srcIdx[0]],
                 objSources,
@@ -390,7 +392,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                 ccdCutout,
                 ccdCutout,
                 ccdCutout)
-            self.assertEqual(len(alert), 11)
+            self.assertEqual(len(alert), 13)
 
             self.assertEqual(alert["diaSourceId"], dia_source_id)
             self.assertEqual(alert["diaSource"], diaSource.to_dict())
