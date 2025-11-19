@@ -45,12 +45,12 @@ from lsst.ap.association import (
     DiaForcedSourceTask,
     PackageAlertsTask)
 
-from lsst.ap.association.utils import convertDataFrameToSdmSchema, checkSdmSchemaColumns, \
-    readSchemaFromApdb, dropEmptyColumns, make_empty_catalog, makeEmptyForcedSourceTable, getRegion, \
-    paddedRegion
+from lsst.ap.association.utils import makeEmptyForcedSourceTable, getRegion, paddedRegion, readSchemaFromApdb
 from lsst.daf.base import DateTime
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
     DiaObjectCalculationTask
+from lsst.pipe.tasks.schemaUtils import convertDataFrameToSdmSchema, checkSdmSchemaColumns, \
+    dropEmptyColumns, make_empty_catalog
 from lsst.pipe.tasks.ssoAssociation import SolarSystemAssociationTask
 from lsst.utils.timer import timeMethod, duration_from_timeMethod
 

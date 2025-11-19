@@ -39,7 +39,7 @@ import lsst.utils.tests
 from lsst.pipe.base.testUtils import assertValidOutput
 
 from lsst.ap.association import DiaPipelineTask
-from lsst.ap.association.utils import convertDataFrameToSdmSchema
+from lsst.pipe.tasks.schemaUtils import convertDataFrameToSdmSchema
 from utils_tests import makeExposure, makeDiaObjects, makeDiaSources, makeDiaForcedSources, \
     makeSolarSystemSources
 
