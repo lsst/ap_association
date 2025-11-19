@@ -383,6 +383,8 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             objForcedSources = self.diaForcedSources.loc[srcIdx[0]]
             alert = packageAlerts.makeAlertDict(
                 dia_source_id,
+                self.exposure.visitInfo.getObservationReason(),
+                self.exposure.visitInfo.getObject(),
                 diaSource,
                 self.diaObjects.loc[srcIdx[0]],
                 objSources,
@@ -390,10 +392,12 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                 ccdCutout,
                 ccdCutout,
                 ccdCutout)
-            self.assertEqual(len(alert), 11)
+            self.assertEqual(len(alert), 13)
 
             self.assertEqual(alert["diaSourceId"], dia_source_id)
             self.assertEqual(alert["diaSource"], diaSource.to_dict())
+            self.assertIsNone(alert["observation_reason"])
+            self.assertIsNone(alert["target_name"])
             self.assertEqual(alert["cutoutDifference"],
                              cutoutBytes)
             self.assertEqual(alert["cutoutScience"],
@@ -406,6 +410,34 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                                            format="fits")
             self.assertAlmostEqual(science_cutout.header["ROTPA"],
                                    template_cutout.header["ROTPA"])
+
+    def testMakeAlertDictSchedulerFields(self):
+        """Test non-null scheduler fields pass through as expected.
+
+        """
+        packageAlerts = PackageAlertsTask()
+        dia_source_id = 1234
+
+        for srcIdx, diaSource in self.diaSources.iterrows():
+            objSources = self.diaSourceHistory.loc[srcIdx[0]]
+            objForcedSources = self.diaForcedSources.loc[srcIdx[0]]
+            obs_reason = f"obs_reason_{srcIdx}",
+            target = f"target_name_{srcIdx}",
+            alert = packageAlerts.makeAlertDict(
+                dia_source_id,
+                obs_reason,
+                target,
+                diaSource,
+                self.diaObjects.loc[srcIdx[0]],
+                objSources,
+                objForcedSources,
+                None,
+                None,
+                None)
+            self.assertEqual(len(alert), 13)
+
+            self.assertEqual(alert["observation_reason"], obs_reason)
+            self.assertEqual(alert["target_name"], target)
 
     def testCutoutRotpa(self):
         """Test that the ROTPA header keyword matches the boresightRotAngle from visitInfo.
