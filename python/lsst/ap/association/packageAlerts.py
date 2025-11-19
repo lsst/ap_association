@@ -263,6 +263,13 @@ class PackageAlertsTask(pipeBase.Task):
         self._patchDiaSources(diaSrcHistory)
         detector = diffIm.detector.getId()
         visit = diffIm.visitInfo.id
+        observation_reason = diffIm.visitInfo.getObservationReason()
+        # alerts should have NULL if scheduler fields are not populated
+        if not len(observation_reason):
+            observation_reason = None
+        target_name = diffIm.visitInfo.getObject()
+        if not len(target_name):
+            target_name = None
         midpoint_unix = diffIm.visitInfo.date.toAstropy().tai.unix
         exposure_time = diffIm.visitInfo.exposureTime
         diffImPhotoCalib = diffIm.getPhotoCalib()
@@ -347,6 +354,8 @@ class PackageAlertsTask(pipeBase.Task):
 
             alerts.append(
                 self.makeAlertDict(diaSource["diaSourceId"],
+                                   observation_reason,
+                                   target_name,
                                    diaSource,
                                    diaObject,
                                    objSourceHistory,
@@ -584,6 +593,8 @@ class PackageAlertsTask(pipeBase.Task):
 
     def makeAlertDict(self,
                       diaSourceId,
+                      observationReason,
+                      targetName,
                       diaSource,
                       diaObject,
                       objDiaSrcHistory,
@@ -600,6 +611,10 @@ class PackageAlertsTask(pipeBase.Task):
             Unique identifier of the triggering diaSource
         diaSource : `pandas.DataFrame`
             New single DiaSource to package.
+        observationReason : `str` or None
+            Scheduler reason for the image containing this diaSource.
+        targetName : `str` or None
+            Scheduler target for the image containing this diaSource.
         diaObject : `pandas.DataFrame`
             DiaObject that ``diaSource`` is matched to.
         objDiaSrcHistory : `pandas.DataFrame`
@@ -618,6 +633,8 @@ class PackageAlertsTask(pipeBase.Task):
         """
         alert = dict()
         alert['diaSourceId'] = diaSourceId
+        alert['observation_reason'] = observationReason
+        alert['target_name'] = targetName
         alert['diaSource'] = diaSource.to_dict()
 
         if objDiaSrcHistory is None:
