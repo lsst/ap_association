@@ -101,7 +101,14 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
     doUseApdbSchema = pexConfig.Field(
         dtype=bool,
         default=False,
-        doc="Use the APDB schema to coerce the data types of the output columns."
+        doc="Use the APDB schema to coerce the data types of the output columns.",
+        deprecated="This field has been renamed to doUseSchema, and will be "
+        "removed after v30."
+    )
+    doUseSchema = pexConfig.Field(
+        dtype=bool,
+        default=False,
+        doc="Use an existing schema to coerce the data types of the output columns."
     )
     schemaDir = pexConfig.Field(
         dtype=str,
@@ -147,11 +154,11 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         self.funcs = self.getFunctors()
         self.inputSchema = initInputs['diaSourceSchema'].schema
         self._create_bit_pack_mappings()
-        if self.config.doUseApdbSchema:
+        if self.config.doUseSchema:
             schemaFile = os.path.join(self.config.schemaDir, self.config.schemaFile)
-            self.apdbSchema = readSdmSchemaFile(schemaFile, self.config.schemaName)
+            self.schema = readSdmSchemaFile(schemaFile, self.config.schemaName)
         else:
-            self.apdbSchema = None
+            self.schema = None
 
         if not self.config.doPackFlags:
             # get the flag rename rules
@@ -261,8 +268,8 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
                             diaSourceDf,
                             self.funcs,
                             dataId=None).df
-        if self.config.doUseApdbSchema:
-            df = convertDataFrameToSdmSchema(self.apdbSchema, df, tableName="DiaSource")
+        if self.config.doUseSchema:
+            df = convertDataFrameToSdmSchema(self.schema, df, tableName="DiaSource")
 
         return pipeBase.Struct(
             diaSourceTable=df,
