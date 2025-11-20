@@ -103,12 +103,16 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
         default=False,
         doc="Use the APDB schema to coerce the data types of the output columns."
     )
+    schemaDir = pexConfig.Field(
+        dtype=str,
+        doc="Path to the directory containing schema definitions.",
+        default=os.path.join("${SDM_SCHEMAS_DIR}",
+                             "yml"),
+    )
     schemaFile = pexConfig.Field(
         dtype=str,
         doc="Yaml file specifying the schema of the output catalog.",
-        default=os.path.join("${SDM_SCHEMAS_DIR}",
-                             "yml",
-                             "apdb.yaml"),
+        default="apdb.yaml",
     )
     schemaName = pexConfig.Field(
         dtype=str,
@@ -143,7 +147,11 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         self.funcs = self.getFunctors()
         self.inputSchema = initInputs['diaSourceSchema'].schema
         self._create_bit_pack_mappings()
-        self.apdbSchema = readSdmSchemaFile(self.config.schemaFile, self.config.schemaName)
+        if self.config.doUseApdbSchema:
+            schemaFile = os.path.join(self.config.schemaDir, self.config.schemaFile)
+            self.apdbSchema = readSdmSchemaFile(schemaFile, self.config.schemaName)
+        else:
+            self.apdbSchema = None
 
         if not self.config.doPackFlags:
             # get the flag rename rules
