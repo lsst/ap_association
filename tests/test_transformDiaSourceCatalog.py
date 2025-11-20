@@ -123,7 +123,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         """Test output dataFrame is created and values are correctly inserted
         from the exposure.
         """
-        self.config.doUseApdbSchema = True
+        self.config.doUseSchema = True
         transformTask = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
                                                       config=self.config)
         result = transformTask.run(self.inputCatalog,
