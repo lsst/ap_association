@@ -155,16 +155,22 @@ def mock_ss_alert(dia_source_id, ss_object_id):
     """Generate a minimal mock alert.
     """
     alert = mock_alert(dia_source_id)
-    alert['MPCORB'] = {
-        'mpcDesignation': 'K20A11H',  # a string-typed field
-        'ssObjectId': ss_object_id,
+    alert['mpc_orbits'] = {
+        'id': 42,
+        'designation': '2020 AH11',  # a string-typed field
         'q': np.float64(0.99999),  # a double-typed field
+        'unpacked_primary_provisional_designation': '2020 AH11',
+        'packed_primary_provisional_designation': 'J201AH1',
 
     }
     alert['ssSource'] = {
+        'diaSourceId': dia_source_id,
         'ssObjectId': ss_object_id,
-        'eclipticLambda': np.float64(3.141592),  # a double-typed field
-        'heliocentricDist': np.float32(3.141592),  # a float-typed field
+        'eclLambda': np.float64(3.141592),  # a double-typed field
+        'eclBeta': np.float64(3.141592),  # a double-typed field
+        'galLon': np.float64(3.141592),  # a double-typed field
+        'galLat': np.float64(3.141592),  # a double-typed field
+        'helioRange': np.float32(3.141592),  # a float-typed field
     }
     return alert
 
@@ -468,7 +474,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                                                   [cd_matrix[1, 0]],  # CD2_1
                                                   [cd_matrix[1, 1]]  # CD2_2
                                                   )
-        wcs_pa = geom.Angle(angle_rad, geom.radians).asDegrees()
+        wcs_pa = geom.Angle(angle_rad.iloc[0], geom.radians).asDegrees()
 
         cutoutBytes = packageAlerts.streamCcdDataToBytes(ccdCutout)
         with io.BytesIO(cutoutBytes) as bytesIO:
@@ -750,7 +756,7 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         alert = mock_ss_alert(1, 1)
         serialized = PackageAlertsTask._serializeAlert(packageAlerts, alert)
         deserialized = _deserialize_alert(serialized)
-        for table in ['diaSource', 'ssSource', 'MPCORB']:
+        for table in ['diaSource', 'ssSource', 'mpc_orbits']:
             for field in alert[table]:
                 self.assertEqual(alert[table][field], deserialized[table][field])
 
