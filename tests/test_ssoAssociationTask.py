@@ -69,6 +69,11 @@ class TestSolarSystemAssociation(unittest.TestCase):
         self.testDiaSources.rename_columns(["coord_ra", "coord_dec"], ["ra", "dec"])
         self.testDiaSources["ra"] = np.rad2deg(self.testDiaSources["ra"])
         self.testDiaSources["dec"] = np.rad2deg(self.testDiaSources["dec"])
+        self.testDiaSources["midpointMjdTai"] = self.testDiaSources["ra"]*0 + 65000.0
+        self.testDiaSources["extendedness"] = np.zeros(len(self.testDiaSources))
+        self.testDiaSources["band"] = np.full(len(self.testDiaSources), 'r', dtype='U1')
+        self.testDiaSources["psfFlux"] = np.ones(len(self.testDiaSources)) * 3.
+        self.testDiaSources["psfFluxErr"] = np.ones(len(self.testDiaSources)) * 0.1
         self.testDiaSources = tb.vstack([self.testDiaSources, Table([[45], [45]], names=["ra", "dec"])])
         self.testDiaSources["ssObjectId"] = 0
         self.testDiaSources["diaSourceId"] = [i for i in range(len(self.testDiaSources))]
@@ -77,8 +82,8 @@ class TestSolarSystemAssociation(unittest.TestCase):
         self.testSsObjects = Table()
         self.testSsObjects["ObjID"] = ["test_ob"]
         self.testSsObjects["ssObjectId"] = [1234]
-        self.testSsObjects["ra"] = [45]
-        self.testSsObjects["dec"] = [45]
+        self.testSsObjects["ephRa"] = [45]
+        self.testSsObjects["ephDec"] = [45]
         self.testSsObjects["tmin"] = [-1]
         self.testSsObjects["tmax"] = [1]
         self.testSsObjects["obs_x_poly"] = [np.array([0])]
@@ -117,14 +122,14 @@ class TestSolarSystemAssociation(unittest.TestCase):
         # Add a new SolarSystemObjects outside of the bbox and test that it
         # is excluded.
         testObjects = tb.vstack([self.testSsObjects[:1] for i in range(3)])
-        testObjects[0]["ra"] = 150
-        testObjects[0]["dec"] = 80
-        testObjects[1]["ra"] = 150
-        testObjects[1]["dec"] = -80
+        testObjects[0]["ephRa"] = 150
+        testObjects[0]["ephDec"] = 80
+        testObjects[1]["ephRa"] = 150
+        testObjects[1]["ephDec"] = -80
         # Coordinates are chosen so that the inverse WCS erroneously maps them
         # to inside the box (to (74.5, 600.6) instead of around (1745, 600.6)).
-        testObjects[2]["ra"] = 44.91215199831453
-        testObjects[2]["dec"] = 45.001331943391406
+        testObjects[2]["ephRa"] = 44.91215199831453
+        testObjects[2]["ephDec"] = 45.001331943391406
         maskedObjects = ssAssocTask._maskToCcdRegion(
             tb.vstack([self.testSsObjects, testObjects]),
             self.exposure.getBBox(),
