@@ -620,7 +620,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             updatedDiaObjectIds,
             [band])
         updatedDiaObjects = convertDataFrameToSdmSchema(self.schema, diaCalResult.updatedDiaObjects,
-                                                        tableName="DiaObject")
+                                                        tableName="DiaObject", skipIndex=True)
 
         # Test for duplication in the updated DiaObjects.
         if self.testDataFrameIndex(diaCalResult.diaObjectCat):
@@ -748,7 +748,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 marginalDiaSources = results.badSources
             unassociatedDiaSources["diaObjectId"] = unassociatedDiaSources["diaSourceId"]
             newDiaObjects = convertDataFrameToSdmSchema(self.schema, unassociatedDiaSources,
-                                                        tableName="DiaObject")
+                                                        tableName="DiaObject", skipIndex=True)
         self.metadata["nRejectedNewDiaObjects"] = len(marginalDiaSources)
         return pipeBase.Struct(diaSources=unassociatedDiaSources,
                                newDiaObjects=newDiaObjects,
@@ -978,7 +978,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         """
         standardizedDataFrame = convertDataFrameToSdmSchema(self.schema,
                                                             dataFrame,
-                                                            tableName=tableName)
+                                                            tableName=tableName,
+                                                            skipIndex=True)
 
         def _setNullColumn(dataframe, colName):
             """Set specified columns with default values of 0 to NULL."""
@@ -1132,7 +1133,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             idGenerator=idGenerator)
         self.log.info(f"Updating {len(diaForcedSources)} diaForcedSources in the APDB")
         diaForcedSources = convertDataFrameToSdmSchema(self.schema, diaForcedSources,
-                                                       tableName="DiaForcedSource")
+                                                       tableName="DiaForcedSource", skipIndex=True)
         return diaForcedSources
 
     @timeMethod
@@ -1164,7 +1165,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             # Drop duplicates via index and keep the first appearance.
             diaObjects = diaObjects.groupby(diaObjects.index).first()
         self.log.info("Loaded %d DiaObjects", len(diaObjects))
-        refreshedDiaObjects = convertDataFrameToSdmSchema(self.schema, diaObjects, tableName="DiaObject")
+        refreshedDiaObjects = convertDataFrameToSdmSchema(self.schema, diaObjects, tableName="DiaObject",
+                                                          skipIndex=True)
 
         refreshedIsInPreloaded = refreshedDiaObjects.index.isin(preloadedDiaObjects.index)
         preloadedIsInRefreshed = preloadedDiaObjects.index.isin(refreshedDiaObjects.index)
@@ -1336,7 +1338,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         """
         if len(newCatalog) > 0:
             catalog = convertDataFrameToSdmSchema(self.schema, newCatalog,
-                                                  tableName=tableName)
+                                                  tableName=tableName, skipIndex=True)
 
             mergedCatalog = pd.concat([originalCatalog, catalog], sort=True)
         else:

@@ -112,9 +112,10 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
 
     # apply SDM type standardization to catch pandas typing issues
     schema = readSchemaFromApdb(apdb)
-    diaObjects = convertDataFrameToSdmSchema(schema, diaObjects, tableName="DiaObject")
-    diaSources = convertDataFrameToSdmSchema(schema, diaSources, tableName="DiaSource")
-    diaForcedSources = convertDataFrameToSdmSchema(schema, diaForcedSources, tableName="DiaForcedSource")
+    diaObjects = convertDataFrameToSdmSchema(schema, diaObjects, tableName="DiaObject", skipIndex=True)
+    diaSources = convertDataFrameToSdmSchema(schema, diaSources, tableName="DiaSource", skipIndex=True)
+    diaForcedSources = convertDataFrameToSdmSchema(schema, diaForcedSources, tableName="DiaForcedSource",
+                                                   skipIndex=True)
 
     return (diaObjects, diaSources, diaForcedSources)
 
