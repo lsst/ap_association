@@ -131,6 +131,7 @@ def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False
                      "midpointMjdTai": midpointMjdTai + 1.0 * idx,
                      "band": exposure.getFilter().bandLabel,
                      "psfNdata": 0,
+                     "bboxSize": 23,
                      "trailNdata": 0,
                      "dipoleNdata": 0}
         data.append(diaSource | flags)
