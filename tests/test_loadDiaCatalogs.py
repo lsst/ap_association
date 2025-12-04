@@ -27,7 +27,7 @@ import unittest
 import yaml
 
 from lsst.ap.association import LoadDiaCatalogsTask
-from lsst.ap.association.utils import readSchemaFromApdb, getMidpointFromTimespan
+from lsst.ap.association.utils import getMidpointFromTimespan, readSchemaFromApdb
 from lsst.dax.apdb import Apdb, ApdbSql, ApdbTables
 from lsst.utils import getPackageDir
 import lsst.utils.tests

@@ -33,8 +33,8 @@ import lsst.sphgeom
 
 from lsst.utils.timer import timeMethod, duration_from_timeMethod
 
-from lsst.ap.association.utils import convertDataFrameToSdmSchema, readSchemaFromApdb, \
-    getMidpointFromTimespan, paddedRegion
+from lsst.ap.association.utils import getMidpointFromTimespan, paddedRegion, readSchemaFromApdb
+from lsst.pipe.tasks.schemaUtils import convertDataFrameToSdmSchema
 
 __all__ = ("LoadDiaCatalogsTask", "LoadDiaCatalogsConfig")
 
@@ -223,7 +223,7 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
             diaObjects = diaObjects.groupby(diaObjects.index).first()
         self.log.info("Loaded %i DiaObjects", len(diaObjects))
 
-        return convertDataFrameToSdmSchema(schema, diaObjects, tableName="DiaObject")
+        return convertDataFrameToSdmSchema(schema, diaObjects, tableName="DiaObject", skipIndex=True)
 
     @timeMethod
     def loadDiaSources(self, diaObjects, region, dateTime, schema):
@@ -267,7 +267,7 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
                                  inplace=True)
         self.log.info("Loaded %i DiaSources", len(diaSources))
 
-        return convertDataFrameToSdmSchema(schema, diaSources, tableName="DiaSource")
+        return convertDataFrameToSdmSchema(schema, diaSources, tableName="DiaSource", skipIndex=True)
 
     @timeMethod
     def loadDiaForcedSources(self, diaObjects, region, dateTime, schema):
@@ -319,4 +319,5 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
         nVisits = 0 if diaForcedSources.empty else len(set(diaForcedSources["visit"]))
         self.log.info("Loaded %i DiaForcedSources from %i visits", len(diaForcedSources), nVisits)
 
-        return convertDataFrameToSdmSchema(schema, diaForcedSources, tableName="DiaForcedSource")
+        return convertDataFrameToSdmSchema(schema, diaForcedSources, tableName="DiaForcedSource",
+                                           skipIndex=True)

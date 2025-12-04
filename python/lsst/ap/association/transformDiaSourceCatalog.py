@@ -37,7 +37,7 @@ from lsst.pipe.tasks.postprocess import TransformCatalogBaseTask, TransformCatal
 from lsst.pipe.tasks.functors import Column
 from lsst.utils.timer import timeMethod
 
-from .utils import convertDataFrameToSdmSchema, readSdmSchemaFile
+from lsst.pipe.tasks.schemaUtils import convertDataFrameToSdmSchema, readSdmSchemaFile
 
 
 class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
@@ -101,19 +101,31 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
     doUseApdbSchema = pexConfig.Field(
         dtype=bool,
         default=False,
-        doc="Use the APDB schema to coerce the data types of the output columns."
+        doc="Use the APDB schema to coerce the data types of the output columns.",
+        deprecated="This field has been renamed to doUseSchema, and will be "
+        "removed after v30."
+    )
+    doUseSchema = pexConfig.Field(
+        dtype=bool,
+        default=False,
+        doc="Use an existing schema to coerce the data types of the output columns."
+    )
+    schemaDir = pexConfig.Field(
+        dtype=str,
+        doc="Path to the directory containing schema definitions.",
+        default=os.path.join("${SDM_SCHEMAS_DIR}",
+                             "yml"),
     )
     schemaFile = pexConfig.Field(
         dtype=str,
         doc="Yaml file specifying the schema of the output catalog.",
-        default=os.path.join("${SDM_SCHEMAS_DIR}",
-                             "yml",
-                             "apdb.yaml"),
+        default="apdb.yaml",
     )
     schemaName = pexConfig.Field(
         dtype=str,
         doc="Name of the table in the schema file to read.",
         default="ApdbSchema",
+        deprecated="This config is no longer used, and will be removed after v30"
     )
 
     def setDefaults(self):
@@ -143,7 +155,11 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         self.funcs = self.getFunctors()
         self.inputSchema = initInputs['diaSourceSchema'].schema
         self._create_bit_pack_mappings()
-        self.apdbSchema = readSdmSchemaFile(self.config.schemaFile, self.config.schemaName)
+        if self.config.doUseSchema:
+            schemaFile = os.path.join(self.config.schemaDir, self.config.schemaFile)
+            self.schema = readSdmSchemaFile(schemaFile)
+        else:
+            self.schema = None
 
         if not self.config.doPackFlags:
             # get the flag rename rules
@@ -253,8 +269,8 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
                             diaSourceDf,
                             self.funcs,
                             dataId=None).df
-        if self.config.doUseApdbSchema:
-            df = convertDataFrameToSdmSchema(self.apdbSchema, df, tableName="DiaSource")
+        if self.config.doUseSchema:
+            df = convertDataFrameToSdmSchema(self.schema, df, tableName="DiaSource")
 
         return pipeBase.Struct(
             diaSourceTable=df,
