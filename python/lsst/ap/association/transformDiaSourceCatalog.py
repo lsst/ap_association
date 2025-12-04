@@ -125,6 +125,7 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
         dtype=str,
         doc="Name of the table in the schema file to read.",
         default="ApdbSchema",
+        deprecated="This config is no longer used, and will be removed after v30"
     )
 
     def setDefaults(self):
@@ -156,7 +157,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         self._create_bit_pack_mappings()
         if self.config.doUseSchema:
             schemaFile = os.path.join(self.config.schemaDir, self.config.schemaFile)
-            self.schema = readSdmSchemaFile(schemaFile, self.config.schemaName)
+            self.schema = readSdmSchemaFile(schemaFile)
         else:
             self.schema = None
 
