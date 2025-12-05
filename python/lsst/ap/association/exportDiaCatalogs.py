@@ -136,7 +136,8 @@ class ExportDiaCatalogsTask(LoadDiaCatalogsTask):
 
         # region = lsst.sphgeom.ConvexPolygon([pp.getVector() for pp in wcs.pixelToSky(bbox.getCorners())])
         regionTime = self._makeRegionTime(skymap, dataId["tract"], dataId["patch"])
-        self.run(regionTime)
+        outputs = self.run(regionTime)
+        butlerQC.put(outputs, outputRefs)
 
     @staticmethod
     def _makeRegionTime(skymap, tract, patch):
