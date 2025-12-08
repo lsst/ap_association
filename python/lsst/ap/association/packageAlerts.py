@@ -139,6 +139,7 @@ class PackageAlertsTask(pipeBase.Task):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.alertSchema = alertPack.Schema.from_uri(self.config.schemaFile)
+        self.parsedSchema = fastavro.parse_schema(self.alertSchema.definition)
         os.makedirs(self.config.alertWriteLocation, exist_ok=True)
 
         if self.config.doProduceAlerts:
@@ -270,6 +271,7 @@ class PackageAlertsTask(pipeBase.Task):
         diffImPhotoCalib = diffIm.getPhotoCalib()
         calexpPhotoCalib = calexp.getPhotoCalib()
         templatePhotoCalib = template.getPhotoCalib()
+
         diffImPsf = self._computePsf(diffIm, diffIm.psf.getAveragePosition())
         sciencePsf = self._computePsf(calexp, calexp.psf.getAveragePosition())
         templatePsf = self._computePsf(template, template.psf.getAveragePosition())
@@ -431,13 +433,13 @@ class PackageAlertsTask(pipeBase.Task):
         try:
             for alert in alerts:
                 alertBytes = self._serializeAlert(alert,
-                                                  schema=self.alertSchema.definition, schema_id=schema_id)
+                                                  schema=self.parsedSchema, schema_id=schema_id)
                 try:
                     timestamp = time.time()*1000  # Current time in milliseconds
                     headers = [("producer_timestamp", str(timestamp).encode('utf-8'))]
                     self.producer.produce(self.kafkaTopic, alertBytes, callback=self._delivery_callback,
                                           headers=headers)
-                    self.producer.flush()
+                    self.producer.poll(0)
                     total_alerts += 1
 
                 except KafkaException as e:
@@ -753,7 +755,7 @@ class PackageAlertsTask(pipeBase.Task):
         The Confluent Wire Format is described more fully here:
         https://docs.confluent.io/current/schema-registry/serdes-develop/index.html#wire-format
         """
-        ConfluentWireFormatHeader = struct.Struct(">bi")
+        return struct.pack(">bi", 0, schema_version)
         return ConfluentWireFormatHeader.pack(0, schema_version)
 
     def _delivery_callback(self, err, msg):
