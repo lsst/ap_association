@@ -158,7 +158,7 @@ class ExportDiaCatalogsTask(LoadDiaCatalogsTask):
             A serializable container for a sky region and timespan.
         """
         wcs = skymap[tract].getWcs()
-        bbox = skymap[tract][patch].getOuterBBox()
+        bbox = skymap[tract][patch].getInnerBBox()
         patchCorners = wcs.pixelToSky(lsst.geom.Box2D(bbox).getCorners())
         region = lsst.sphgeom.ConvexPolygon([pp.getVector() for pp in patchCorners])
 
