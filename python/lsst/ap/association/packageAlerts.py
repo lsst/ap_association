@@ -258,6 +258,7 @@ class PackageAlertsTask(pipeBase.Task):
             Minimum number of detections of a diaObject required
             to run forced photometry. Set to 1 to include all diaObjects.
         """
+        t0 = time.time()
 
         alerts = []
         self._patchDiaSources(diaSourceCat)
@@ -378,6 +379,9 @@ class PackageAlertsTask(pipeBase.Task):
             self.log.info("Writing alerts to %s.", avro_path)
             with open(avro_path, "wb") as f:
                 self.alertSchema.store_alerts(f, alerts)
+
+        self.log.info("PackageAlertsTask.run took %.2f seconds",
+                      time.time() - t0)
 
     def _patchDiaSources(self, diaSources):
         """Add the ``programId`` column to the data.
