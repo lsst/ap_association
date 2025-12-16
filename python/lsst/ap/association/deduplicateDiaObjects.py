@@ -23,19 +23,18 @@
 """
 
 
+from astropy.coordinates import SkyCoord
 from astropy.time import Time
 import astropy.units as u
+import numpy as np
 import pandas as pd
 from sklearn.cluster import AgglomerativeClustering
 
-from lsst.daf.base import DateTime
-import lsst.daf.butler as dafButler
 import lsst.dax.apdb as daxApdb
 import lsst.geom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
-from lsst.pipe.base.utils import RegionTimeInfo
 from lsst.skymap import BaseSkyMap
 import lsst.sphgeom
 
@@ -45,7 +44,7 @@ __all__ = ("DeduplicateDiaObjectsTask", "DeduplicateDiaObjectsConfig")
 
 
 class DeduplicateDiaObjectsConnections(pipeBase.PipelineTaskConnections,
-                                   dimensions=("tract", "patch", "skymap")):
+                                       dimensions=("tract", "patch", "skymap")):
 
     skyMap = pipeBase.connectionTypes.Input(
         doc="Geometry of the tracts and patches that the coadds are defined on.",
@@ -71,7 +70,7 @@ class DeduplicateDiaObjectsConnections(pipeBase.PipelineTaskConnections,
 
 
 class DeduplicateDiaObjectsConfig(pipeBase.PipelineTaskConfig,
-                              pipelineConnections=DeduplicateDiaObjectsConnections):
+                                  pipelineConnections=DeduplicateDiaObjectsConnections):
     """Config class for DeduplicateDiaObjectsConfig.
     """
     apdb_config_url = pexConfig.Field(
@@ -95,12 +94,11 @@ class DeduplicateDiaObjectsConfig(pipeBase.PipelineTaskConfig,
         min=0,
     )
     earliestMidpointMjdTai = pexConfig.Field(
-        dtype=long,
-        default=Time('2025-09-01',scale='tai').mjd,
+        dtype=float,
+        default=Time('2025-09-01', scale='tai').mjd,
         doc="MidpointMjdTai of earliest DIASource to be reassigned during "
             "deduplication.",
     )
-
 
 
 class DeduplicateDiaObjectsTask(pipeBase.PipelineTask):
@@ -123,7 +121,6 @@ class DeduplicateDiaObjectsTask(pipeBase.PipelineTask):
         outputs = self.run(diaObjects, skymap, dataId["tract"], dataId["patch"])
         butlerQC.put(outputs, outputRefs)
 
-
     def run(self, diaObjects, skymap, tract, patch):
         """Take a set of DiaObjects and cluster them to remove duplicates.
 
@@ -138,15 +135,15 @@ class DeduplicateDiaObjectsTask(pipeBase.PipelineTask):
               replacements (`dict`)
         """
 
-        trimmed_diaObjects = self._trimToPaddedBBox(diaObjects, skymap, 
-                tract, patch)
+        trimmed_diaObjects = self._trimToPaddedBBox(diaObjects, skymap,
+                                                    tract, patch)
 
         duplicate_count = self.count_duplicates(trimmed_diaObjects)
 
         if duplicate_count == 0:
-            raise NoWorkFound("No duplicate DiaObjects found.")
+            raise pipeBase.NoWorkFound("No duplicate DiaObjects found.")
         else:
-            self.log.info(f"Found {duplicate_count} duplicates in {len(trimmed_diaObjects) DiaObjects."}
+            self.log.info(f"Found {duplicate_count} duplicates in {len(trimmed_diaObjects)} DiaObjects.")
 
         cluster_labels = self.cluster(trimmed_diaObjects)
 
@@ -157,7 +154,7 @@ class DeduplicateDiaObjectsTask(pipeBase.PipelineTask):
         self.remove_apdb_duplicates(deduplication_map)
 
         return pipeBase.Struct(
-                diaObjectDeduplicationMap = deduplication_map)
+            diaObjectDeduplicationMap=deduplication_map)
 
     def remove_apdb_duplicates(self, diaObjects, deduplication_map):
         """Reassign diaSources and remove diaObjects according to provided map.
@@ -176,14 +173,14 @@ class DeduplicateDiaObjectsTask(pipeBase.PipelineTask):
         DiaObjectsToRemove = []
         for idx, idi in deduplication_map['removedDiaObjectId']:
             w = diaObjects['diaObjectId'] == idi
-            assert(np.sum(w) == 1)
-            DiaObjectsToReassign.extend([daxApdb.recordIds.DiaObjectId.from_named_tuple(row)
-                                         for row in diaObjects.loc[w].itertuples())
+            assert (np.sum(w) == 1)
+            DiaObjectsToRemove.extend([daxApdb.recordIds.DiaObjectId.from_named_tuple(row)
+                                       for row in diaObjects.loc[w].itertuples()])
 
         diaSourcesToReassign = \
-            self.apdb.getDiaSourcesForDiaObjects(DiaObjectsToReassign,
-                                                 start_time = start_time,
-                                                 max_dist_arcsec = self.config.maxClusteringDistance)
+            self.apdb.getDiaSourcesForDiaObjects(DiaObjectsToRemove,
+                                                 start_time=start_time,
+                                                 max_dist_arcsec=self.config.maxClusteringDistance)
 
         id_map = {}
         for old_id, new_id in deduplication_map.iterrows():
@@ -199,8 +196,12 @@ class DeduplicateDiaObjectsTask(pipeBase.PipelineTask):
             else:
                 self.log.verbose('No diaSources found for diaObject {old_id}')
 
-                    
+        self.apdb.reassignDiaSourcesToDiaObjects(id_map)
 
+        self.apdb.setValidityEnd(DiaObjectsToRemove, Time.now())
+
+        # for use with nightly deduplication
+        # self.apdb.resetDedup()
 
     def remap_clusters(self, diaObjects):
         """Use cluster labels to determine which diaObjects to remap.
@@ -215,28 +216,24 @@ class DeduplicateDiaObjectsTask(pipeBase.PipelineTask):
                 min_age_idx = group['validityStartMjdTai'].argmin()
                 id_keep = ids.pop(min_age_idx)
                 for idi in ids:
-                    dedup_map.append((idi, id_keep)
+                    dedup_map.append((idi, id_keep))
 
-        return pd.DataFrame(dedup_map, columns=('removedDiaObjectId','keptDiaObjectId'))
+        return pd.DataFrame(dedup_map, columns=['removedDiaObjectId', 'keptDiaObjectId'])
 
     def cluster(self, diaObjects):
         """Use AgglomerativeClustering to identify groups of duplicates.
         """
 
-        X = diaObjects[['ra','dec']].values
-        clustering = AgglomerativeClustering(distance_threshold=
-                                            self.config.maxClusteringDistance/3600., 
-                                            n_clusters=None).fit(X)
+        X = diaObjects[['ra', 'dec']].values
+        clustering = AgglomerativeClustering(distance_threshold=self.config.maxClusteringDistance/3600.,
+                                             n_clusters=None).fit(X)
 
         self.log.info(f"Clustered {len(clustering.labels_)} diaObjects into "
-                      f"{len(np.unique(clustering.labels_)} clusters.")
+                      f"{len(np.unique(clustering.labels_))} clusters.")
 
         return pd.Series(clustering.labels_, index=diaObjects.index,
                          name="cluster_label")
 
-
-
-        
     def count_duplicates(self, catalog, radius_arcsec=None):
         """Count catalog objects with self-matches within radius_arcsec.
         """
@@ -244,16 +241,15 @@ class DeduplicateDiaObjectsTask(pipeBase.PipelineTask):
         if radius_arcsec is None:
             radius_arcsec = self.config.maxClusteringDistance/2
 
-        sc = SkyCoord([catalog['ra'], catalog['dec'], unit='deg')
+        sc = SkyCoord(catalog['ra'], catalog['dec'], unit='deg')
         idx, d2d, _ = sc.match_to_catalog_sky(sc, nthneighbor=2)
         wmatch = d2d < radius_arcsec*u.arcsecond
         return np.sum(wmatch)
 
-
     def _trimToPaddedBBox(self, diaObjects, skymap, tract, patch):
         """Trim catalog to the inner BBox padded by angleMargin.
-        
-        The APDB load in ExportDiaCatalogsTask returns a region larger than 
+
+        The APDB load in ExportDiaCatalogsTask returns a region larger than
         the inner patch BBox + angleMargin, so re-trim the data.
 
         Parameters
@@ -268,16 +264,15 @@ class DeduplicateDiaObjectsTask(pipeBase.PipelineTask):
         patchCorners = wcs.pixelToSky(lsst.geom.Box2D(bbox).getCorners())
         region = lsst.sphgeom.ConvexPolygon([pp.getVector() for pp in patchCorners])
         pad_region = paddedRegion(region,
-                 lsst.sphgeom.Angle.fromDegrees(self.config.angleMargin/3600.))
+                                  lsst.sphgeom.Angle.fromDegrees(self.config.angleMargin/3600.))
 
         diaObjectsDf = diaObjects.to_pandas()
 
         bbox_mask = []
         for ra, dec in zip(diaObjectsDf['ra'], diaObjectsDf['dec']):
-            p = sph.UnitVector3d(sph.LonLat.fromDegrees(ra,dec))
-            bbox_mask.append(region.contains(p))
+            p = lsst.sphgeom.UnitVector3d(lsst.sphgeom.LonLat.fromDegrees(ra, dec))
+            bbox_mask.append(pad_region.contains(p))
 
-        self.log.info(f"Trimmed {len(bbox_mask)} diaObjects to {np.sum(bbox_mask)}."}
+        self.log.info(f"Trimmed {len(bbox_mask)} diaObjects to {np.sum(bbox_mask)}.")
 
         return diaObjectsDf.iloc[bbox_mask]
-
