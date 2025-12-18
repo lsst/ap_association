@@ -25,6 +25,7 @@ from .filterDiaSourceCatalog import *
 from .loadDiaCatalogs import *
 from .packageAlerts import *
 from .diaPipe import *
+from .deduplicateDiaObjects import *
 from .exportDiaCatalogs import *
 from .transformDiaSourceCatalog import *
 from .utils import *

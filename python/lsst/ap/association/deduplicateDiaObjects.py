@@ -24,6 +24,7 @@
 
 
 from astropy.coordinates import SkyCoord
+from astropy.table import Table
 from astropy.time import Time
 import astropy.units as u
 import numpy as np
@@ -60,7 +61,7 @@ class DeduplicateDiaObjectsConnections(pipeBase.PipelineTaskConnections,
     )
     diaObjectDeduplicationMap = connTypes.Output(
         doc="DiaSources preloaded from the APDB.",
-        name="apdb_diaObject_deduplication",
+        name="apdb_diaObject_deduplication_map",
         storageClass="ArrowAstropy",
         dimensions=("tract", "patch"),
     )
@@ -116,7 +117,13 @@ class DeduplicateDiaObjectsTask(pipeBase.PipelineTask):
 
         diaObjects = inputs.pop("diaObjects")
         skymap = inputs.pop("skyMap")
-        dataId = diaObjects[0].dataId
+        # TODO: this cannot be the best way to do this
+        for _, ref in inputRefs:
+            dataId = ref.dataId
+            if 'tract' in dataId:
+                break
+            else:
+                continue
 
         outputs = self.run(diaObjects, skymap, dataId["tract"], dataId["patch"])
         butlerQC.put(outputs, outputRefs)
@@ -147,14 +154,14 @@ class DeduplicateDiaObjectsTask(pipeBase.PipelineTask):
 
         cluster_labels = self.cluster(trimmed_diaObjects)
 
-        trimmed_diaObjects['cluster_label'] = cluster_labels
+        clustered_diaObjects = trimmed_diaObjects.join(cluster_labels)
 
-        deduplication_map = self.remap_clusters(trimmed_diaObjects)
+        deduplication_map = self.remap_clusters(clustered_diaObjects)
 
-        self.remove_apdb_duplicates(deduplication_map)
+        self.remove_apdb_duplicates(clustered_diaObjects, deduplication_map)
 
         return pipeBase.Struct(
-            diaObjectDeduplicationMap=deduplication_map)
+            diaObjectDeduplicationMap=Table.from_df(deduplication_map))
 
     def remove_apdb_duplicates(self, diaObjects, deduplication_map):
         """Reassign diaSources and remove diaObjects according to provided map.
@@ -171,7 +178,7 @@ class DeduplicateDiaObjectsTask(pipeBase.PipelineTask):
 
         # make the records needed by the apdb methods
         DiaObjectsToRemove = []
-        for idx, idi in deduplication_map['removedDiaObjectId']:
+        for idx, idi in deduplication_map['removedDiaObjectId'].items():
             w = diaObjects['diaObjectId'] == idi
             assert (np.sum(w) == 1)
             DiaObjectsToRemove.extend([daxApdb.recordIds.DiaObjectId.from_named_tuple(row)
@@ -207,7 +214,7 @@ class DeduplicateDiaObjectsTask(pipeBase.PipelineTask):
         """Use cluster labels to determine which diaObjects to remap.
         """
 
-        grp = diaObjects.groupby('clustering_label')
+        grp = diaObjects.groupby('cluster_label')
         dedup_map = []
         for drp_id_i, group in grp:
             if len(group) > 1:
