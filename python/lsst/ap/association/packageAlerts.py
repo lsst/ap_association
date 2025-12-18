@@ -658,7 +658,7 @@ class PackageAlertsTask(pipeBase.Task):
 
         if ssSource is None:
             alert['ssSource'] = None
-            alert['MPCORB'] = None
+            alert['mpc_orbits'] = None
         else:
             mpcorbColumns = [col for col in ssSource if col[:7] == 'MPCORB_']
             mpcOrbit = {key[7:]: ssSource[key] for key in mpcorbColumns}
@@ -667,7 +667,7 @@ class PackageAlertsTask(pipeBase.Task):
             ssSource = {key: ssSource[key] for key in ssSource if key not in mpcorbColumns}
             ssSource['diaSourceId'] = diaSourceId
             alert['ssSource'] = ssSource
-            alert['MPCORB'] = mpcOrbit
+            alert['mpc_orbits'] = mpcOrbit
 
         if diffImCutout is None:
             alert['cutoutDifference'] = None
