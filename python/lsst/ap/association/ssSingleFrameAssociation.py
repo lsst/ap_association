@@ -164,5 +164,14 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
         sourceTable['dec'] = sourceTable['coord_dec'].to(deg).value
         sourceTable['midpointMjdTai'] = exposure.visitInfo.date.toAstropy().tai.mjd
         sourceTable['band'] = exposure.getFilter().bandLabel
+        colNames = ['base_ClassificationSizeExtendedness_value',
+                    'base_PsfFlux_instFlux',
+                    'base_PsfFlux_instFluxErr',
+                    ]
+        newNames = ["extendedness",
+                    "psfFlux",
+                    "psfFluxErr",
+                    ]
+        sourceTable.rename_columns(colNames, newNames)
         return self.solarSystemAssociator.run(sourceTable, solarSystemObjectTable,
                                               exposure.visitInfo, exposure.getBBox(), exposure.wcs)
