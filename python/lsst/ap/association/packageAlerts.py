@@ -663,7 +663,7 @@ class PackageAlertsTask(pipeBase.Task):
             mpcorbColumns = [col for col in ssSource if col[:7] == 'MPCORB_']
             mpcOrbit = {key[7:]: ssSource[key] for key in mpcorbColumns}
             mpcOrbit['ssObjectId'] = ssSource['ssObjectId']
-            packed_desig = ss_object_id_to_obj_id(ssSource['ssObjectId'])[0]
+            packed_desig = ss_object_id_to_obj_id(ssSource['ssObjectId'])
             unpacked_desig = unpack_mpc_designation(packed_desig)
             mpcOrbit['designation'] = unpacked_desig
             mpcOrbit['packed_primary_provisional_designation'] = packed_desig
