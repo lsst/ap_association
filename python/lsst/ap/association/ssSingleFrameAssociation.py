@@ -162,5 +162,7 @@ class SsSingleFrameAssociationTask(pipeBase.PipelineTask):
         sourceTable = sourceTable.asAstropy()
         sourceTable['ra'] = sourceTable['coord_ra'].to(deg).value
         sourceTable['dec'] = sourceTable['coord_dec'].to(deg).value
+        sourceTable['midpointMjdTai'] = exposure.visitInfo.date.toAstropy().tai.mjd
+        sourceTable['band'] = exposure.getFilter().bandLabel
         return self.solarSystemAssociator.run(sourceTable, solarSystemObjectTable,
                                               exposure.visitInfo, exposure.getBBox(), exposure.wcs)
