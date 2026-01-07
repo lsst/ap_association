@@ -73,14 +73,14 @@ class DeduplicateAllSkyDiaObjectsConfig(pexConfig.Config):
         DiaSource to be reassigned during deduplication. Default corresponds
         to 2025-09-01.
     """
-#    apdb_config_url = pexConfig.Field(
-#        dtype=str,
-#        default=None,
-#        optional=False,
-#        doc="A config file specifying the APDB and its connection parameters, "
-#            "typically written by the apdb-cli command-line utility. "
-#            "The database must already be initialized.",
-#    )
+    apdb_config_url = pexConfig.Field(
+        dtype=str,
+        default=None,
+        optional=False,
+        doc="A config file specifying the APDB and its connection parameters, "
+            "typically written by the apdb-cli command-line utility. "
+            "The database must already be initialized.",
+    )
     maxClusteringDistance = pexConfig.RangeField(
         doc="Maximum distence to merge clusters of duplicate diaObjects (arcseconds)",
         dtype=float,
@@ -108,8 +108,7 @@ class DeduplicateAllSkyDiaObjectsTask(pipeBase.Task):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        #self.apdb = daxApdb.Apdb.from_uri(self.config.apdb_config_url)
-        self.apdb = daxApdb.Apdb.from_uri('pp_apdb_lsstcam_test.yaml')
+        self.apdb = daxApdb.Apdb.from_uri(self.config.apdb_config_url)
 
     def run(self):
         """Load DiaObjects and cluster them to remove duplicates.
