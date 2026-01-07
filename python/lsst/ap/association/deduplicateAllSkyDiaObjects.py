@@ -19,10 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Deduplicate DiaObjects exported by exportDiaCatalogsTask
-"""
-
-
 from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.time import Time
@@ -65,7 +61,17 @@ class DeduplicateAllSkyDiaObjectsConnections(pipeBase.PipelineTaskConnections,
 
 
 class DeduplicateAllSkyDiaObjectsConfig(pexConfig.Config):
-    """Config class for DeduplicateDiaObjectsConfig.
+    """Configuration for DeduplicateAllSkyDiaObjectsTask.
+    
+    Parameters
+    ----------
+    maxClusteringDistance : `float`
+        Maximum distance to merge clusters of duplicate DiaObjects, in arcseconds.
+        Default is 1.5 arcseconds.
+    earliestMidpointMjdTai : `float`
+        MidpointMjdTai (Modified Julian Date in TAI scale) of the earliest
+        DiaSource to be reassigned during deduplication. Default corresponds
+        to 2025-09-01.
     """
 #    apdb_config_url = pexConfig.Field(
 #        dtype=str,
@@ -90,7 +96,12 @@ class DeduplicateAllSkyDiaObjectsConfig(pexConfig.Config):
 
 
 class DeduplicateAllSkyDiaObjectsTask(pipeBase.Task):
-    """Deduplicate DiaObjects by clustering them spatially.
+    """Deduplicate DiaObjects by clustering them spatially and update the APDB.
+    
+    This task identifies and merges duplicate DiaObjects in the Alert Production
+    Database (APDB) that are spatially coincident. It uses agglomerative clustering
+    to group nearby objects, then reassigns DiaSources from duplicate objects to
+    a single kept DiaObject (the oldest one in each cluster).
     """
     ConfigClass = DeduplicateAllSkyDiaObjectsConfig
     _DefaultName = "deduplicateAllSkyDiaObjects"
@@ -106,9 +117,17 @@ class DeduplicateAllSkyDiaObjectsTask(pipeBase.Task):
         Returns
         -------
         result : `lsst.pipe.base.Struct`
-            Results struct with components.
-            - ``diaObjectDeduplicationMap`` : map of diaObjectIds to their
-              replacements (`dict`)
+            Results struct with components:
+            
+            ``diaObjectDeduplicationMap`` : `astropy.table.Table`
+                Table mapping duplicate DiaObject IDs to the IDs they should be
+                merged into. Contains columns 'removedDiaObjectId' and
+                'keptDiaObjectId'.
+        
+        Raises
+        ------
+        lsst.pipe.base.NoWorkFound
+            If no duplicate DiaObjects are found in the APDB.
         """
 
         # TODO: consider adding a config for the "since" argument
@@ -147,19 +166,30 @@ class DeduplicateAllSkyDiaObjectsTask(pipeBase.Task):
         self.log.info(f"After deduplication, {updated_duplicate_count} duplicates "
                        "remain of {len(kept_diaObjects)} DiaObjects.")
 
-#        self.remove_apdb_duplicates(clustered_diaObjects, deduplication_map)
+        # TODO: consider a "dry run" configuration
+        # self.remove_apdb_duplicates(clustered_diaObjects, deduplication_map)
 
         return pipeBase.Struct(
             diaObjectDeduplicationMap=Table.from_df(deduplication_map))
 
     def remove_apdb_duplicates(self, diaObjects, deduplication_map):
-        """Reassign diaSources and remove diaObjects according to provided map.
+        """Reassign DiaSources and remove DiaObjects according to provided map.
+        
+        This method performs the actual database modifications to deduplicate
+        DiaObjects. It reassigns DiaSources from duplicate DiaObjects to their
+        corresponding kept objects, then marks the duplicate DiaObjects as
+        invalid by setting their validity end time.
 
         Parameters
         ----------
-        diaObjects : `pd.DataFrame`
-        deduplication_map : `pd.DataFrame`
-            Table with columns specifying how to reassociate duplicates.
+        diaObjects : `pandas.DataFrame`
+            DataFrame containing DiaObjects, including both kept and removed
+            objects. Must include columns: 'diaObjectId', 'validityStartMjdTai',
+            'ra', 'dec'.
+        deduplication_map : `pandas.DataFrame`
+            Table specifying how to reassociate duplicates. Must contain columns:
+            - 'removedDiaObjectId' : IDs of DiaObjects to be removed
+            - 'keptDiaObjectId' : IDs of DiaObjects to keep
         """
 
         start_time = Time(self.config.earliestMidpointMjdTai,
@@ -200,7 +230,30 @@ class DeduplicateAllSkyDiaObjectsTask(pipeBase.Task):
         # self.apdb.resetDedup()
 
     def remap_clusters(self, diaObjects):
-        """Use cluster labels to determine which diaObjects to remap.
+        """Use cluster labels to determine which DiaObjects to remap.
+        
+        For each cluster containing multiple DiaObjects, this method identifies
+        the oldest object (by validityStartMjdTai) to keep and marks all others
+        for removal.
+
+        Parameters
+        ----------
+        diaObjects : `pandas.DataFrame`
+            DataFrame of DiaObjects with cluster assignments. Must include columns:
+            
+            - 'cluster_label' : Cluster ID assigned by the clustering algorithm
+            - 'diaObjectId' : Unique identifier for each DiaObject
+            - 'validityStartMjdTai' : Start time of object validity 
+
+        Returns
+        -------
+        deduplication_map : `pandas.DataFrame`
+            Mapping of removed DiaObject IDs to kept IDs. Contains columns:
+            
+            - 'removedDiaObjectId' : IDs to be removed
+            - 'keptDiaObjectId' : IDs to keep 
+            
+            Only includes entries for clusters with multiple objects.
         """
 
         grp = diaObjects.groupby('cluster_label')
@@ -219,7 +272,34 @@ class DeduplicateAllSkyDiaObjectsTask(pipeBase.Task):
         return pd.DataFrame(dedup_map, columns=['removedDiaObjectId', 'keptDiaObjectId'])
 
     def cluster(self, diaObjects):
-        """Use AgglomerativeClustering to identify groups of duplicates.
+        """Use agglomerative clustering to identify groups of duplicates.
+        
+        This method applies hierarchical agglomerative clustering to DiaObjects
+        based on their sky positions (RA, Dec). Objects within the configured
+        maximum distance are grouped into clusters representing duplicate sets.
+
+        Parameters
+        ----------
+        diaObjects : `pandas.DataFrame`
+            DataFrame of DiaObjects to cluster. Must include columns:
+            
+            - 'ra' : Right ascension in degrees
+            - 'dec' : Declination in degrees
+
+        Returns
+        -------
+        cluster_labels : `pandas.Series`
+            Series of cluster labels (integers) indexed to match the input
+            DataFrame. Objects with the same label belong to the same cluster
+            and are considered duplicates. 
+        
+        Notes
+        -----
+        A k-nearest neighbors connectivity graph is used to improve performance.
+        However, it prevents objects from being grouped together if they are not among
+        each other's k nearest neighbors, even if they fall within the desired distance
+        threshold.  `radius_neighbors_graph with a distance threshold would 
+        avoid this issue but has proven computationally infeasible.
         """
 
         X = diaObjects[['ra', 'dec']].values
@@ -237,7 +317,34 @@ class DeduplicateAllSkyDiaObjectsTask(pipeBase.Task):
                          name="cluster_label")
 
     def count_duplicates(self, catalog, radius_arcsec=None):
-        """Count catalog objects with self-matches within radius_arcsec.
+        """Count catalog objects with self-matches within specified radius.
+        
+        This method counts how many objects in the catalog have at least one
+        other object within the search radius, providing a measure of the
+        duplicate population.
+
+        Parameters
+        ----------
+        catalog : `pandas.DataFrame`
+            Catalog of objects to check for duplicates. 
+        radius_arcsec : `float`, optional
+            Search radius in arcseconds within which to consider objects as
+            duplicates. If None, defaults to half of config.maxClusteringDistance.
+
+        Returns
+        -------
+        duplicate_count : `int`
+            Number of objects that have at least one neighbor within the
+            specified radius (excluding self-matches).
+        
+        Notes
+        -----
+        The method uses Astropy's catalog matching with nthneighbor=2 to find
+        the nearest neighbor excluding the object itself. Objects whose nearest
+        neighbor is within radius_arcsec are counted as having duplicates.
+        
+        This provides a quick diagnostic count and may not exactly match the
+        number of duplicates identified by the clustering algorithm.
         """
 
         if radius_arcsec is None:
