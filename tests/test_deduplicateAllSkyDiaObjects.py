@@ -164,25 +164,136 @@ class TestDeduplicateAllSkyDiaObjects(unittest.TestCase):
         return config
 
     def testRun(self):
-        """Test the full run method for the loader.
+        """Test the full run method for deduplication.
         """
         diaConfig = self._makeConfig()
         task = DeduplicateAllSkyDiaObjectsTask(config=diaConfig)
         result = task.run()
 
-#        self.assertEqual(len(result.diaObjects), len(self.diaObjects))
-#        self.assertEqual(len(result.diaSources), len(self.diaSources))
-#        self.assertEqual(len(result.diaForcedSources),
-#                         len(self.diaForcedSources))
+        # Check that we got a deduplication map
+        self.assertIsNotNone(result.diaObjectDeduplicationMap)
+        
+        # We created 8 duplicates in 3 groups, so we should have 8 entries
+        # in the deduplication map (all duplicates get remapped)
+        self.assertEqual(len(result.diaObjectDeduplicationMap), 8)
+        
+        # Check that the map has the correct columns
+        self.assertIn('removedDiaObjectId', result.diaObjectDeduplicationMap.columns)
+        self.assertIn('keptDiaObjectId', result.diaObjectDeduplicationMap.columns)
+        
+        # Verify that removed IDs are actually the duplicate IDs we created
+        removed_ids = set(result.diaObjectDeduplicationMap['removedDiaObjectId'])
+        expected_duplicate_ids = {1000, 1001, 1002, 1003, 2000, 2001, 2002, 3000}
+        self.assertEqual(removed_ids, expected_duplicate_ids)
+        
+        # Verify that kept IDs are from the original objects
+        kept_ids = set(result.diaObjectDeduplicationMap['keptDiaObjectId'])
+        # The kept IDs should be from the original objects (1, 2, 3)
+        self.assertTrue(kept_ids.issubset({1, 2, 3}))
 
     def test_remap_clusters(self):
-        pass
+        """Test the cluster remapping logic.
+        """
+        diaConfig = self._makeConfig()
+        task = DeduplicateAllSkyDiaObjectsTask(config=diaConfig)
+        
+        # Create a simple test DataFrame with cluster labels
+        test_data = pd.DataFrame({
+            'diaObjectId': [1, 2, 3, 4, 5, 6],
+            'validityStartMjdTai': [100.0, 101.0, 102.0, 200.0, 201.0, 300.0],
+            'cluster_label': [0, 0, 0, 1, 1, 2],
+            'ra': [10.0, 10.0, 10.0, 20.0, 20.0, 30.0],
+            'dec': [5.0, 5.0, 5.0, 10.0, 10.0, 15.0]
+        })
+        
+        dedup_map = task.remap_clusters(test_data)
+        
+        # Cluster 0 has 3 objects (1, 2, 3), oldest is 1 (validityStart=100.0)
+        # So 2 and 3 should be remapped to 1
+        # Cluster 1 has 2 objects (4, 5), oldest is 4 (validityStart=200.0)
+        # So 5 should be remapped to 4
+        # Cluster 2 has 1 object (6), so no remapping
+        
+        self.assertEqual(len(dedup_map), 3)  # 2 + 1 remappings
+        
+        # Check that objects 2 and 3 map to object 1
+        obj2_mapping = dedup_map[dedup_map['removedDiaObjectId'] == 2]
+        obj3_mapping = dedup_map[dedup_map['removedDiaObjectId'] == 3]
+        self.assertEqual(len(obj2_mapping), 1)
+        self.assertEqual(len(obj3_mapping), 1)
+        self.assertEqual(obj2_mapping.iloc[0]['keptDiaObjectId'], 1)
+        self.assertEqual(obj3_mapping.iloc[0]['keptDiaObjectId'], 1)
+        
+        # Check that object 5 maps to object 4
+        obj5_mapping = dedup_map[dedup_map['removedDiaObjectId'] == 5]
+        self.assertEqual(len(obj5_mapping), 1)
+        self.assertEqual(obj5_mapping.iloc[0]['keptDiaObjectId'], 4)
 
     def test_cluster(self):
-        pass    
+        """Test the clustering algorithm.
+        """
+        diaConfig = self._makeConfig(maxClusteringDistance=1.5)
+        task = DeduplicateAllSkyDiaObjectsTask(config=diaConfig)
+        
+        cluster_labels = task.cluster(self.diaObjects)
+        
+        self.assertEqual(len(cluster_labels), len(self.diaObjects))
+        
+        group1_ids = [1, 1000, 1001, 1002, 1003]
+        group1_mask = self.diaObjects['diaObjectId'].isin(group1_ids)
+        group1_labels = cluster_labels[group1_mask]
+        
+        self.assertEqual(len(group1_labels.unique()), 1, 
+                        "Objects in duplicate group 1 should share a cluster label")
+        
+        group2_ids = [2, 2000, 2001, 2002]
+        group2_mask = self.diaObjects['diaObjectId'].isin(group2_ids)
+        group2_labels = cluster_labels[group2_mask]
+        
+        self.assertEqual(len(group2_labels.unique()), 1,
+                        "Objects in duplicate group 2 should share a cluster label")
+        
+        group3_ids = [3, 3000]
+        group3_mask = self.diaObjects['diaObjectId'].isin(group3_ids)
+        group3_labels = cluster_labels[group3_mask]
+        
+        self.assertEqual(len(group3_labels.unique()), 1,
+                        "Objects in duplicate group 3 should share a cluster label")
+        
+        self.assertNotEqual(group1_labels.iloc[0], group2_labels.iloc[0],
+                           "Group 1 and Group 2 should have different cluster labels")
+        self.assertNotEqual(group1_labels.iloc[0], group3_labels.iloc[0],
+                           "Group 1 and Group 3 should have different cluster labels")
+        self.assertNotEqual(group2_labels.iloc[0], group3_labels.iloc[0],
+                           "Group 2 and Group 3 should have different cluster labels")
 
     def test_count_duplicates(self):
-        pass
+        """Test the duplicate counting method.
+        """
+        diaConfig = self._makeConfig(maxClusteringDistance=1.5)
+        task = DeduplicateAllSkyDiaObjectsTask(config=diaConfig)
+        
+        test_catalog = pd.DataFrame({
+            'diaObjectId': [1, 2, 3, 4, 5],
+            'ra': [10.0, 10.0001,  # Pair 1 
+                   10.1, 10.1001,  # Pair 2
+                   10.3],          # Single
+            'dec': [5.0, 5.0001,
+                    5.1, 5.1001,
+                    5.3]
+        })
+        
+        duplicate_count = task.count_duplicates(test_catalog)
+        
+        self.assertEqual(duplicate_count, 4)
+        
+        # Test with custom radius
+        duplicate_count_small = task.count_duplicates(test_catalog, radius_arcsec=0.1)
+        self.assertEqual(duplicate_count_small, 0)
+        
+        # Test with large radius
+        duplicate_count_large = task.count_duplicates(test_catalog, radius_arcsec=3600.0)
+        self.assertEqual(duplicate_count_large, 5)
 
 
 def setup_module(module):
