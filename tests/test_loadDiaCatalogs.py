@@ -29,29 +29,10 @@ import yaml
 from lsst.ap.association import LoadDiaCatalogsTask
 from lsst.ap.association.utils import getMidpointFromTimespan, readSchemaFromApdb
 from lsst.dax.apdb import Apdb, ApdbSql, ApdbTables
-from lsst.utils import getPackageDir
+from lsst.resources import ResourcePath
 import lsst.utils.tests
 from utils_tests import makeExposure, makeDiaObjects, makeDiaSources, makeDiaForcedSources, makeRegionTime, \
     getRegion
-
-
-def _data_file_name(basename, module_name):
-    """Return path name of a data file.
-
-    Parameters
-    ----------
-    basename : `str`
-        Name of the file to add to the path string.
-    module_name : `str`
-        Name of lsst stack package environment variable.
-
-    Returns
-    -------
-    data_file_path : `str`
-       Full path of the file to load from the "data" directory in a given
-       repository.
-    """
-    return os.path.join(getPackageDir(module_name), "data", basename)
 
 
 class TestLoadDiaCatalogs(unittest.TestCase):
@@ -158,8 +139,8 @@ class TestLoadDiaCatalogs(unittest.TestCase):
         tableDef = self.apdb.tableDef(ApdbTables.DiaSource)
         apdbSchemaColumns = [column.name for column in tableDef.columns]
 
-        functorFile = _data_file_name("DiaSource.yaml", "ap_association")
-        with open(functorFile) as yaml_stream:
+        functorFile = ResourcePath("resource://lsst.ap.association/resources/data/DiaSource.yaml")
+        with functorFile.open("r") as yaml_stream:
             diaSourceFunctor = yaml.safe_load_all(yaml_stream)
             for functor in diaSourceFunctor:
                 diaSourceColumns = [column for column in list(functor['funcs'].keys())
