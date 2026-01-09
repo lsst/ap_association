@@ -170,25 +170,18 @@ class TestDeduplicateAllSkyDiaObjects(unittest.TestCase):
         task = DeduplicateAllSkyDiaObjectsTask(config=diaConfig)
         result = task.run()
 
-        # Check that we got a deduplication map
         self.assertIsNotNone(result.diaObjectDeduplicationMap)
         
-        # We created 8 duplicates in 3 groups, so we should have 8 entries
-        # in the deduplication map (all duplicates get remapped)
         self.assertEqual(len(result.diaObjectDeduplicationMap), 8)
         
-        # Check that the map has the correct columns
         self.assertIn('removedDiaObjectId', result.diaObjectDeduplicationMap.columns)
         self.assertIn('keptDiaObjectId', result.diaObjectDeduplicationMap.columns)
         
-        # Verify that removed IDs are actually the duplicate IDs we created
         removed_ids = set(result.diaObjectDeduplicationMap['removedDiaObjectId'])
         expected_duplicate_ids = {1000, 1001, 1002, 1003, 2000, 2001, 2002, 3000}
         self.assertEqual(removed_ids, expected_duplicate_ids)
         
-        # Verify that kept IDs are from the original objects
         kept_ids = set(result.diaObjectDeduplicationMap['keptDiaObjectId'])
-        # The kept IDs should be from the original objects (1, 2, 3)
         self.assertTrue(kept_ids.issubset({1, 2, 3}))
 
     def test_remap_clusters(self):
@@ -207,12 +200,6 @@ class TestDeduplicateAllSkyDiaObjects(unittest.TestCase):
         })
         
         dedup_map = task.remap_clusters(test_data)
-        
-        # Cluster 0 has 3 objects (1, 2, 3), oldest is 1 (validityStart=100.0)
-        # So 2 and 3 should be remapped to 1
-        # Cluster 1 has 2 objects (4, 5), oldest is 4 (validityStart=200.0)
-        # So 5 should be remapped to 4
-        # Cluster 2 has 1 object (6), so no remapping
         
         self.assertEqual(len(dedup_map), 3)  # 2 + 1 remappings
         

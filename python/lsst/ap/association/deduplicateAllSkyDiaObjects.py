@@ -198,6 +198,8 @@ class DeduplicateAllSkyDiaObjectsTask(pipeBase.Task):
         DiaObjectsToRemove = []
         for idx, idi in deduplication_map['removedDiaObjectId'].items():
             w = diaObjects['diaObjectId'] == idi
+            # TODO: maybe need to pass in all DIAObjects 
+            # to make sure we close all of the removed diaobjects?
             assert (np.sum(w) == 1)
             DiaObjectsToRemove.extend([daxApdb.recordIds.DiaObjectId.from_named_tuple(row)
                                        for row in diaObjects.loc[w].itertuples()])
