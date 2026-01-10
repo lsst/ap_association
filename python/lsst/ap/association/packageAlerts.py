@@ -706,7 +706,7 @@ class PackageAlertsTask(pipeBase.Task):
             Input cutout serialized into byte data.
         """
         with io.BytesIO() as streamer:
-            cutout.write(streamer, format="fits")
+            cutout.write(streamer, format="fits", hdu_flags='MASKPLANE')
             cutoutBytes = streamer.getvalue()
         return cutoutBytes
 
