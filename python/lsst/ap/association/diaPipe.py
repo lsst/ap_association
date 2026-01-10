@@ -570,7 +570,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 self.log.warning("Error encountered while attempting to load "
                                  "the latest diaObjects from the APDB. Processing "
                                  "will continue with only the diaObjects from "
-                                 "preload. Error:", e)
+                                 "preload.", exc_info=e)
             finally:
                 self.metadata["loadDiaObjectsDuration"] = duration_from_timeMethod(
                     self.metadata, "loadRefreshedDiaObjects", clock="Utc"
