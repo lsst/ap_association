@@ -50,7 +50,7 @@ import lsst.geom as geom
 import lsst.pex.config as pexConfig
 from lsst.pex.exceptions import InvalidParameterError
 import lsst.pipe.base as pipeBase
-from lsst.pipe.tasks.associationUtils import ss_object_id_to_obj_id, unpack_mpc_designation
+from lsst.pipe.tasks.associationUtils import ss_object_id_to_obj_id, pack_mpc_designation
 import lsst.utils.logging
 from lsst.utils.timer import timeMethod
 
@@ -662,9 +662,8 @@ class PackageAlertsTask(pipeBase.Task):
         else:
             mpcorbColumns = [col for col in ssSource if col[:7] == 'MPCORB_']
             mpcOrbit = {key[7:]: ssSource[key] for key in mpcorbColumns}
-            mpcOrbit['ssObjectId'] = ssSource['ssObjectId']
-            packed_desig = ss_object_id_to_obj_id(ssSource['ssObjectId'])
-            unpacked_desig = unpack_mpc_designation(packed_desig)
+            unpacked_desig = ss_object_id_to_obj_id(ssSource['ssObjectId'])
+            packed_desig = pack_mpc_designation(unpacked_desig)
             mpcOrbit['designation'] = unpacked_desig
             mpcOrbit['packed_primary_provisional_designation'] = packed_desig
             mpcOrbit['unpacked_primary_provisional_designation'] = unpacked_desig

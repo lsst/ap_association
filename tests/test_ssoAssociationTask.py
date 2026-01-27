@@ -93,6 +93,7 @@ class TestSolarSystemAssociation(unittest.TestCase):
         self.testSsObjects["obj_y_poly"] = [np.array([1])]
         self.testSsObjects["obj_z_poly"] = [np.array([2 ** 0.5])]
         self.testSsObjects["Err(arcsec)"] = np.ones(len(self.testSsObjects))
+        self.testSsObjects["trailedSourceMagTrue"] = 22
 
     def test_run(self):
         """Test that association and id assignment work as expected.
