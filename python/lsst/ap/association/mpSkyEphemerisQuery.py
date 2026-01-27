@@ -28,6 +28,7 @@ Will compute the location for of known SSObjects within a visit-detector combina
 __all__ = ["MPSkyEphemerisQueryConfig", "MPSkyEphemerisQueryTask"]
 
 
+import numpy as np
 import os
 import pandas as pd
 import pyarrow as pa
@@ -46,6 +47,17 @@ ELEMENTS_LIST = "q,e,inc,node,argPeri,t_p_MJD_TDB,epochMJD_TDB".split(',')
 ELEMENTS_FORMAT = " ".join(["{:> 11f}"] * len(ELEMENTS_LIST))
 NAMING_MAP = {'inc': 'incl', 'argPeri': 'peri', 't_p_MJD_TDB': 't_p', 'epochMJD_TDB': 'epoch',
               'q': 'q', 'e': 'e', 'node': 'node'}
+
+ELEMENTS_LIST_MPC_ORBITS = ['designation', 'id', 'packed_primary_provisional_designation',
+                            'unpacked_primary_provisional_designation', 'mpc_orb_jsonb',
+                            'created_at', 'updated_at', 'orbit_type_int', 'u_param', 'nopp',
+                            'arc_length_total', 'arc_length_sel', 'nobs_total', 'nobs_total_sel',
+                            'a', 'q', 'e', 'i', 'node', 'argperi', 'peri_time', 'yarkovsky', 'srp',
+                            'a1', 'a2', 'a3', 'dt', 'mean_anomaly', 'period', 'mean_motion', 'a_unc',
+                            'q_unc', 'e_unc', 'i_unc', 'node_unc', 'argperi_unc', 'peri_time_unc',
+                            'yarkovsky_unc', 'srp_unc', 'a1_unc', 'a2_unc', 'a3_unc', 'dt_unc',
+                            'mean_anomaly_unc', 'period_unc', 'mean_motion_unc', 'epoch_mjd', 'h', 'g',
+                            'not_normalized_rms', 'normalized_rms', 'earth_moid', 'fitting_datetime']
 
 
 class MPSkyEphemerisQueryConnections(PipelineTaskConnections,
@@ -85,7 +97,7 @@ class MPSkyEphemerisQueryConfig(
     mpSkyRequestTimeoutSeconds = pexConfig.Field(
         dtype=float,
         doc="Time in seconds to wait for mpSky request before failing ",
-        default=1.0
+        default=10.0
     )
     mpSkyFallbackURL = pexConfig.Field(
         dtype=str,
@@ -157,58 +169,16 @@ class MPSkyEphemerisQueryTask(PipelineTask):
                                                          expRadius + self.config.queryBufferRadiusDegrees,
                                                          mpSkyURL)
         if elements is not None:
-            for element in ELEMENTS_LIST:
-                mpSkySsObjects[self.config.mpcorb_prefix + NAMING_MAP[element]] = elements[element]
+            if 'mpc_orb_jsonb' in elements.columns:
+                for element in ELEMENTS_LIST_MPC_ORBITS:
+                    mpSkySsObjects[self.config.mpcorb_prefix + element] = elements[element]
+            else:
+                for element in ELEMENTS_LIST:
+                    mpSkySsObjects[self.config.mpcorb_prefix + NAMING_MAP[element]] = elements[element]
+        mpSkySsObjects = mpSkySsObjects.fillna(value=np.nan)
         # ssObjectId and mpcDesignation are also in the MPCORB schema so let's add them here.
         return Struct(
             ssObjects=mpSkySsObjects,
-        )
-
-    def read_mp_sky_response(self, response):
-        """Extract ephemerides from an MPSky web request
-
-        Parameters
-        ----------
-        response : `requests.Response`
-            MPSky message
-
-        Returns
-        -------
-        objID : `np.ndarray`
-            Designations of nearby objects
-        ra : `np.ndarray`
-            Array of object right ascensions
-        dec : `np.ndarray`
-            Array of object declinations
-        object_polynomial : `np.ndarray`, (N,M)
-            Array of object cartesian position polynomials
-        observer_polynomial : `np.ndarray`, (N,M)
-            Array of observer cartesian position polynomials
-        t_min : `np.ndarray`
-            Lower time bound for polynomials
-        t_max : `np.ndarray`
-            Upper time bound for polynomials
-        elements : `pandas.DataFrame` or `NoneType`
-            Orbital elements of ssObjects (to pass to alerts)
-        """
-        with pa.input_stream(memoryview(response.content)) as fp:
-            fp.seek(0)
-            p = pa.ipc.read_tensor(fp)
-            op = pa.ipc.read_tensor(fp)
-            with pa.ipc.open_stream(fp) as reader:
-                schema = reader.schema
-                r = next(reader)
-
-        # construct an elements pandas dataframe
-        if "q" in schema.names:
-            cols = {col: r[col].to_numpy() for col in ELEMENTS_LIST}
-            elements = pd.DataFrame(cols)
-        else:
-            elements = None
-
-        return (
-            r["name"].to_numpy(zero_copy_only=False), r["ra"].to_numpy(), r["dec"].to_numpy(),
-            p.to_numpy(), op.to_numpy(), r["tmin"].to_numpy(), r["tmax"].to_numpy(), elements
         )
 
     def _mpSkyConeSearch(self, expCenter, epochMJD, queryRadius, mpSkyURL):
@@ -241,19 +211,50 @@ class MPSkyEphemerisQueryTask(PipelineTask):
             "ra": fieldRA,
             "dec": fieldDec,
             "radius": queryRadius,
-            "return_elements": True
+            "return_elements": "extended"
         }
 
         response = None
         try:
             response = requests.get(mpSkyURL, params=params, timeout=self.config.mpSkyRequestTimeoutSeconds)
             response.raise_for_status()
-            response = self.read_mp_sky_response(response)
-            objID, ra, dec, object_polynomial, observer_polynomial, tmin, tmax, elements = response
+            with pa.input_stream(memoryview(response.content)) as fp:
+                fp.seek(0)
+                p = pa.ipc.read_tensor(fp)
+                op = pa.ipc.read_tensor(fp)
+                with pa.ipc.open_stream(fp) as reader:
+                    schema = reader.schema
+                    r = next(reader)
+
+            # construct an elements pandas dataframe
+            if "q" in schema.names:
+                if "mpc_orb_jsonb" in schema.names:
+                    colnames = ELEMENTS_LIST_MPC_ORBITS
+                else:
+                    colnames = ELEMENTS_LIST
+                cols = {col: r[col].to_numpy(zero_copy_only=False) for col in colnames}
+                elements = pd.DataFrame(cols)
+                for c in cols:
+                    if c in ['created_at', 'fitting_datetime', 'updated_at']:
+                        elements[c] = None
+                        # TODO (DM-53952): Handle properly, probably as a datetime
+            else:
+                elements = None
 
             mpSkySsObjects = pd.DataFrame()
-            mpSkySsObjects['ObjID'] = objID
-            mpSkySsObjects['ra'] = ra
+            mpSkySsObjects['ObjID'] = r["name"].to_numpy(zero_copy_only=False)
+            mpSkySsObjects['ra'] = r["ra"].to_numpy()
+            mpSkySsObjects['dec'] = r["dec"].to_numpy()
+            mpSkySsObjects['tmin'] = r["tmin"].to_numpy()
+            mpSkySsObjects['tmax'] = r["tmax"].to_numpy()
+
+            mpSkySsObjects['trailedSourceMagTrue'] = np.nan
+            if 'Vmag' in r:
+                mpSkySsObjects['trailedSourceMagTrue'] = r["Vmag"].to_numpy()
+
+            object_polynomial = p.to_numpy()
+            observer_polynomial = op.to_numpy()
+
             mpSkySsObjects['obj_x_poly'] = [poly[0] for poly in object_polynomial.T]
             mpSkySsObjects['obj_y_poly'] = [poly[1] for poly in object_polynomial.T]
             mpSkySsObjects['obj_z_poly'] = [poly[2] for poly in object_polynomial.T]
@@ -263,11 +264,13 @@ class MPSkyEphemerisQueryTask(PipelineTask):
                                             i in range(len(mpSkySsObjects))]
             mpSkySsObjects['obs_z_poly'] = [observer_polynomial.T[2] for
                                             i in range(len(mpSkySsObjects))]
-            mpSkySsObjects['tmin'] = tmin
-            mpSkySsObjects['tmax'] = tmax
-            mpSkySsObjects['dec'] = dec
             mpSkySsObjects['Err(arcsec)'] = 2
-            mpSkySsObjects['ssObjectId'] = [obj_id_to_ss_object_id(v) for v in mpSkySsObjects['ObjID'].values]
+            if 'packed_primary_provisional_designation' in elements.columns:
+                desigs = elements['packed_primary_provisional_designation'].values
+            else:
+                desigs = mpSkySsObjects['ObjID'].values
+            mpSkySsObjects['ssObjectId'] = [obj_id_to_ss_object_id(v) for v in desigs]
+
             nFound = len(mpSkySsObjects)
 
             if nFound == 0:
