@@ -216,9 +216,13 @@ class DeduplicateAllSkyDiaObjectsTask(pipeBase.Task):
             reassign_count = np.sum(w)
 
             if reassign_count:
+                wnew = diaObjects['diaObjectId'] == new_id
+                assert (np.sum(wnew) == 1)
+                newDiaObjectId = [daxApdb.recordIds.DiaObjectId.from_named_tuple(row)
+                                  for row in diaObjects.loc[wnew].itertuples()][0]
                 for row in diaSourcesToReassign.loc[w].itertuples():
                     ds = daxApdb.recordIds.DiaSourceId.from_named_tuple(row)
-                    id_map[ds] = new_id
+                    id_map[ds] = newDiaObjectId
                 self.log.verbose('Reassigned %d diaSources from diaObject %d to %d' %
                                  (reassign_count, old_id, new_id))
 
