@@ -892,47 +892,46 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 removed from `associatedDiaSources` and were not added as new
                 diaObjects.
         """
-        # Associate new DiaSources with existing DiaObjects.
-        assocResults = self.associator.run(diaSourceTable, diaObjects)
-        # TODO: work out how to mark asteroid-diaObj overlaps as contaminated
-        toAssociate = []
+        associatedCatalogs = []
+        # First associate diaSources with known asteroids
         if self.config.doSolarSystemAssociation and solarSystemObjectTable is not None:
             ssoAssocResult = self.solarSystemAssociator.run(
-                Table.from_pandas(assocResults.unAssocDiaSources),
+                Table.from_pandas(diaSourceTable),
                 solarSystemObjectTable,
                 diffIm.visitInfo,
                 diffIm.getBBox(),
                 diffIm.wcs
             )
-            # Create new DiaObjects from unassociated diaSources.
-            if len(ssoAssocResult.unAssocDiaSources) > 0:
-                # If the table is empty then converting time fields to pandas
-                # will raise an error. Pass in an empty Dataframe in that case.
-                createResults = self.createNewDiaObjects(ssoAssocResult.unAssocDiaSources.to_pandas())
-            else:
-                createResults = self.createNewDiaObjects(pd.DataFrame())
-            if len(ssoAssocResult.ssoAssocDiaSources) > 0:
-                toAssociate.append(ssoAssocResult.ssoAssocDiaSources.to_pandas())
             nTotalSsObjects = ssoAssocResult.nTotalSsObjects
             nAssociatedSsObjects = ssoAssocResult.nAssociatedSsObjects
             associatedSsSources = ssoAssocResult.associatedSsSources
             unassociatedSsObjects = ssoAssocResult.unassociatedSsObjects
-
+            if len(ssoAssocResult.ssoAssocDiaSources) > 0:
+                associatedCatalogs.append(ssoAssocResult.ssoAssocDiaSources.to_pandas())
+            if len(ssoAssocResult.unAssocDiaSources) > 0:
+                # If the table is empty then converting time fields to pandas
+                # will raise an error. Pass in an empty Dataframe in that case.
+                unAssocSSDiaSources = ssoAssocResult.unAssocDiaSources.to_pandas()
+            else:
+                unAssocSSDiaSources = pd.DataFrame()
         else:
-            # Create new DiaObjects from unassociated diaSources.
-            createResults = self.createNewDiaObjects(assocResults.unAssocDiaSources)
+            unAssocSSDiaSources = diaSourceTable
             nTotalSsObjects = 0
             nAssociatedSsObjects = 0
             associatedSsSources = None
             unassociatedSsObjects = None
+        # Associate new DiaSources with existing DiaObjects.
+        assocResults = self.associator.run(unAssocSSDiaSources, diaObjects)
+        createResults = self.createNewDiaObjects(assocResults.unAssocDiaSources)
+
         if not assocResults.matchedDiaSources.empty:
-            toAssociate.append(assocResults.matchedDiaSources)
+            associatedCatalogs.append(assocResults.matchedDiaSources)
         if not createResults.diaSources.empty:
-            toAssociate.append(createResults.diaSources)
-        if len(toAssociate) == 0:
+            associatedCatalogs.append(createResults.diaSources)
+        if len(associatedCatalogs) == 0:
             associatedDiaSources = make_empty_catalog(self.schema, tableName="DiaSource")
         else:
-            associatedDiaSources = pd.concat(toAssociate)
+            associatedDiaSources = pd.concat(associatedCatalogs)
 
         self._add_association_meta_data(assocResults.nUpdatedDiaObjects,
                                         assocResults.nUnassociatedDiaObjects,
