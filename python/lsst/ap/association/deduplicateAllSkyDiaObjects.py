@@ -142,6 +142,9 @@ class DeduplicateAllSkyDiaObjectsTask(pipeBase.Task):
         diaObjects = all_diaObjects.loc[~wdup, :].copy()
         self.log.info(f"Filtered to {len(all_diaObjects)} latest DiaObjects.")
 
+        if len(diaObjects) == 0:
+            raise pipeBase.NoWorkFound("No DiaObjects available for deduplication.")
+
         duplicate_count = self.count_duplicates(diaObjects)
 
         if duplicate_count == 0:
