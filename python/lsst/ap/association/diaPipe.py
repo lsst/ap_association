@@ -913,7 +913,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 # will raise an error. Pass in an empty Dataframe in that case.
                 unAssocSSDiaSources = ssoAssocResult.unAssocDiaSources.to_pandas()
             else:
-                unAssocSSDiaSources = pd.DataFrame()
+                unAssocSSDiaSources = make_empty_catalog(self.schema, tableName="DiaSource")
         else:
             unAssocSSDiaSources = diaSourceTable
             nTotalSsObjects = 0
