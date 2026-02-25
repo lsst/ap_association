@@ -80,8 +80,10 @@ class TestSolarSystemAssociation(unittest.TestCase):
 
         # Grab a subset to treat as solar system objects
         self.testSsObjects = Table()
-        self.testSsObjects["ObjID"] = ["test_ob"]
-        self.testSsObjects["ssObjectId"] = [1234]
+        self.testSsObjects["ObjID"] = ["K15MK4Q"]
+        self.testSsObjects["MPCORB_unpacked_primary_provisional_designation"] = self.testSsObjects["ObjID"]
+
+        self.testSsObjects["ssObjectId"] = [21164728253101137]
         self.testSsObjects["ephRa"] = [45]
         self.testSsObjects["ephDec"] = [45]
         self.testSsObjects["tmin"] = [-1]
@@ -93,6 +95,7 @@ class TestSolarSystemAssociation(unittest.TestCase):
         self.testSsObjects["obj_y_poly"] = [np.array([1])]
         self.testSsObjects["obj_z_poly"] = [np.array([2 ** 0.5])]
         self.testSsObjects["Err(arcsec)"] = np.ones(len(self.testSsObjects))
+        self.testSsObjects["trailedSourceMagTrue"] = 22
 
     def test_run(self):
         """Test that association and id assignment work as expected.
@@ -106,7 +109,7 @@ class TestSolarSystemAssociation(unittest.TestCase):
         self.assertEqual(len(results.ssoAssocDiaSources), 1)
         self.assertEqual(results.ssoAssocDiaSources['ra'][0], 45.0)
         self.assertEqual(results.ssoAssocDiaSources['dec'][0], 45.0)
-        self.assertEqual(results.ssoAssocDiaSources['ssObjectId'][0], 1234)
+        self.assertEqual(results.ssoAssocDiaSources['ssObjectId'][0], 21164728253101137)
 
     def test_mask(self):
         """Test that masking against the CCD bounding box works as expected.

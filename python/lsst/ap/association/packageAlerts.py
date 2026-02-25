@@ -662,8 +662,25 @@ class PackageAlertsTask(pipeBase.Task):
         else:
             mpcorbColumns = [col for col in ssSource if col[:7] == 'MPCORB_']
             mpcOrbit = {key[7:]: ssSource[key] for key in mpcorbColumns}
-            mpcOrbit['ssObjectId'] = ssSource['ssObjectId']
-            mpcOrbit['mpcDesignation'] = ss_object_id_to_obj_id(ssSource['ssObjectId'])[0]
+
+            fields_to_cast = [
+                "arc_length_total", "arc_length_sel", "a", "mean_anomaly", "period", "mean_motion", "a_unc",
+                "mean_anomaly_unc", "period_unc", "mean_motion_unc", "yarkovsky", "srp", "a1", "a2", "a3",
+                "dt", "yarkovsky_unc", "srp_unc", "a1_unc", "a2_unc", "a3_unc", "dt_unc",
+                "not_normalized_rms", "earth_moid"
+            ]
+            for key in fields_to_cast:
+                if key in mpcOrbit and mpcOrbit[key] is not None:
+                    mpcOrbit[key] = float(mpcOrbit[key])
+
+            if 'packed_primary_provisional_designation' not in mpcOrbit:
+                unpacked_desig = ssSource['designation']
+                packed_desig = ss_object_id_to_obj_id(ssSource['ssObjectId'], packed=True)
+                mpcOrbit['designation'] = unpacked_desig
+                mpcOrbit['packed_primary_provisional_designation'] = packed_desig
+                mpcOrbit['unpacked_primary_provisional_designation'] = unpacked_desig
+
+            mpcOrbit['id'] = 0
             ssSource = {key: ssSource[key] for key in ssSource if key not in mpcorbColumns}
             ssSource['diaSourceId'] = diaSourceId
             alert['ssSource'] = ssSource
