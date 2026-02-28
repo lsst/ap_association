@@ -344,6 +344,26 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         doc="Task used for force photometer DiaObject locations in direct and "
             "difference images.",
     )
+    forcedReliabilityThreshold = pexConfig.Field(
+        dtype=float,
+        default=0.5,
+        doc="Minimum reliability score of constituent diaSources to use when "
+            "determining whether to calculate forced photometry for a "
+            "diaObject.",
+    )
+    forcedTrailLengthThreshold = pexConfig.Field(
+        dtype=float,
+        default=1.4,
+        doc="Maximum trail length (arseconds) of constituent diaSources to use "
+            "when determining whether to calculate forced photometry for a "
+            "diaObject.",
+    )
+    forcedBadFlags = pexConfig.ListField(
+        dtype=str,
+        default=["glint_trail", "isDipole"],
+        doc="Flags of constituent diaSources to exclude when determining "
+            "whether to calculate forced photometry for a diaObject.",
+    )
     alertPackager = pexConfig.ConfigurableField(
         target=PackageAlertsTask,
         doc="Subtask for packaging Ap data into alerts.",
@@ -636,8 +656,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         # Forced source measurement
         if self.config.doRunForcedMeasurement:
+            diaObjectsForced = self._selectGoodDiaObjects(diaCalResult.diaObjectCat, mergedDiaSourceHistory)
             diaForcedSources = self.runForcedMeasurement(
-                diaCalResult.diaObjectCat, updatedDiaObjects, exposure, diffIm, idGenerator
+                diaObjectsForced, updatedDiaObjects, exposure, diffIm, idGenerator
             )
             forcedSourceHistoryThreshold = self.diaForcedSource.config.historyThreshold
         else:
@@ -713,6 +734,38 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                newDiaSources=assocResults.newDiaSources,
                                marginalDiaSources=assocResults.marginalDiaSources
                                )
+
+    def _selectGoodDiaObjects(self, diaObjects, diaSources):
+        """
+        Extract a subset of diaObjects with multiple associated diaSources that
+        pass selection requirements.
+        """
+        n_history = self.diaForcedSource.config.historyThreshold
+        required_columns = ["reliability", "trailLength"]
+        for col in required_columns:
+            if col not in diaSources.columns:
+                raise RuntimeError("Required column '%s' missing from diaSource table." % col)
+
+        rel_ok = diaSources["reliability"] >= self.config.forcedReliabilityThreshold
+        trailed_ok = diaSources["trailLength"] <= self.config.forcedTrailLengthThreshold
+        badFlags = [f for f in self.config.forcedBadFlags if f in diaSources.columns]
+        if badFlags:
+            self.log.info("Excluding diaSources with %s flags set when calculating"
+                          " diaObject history for forced photometry." % badFlags)
+        # Exclude rows where ANY bad flag is True.
+        # If bad flag columns can contain NA, treat NA as True (i.e.,  bad) via fillna(True).
+        bad_any = diaSources[badFlags].fillna(True).any(axis=1)
+        mask = rel_ok & trailed_ok & ~bad_any
+        ids = diaSources.index.get_level_values("diaObjectId")[mask]
+
+        # Count occurrences in diaSource
+        counts = pd.Series(ids, copy=False).value_counts()
+
+        # IDs that exceed threshold
+        keep_ids = counts[counts >= n_history].index
+
+        # Since diaObject index is unique, direct index filtering is safe and efficient
+        return diaObjects.loc[diaObjects.index.intersection(keep_ids)]
 
     def createNewDiaObjects(self, unassociatedDiaSources):
         """Loop through the set of DiaSources and create new DiaObjects
