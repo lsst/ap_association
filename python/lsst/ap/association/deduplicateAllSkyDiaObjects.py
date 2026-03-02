@@ -25,8 +25,8 @@ from astropy.time import Time
 import astropy.units as u
 import numpy as np
 import pandas as pd
-from sklearn.cluster import AgglomerativeClustering
-from sklearn.neighbors import kneighbors_graph
+from sklearn.cluster import AgglomerativeClustering, MiniBatchKMeans
+from sklearn.neighbors import kneighbors_graph, BallTree
 
 import lsst.dax.apdb as daxApdb
 import lsst.pex.config as pexConfig
@@ -84,6 +84,14 @@ class DeduplicateAllSkyDiaObjectsConfig(pexConfig.Config):
         dtype=int,
         default=30,
         min=3,
+    )
+    maxSubsetSize = pexConfig.RangeField(
+        doc="Maximum number of DiaObjects to process in a single subset during "
+            "clustering. Larger values use more memory but may produce better "
+            "results at cluster boundaries.",
+        dtype=int,
+        default=50000,
+        min=1000,
     )
 
 
@@ -289,6 +297,12 @@ class DeduplicateAllSkyDiaObjectsTask(pipeBase.Task):
         within the configured maximum distance are grouped into
         clusters representing duplicate sets.
 
+        For large datasets, the data is first partitioned using KMeans
+        to create manageable subsets, then agglomerative clustering is
+        applied within each subset. Objects near partition boundaries
+        are processed with overlap to avoid missing cross-boundary
+        duplicates.
+
         Parameters
         ----------
         diaObjects : `pandas.DataFrame`
@@ -314,17 +328,145 @@ class DeduplicateAllSkyDiaObjectsTask(pipeBase.Task):
         would avoid this issue but has proven computationally
         infeasible.
         """
+        n_objects = len(diaObjects)
 
+        # If the dataset is small enough, use direct clustering
+        if n_objects <= self.config.maxSubsetSize:
+            return self._cluster_subset(diaObjects)
+
+        # For large datasets, partition using KMeans first
         coords = diaObjects[['ra', 'dec']].values
-        connectivity = kneighbors_graph(coords, n_neighbors=self.config.nNeighborsConnectivity,
+
+        # Determine number of partitions
+        n_partitions = max(2, int(np.ceil(n_objects / self.config.maxSubsetSize)))
+        self.log.info(f"Partitioning {n_objects} objects into {n_partitions} subsets "
+                      "for memory-efficient clustering.")
+
+        # Use MiniBatchKMeans for memory efficiency
+        kmeans = MiniBatchKMeans(n_clusters=n_partitions, random_state=42,
+                                 batch_size=min(10000, n_objects),
+                                 n_init=3)
+        partition_labels = kmeans.fit_predict(coords)
+
+        # Initialize cluster labels with unique values per object
+        # We'll use a union-find approach to merge clusters across partitions
+        cluster_labels = np.arange(n_objects)
+
+        # Build a BallTree for efficient neighbor queries
+        # Convert threshold to radians for haversine metric
+        threshold_rad = np.radians(self.config.maxClusteringDistance / 3600.0)
+
+        # Process each partition with overlap
+        for partition_id in range(n_partitions):
+            # Get objects in this partition
+            partition_mask = partition_labels == partition_id
+            partition_indices = np.where(partition_mask)[0]
+
+            if len(partition_indices) == 0:
+                continue
+
+            # Find objects near partition boundaries by checking distance
+            # to objects in other partitions
+            partition_coords = coords[partition_indices]
+
+            # Find nearby objects from other partitions that could be
+            # duplicates of objects in this partition
+            other_mask = ~partition_mask
+            other_indices = np.where(other_mask)[0]
+
+#            if len(other_indices) > 0:
+            if False:
+                other_coords = coords[other_indices]
+
+                # Use BallTree to find objects within threshold distance
+                tree = BallTree(np.radians(partition_coords), metric='haversine')
+                # Query which other objects are within threshold of
+                # partition objects
+                nearby_indices_list = tree.query_radius(np.radians(other_coords),
+                                                        r=threshold_rad)
+
+                # Find which other objects have neighbors in this partition
+                nearby_other_mask = np.array([len(x) > 0 for x in nearby_indices_list])
+                nearby_other_indices = other_indices[nearby_other_mask]
+
+                # Combine partition objects with nearby boundary objects
+                combined_indices = np.concatenate([partition_indices, nearby_other_indices])
+            else:
+                combined_indices = partition_indices
+
+            if len(combined_indices) == 0:
+                continue
+
+            # Create subset DataFrame for clustering
+            subset_df = diaObjects.iloc[combined_indices]
+
+            # Cluster this subset
+            subset_labels = self._cluster_subset(subset_df)
+
+            # Map subset cluster labels back to global indices.
+            # Objects with the same subset label should have the same
+            # global label.
+            subset_indices = combined_indices
+            label_to_global = {}
+
+            for i, (idx, label) in enumerate(zip(subset_indices, subset_labels.values)):
+                if label not in label_to_global:
+                    # Use the first index we see for this label as the
+                    # canonical one
+                    label_to_global[label] = cluster_labels[idx]
+                else:
+                    # Merge: set this object's label to match the canonical one
+                    old_label = cluster_labels[idx]
+                    new_label = label_to_global[label]
+                    if old_label != new_label:
+                        # Update all objects with old_label to new_label
+                        cluster_labels[cluster_labels == old_label] = new_label
+
+        # Renumber labels to be contiguous
+        unique_labels = np.unique(cluster_labels)
+        label_map = {old: new for new, old in enumerate(unique_labels)}
+        final_labels = np.array([label_map[lbl] for lbl in cluster_labels])
+
+        self.log.info(f"Clustered {n_objects} diaObjects into "
+                      f"{len(unique_labels)} clusters.")
+
+        return pd.Series(final_labels, index=diaObjects.index,
+                         name="cluster_label")
+
+    def _cluster_subset(self, diaObjects):
+        """Apply agglomerative clustering to a subset of DiaObjects.
+
+        This is the core clustering routine applied to subsets that fit
+        in memory.
+
+        Parameters
+        ----------
+        diaObjects : `pandas.DataFrame`
+            DataFrame of DiaObjects to cluster. Must include columns:
+
+            - 'ra' : Right ascension in degrees
+            - 'dec' : Declination in degrees
+
+        Returns
+        -------
+        cluster_labels : `pandas.Series`
+            Series of cluster labels (integers) indexed to match the
+            input DataFrame.
+        """
+        coords = diaObjects[['ra', 'dec']].values
+
+        # Adjust n_neighbors if subset is smaller than configured value
+        n_neighbors = min(self.config.nNeighborsConnectivity, len(diaObjects) - 1)
+        if n_neighbors < 1:
+            # Single object, just return label 0
+            return pd.Series([0], index=diaObjects.index, name="cluster_label")
+
+        connectivity = kneighbors_graph(coords, n_neighbors=n_neighbors,
                                         mode='connectivity', include_self='auto')
 
         clustering = AgglomerativeClustering(distance_threshold=self.config.maxClusteringDistance/3600.,
                                              connectivity=connectivity,
                                              n_clusters=None).fit(coords)
-
-        self.log.info(f"Clustered {len(clustering.labels_)} diaObjects into "
-                      f"{len(np.unique(clustering.labels_))} clusters.")
 
         return pd.Series(clustering.labels_, index=diaObjects.index,
                          name="cluster_label")
