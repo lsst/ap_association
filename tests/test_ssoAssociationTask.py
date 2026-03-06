@@ -22,6 +22,7 @@
 import numpy as np
 from astropy.table import Table
 import astropy.table as tb
+import astropy.units as u
 import unittest
 
 from lsst.pipe.tasks.ssoAssociation import SolarSystemAssociationTask
@@ -67,13 +68,13 @@ class TestSolarSystemAssociation(unittest.TestCase):
         # Convert to task required format
         self.testDiaSources = catalog.asAstropy()
         self.testDiaSources.rename_columns(["coord_ra", "coord_dec"], ["ra", "dec"])
-        self.testDiaSources["ra"] = np.rad2deg(self.testDiaSources["ra"])
-        self.testDiaSources["dec"] = np.rad2deg(self.testDiaSources["dec"])
-        self.testDiaSources["midpointMjdTai"] = self.testDiaSources["ra"]*0 + 65000.0
+        self.testDiaSources["ra"] = np.rad2deg(self.testDiaSources["ra"]) * u.deg
+        self.testDiaSources["dec"] = np.rad2deg(self.testDiaSources["dec"]) * u.deg
+        self.testDiaSources["midpointMjdTai"] = (self.testDiaSources["ra"]*0 + 65000.0) * u.d
         self.testDiaSources["extendedness"] = np.zeros(len(self.testDiaSources))
         self.testDiaSources["band"] = np.full(len(self.testDiaSources), 'r', dtype='U1')
-        self.testDiaSources["psfFlux"] = np.ones(len(self.testDiaSources)) * 3.
-        self.testDiaSources["psfFluxErr"] = np.ones(len(self.testDiaSources)) * 0.1
+        self.testDiaSources["psfFlux"] = np.ones(len(self.testDiaSources)) * 3. * u.nJy
+        self.testDiaSources["psfFluxErr"] = np.ones(len(self.testDiaSources)) * 0.1 * u.nJy
         self.testDiaSources = tb.vstack([self.testDiaSources, Table([[45], [45]], names=["ra", "dec"])])
         self.testDiaSources["ssObjectId"] = 0
         self.testDiaSources["diaSourceId"] = [i for i in range(len(self.testDiaSources))]
@@ -84,17 +85,17 @@ class TestSolarSystemAssociation(unittest.TestCase):
         self.testSsObjects["MPCORB_unpacked_primary_provisional_designation"] = self.testSsObjects["ObjID"]
 
         self.testSsObjects["ssObjectId"] = [21164728253101137]
-        self.testSsObjects["ephRa"] = [45]
-        self.testSsObjects["ephDec"] = [45]
-        self.testSsObjects["tmin"] = [-1]
-        self.testSsObjects["tmax"] = [1]
+        self.testSsObjects["ephRa"] = [45 * u.deg]
+        self.testSsObjects["ephDec"] = [45 * u.deg]
+        self.testSsObjects["tmin"] = [-1 * u.d]
+        self.testSsObjects["tmax"] = [1 * u.d]
         self.testSsObjects["obs_x_poly"] = [np.array([0])]
         self.testSsObjects["obs_y_poly"] = [np.array([0])]
         self.testSsObjects["obs_z_poly"] = [np.array([0])]
         self.testSsObjects["obj_x_poly"] = [np.array([1])]
         self.testSsObjects["obj_y_poly"] = [np.array([1])]
         self.testSsObjects["obj_z_poly"] = [np.array([2 ** 0.5])]
-        self.testSsObjects["Err(arcsec)"] = np.ones(len(self.testSsObjects))
+        self.testSsObjects["Err(arcsec)"] = np.ones(len(self.testSsObjects)) * u.arcsec
         self.testSsObjects["trailedSourceMagTrue"] = 22
 
     def test_run(self):
