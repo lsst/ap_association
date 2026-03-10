@@ -38,7 +38,7 @@ import lsst.sphgeom
 from lsst.ap.association.utils import getRegion
 
 
-def makeDiaObjects(nObjects, exposure, rng):
+def makeDiaObjects(nObjects, exposure, rng, startId=1):
     """Make a test set of DiaObjects.
 
     Parameters
@@ -64,7 +64,7 @@ def makeDiaObjects(nObjects, exposure, rng):
         coord = exposure.wcs.pixelToSky(x, y)
         newObject = {"ra": coord.getRa().asDegrees(),
                      "dec": coord.getDec().asDegrees(),
-                     "diaObjectId": idx + 1,
+                     "diaObjectId": idx + startId,
                      "nDiaSources": 5}
         for f in ["u", "g", "r", "i", "z", "y"]:
             newObject["%s_psfFluxNdata" % f] = 0
@@ -73,7 +73,7 @@ def makeDiaObjects(nObjects, exposure, rng):
     return pd.DataFrame(data=data).set_index("diaObjectId", drop=False)
 
 
-def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False, flagList=None):
+def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False, flagList=None, startId=1):
     """Make a test set of DiaSources.
 
     Parameters
@@ -127,7 +127,7 @@ def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False
                      "diaObjectId": objId,
                      "ssObjectId": 0,
                      "parentDiaSourceId": 0,
-                     "diaSourceId": idx + 1,
+                     "diaSourceId": idx + startId,
                      "midpointMjdTai": midpointMjdTai + 1.0 * idx,
                      "band": exposure.getFilter().bandLabel,
                      "psfNdata": 0,
@@ -139,7 +139,7 @@ def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False
     return pd.DataFrame(data=data).set_index(["diaObjectId", "band", "diaSourceId"], drop=False)
 
 
-def makeSolarSystemSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False):
+def makeSolarSystemSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False, startId=1):
     """Make a test set of solar system sources.
 
     Parameters
@@ -162,14 +162,16 @@ def makeSolarSystemSources(nSources, diaObjectIds, exposure, rng, randomizeObjec
     solarSystemSources : `pandas.DataFrame`
         Solar system sources generated across the exposure.
     """
-    solarSystemSources = makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False)
+    solarSystemSources = makeDiaSources(nSources, diaObjectIds, exposure, rng,
+                                        randomizeObjects=False,
+                                        startId=startId)
     solarSystemSources["ssObjectId"] = rng.integers(0, high=2**63-1, size=nSources)
     solarSystemSources["Err(arcsec)"] = rng.uniform(0.2, 0.4, size=nSources)
 
     return solarSystemSources
 
 
-def makeDiaForcedSources(nForcedSources, diaObjectIds, exposure, rng, randomizeObjects=False):
+def makeDiaForcedSources(nForcedSources, diaObjectIds, exposure, rng, randomizeObjects=False, startId=1):
     """Make a test set of DiaSources.
 
     Parameters
@@ -207,7 +209,7 @@ def makeDiaForcedSources(nForcedSources, diaObjectIds, exposure, rng, randomizeO
         x = rng.uniform(bbox.minX, bbox.maxX)
         y = rng.uniform(bbox.minY, bbox.maxY)
         coord = exposure.wcs.pixelToSky(x, y)
-        data.append({"diaForcedSourceId": i + 1,
+        data.append({"diaForcedSourceId": i + startId,
                      "visit": visit + i,
                      "detector": detector,
                      "diaObjectId": objId,

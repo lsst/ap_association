@@ -307,7 +307,11 @@ class PackageAlertsTask(pipeBase.Task):
                 else:
                     objSourceHistory = None
                 if doRunForcedMeasurement and diaObject["nDiaSources"] >= forcedSourceHistoryThreshold:
-                    objDiaForcedSources = diaForcedSources.loc[srcIndex[0]]
+                    if srcIndex[0] in diaForcedSources.diaObjectId:
+                        objDiaForcedSources = diaForcedSources.loc[srcIndex[0]]
+                    else:
+                        # Send empty table with correct columns
+                        objDiaForcedSources = diaForcedSources.loc[[]]
                 else:
                     # Send empty table with correct columns
                     objDiaForcedSources = diaForcedSources.loc[[]]

@@ -456,6 +456,189 @@ class TestDiaPipelineTask(unittest.TestCase):
                           reliabilityThreshold=0.1, lowSnrReliabilityThreshold=0.5,
                           badFlags=[badFlagName])
 
+    def testRunWithForcedMeasurement(self):
+        """Test running association with forced photometry."""
+
+        reliabilityThreshold = 0.5
+        trailLengthThreshold = 1.0
+        config = self._makeDefaultConfig(config_file=self.config_file.name,
+                                         doPackageAlerts=False,
+                                         doRunForcedMeasurement=True,
+                                         forcedReliabilityThreshold=reliabilityThreshold,
+                                         forcedTrailLengthThreshold=trailLengthThreshold)
+        task = DiaPipelineTask(config=config)
+        nDeepObjects = 20
+        nShallowObjects = 20
+        nGoodDiaSourcesDeep = 100
+        nGoodDiaSourcesShallow = nShallowObjects
+        nGoodDiaSources = nGoodDiaSourcesDeep + nGoodDiaSourcesShallow
+        nBadDiaSources = 200
+
+        # Create diaObjects
+        diaObjectsDeep = makeDiaObjects(nDeepObjects, self.exposure, self.rng, startId=1)
+        diaObjectsShallow = makeDiaObjects(nShallowObjects, self.exposure, self.rng, startId=1 + nDeepObjects)
+        diaObjects = task.mergeCatalogs(diaObjectsDeep, diaObjectsShallow, tableName="DiaObject")
+
+        diaSourcesGoodDeep = makeDiaSources(nGoodDiaSourcesDeep, diaObjectsDeep["diaObjectId"].to_numpy(),
+                                            self.exposure, self.rng, startId=1,
+                                            flagList=config.forcedBadFlags)
+        diaSourcesGoodShallow = makeDiaSources(nGoodDiaSourcesShallow,
+                                               diaObjectsShallow["diaObjectId"].to_numpy(),
+                                               self.exposure, self.rng, startId=1 + nGoodDiaSourcesDeep,
+                                               flagList=config.forcedBadFlags)
+
+        diaSourcesGoodDeep = convertDataFrameToSdmSchema(task.schema, diaSourcesGoodDeep,
+                                                         tableName="DiaSource", skipIndex=True)
+        diaSourcesGood = task.mergeCatalogs(diaSourcesGoodDeep, diaSourcesGoodShallow, tableName="DiaSource")
+
+        diaSourcesBad = makeDiaSources(nBadDiaSources, diaObjects["diaObjectId"].to_numpy(), self.exposure,
+                                       self.rng, randomizeObjects=True, startId=1 + nGoodDiaSources,
+                                       flagList=config.forcedBadFlags)
+        diaSourcesGood['reliability'] = (self.rng.random(nGoodDiaSources)*(1 - reliabilityThreshold)
+                                         + reliabilityThreshold)
+        diaSourcesGood['trailLength'] = self.rng.random(nGoodDiaSources)*trailLengthThreshold
+        diaSourcesBad = convertDataFrameToSdmSchema(task.schema, diaSourcesBad,
+                                                    tableName="DiaSource", skipIndex=True)
+
+        # Set some "bad" diaSources to have bad reliability, some good
+        diaSourcesBad['reliability'] = self.rng.random(nBadDiaSources)
+        # Set some "bad" diaSources to have too long trail lengths, some acceptible
+        diaSourcesBad['trailLength'] = self.rng.random(nBadDiaSources)*trailLengthThreshold + 0.5
+        missingBadFlags = ((diaSourcesBad['reliability'] > reliabilityThreshold)
+                           & (diaSourcesBad['trailLength'] < trailLengthThreshold)
+                           )
+        for badFlag in config.forcedBadFlags:
+            # Set a fraction of the bad diaSources to have each flag, assigned randomly
+            diaSourcesBad[badFlag] = self.rng.random(nBadDiaSources) > 0.8
+            missingBadFlags &= ~diaSourcesBad[badFlag]
+        # Catch any "bad" diaSources that have not yet been flagged
+        if np.any(missingBadFlags):
+            diaSourcesBad[badFlag] |= missingBadFlags
+        diaObjectsForcedGoodOnly = task._selectGoodDiaObjects(diaObjects, diaSourcesGood)
+        diaObjectsForcedBadOnly = task._selectGoodDiaObjects(diaObjects, diaSourcesBad)
+        # None of the diaObjects should be selected if only given the bad diaSources
+        self.assertTrue(diaObjectsForcedBadOnly.empty)
+
+        diaSources = task.mergeCatalogs(diaSourcesGood, diaSourcesBad, tableName="DiaSource")
+        diaObjectsForced = task._selectGoodDiaObjects(diaObjects, diaSources)
+        # The number of diaObjects selected should be the same regardless of
+        # whether the bad diaSources are included
+        self.assertEqual(len(diaObjectsForced), len(diaObjectsForcedGoodOnly))
+        # All of the deep diaObjects should be selected, and none of the shallow
+        self.assertEqual(len(diaObjectsForced), nDeepObjects)
+        fSrc = task.runForcedMeasurement(diaObjectsForced, diaObjectsForced, self.exposure, self.exposure,
+                                         IdGenerator())
+        self.assertEqual(set(fSrc['diaObjectId']), set(diaObjectsDeep['diaObjectId']))
+
+    def test_selectGoodObjects(self):
+        """Test the diaObject selection funtion used for forced photometry.
+        """
+        reliabilityThreshold = 0.5
+        trailLengthThreshold = 1.0
+        config = self._makeDefaultConfig(config_file=self.config_file.name,
+                                         doPackageAlerts=False,
+                                         doRunForcedMeasurement=True,
+                                         forcedReliabilityThreshold=reliabilityThreshold,
+                                         forcedTrailLengthThreshold=trailLengthThreshold)
+        task = DiaPipelineTask(config=config)
+        nObjects = 20
+        nDiaSources = 100
+
+        # Create diaObjects
+        diaObjects = makeDiaObjects(nObjects, self.exposure, self.rng, startId=1)
+
+        diaSources = makeDiaSources(nDiaSources, diaObjects["diaObjectId"].to_numpy(),
+                                    self.exposure, self.rng, startId=1,
+                                    flagList=config.forcedBadFlags)
+        # Since flagList is not specified, the columns will be missing, and added and filled with NaNs
+        # when put through convertDataFrameToSdmSchema.
+        diaSourcesMissingColumns = makeDiaSources(nDiaSources, diaObjects["diaObjectId"].to_numpy(),
+                                                  self.exposure, self.rng, startId=1 + nDiaSources)
+        # Should raise an error if run before adding the required columns
+        with self.assertRaises(RuntimeError):
+            task._selectGoodDiaObjects(diaObjects, diaSources)
+
+        diaSources['reliability'] = (self.rng.random(nDiaSources)*(1 - reliabilityThreshold)
+                                     + reliabilityThreshold)
+        diaSources['trailLength'] = self.rng.random(nDiaSources)*trailLengthThreshold
+
+        diaSourcesMissingColumns['reliability'] = (self.rng.random(nDiaSources)*(1 - reliabilityThreshold)
+                                                   + reliabilityThreshold)
+        diaSourcesMissingColumns['trailLength'] = self.rng.random(nDiaSources)*trailLengthThreshold
+
+        diaSourcesNotMatched = makeDiaSources(nDiaSources, diaObjects["diaObjectId"].to_numpy() + 999,
+                                              self.exposure, self.rng, startId=1)
+
+        diaSourcesNotMatched['reliability'] = (self.rng.random(nDiaSources)*(1 - reliabilityThreshold)
+                                               + reliabilityThreshold)
+        diaSourcesNotMatched['trailLength'] = self.rng.random(nDiaSources)*trailLengthThreshold
+
+        diaSources = convertDataFrameToSdmSchema(task.schema, diaSources,
+                                                 tableName="DiaSource", skipIndex=True)
+        diaSourcesMissingColumns = convertDataFrameToSdmSchema(task.schema, diaSourcesMissingColumns,
+                                                               tableName="DiaSource", skipIndex=True)
+        diaSourcesNotMatched = convertDataFrameToSdmSchema(task.schema, diaSourcesNotMatched,
+                                                           tableName="DiaSource", skipIndex=True)
+
+        # Run the method with missing flags
+        diaObjectsSelected = task._selectGoodDiaObjects(diaObjects, diaSources)
+        diaObjectsBadSelection = task._selectGoodDiaObjects(diaObjects, diaSourcesNotMatched)
+        diaObjectsNaNSelection = task._selectGoodDiaObjects(diaObjects, diaSourcesMissingColumns)
+        # The matched catalog of good diaSources should not drop any diaObjects
+        self.assertTrue(diaObjects.equals(diaObjectsSelected))
+        # The mis-matched catalog of good diaSources should drop every diaObject
+        self.assertTrue(diaObjectsBadSelection.empty)
+        # All diaObjects should be dropped for the diaSource catalog that has all NaN values for the flags
+        self.assertTrue(diaObjectsNaNSelection.empty)
+
+    def test_selectGoodObjectsWithWrongFlags(self):
+        """Test the diaObject selection funtion used for forced photometry.
+        """
+        reliabilityThreshold = 0.5
+        trailLengthThreshold = 1.0
+        config = self._makeDefaultConfig(config_file=self.config_file.name,
+                                         doPackageAlerts=False,
+                                         doRunForcedMeasurement=True,
+                                         forcedReliabilityThreshold=reliabilityThreshold,
+                                         forcedTrailLengthThreshold=trailLengthThreshold,
+                                         forcedBadFlags=['foo', 'bar'])
+        task = DiaPipelineTask(config=config)
+        nObjects = 20
+        nDiaSources = 100
+
+        # Create diaObjects
+        diaObjects = makeDiaObjects(nObjects, self.exposure, self.rng, startId=1)
+
+        diaSources = makeDiaSources(nDiaSources, diaObjects["diaObjectId"].to_numpy(),
+                                    self.exposure, self.rng, startId=1)
+
+        diaSources['reliability'] = (self.rng.random(nDiaSources)*(1 - reliabilityThreshold)
+                                     + reliabilityThreshold)
+        diaSources['trailLength'] = self.rng.random(nDiaSources)*trailLengthThreshold
+
+        diaSourcesNotMatched = makeDiaSources(nDiaSources, diaObjects["diaObjectId"].to_numpy() + 999,
+                                              self.exposure, self.rng, startId=1)
+
+        diaSourcesNotMatched['reliability'] = (self.rng.random(nDiaSources)*(1 - reliabilityThreshold)
+                                               + reliabilityThreshold)
+        diaSourcesNotMatched['trailLength'] = self.rng.random(nDiaSources)*trailLengthThreshold
+
+        diaSources = convertDataFrameToSdmSchema(task.schema, diaSources,
+                                                 tableName="DiaSource", skipIndex=True)
+        diaSourcesNotMatched = convertDataFrameToSdmSchema(task.schema, diaSourcesNotMatched,
+                                                           tableName="DiaSource", skipIndex=True)
+
+        # Verify that the flags are in fact missing
+        for flag in config.forcedBadFlags:
+            self.assertNotIn(flag, diaSources.columns)
+        # Run the method with missing flags
+        diaObjectsSelected = task._selectGoodDiaObjects(diaObjects, diaSources)
+        diaObjectsBadSelection = task._selectGoodDiaObjects(diaObjects, diaSourcesNotMatched)
+        # The matched catalog of good diaSources should not drop any diaObjects
+        self.assertTrue(diaObjects.equals(diaObjectsSelected))
+        # The mis-matched catalog of good diaSources should drop every diaObject
+        self.assertTrue(diaObjectsBadSelection.empty)
+
     def test_mergeEmptyCatalog(self):
         """Test that a catalog is unchanged if it is merged with an empty
         catalog.
