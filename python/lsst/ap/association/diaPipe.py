@@ -1061,9 +1061,13 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         standardizedAssociatedDiaSources : pandas.DataFrame
             The standardized DiaSource catalog
         """
+        for col in table.colnames:
+            if hasattr(table[col], 'filled'):
+                table[col] = table[col].filled(None)
         dataFrame = table.to_pandas()
         standardizedDataFrame = self.standardizeDataFrame(dataFrame, tableName, nullColumns=nullColumns)
-        return standardizedDataFrame
+        outputTable = Table.from_pandas(standardizedDataFrame)
+        return outputTable
 
     @timeMethod
     def mergeAssociatedCatalogs(self, preloadedDiaSources, associatedDiaSources, diaObjects, newDiaObjects,
