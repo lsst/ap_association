@@ -30,9 +30,11 @@ __all__ = ["MPSkyEphemerisQueryConfig", "MPSkyEphemerisQueryTask"]
 
 import numpy as np
 import os
-import pandas as pd
 import pyarrow as pa
 import requests
+
+from astropy.table import Table, MaskedColumn
+import astropy.units as u
 
 from lsst.ap.association.utils import getMidpointFromTimespan
 from lsst.geom import SpherePoint
@@ -58,6 +60,28 @@ ELEMENTS_LIST_MPC_ORBITS = ['designation', 'id', 'packed_primary_provisional_des
                             'yarkovsky_unc', 'srp_unc', 'a1_unc', 'a2_unc', 'a3_unc', 'dt_unc',
                             'mean_anomaly_unc', 'period_unc', 'mean_motion_unc', 'epoch_mjd', 'h', 'g',
                             'not_normalized_rms', 'normalized_rms', 'earth_moid', 'fitting_datetime']
+
+# Units for orbital element columns (MPC orbits schema)
+ELEMENTS_MPC_ORBITS_UNITS = {
+    'a': u.AU, 'q': u.AU, 'e': u.dimensionless_unscaled,
+    'i': u.deg, 'node': u.deg, 'argperi': u.deg,
+    'peri_time': u.d, 'mean_anomaly': u.deg,
+    'period': u.d, 'mean_motion': u.deg/u.d,
+    'a_unc': u.AU, 'q_unc': u.AU, 'e_unc': u.dimensionless_unscaled,
+    'i_unc': u.deg, 'node_unc': u.deg, 'argperi_unc': u.deg,
+    'peri_time_unc': u.d, 'mean_anomaly_unc': u.deg,
+    'period_unc': u.d, 'mean_motion_unc': u.deg/u.d,
+    'earth_moid': u.AU, 'epoch_mjd': u.d,
+    'arc_length_total': u.d, 'arc_length_sel': u.d,
+    'h': u.mag, 'not_normalized_rms': u.arcsec, 'normalized_rms': u.dimensionless_unscaled,
+}
+
+# Units for classic orbital elements schema
+ELEMENTS_UNITS = {
+    'q': u.AU, 'e': u.dimensionless_unscaled,
+    'incl': u.deg, 'node': u.deg, 'peri': u.deg,
+    't_p': u.d, 'epoch': u.d,
+}
 
 
 class MPSkyEphemerisQueryConnections(PipelineTaskConnections,
@@ -133,16 +157,16 @@ class MPSkyEphemerisQueryTask(PipelineTask):
         result : `lsst.pipe.base.Struct`
             Results struct with components:
 
-            - ``ssObjects`` : `pandas.DataFrame`
-                DataFrame containing Solar System Objects near the detector
+            - ``ssObjects`` : `astropy.table.Table`
+                Table containing Solar System Objects near the detector
                 footprint as retrieved by MPSky. The columns are as follows:
 
                 ``Name``
                     object name (`str`)
                 ``ra``
-                    RA in decimal degrees (`float`)
+                    RA in decimal degrees (`float`, degrees)
                 ``dec``
-                    DEC in decimal degrees (`float`)
+                    DEC in decimal degrees (`float`, degrees)
                 ``obj_X_poly``, ``obj_Y_poly``, ``obj_Z_poly``
                     Chebyshev coefficients for object path
                 ``obs_X_poly``, ``obs_Y_poly``, ``obs_Z_poly``
@@ -169,14 +193,19 @@ class MPSkyEphemerisQueryTask(PipelineTask):
                                                          expRadius + self.config.queryBufferRadiusDegrees,
                                                          mpSkyURL)
         if elements is not None:
-            if 'mpc_orb_jsonb' in elements.columns:
+            if 'mpc_orb_jsonb' in elements.colnames:
                 for element in ELEMENTS_LIST_MPC_ORBITS:
                     mpSkySsObjects[self.config.mpcorb_prefix + element] = elements[element]
             else:
                 for element in ELEMENTS_LIST:
                     mpSkySsObjects[self.config.mpcorb_prefix + NAMING_MAP[element]] = elements[element]
-        mpSkySsObjects = mpSkySsObjects.fillna(value=np.nan)
-        # ssObjectId and mpcDesignation are also in the MPCORB schema so let's add them here.
+
+        # Fill masked values with NaN for float columns (equivalent to DataFrame.fillna)
+        for colname in mpSkySsObjects.colnames:
+            col = mpSkySsObjects[colname]
+            if hasattr(col, 'filled') and col.dtype.kind == 'f':
+                mpSkySsObjects[colname] = col.filled(np.nan)
+
         return Struct(
             ssObjects=mpSkySsObjects,
         )
@@ -197,10 +226,10 @@ class MPSkyEphemerisQueryTask(PipelineTask):
 
         Returns
         -------
-        mpSkySsObjects : `pandas.DataFrame`
-            DataFrame with Solar System Object information and RA/DEC position
+        mpSkySsObjects : `astropy.table.Table`
+            Table with Solar System Object information and RA/DEC position
             within the visit.
-        elements : `pandas.DataFrame` or `None`
+        elements : `astropy.table.Table` or `None`
             Orbital elements of ssObjects (to pass to alerts)
         """
         fieldRA = expCenter.getRa().asDegrees()
@@ -226,49 +255,67 @@ class MPSkyEphemerisQueryTask(PipelineTask):
                     schema = reader.schema
                     r = next(reader)
 
-            # construct an elements pandas dataframe
+            # Construct an elements astropy Table
             if "q" in schema.names:
                 if "mpc_orb_jsonb" in schema.names:
                     colnames = ELEMENTS_LIST_MPC_ORBITS
+                    units_map = ELEMENTS_MPC_ORBITS_UNITS
                 else:
                     colnames = ELEMENTS_LIST
-                cols = {col: r[col].to_numpy(zero_copy_only=False) for col in colnames}
-                elements = pd.DataFrame(cols)
-                for c in cols:
-                    if c in ['created_at', 'fitting_datetime', 'updated_at']:
-                        elements[c] = None
-                        # TODO (DM-53952): Handle properly, probably as a datetime
+                    units_map = {NAMING_MAP[k]: v for k, v in ELEMENTS_UNITS.items()}
+
+                # Columns that are timestamps/datetimes — store as masked strings
+                DATETIME_COLS = {'created_at', 'fitting_datetime', 'updated_at'}
+                # Columns that should be stored as plain strings (object dtype in arrow)
+                STRING_COLS = {'designation', 'id', 'packed_primary_provisional_designation',
+                               'unpacked_primary_provisional_designation', 'mpc_orb_jsonb'}
+
+                elements = Table()
+                for col in colnames:
+                    data = r[col].to_numpy(zero_copy_only=False)
+                    if col in DATETIME_COLS:
+                        # Store as masked empty strings — TODO (DM-53952): handle as datetime
+                        elements[col] = MaskedColumn(
+                            np.full(len(data), "", dtype=str), mask=np.ones(len(data), dtype=bool)
+                        )
+                    elif col in STRING_COLS:
+                        # Ensure clean string dtype, not object
+                        elements[col] = np.array(data, dtype=str)
+                    else:
+                        unit = units_map.get(col, None)
+                        if unit is None:
+                            elements[col] = MaskedColumn(data)
+                        else:
+                            elements[col] = MaskedColumn(data, unit=unit)
             else:
                 elements = None
-
-            mpSkySsObjects = pd.DataFrame()
-            mpSkySsObjects['ObjID'] = r["name"].to_numpy(zero_copy_only=False)
-            mpSkySsObjects['ra'] = r["ra"].to_numpy()
-            mpSkySsObjects['dec'] = r["dec"].to_numpy()
-            mpSkySsObjects['tmin'] = r["tmin"].to_numpy()
-            mpSkySsObjects['tmax'] = r["tmax"].to_numpy()
-
-            mpSkySsObjects['trailedSourceMagTrue'] = np.nan
-            if 'Vmag' in r:
-                mpSkySsObjects['trailedSourceMagTrue'] = r["Vmag"].to_numpy()
 
             object_polynomial = p.to_numpy()
             observer_polynomial = op.to_numpy()
 
-            mpSkySsObjects['obj_x_poly'] = [poly[0] for poly in object_polynomial.T]
-            mpSkySsObjects['obj_y_poly'] = [poly[1] for poly in object_polynomial.T]
-            mpSkySsObjects['obj_z_poly'] = [poly[2] for poly in object_polynomial.T]
-            mpSkySsObjects['obs_x_poly'] = [observer_polynomial.T[0] for
-                                            i in range(len(mpSkySsObjects))]
-            mpSkySsObjects['obs_y_poly'] = [observer_polynomial.T[1] for
-                                            i in range(len(mpSkySsObjects))]
-            mpSkySsObjects['obs_z_poly'] = [observer_polynomial.T[2] for
-                                            i in range(len(mpSkySsObjects))]
-            mpSkySsObjects['Err(arcsec)'] = 2
-            if 'packed_primary_provisional_designation' in elements.columns:
-                desigs = elements['packed_primary_provisional_designation'].values
+            n = len(r["name"])
+            vmag_data = r["Vmag"].to_numpy() if 'Vmag' in r else np.full(n, np.nan)
+
+            mpSkySsObjects = Table({
+                'ObjID': r["name"].to_numpy(zero_copy_only=False).astype(str),
+                'ra': MaskedColumn(r["ra"].to_numpy(), unit=u.deg),
+                'dec': MaskedColumn(r["dec"].to_numpy(), unit=u.deg),
+                'tmin': MaskedColumn(r["tmin"].to_numpy(), unit=u.d),
+                'tmax': MaskedColumn(r["tmax"].to_numpy(), unit=u.d),
+                'trailedSourceMagTrue': MaskedColumn(vmag_data, unit=u.mag),
+                'obj_x_poly': [poly[0] for poly in object_polynomial.T],
+                'obj_y_poly': [poly[1] for poly in object_polynomial.T],
+                'obj_z_poly': [poly[2] for poly in object_polynomial.T],
+                'obs_x_poly': [observer_polynomial.T[0] for _ in range(n)],
+                'obs_y_poly': [observer_polynomial.T[1] for _ in range(n)],
+                'obs_z_poly': [observer_polynomial.T[2] for _ in range(n)],
+                'Err(arcsec)': MaskedColumn(np.full(n, 2.0), unit=u.arcsec),
+            })
+
+            if 'packed_primary_provisional_designation' in elements.colnames:
+                desigs = elements['packed_primary_provisional_designation'].data
             else:
-                desigs = mpSkySsObjects['ObjID'].values
+                desigs = mpSkySsObjects['ObjID'].data
             mpSkySsObjects['ssObjectId'] = [obj_id_to_ss_object_id(v) for v in desigs]
 
             nFound = len(mpSkySsObjects)
