@@ -27,11 +27,13 @@ import pandas as pd
 import numpy as np
 
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
+from lsst.afw.coord import Observatory
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 from lsst.daf.base import DateTime, PropertySet
 import lsst.daf.butler as dafButler
 import lsst.geom
+import lsst.meas.algorithms as measAlg
 from lsst.pipe.base.utils import RegionTimeInfo
 import lsst.sphgeom
 
@@ -250,9 +252,11 @@ def makeExposure(flipX=False, flipY=False):
     metadata.set("NAXIS2", 1153)
     metadata.set("RADECSYS", 'FK5')
     metadata.set("EQUINOX", 2000.)
+    ra = 215.604025685476
+    dec = 53.1595451514076
 
-    metadata.setDouble("CRVAL1", 215.604025685476)
-    metadata.setDouble("CRVAL2", 53.1595451514076)
+    metadata.setDouble("CRVAL1", ra)
+    metadata.setDouble("CRVAL2", dec)
     metadata.setDouble("CRPIX1", 1109.99981456774)
     metadata.setDouble("CRPIX2", 560.018167811613)
     metadata.set("CTYPE1", 'RA---SIN')
@@ -276,7 +280,14 @@ def makeExposure(flipX=False, flipY=False):
     visit = afwImage.VisitInfo(
         exposureTime=200.,
         date=DateTime("2014-05-13T17:00:00.000000000",
-                      DateTime.Timescale.TAI))
+                      DateTime.Timescale.TAI),
+        boresightRaDec=lsst.geom.SpherePoint(ra, dec, lsst.geom.degrees),
+        boresightRotAngle=73.2*lsst.geom.degrees,
+        rotType=afwImage.RotType.SKY,
+        observatory=Observatory(11.1*lsst.geom.degrees, 22.2*lsst.geom.degrees, 0.333),
+    )
+    kernel = measAlg.DoubleGaussianPsf(7, 7, 2.0).getKernel()
+    exposure.setPsf(measAlg.KernelPsf(kernel, exposure.getBBox().getCenter()))
     exposure.info.id = 1234
     exposure.setDetector(detector)
     exposure.info.setVisitInfo(visit)

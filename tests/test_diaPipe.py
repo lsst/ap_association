@@ -22,14 +22,13 @@
 import contextlib
 import tempfile
 import unittest
-from unittest.mock import patch, Mock, MagicMock, DEFAULT
+from unittest.mock import patch, MagicMock, DEFAULT
 import warnings
 
 import numpy as np
 import pandas as pd
 import astropy.table as tb
 
-import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
 import lsst.dax.apdb as daxApdb
 from lsst.meas.base import IdGenerator
@@ -94,6 +93,8 @@ class TestDiaPipelineTask(unittest.TestCase):
         srcSchema.addField("base_PixelFlags_flag_offimage", type="Flag")
         self.srcSchema = afwTable.SourceCatalog(srcSchema)
         self.exposure = makeExposure(False, False)
+        self.diffim = makeExposure(False, False)
+        self.template = makeExposure(False, False)
         self.diaObjects = makeDiaObjects(20, self.exposure, rng)
         self.diaSources = makeDiaSources(
             100, self.diaObjects["diaObjectId"].to_numpy(), self.exposure, rng)
@@ -159,8 +160,6 @@ class TestDiaPipelineTask(unittest.TestCase):
         # Set DataFrame index testing to always return False. Mocks return
         # true for this check otherwise.
         task.testDataFrameIndex = lambda x: False
-        diffIm = Mock(spec=afwImage.ExposureF)
-        template = Mock(spec=afwImage.ExposureF)
         diaSrc = _makeMockDataFrame()
         ssObjects = _makeMockTable()
 
@@ -220,9 +219,9 @@ class TestDiaPipelineTask(unittest.TestCase):
 
             result = task.run(diaSrc,
                               None,
-                              diffIm,
+                              self.diffim,
                               self.exposure,
-                              template,
+                              self.template,
                               preloadedDiaObjects=self.diaObjects,
                               preloadedDiaSources=self.diaSources,
                               preloadedDiaForcedSources=self.diaForcedSources,
