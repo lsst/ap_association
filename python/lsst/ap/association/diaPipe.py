@@ -75,6 +75,23 @@ class TooManyDiaObjectsError(pipeBase.AlgorithmError):
                 }
 
 
+class PostApdbUpdateError(pipeBase.AlgorithmError):
+    """Raised for any error that occurs after the APDB has been updated.
+    This allows partial outputs to be written, and signals that processing
+    can't be retried.
+    """
+    def __init__(self, *, errorMsg):
+        msg = ("Aborting processing after writing to the APDB. "
+               "This image cannot be retried! "
+               "The original error was:\n"
+               f"{errorMsg}")
+        super().__init__(msg)
+
+    @property
+    def metadata(self):
+        return {}
+
+
 class DiaPipelineConnections(
         pipeBase.PipelineTaskConnections,
         dimensions=("instrument", "visit", "detector"),
@@ -508,9 +525,27 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         if not self.config.doSolarSystemAssociation:
             inputs["solarSystemObjectTable"] = None
 
-        outputs = self.run(**inputs)
-
-        butlerQC.put(outputs, outputRefs)
+        associationResults = pipeBase.Struct(
+            apdbMarker=None,
+            associatedDiaSources=None,
+            diaForcedSources=None,
+            diaObjects=None,
+            associatedSsSources=None,
+            unassociatedSsObjects=None,
+            newDiaSources=None,
+            marginalDiaSources=None,
+        )
+        try:
+            self.run(**inputs, associationResults=associationResults)
+        except pipeBase.AlgorithmError as e:
+            error = pipeBase.AnnotatedPartialOutputsError.annotate(
+                e,
+                self,
+                log=self.log
+            )
+            butlerQC.put(associationResults, outputRefs)
+            raise error from e
+        butlerQC.put(associationResults, outputRefs)
 
     @timeMethod
     def run(self,
@@ -524,7 +559,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             preloadedDiaForcedSources,
             band,
             idGenerator,
-            solarSystemObjectTable=None):
+            solarSystemObjectTable=None,
+            associationResults=None):
         """Process DiaSources and DiaObjects.
 
         Load previous DiaObjects and their DiaSource history. Calibrate the
@@ -558,10 +594,14 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             Object that generates source IDs and random number generator seeds.
         solarSystemObjectTable : `astropy.table.Table`
             Preloaded Solar System objects expected to be visible in the image.
+        associationResults : `lsst.pipe.base.Struct`, optional
+            Result struct that is modified to allow saving of partial outputs
+            for some failure conditions. If the task completes successfully,
+            this is also returned.
 
         Returns
         -------
-        results : `lsst.pipe.base.Struct`
+        associationResults : `lsst.pipe.base.Struct`
             Results struct with components.
 
             - ``apdbMarker`` : Marker dataset to store in the Butler indicating
@@ -580,6 +620,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         RuntimeError
             Raised if duplicate DiaObjects or duplicate DiaSources are found.
         """
+
+        if associationResults is None:
+            associationResults = pipeBase.Struct()
         # Accept either legacySolarSystemTable or optional solarSystemObjectTable.
         if legacySolarSystemTable is not None and solarSystemObjectTable is None:
             solarSystemObjectTable = Table.from_pandas(legacySolarSystemTable)
@@ -676,64 +719,70 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             # A single log message is easier for Loki to parse than timeMethod's start+end pairs.
             self.log.verbose("writeToApdb: Took %.4f seconds", self.metadata["writeToApdbDuration"])
 
-        associatedSsSources = assocResults.associatedSsSources
-        associatedSsSourcesPlusMpcorb = None
-        if associatedSsSources is not None:
-            mpcorbColumns = [col for col in associatedSsSources.columns if col[:7] == 'MPCORB_']
-            associatedSsSourceMpcorb = associatedSsSources[mpcorbColumns].copy()
-            associatedSsSources = self.standardizeTable(associatedSsSources, "SSSource", nullColumns=[])
-            associatedSsSourcesPlusMpcorb = associatedSsSources.copy()
-            for mpcorbColumn in mpcorbColumns:
-                associatedSsSourcesPlusMpcorb[mpcorbColumn] = associatedSsSourceMpcorb[mpcorbColumn]
-
-        # patch the otherwise-empty validityStart field for the alerts
-        updatedDiaObjects['validityStartMjdTai'] = validityStart.get(system=DateTime.MJD, scale=DateTime.TAI)
-
-        # Package alerts
-        if self.config.doPackageAlerts:
-            # Append new forced sources to the full history
-            diaForcedSourcesFull = self.mergeCatalogs(preloadedDiaForcedSources, diaForcedSources,
-                                                      tableName="DiaForcedSource")
-            if self.testDataFrameIndex(diaForcedSources):
-                self.log.warning(
-                    "Duplicate DiaForcedSources created after merge with "
-                    "history and new sources. This may cause downstream "
-                    "problems. Dropping duplicates.")
-                # Drop duplicates via index and keep the first appearance.
-                # Reset due to the index shape being slight different than
-                # expected.
-                diaForcedSourcesFull = diaForcedSourcesFull.groupby(
-                    diaForcedSourcesFull.index).first()
-                diaForcedSourcesFull.reset_index(drop=True, inplace=True)
-                diaForcedSourcesFull.set_index(
-                    ["diaObjectId", "diaForcedSourceId"],
-                    drop=False,
-                    inplace=True)
-
-            self.alertPackager.run(assocResults.associatedDiaSources,
-                                   updatedDiaObjects,
-                                   preloadedDiaSources,
-                                   diaForcedSourcesFull,
-                                   diffIm,
-                                   exposure,
-                                   template,
-                                   ssSrc=associatedSsSourcesPlusMpcorb,
-                                   doRunForcedMeasurement=self.config.doRunForcedMeasurement,
-                                   forcedSourceHistoryThreshold=forcedSourceHistoryThreshold,
-                                   )
-
         # For historical reasons, apdbMarker is a Config even if it's not meant to be read.
         # A default Config is the cheapest way to satisfy the storage class.
-        marker = pexConfig.Config()
-        return pipeBase.Struct(apdbMarker=marker,
-                               associatedDiaSources=assocResults.associatedDiaSources,
-                               diaForcedSources=diaForcedSources,
-                               diaObjects=diaCalResult.diaObjectCat,
-                               associatedSsSources=associatedSsSources,
-                               unassociatedSsObjects=assocResults.unassociatedSsObjects,
-                               newDiaSources=assocResults.newDiaSources,
-                               marginalDiaSources=assocResults.marginalDiaSources
-                               )
+        associationResults.apdbMarker = pexConfig.Config()
+        associationResults.associatedDiaSources = assocResults.associatedDiaSources
+        associationResults.diaForcedSources = diaForcedSources
+        associationResults.diaObjects = diaCalResult.diaObjectCat
+        associationResults.unassociatedSsObjects = assocResults.unassociatedSsObjects
+        associationResults.newDiaSources = assocResults.newDiaSources
+        associationResults.marginalDiaSources = assocResults.marginalDiaSources
+
+        # Catch *any* error after we have updated the APDB
+        try:
+            associatedSsSources = assocResults.associatedSsSources
+            associatedSsSourcesPlusMpcorb = None
+            if associatedSsSources is not None:
+                mpcorbColumns = [col for col in associatedSsSources.columns if col[:7] == 'MPCORB_']
+                associatedSsSourceMpcorb = associatedSsSources[mpcorbColumns].copy()
+                associatedSsSources = self.standardizeTable(associatedSsSources, "SSSource", nullColumns=[])
+                associatedSsSourcesPlusMpcorb = associatedSsSources.copy()
+                for mpcorbColumn in mpcorbColumns:
+                    associatedSsSourcesPlusMpcorb[mpcorbColumn] = associatedSsSourceMpcorb[mpcorbColumn]
+            associationResults.associatedSsSources = associatedSsSources
+
+            # patch the otherwise-empty validityStart field for the alerts
+            updatedDiaObjects['validityStartMjdTai'] = validityStart.get(system=DateTime.MJD,
+                                                                         scale=DateTime.TAI)
+
+            # Package alerts
+            if self.config.doPackageAlerts:
+                # Append new forced sources to the full history
+                diaForcedSourcesFull = self.mergeCatalogs(preloadedDiaForcedSources, diaForcedSources,
+                                                          tableName="DiaForcedSource")
+                if self.testDataFrameIndex(diaForcedSources):
+                    self.log.warning(
+                        "Duplicate DiaForcedSources created after merge with "
+                        "history and new sources. This may cause downstream "
+                        "problems. Dropping duplicates.")
+                    # Drop duplicates via index and keep the first appearance.
+                    # Reset due to the index shape being slight different than
+                    # expected.
+                    diaForcedSourcesFull = diaForcedSourcesFull.groupby(
+                        diaForcedSourcesFull.index).first()
+                    diaForcedSourcesFull.reset_index(drop=True, inplace=True)
+                    diaForcedSourcesFull.set_index(
+                        ["diaObjectId", "diaForcedSourceId"],
+                        drop=False,
+                        inplace=True)
+
+                self.alertPackager.run(assocResults.associatedDiaSources,
+                                       updatedDiaObjects,
+                                       preloadedDiaSources,
+                                       diaForcedSourcesFull,
+                                       diffIm,
+                                       exposure,
+                                       template,
+                                       ssSrc=associatedSsSourcesPlusMpcorb,
+                                       doRunForcedMeasurement=self.config.doRunForcedMeasurement,
+                                       forcedSourceHistoryThreshold=forcedSourceHistoryThreshold,
+                                       )
+        except Exception as e:
+            # Catch *any* error after we have updated the APDB
+            raise PostApdbUpdateError(errorMsg=repr(e))
+
+        return associationResults
 
     def _selectGoodDiaObjects(self, diaObjects, diaSources):
         """
