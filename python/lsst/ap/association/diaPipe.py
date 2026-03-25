@@ -826,37 +826,39 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 "DIA Object association will fail."
             )
 
-        visit_info = exposure.getInfo().getVisitInfo()
-        if visit_info is None:
-            errors.append(
-                f"{label}: VisitInfo is None; observation time, pointing, "
-                "rotation angle, and exposure duration are unavailable."
-            )
-        else:
-            obs_date = visit_info.getDate()
-            if not obs_date.isValid():
+        # Skip visitInfo checks for the template
+        if label != "Template":
+            visit_info = exposure.getInfo().getVisitInfo()
+            if visit_info is None:
                 errors.append(
-                    f"{label}: VisitInfo.date is invalid."
+                    f"{label}: VisitInfo is None; observation time, pointing, "
+                    "rotation angle, and exposure duration are unavailable."
                 )
+            else:
+                obs_date = visit_info.getDate()
+                if not obs_date.isValid():
+                    errors.append(
+                        f"{label}: VisitInfo.date is invalid."
+                    )
 
-            # boresightRaDec — written to APDB rows and alert payloads.
-            boresight = visit_info.getBoresightRaDec()
-            ra_deg = boresight.getRa().asDegrees()
-            dec_deg = boresight.getDec().asDegrees()
-            if not np.isfinite(ra_deg) or not np.isfinite(dec_deg):
-                errors.append(
-                    f"{label}: VisitInfo.boresightRaDec contains NaN "
-                    f"(RA={ra_deg}, Dec={dec_deg}); pointing metadata "
-                    "is missing or corrupt."
-                )
+                # boresightRaDec — written to APDB rows and alert payloads.
+                boresight = visit_info.getBoresightRaDec()
+                ra_deg = boresight.getRa().asDegrees()
+                dec_deg = boresight.getDec().asDegrees()
+                if not np.isfinite(ra_deg) or not np.isfinite(dec_deg):
+                    errors.append(
+                        f"{label}: VisitInfo.boresightRaDec contains NaN "
+                        f"(RA={ra_deg}, Dec={dec_deg}); pointing metadata "
+                        "is missing or corrupt."
+                    )
 
-            rot_deg = visit_info.getBoresightRotAngle().asDegrees()
-            if not np.isfinite(rot_deg):
-                errors.append(
-                    f"{label}: VisitInfo.boresightRotAngle is NaN; the "
-                    "ROTPA keyword will be corrupt in all alert cutout "
-                    "FITS headers."
-                )
+                rot_deg = visit_info.getBoresightRotAngle().asDegrees()
+                if not np.isfinite(rot_deg):
+                    errors.append(
+                        f"{label}: VisitInfo.boresightRotAngle is NaN; the "
+                        "ROTPA keyword will be corrupt in all alert cutout "
+                        "FITS headers."
+                    )
 
         filter_label = exposure.getFilter()
         if filter_label is None:
