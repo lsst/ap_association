@@ -620,9 +620,12 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         RuntimeError
             Raised if duplicate DiaObjects or duplicate DiaSources are found.
         """
-
         if associationResults is None:
             associationResults = pipeBase.Struct()
+        self._validateExposure(exposure, "Science")
+        self._validateExposure(diffIm, "Difference")
+        self._validateExposure(template, "Template")
+
         # Accept either legacySolarSystemTable or optional solarSystemObjectTable.
         if legacySolarSystemTable is not None and solarSystemObjectTable is None:
             solarSystemObjectTable = Table.from_pandas(legacySolarSystemTable)
@@ -783,6 +786,112 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             raise PostApdbUpdateError(errorMsg=repr(e))
 
         return associationResults
+
+    def _validateExposure(self, exposure, label):
+        """Validate exposure metadata early to avoid failures after updating
+        the APDB.
+
+        Parameters
+        ----------
+        exposure : `lsst.afw.image.ExposureF`
+            Calibrated science image that was subtracted.  Corresponds to the
+            ``exposure`` Butler connection (``{fakesType}calexp``).
+        label : `str`
+            Specification of the image being validated, for logging messages.
+
+        Raises
+        ------
+        ValueError
+            Raised when any required metadata field is missing or invalid.
+        """
+        errors = []
+
+        photo_calib = exposure.getPhotoCalib()
+        if photo_calib is None:
+            errors.append(
+                f"{label}: PhotoCalib is None; flux-to-nJy calibration "
+                "in alert packaging will fail."
+            )
+        else:
+            mean = photo_calib.getCalibrationMean()
+            if not np.isfinite(mean) or mean <= 0.0:
+                errors.append(
+                    f"{label}: PhotoCalib calibration mean is {mean!r}; "
+                    "must be a finite, positive value."
+                )
+
+        if exposure.getWcs() is None:
+            errors.append(
+                f"{label}: WCS is None; sky-to-pixel projection and "
+                "DIA Object association will fail."
+            )
+
+        # Skip visitInfo checks for the template
+        if label != "Template":
+            visit_info = exposure.getInfo().getVisitInfo()
+            if visit_info is None:
+                errors.append(
+                    f"{label}: VisitInfo is None; observation time, pointing, "
+                    "rotation angle, and exposure duration are unavailable."
+                )
+            else:
+                obs_date = visit_info.getDate()
+                if not obs_date.isValid():
+                    errors.append(
+                        f"{label}: VisitInfo.date is invalid."
+                    )
+
+                # boresightRaDec — written to APDB rows and alert payloads.
+                boresight = visit_info.getBoresightRaDec()
+                ra_deg = boresight.getRa().asDegrees()
+                dec_deg = boresight.getDec().asDegrees()
+                if not np.isfinite(ra_deg) or not np.isfinite(dec_deg):
+                    errors.append(
+                        f"{label}: VisitInfo.boresightRaDec contains NaN "
+                        f"(RA={ra_deg}, Dec={dec_deg}); pointing metadata "
+                        "is missing or corrupt."
+                    )
+
+                rot_deg = visit_info.getBoresightRotAngle().asDegrees()
+                if not np.isfinite(rot_deg):
+                    errors.append(
+                        f"{label}: VisitInfo.boresightRotAngle is NaN; the "
+                        "ROTPA keyword will be corrupt in all alert cutout "
+                        "FITS headers."
+                    )
+
+        filter_label = exposure.getFilter()
+        if filter_label is None:
+            errors.append(
+                f"{label}: filter label is None."
+            )
+        else:
+            band = filter_label.bandLabel if filter_label.hasBandLabel() else ""
+            if not band:
+                errors.append(
+                    f"{label}: filter label carries no band name."
+                )
+
+        bbox = exposure.getBBox()
+        if bbox.getWidth() <= 0 or bbox.getHeight() <= 0:
+            errors.append(
+                f"{label}: bounding box is empty "
+                f"({bbox.getWidth()}×{bbox.getHeight()} px); the "
+                "readout or ISR step may have failed."
+            )
+
+        if exposure.getPsf() is None:
+            errors.append(
+                f"{label}: PSF model is None."
+            )
+
+        if errors:
+            detail = "\n  ".join(errors)
+            raise ValueError(
+                "Input exposure metadata is invalid; aborting before any "
+                "APDB writes to prevent non-recoverable data corruption:\n  "
+                + detail
+            )
 
     def _selectGoodDiaObjects(self, diaObjects, diaSources):
         """
