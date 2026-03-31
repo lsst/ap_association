@@ -145,7 +145,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         """
         self._testRun(doPackageAlerts=True, doSolarSystemAssociation=False, doReloadDiaObjects=True)
 
-    def _testRun(self, doPackageAlerts=False, doSolarSystemAssociation=False, doRunForcedMeasurement=False,
+    def _testRun(self, doPackageAlerts=False, doSolarSystemAssociation=False,
                  doReloadDiaObjects=False):
         """Test the normal workflow of each ap_pipe step.
         """
@@ -153,7 +153,6 @@ class TestDiaPipelineTask(unittest.TestCase):
             config_file=self.config_file.name,
             doPackageAlerts=doPackageAlerts,
             doSolarSystemAssociation=doSolarSystemAssociation,
-            doRunForcedMeasurement=doRunForcedMeasurement,
             doReloadDiaObjects=doReloadDiaObjects,
         )
         task = DiaPipelineTask(config=config)
@@ -204,12 +203,17 @@ class TestDiaPipelineTask(unittest.TestCase):
         def updateObjectTableMock(diaObjects, diaSources):
             pass
 
+        def _selectGoodDiaObjects(diaObjectCat, mergedDiaSourceHistory):
+            return diaObjectCat.copy(deep=True)
+
         # apdb isn't a subtask, but still needs to be mocked out for correct
         # execution in the test environment.
         with patch.multiple(task, **{task: DEFAULT for task in subtasksToMock + ["apdb"]}), \
             patch('lsst.ap.association.diaPipe.pd.concat', side_effect=concatMock), \
             patch('lsst.ap.association.diaPipe.DiaPipelineTask.updateObjectTable',
                   side_effect=updateObjectTableMock), \
+            patch('lsst.ap.association.diaPipe.DiaPipelineTask._selectGoodDiaObjects',
+                  side_effect=_selectGoodDiaObjects), \
             patch('lsst.ap.association.diaPipe.DiaPipelineTask.loadRefreshedDiaObjects',
                   side_effect=loadObjects_run), \
             patch('lsst.ap.association.association.AssociationTask.run',
@@ -462,7 +466,6 @@ class TestDiaPipelineTask(unittest.TestCase):
         trailLengthThreshold = 1.0
         config = self._makeDefaultConfig(config_file=self.config_file.name,
                                          doPackageAlerts=False,
-                                         doRunForcedMeasurement=True,
                                          forcedReliabilityThreshold=reliabilityThreshold,
                                          forcedTrailLengthThreshold=trailLengthThreshold)
         task = DiaPipelineTask(config=config)
@@ -536,7 +539,6 @@ class TestDiaPipelineTask(unittest.TestCase):
         trailLengthThreshold = 1.0
         config = self._makeDefaultConfig(config_file=self.config_file.name,
                                          doPackageAlerts=False,
-                                         doRunForcedMeasurement=True,
                                          forcedReliabilityThreshold=reliabilityThreshold,
                                          forcedTrailLengthThreshold=trailLengthThreshold)
         task = DiaPipelineTask(config=config)
@@ -597,7 +599,6 @@ class TestDiaPipelineTask(unittest.TestCase):
         trailLengthThreshold = 1.0
         config = self._makeDefaultConfig(config_file=self.config_file.name,
                                          doPackageAlerts=False,
-                                         doRunForcedMeasurement=True,
                                          forcedReliabilityThreshold=reliabilityThreshold,
                                          forcedTrailLengthThreshold=trailLengthThreshold,
                                          forcedBadFlags=['foo', 'bar'])
