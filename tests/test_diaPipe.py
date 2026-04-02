@@ -145,8 +145,15 @@ class TestDiaPipelineTask(unittest.TestCase):
         """
         self._testRun(doPackageAlerts=True, doSolarSystemAssociation=False, doReloadDiaObjects=True)
 
+    def testRunDisableDeprecatedDoRunForcedMeasurement(self):
+        """Test running with forced sources disabled.
+        """
+        self._testRun(doPackageAlerts=True, doSolarSystemAssociation=False, doReloadDiaObjects=True,
+                      doRunForcedMeasurement=False, subtasksToMock=["diaCalculation", ]
+                      )
+
     def _testRun(self, doPackageAlerts=False, doSolarSystemAssociation=False,
-                 doReloadDiaObjects=False):
+                 doReloadDiaObjects=False, subtasksToMock=None, **kwargs):
         """Test the normal workflow of each ap_pipe step.
         """
         config = self._makeDefaultConfig(
@@ -154,6 +161,7 @@ class TestDiaPipelineTask(unittest.TestCase):
             doPackageAlerts=doPackageAlerts,
             doSolarSystemAssociation=doSolarSystemAssociation,
             doReloadDiaObjects=doReloadDiaObjects,
+            **kwargs
         )
         task = DiaPipelineTask(config=config)
         # Set DataFrame index testing to always return False. Mocks return
@@ -165,9 +173,8 @@ class TestDiaPipelineTask(unittest.TestCase):
         # Each of these subtasks should be called once during diaPipe
         # execution. We use mocks here to check they are being executed
         # appropriately.
-        subtasksToMock = [
-            "diaCalculation",
-        ]
+        if subtasksToMock is None:
+            subtasksToMock = ["diaCalculation", "diaForcedSource", ]
         if doPackageAlerts:
             subtasksToMock.append("alertPackager")
         else:
