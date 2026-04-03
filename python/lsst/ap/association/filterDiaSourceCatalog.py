@@ -108,6 +108,7 @@ class FilterDiaSourceCatalogConfig(
     badFlagList = pexConfig.ListField(
         dtype=str,
         default=[
+            "slot_Centroid_flag",
             "base_PixelFlags_flag_crCenter",
             "base_PixelFlags_flag_high_varianceCenterAll"
         ],
