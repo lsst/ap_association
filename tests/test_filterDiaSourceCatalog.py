@@ -56,6 +56,8 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
             dataset.addSource(10000.0, geom.Point2D(srcIdx, self.yLoc))
         schema = dataset.makeMinimalSchema()
         schema.addField("sky_source", type="Flag", doc="Sky objects.")
+        schema.addField("slot_Centroid_flag", type="Flag", doc="The centroid calculation "
+                        "failed. The source position is incorrect.")
         schema.addField("base_PixelFlags_flag_crCenter", type="Flag", doc="A cosmic ray was detected "
                         "and interpolated in this object's center.")
         schema.addField("base_PixelFlags_flag_high_varianceCenterAll", type="Flag", doc="The object was "
