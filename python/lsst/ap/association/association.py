@@ -321,17 +321,11 @@ class AssociationTask(pipeBase.Task):
 
         # We sort from best match to worst to effectively perform a
         # "handshake" match where both the DIASources and DIAObjects agree
-        # their the best match. By sorting this way, scores with NaN (those
-        # sources that have no match and will create new DIAObjects) will be
-        # placed at the end of the array.
-        score_args = score_struct.scores.argsort(axis=None)
+        # their the best match. Sources with non-finite scores have no
+        # match and are skipped — they are left for the new-DIAObject loop.
+        finite_idx = np.flatnonzero(np.isfinite(score_struct.scores))
+        score_args = finite_idx[np.argsort(score_struct.scores[finite_idx])]
         for score_idx in score_args:
-            if not np.isfinite(score_struct.scores[score_idx]):
-                # Thanks to the sorting the rest of the sources will be
-                # NaN for their score. We therefore exit the loop to append
-                # sources to a existing DIAObject, leaving these for
-                # the loop creating new objects.
-                break
             dia_obj_idx = score_struct.obj_idxs[score_idx]
             if used_dia_object[dia_obj_idx]:
                 continue
@@ -339,8 +333,13 @@ class AssociationTask(pipeBase.Task):
             used_dia_source[score_idx] = True
             obj_id = score_struct.obj_ids[score_idx]
             associated_dia_object_ids[score_idx] = obj_id
-            dia_sources.loc[score_idx, "diaObjectId"] = obj_id
             n_updated_dia_objects += 1
+
+        # Assign positionally rather than by label — score_idx values from
+        # argsort are 0..N-1, but dia_sources may have a non-contiguous
+        # label index after upstream NaN filtering.
+        dia_sources = dia_sources.copy()
+        dia_sources["diaObjectId"] = associated_dia_object_ids
 
         return pipeBase.Struct(
             diaSources=dia_sources,
