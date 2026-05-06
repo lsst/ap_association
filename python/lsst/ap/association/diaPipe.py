@@ -776,7 +776,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                        )
         except Exception as e:
             # Catch *any* error after we have updated the APDB
-            raise PostApdbUpdateError(errorMsg=repr(e))
+            raise PostApdbUpdateError(errorMsg=repr(e)) from e
 
         return associationResults
 
@@ -1517,8 +1517,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                   "before association, leaving %i in the catalog",
                                   nPurged, len(diaObjCat) - nPurged)
                 diaObjCat = diaObjCat[selector].copy()
-        except Exception as e:
-            self.log.warning("Error attempting to check diaObject history: %s", e)
+        except (AttributeError, KeyError, ValueError) as e:
+            self.log.warning("Error attempting to check diaObject history: %s", e, exc_info=e)
         return diaObjCat, diaObjectIds
 
     def mergeCatalogs(self, originalCatalog, newCatalog, tableName):
