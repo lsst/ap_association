@@ -754,21 +754,14 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 # Append new forced sources to the full history
                 diaForcedSourcesFull = self.mergeCatalogs(preloadedDiaForcedSources, diaForcedSources,
                                                           tableName="DiaForcedSource")
-                if self.testDataFrameIndex(diaForcedSources):
+                if self.testDataFrameIndex(diaForcedSourcesFull):
                     self.log.warning(
                         "Duplicate DiaForcedSources created after merge with "
                         "history and new sources. This may cause downstream "
                         "problems. Dropping duplicates.")
                     # Drop duplicates via index and keep the first appearance.
-                    # Reset due to the index shape being slight different than
-                    # expected.
-                    diaForcedSourcesFull = diaForcedSourcesFull.groupby(
-                        diaForcedSourcesFull.index).first()
-                    diaForcedSourcesFull.reset_index(drop=True, inplace=True)
-                    diaForcedSourcesFull.set_index(
-                        ["diaObjectId", "diaForcedSourceId"],
-                        drop=False,
-                        inplace=True)
+                    diaForcedSourcesFull = diaForcedSourcesFull[
+                        ~diaForcedSourcesFull.index.duplicated(keep="first")]
 
                 self.alertPackager.run(assocResults.associatedDiaSources,
                                        updatedDiaObjects,
