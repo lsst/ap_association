@@ -106,17 +106,17 @@ class TestAssociationTask(unittest.TestCase):
         score_struct = assoc_task.score(self.diaObjects,
                                         self.diaSourceZeroScatter,
                                         1.0 * geom.arcseconds)
-        self.assertFalse(np.isfinite(score_struct.scores[0]))
+        # Source 0 has no nearby DIAObject (closest is ~144" away).
+        self.assertNotIn(0, score_struct.src_idx)
+        # Sources 1..4 each have at least one candidate at ~zero score.
         for src_idx in range(1, len(self.diaSources)):
-            # Our scores should be extremely close to 0 but not exactly so due
-            # to machine noise.
-            self.assertAlmostEqual(score_struct.scores[src_idx], 0.0,
-                                   places=16)
+            mask = score_struct.src_idx == src_idx
+            self.assertTrue(np.any(mask))
+            self.assertAlmostEqual(score_struct.scores[mask].min(), 0.0,
+                                   places=10)
 
-        # After matching each DIAObject should now contain 2 DIASources
-        # except the last DIAObject in this collection which should be
-        # newly created during the matching step and contain only one
-        # DIASource.
+        # Linear-assignment match: 4 sources match 4 distinct objects;
+        # the fifth object is left unassociated.
         match_result = assoc_task.match(
             self.diaObjects, self.diaSources, score_struct)
         self.assertEqual(match_result.nUpdatedDiaObjects, 4)
@@ -139,11 +139,10 @@ class TestAssociationTask(unittest.TestCase):
         task = AssociationTask()
         result = task.score(self.diaObjects, self.diaSources,
                             1.0 * geom.arcseconds)
-        # 4 of 5 sources match (source 0 has no nearby object).
-        self.assertEqual(np.sum(np.isfinite(result.scores)), 4)
-        finite = result.scores[np.isfinite(result.scores)]
+        # 4 of 5 sources have at least one candidate.
+        self.assertEqual(len(np.unique(result.src_idx)), 4)
         # Chord distance on the unit sphere — values are radians.
-        self.assertTrue(np.all(finite < 1e-3))
+        self.assertTrue(np.all(result.scores < 1e-3))
 
     def test_score_falls_back_when_errors_all_nan(self):
         """Empty (all-NaN) raErr/decErr columns trigger the chord fallback.
@@ -156,10 +155,8 @@ class TestAssociationTask(unittest.TestCase):
         sources["decErr"] = np.nan
         task = AssociationTask()
         result = task.score(objects, sources, 1.0 * geom.arcseconds)
-        finite = result.scores[np.isfinite(result.scores)]
-        self.assertEqual(len(finite), 4)
-        # Chord-distance regime, not chi^2.
-        self.assertTrue(np.all(finite < 1e-3))
+        self.assertEqual(len(np.unique(result.src_idx)), 4)
+        self.assertTrue(np.all(result.scores < 1e-3))
 
     def test_chi2_accepts_within_uncertainty(self):
         """A 0.05" separation with 0.05" per-axis sigma yields chi^2 ~ 0.5.
@@ -176,14 +173,16 @@ class TestAssociationTask(unittest.TestCase):
         ])
         task = AssociationTask()
         result = task.score(objects, sources, 1.0 * geom.arcseconds)
-        self.assertTrue(np.isfinite(result.scores[0]))
+        self.assertEqual(len(result.src_idx), 1)
+        self.assertEqual(result.src_idx[0], 0)
+        self.assertEqual(result.obj_idx[0], 0)
         # var per axis = 2 * sig^2 = 2*(0.05)^2 arcsec^2; dra=0, ddec=0.05".
         # chi^2 = 0 + (0.05)^2 / (2 * 0.05^2) = 0.5.
         self.assertAlmostEqual(result.scores[0], 0.5, places=6)
 
     def test_within_maxdist_matches_despite_high_chi2(self):
-        """A 0.5" separation with 0.05" per-axis sigma (chi^2 ~ 50) is
-        still matched: the chi^2 only ranks the match, and
+        """A 0.5" separation with 0.05" per-axis sigma (chi^2 ~ 50, i.e.
+        ~7 sigma) is still matched: the chi^2 only ranks candidates, and
         ``maxDistArcSeconds`` is the sole association gate.
         """
         sig_deg = 0.05 / 3600.0
@@ -198,10 +197,15 @@ class TestAssociationTask(unittest.TestCase):
         ])
         task = AssociationTask()
         result = task.score(objects, sources, 1.0 * geom.arcseconds)
-        # Within the 1" gate, so it is scored (chi^2 ~ 50) and matched.
-        self.assertTrue(np.isfinite(result.scores[0]))
+        # The pair is kept as a candidate and scored at its chi^2 (~50),
+        # despite the large offset.
+        self.assertEqual(len(result.src_idx), 1)
         self.assertAlmostEqual(result.scores[0], 50.0, places=6)
-        self.assertEqual(result.obj_ids[0], 1)
+        # End-to-end the source is associated to the object.
+        run_result = task.run(sources, objects)
+        self.assertEqual(run_result.nUpdatedDiaObjects, 1)
+        matched = run_result.matchedDiaSources.set_index("diaSourceId")
+        self.assertEqual(int(matched.loc[100, "diaObjectId"]), 1)
 
     def test_chi2_ra_wraparound(self):
         """Pairs straddling RA=0/360 are scored correctly.
@@ -218,10 +222,99 @@ class TestAssociationTask(unittest.TestCase):
         ])
         task = AssociationTask()
         result = task.score(objects, sources, 1.0 * geom.arcseconds)
-        # Separation is 0.02" of RA across the wrap; at dec=0 that's ~0.02"
-        # on-sky, well within both the geometric and chi^2 cuts.
-        self.assertTrue(np.isfinite(result.scores[0]))
-        self.assertEqual(result.obj_ids[0], 1)
+        # Separation is 0.02" of RA across the wrap — within both cuts.
+        self.assertEqual(len(result.src_idx), 1)
+        self.assertEqual(result.src_idx[0], 0)
+        self.assertEqual(result.obj_idx[0], 0)
+
+    def test_lap_recovers_match_lost_to_greedy(self):
+        """LAP keeps a source matched when its nearest object is taken
+        by a better-fitting competitor — the case that single-nearest
+        greedy used to drop into a new DIAObject.
+        """
+        sig_deg = 0.5 / 3600.0  # 0.5" per axis
+        objects = pd.DataFrame([
+            {"ra": 1.0, "dec": 1.0,
+             "raErr": sig_deg, "decErr": sig_deg, "diaObjectId": 1},
+            {"ra": 1.0, "dec": 1.0 + 0.99 / 3600.0,
+             "raErr": sig_deg, "decErr": sig_deg, "diaObjectId": 2},
+        ]).set_index("diaObjectId", drop=False)
+        # Source 100: closer to obj 1, but obj 2 is also a viable candidate.
+        # Source 101: sits exactly on obj 1.
+        sources = pd.DataFrame([
+            {"ra": 1.0, "dec": 1.0 + 0.4 / 3600.0,
+             "raErr": sig_deg, "decErr": sig_deg, "diaSourceId": 100,
+             "diaObjectId": 0},
+            {"ra": 1.0, "dec": 1.0,
+             "raErr": sig_deg, "decErr": sig_deg, "diaSourceId": 101,
+             "diaObjectId": 0},
+        ])
+        task = AssociationTask()
+        result = task.run(sources, objects)
+        # Both sources matched; LAP picks src 100 → obj 2, src 101 → obj 1.
+        self.assertEqual(result.nUpdatedDiaObjects, 2)
+        self.assertEqual(result.nUnassociatedDiaObjects, 0)
+        matched = result.matchedDiaSources.set_index("diaSourceId")
+        self.assertEqual(int(matched.loc[100, "diaObjectId"]), 2)
+        self.assertEqual(int(matched.loc[101, "diaObjectId"]), 1)
+
+    def test_match_preserves_diaObjectId_dtype(self):
+        """match() preserves the incoming diaObjectId dtype rather than
+        overwriting it with uint64. This keeps pd.concat dtype-stable
+        downstream — mixing uint64 and int64 silently promotes to
+        float64.
+        """
+        self.assertEqual(self.diaSources["diaObjectId"].dtype, np.int64)
+        task = AssociationTask()
+        result = task.run(self.diaSources, self.diaObjects)
+        self.assertEqual(
+            result.matchedDiaSources["diaObjectId"].dtype, np.int64)
+        self.assertEqual(
+            result.unAssocDiaSources["diaObjectId"].dtype, np.int64)
+
+        sources_u64 = self.diaSources.copy()
+        sources_u64["diaObjectId"] = sources_u64["diaObjectId"].astype(
+            np.uint64)
+        result = task.run(sources_u64, self.diaObjects)
+        self.assertEqual(
+            result.matchedDiaSources["diaObjectId"].dtype, np.uint64)
+        self.assertEqual(
+            result.unAssocDiaSources["diaObjectId"].dtype, np.uint64)
+        with self.assertRaises(ValueError):
+            sources_float = self.diaSources.copy()
+            sources_float["diaObjectId"] = sources_float["diaObjectId"].astype(float)
+            task.run(sources_float, self.diaObjects)
+
+    def test_contention_leaves_extra_source_unassociated(self):
+        """When two sources fall within ``maxDistArcSeconds`` of a single
+        object, the better-fitting one is matched and the other is left
+        unassociated rather than forced onto the same object.
+        """
+        sig_deg = 0.1 / 3600.0
+        objects = pd.DataFrame([
+            {"ra": 1.0, "dec": 1.0,
+             "raErr": sig_deg, "decErr": sig_deg, "diaObjectId": 1},
+        ]).set_index("diaObjectId", drop=False)
+        sources = pd.DataFrame([
+            {"ra": 1.0, "dec": 1.0 + 0.2 / 3600.0,  # closer to the object
+             "raErr": sig_deg, "decErr": sig_deg, "diaSourceId": 100,
+             "diaObjectId": 0},
+            {"ra": 1.0, "dec": 1.0 + 0.5 / 3600.0,  # farther
+             "raErr": sig_deg, "decErr": sig_deg, "diaSourceId": 101,
+             "diaObjectId": 0},
+        ])
+        task = AssociationTask()
+        result = task.run(sources, objects)
+        # One object, so at most one source can match it.
+        self.assertEqual(result.nUpdatedDiaObjects, 1)
+        self.assertEqual(result.nUnassociatedDiaObjects, 0)
+        self.assertEqual(len(result.matchedDiaSources), 1)
+        self.assertEqual(len(result.unAssocDiaSources), 1)
+        # The closer source wins the object; the other is unassociated.
+        matched = result.matchedDiaSources.set_index("diaSourceId")
+        self.assertEqual(int(matched.loc[100, "diaObjectId"]), 1)
+        self.assertEqual(
+            int(result.unAssocDiaSources["diaSourceId"].iloc[0]), 101)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

@@ -24,8 +24,12 @@
 
 __all__ = ["AssociationConfig", "AssociationTask"]
 
+import itertools
+
 import numpy as np
 import pandas as pd
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import min_weight_full_bipartite_matching
 from scipy.spatial import cKDTree
 
 import lsst.geom as geom
@@ -182,18 +186,19 @@ class AssociationTask(pipeBase.Task):
 
     @timeMethod
     def score(self, dia_objects, dia_sources, max_dist):
-        """Compute a quality score for each dia_source/dia_object pair.
+        """Build the candidate (DIASource, DIAObject) match table and
+        score every pair.
 
-        The single nearest DIAObject within ``max_dist`` is selected per
-        DIASource via a 3D kd-tree on unit vectors. When both inputs
-        carry usable ``raErr``/``decErr`` columns, the score is the 2-DOF
-        position chi^2 (with non-finite or non-positive uncertainties
-        replaced by ``sigmaFloorArcSeconds`` and the combined per-axis
-        variance also floored at the same value), which is used only to
-        rank the match. ``max_dist`` is the sole association gate. When
-        the uncertainty columns are absent or empty, the kd-tree chord
-        distance (in radians) is used as the score instead — preserving
-        the pre-existing behaviour.
+        For each DIASource, all DIAObjects within ``max_dist`` are retrieved
+        from a kd-tree on unit vectors. Each candidate pair is then scored:
+
+        - If both inputs carry usable ``raErr``/``decErr`` columns, the
+          score is the 2-DOF position chi^2, so the match prefers the
+          best-fitting object rather than the merely-nearest one.
+        - Otherwise, the distance (in radians) is used as the score.
+
+        No candidates are dropped by the score itself: every pair within
+        ``max_dist`` is retained, and the score is used only to rank them.
 
         ``raErr`` and ``decErr`` are taken to follow the LSST DPDD
         convention: each is the marginal uncertainty of the catalog
@@ -202,78 +207,93 @@ class AssociationTask(pipeBase.Task):
         between residual and uncertainty, and chi^2 reduces to
         ``dRA^2 / sum(raErr^2) + dDec^2 / sum(decErr^2)``.
 
+        ``max_dist`` is both the candidate pre-filter and the
+        association radius: every pair within it is retained, and the
+        score is used only to rank candidates in the downstream match.
+
         Parameters
         ----------
-        dia_objects : `pandas.DataFrame`
-            DIAObjects to score against ``dia_sources``. Must contain
-            ``ra`` and ``dec``; ``raErr`` and ``decErr`` are used when
-            present.
-        dia_sources : `pandas.DataFrame`
-            DIASources to score. Must contain ``ra`` and ``dec``;
-            ``raErr`` and ``decErr`` are used when present.
+        dia_objects, dia_sources : `pandas.DataFrame`
+            Must contain ``ra`` and ``dec``; ``raErr`` and ``decErr`` are
+            used when present.
         max_dist : `lsst.geom.Angle`
-            Maximum allowed angular separation; pairs farther than this
-            are not considered regardless of their uncertainties.
+            Hard angular upper bound on candidate pairs.
 
         Returns
         -------
         result : `lsst.pipe.base.Struct`
-            Results struct with components:
+            Flat candidate-pair table:
 
+            - ``src_idx`` : `numpy.ndarray` of `int`
+                Positional source index for each surviving pair.
+            - ``obj_idx`` : `numpy.ndarray` of `int`
+                Positional object index for each surviving pair.
             - ``scores`` : `numpy.ndarray` of `float`
-                Match quality (chi^2 if uncertainty-based, chord
-                distance otherwise). INF for unmatched sources.
-            - ``obj_idxs`` : `numpy.ndarray` of `int`
-                Positional indices of matched DIAObjects; -1 if
-                unmatched.
-            - ``obj_ids`` : `numpy.ndarray` of `int`
-                ``diaObjectId`` of matched DIAObjects; 0 if unmatched.
+                Cost of each pair (chi^2 if uncertainty-based, chord
+                distance in radians otherwise). Lower is better.
+            - ``unmatched_cost`` : `float`
+                Cost to assign to the synthetic 'no-match' alternative
+                in the linear-assignment match — set so that any
+                surviving real candidate is preferred.
         """
         n_src = len(dia_sources)
-        scores = np.full(n_src, np.inf, dtype=np.float64)
-        obj_idxs = np.full(n_src, -1, dtype=np.int64)
-        obj_ids = np.full(n_src, 0, dtype=np.int64)
+        n_obj = len(dia_objects)
+        empty_int = np.empty(0, dtype=np.int64)
+        empty_float = np.empty(0, dtype=np.float64)
+        max_dist_rad = max_dist.asRadians()
+        # Used as the no-match cost in distance mode; always strictly
+        # above any real candidate (which the kd-tree caps at max_dist_rad).
+        chord_unmatched_cost = max_dist_rad * 1.01 + 1e-300
 
-        if len(dia_objects) == 0:
+        if n_obj == 0 or n_src == 0:
             return pipeBase.Struct(
-                scores=scores,
-                obj_idxs=obj_idxs,
-                obj_ids=obj_ids)
+                src_idx=empty_int,
+                obj_idx=empty_int,
+                scores=empty_float,
+                unmatched_cost=chord_unmatched_cost)
 
         spatial_tree = self._make_spatial_tree(dia_objects)
-        max_dist_rad = max_dist.asRadians()
-        vectors = self._radec_to_xyz(dia_sources)
+        src_vectors = self._radec_to_xyz(dia_sources)
 
-        chord_dists, candidate_obj_idxs = spatial_tree.query(
-            vectors,
-            distance_upper_bound=max_dist_rad)
-        matched = np.isfinite(chord_dists)
-        if not np.any(matched):
+        candidate_lists = spatial_tree.query_ball_point(
+            src_vectors, r=max_dist_rad)
+        counts = np.fromiter(
+            (len(c) for c in candidate_lists), dtype=np.int64, count=n_src)
+        n_pairs = int(counts.sum())
+        if n_pairs == 0:
             return pipeBase.Struct(
-                scores=scores,
-                obj_idxs=obj_idxs,
-                obj_ids=obj_ids)
+                src_idx=empty_int,
+                obj_idx=empty_int,
+                scores=empty_float,
+                unmatched_cost=chord_unmatched_cost)
 
-        use_chi2 = (self._has_position_errors(dia_sources)
-                    and self._has_position_errors(dia_objects))
-        if use_chi2:
-            src_idx = np.flatnonzero(matched)
-            obj_idx = candidate_obj_idxs[src_idx]
-            chi2 = self._chi2_position(
+        src_idx = np.repeat(np.arange(n_src, dtype=np.int64), counts)
+        obj_idx = np.fromiter(
+            itertools.chain.from_iterable(candidate_lists),
+            dtype=np.int64, count=n_pairs)
+
+        if (self._has_position_errors(dia_sources)
+                and self._has_position_errors(dia_objects)):
+            scores = self._chi2_position(
                 dia_sources, dia_objects, src_idx, obj_idx)
-            scores[src_idx] = chi2
-            obj_idxs[src_idx] = obj_idx
-            obj_ids[src_idx] = dia_objects.index.to_numpy()[obj_idx]
+            # ``max_dist`` is the sole association gate: every candidate
+            # pair is kept and the chi^2 only ranks them. Price the
+            # 'no-match' alternative just above the worst candidate so a
+            # real match is always preferred. A diaSource will only not be
+            # associated if there are more diaSources than diaObjects.
+            unmatchedCostDelta = 1.0
+            unmatched_cost = (float(scores.max()) + unmatchedCostDelta)
         else:
-            scores[matched] = chord_dists[matched]
-            obj_idxs[matched] = candidate_obj_idxs[matched]
-            obj_ids[matched] = dia_objects.index.to_numpy()[
-                candidate_obj_idxs[matched]]
+            obj_vectors = self._radec_to_xyz(dia_objects)
+            diffs = src_vectors[src_idx] - obj_vectors[obj_idx]
+            scores = np.linalg.norm(diffs, axis=1)
+            unmatched_cost = chord_unmatched_cost
 
         return pipeBase.Struct(
+            src_idx=src_idx,
+            obj_idx=obj_idx,
             scores=scores,
-            obj_idxs=obj_idxs,
-            obj_ids=obj_ids)
+            unmatched_cost=unmatched_cost)
 
     @staticmethod
     def _has_position_errors(catalog):
@@ -378,71 +398,86 @@ class AssociationTask(pipeBase.Task):
 
     @timeMethod
     def match(self, dia_objects, dia_sources, score_struct):
-        """Match DIAsources to DiaObjects given a score.
+        """Solve a min-cost bipartite matching between sources and objects.
+
+        Each DIASource is given a synthetic 'no-match' alternative (a
+        per-source 'ghost' column) carrying ``score_struct.unmatched_cost``.
+        A min-weight full bipartite matching is then solved on the sparse
+        cost matrix made from real candidate pairs and ghost edges.
+        Sources matched to a ghost are reported as unassociated; sources
+        matched to a real object inherit that object's ``diaObjectId``.
+
+        When two sources compete for the same object, the source with a
+        strictly worse alternative gets that object, and the other source falls
+        back to its second-best candidate rather than creating a new DIAObject.
 
         Parameters
         ----------
-        dia_objects : `pandas.DataFrame`
-            A SourceCatalog of DIAObjects to associate to DIASources.
-        dia_sources : `pandas.DataFrame`
-            A contiguous catalog of dia_sources for which the set of scores
-            has been computed on with DIAObjectCollection.score.
+        dia_objects, dia_sources : `pandas.DataFrame`
         score_struct : `lsst.pipe.base.Struct`
-            Results struct with components:
-
-            - ``"scores"``: array of floats of match quality
-                updated DIAObjects (array-like of `float`).
-            - ``"obj_ids"``: array of floats of match quality
-                updated DIAObjects (array-like of `int`).
-            - ``"obj_idxs"``: indexes of the matched DIAObjects in the catalog.
-                (array-like of `int`)
-
-            Default values for these arrays are
-            INF, -1 and -1 respectively for unassociated sources.
+            Output of `score`: ``src_idx``, ``obj_idx``, ``scores``,
+            ``unmatched_cost``.
 
         Returns
         -------
         result : `lsst.pipe.base.Struct`
-            Results struct with components.
 
-            - ``"diaSources"`` : Full set of diaSources both matched and not.
-              (`pandas.DataFrame`)
-            - ``"nUpdatedDiaObjects"`` : Number of DiaObjects that were
-              associated. (`int`)
-            - ``"nUnassociatedDiaObjects"`` : Number of DiaObjects that were
-              not matched a new DiaSource. (`int`)
+            - ``diaSources`` : input source table with ``diaObjectId``
+              populated (0 for unmatched). (`pandas.DataFrame`)
+            - ``nUpdatedDiaObjects`` : number of DIAObjects matched to a
+              new DIASource. (`int`)
+            - ``nUnassociatedDiaObjects`` : number of preloaded DIAObjects
+              with no matching DIASource. (`int`)
         """
-        n_previous_dia_objects = len(dia_objects)
-        used_dia_object = np.zeros(n_previous_dia_objects, dtype=bool)
-        used_dia_source = np.zeros(len(dia_sources), dtype=bool)
-        associated_dia_object_ids = np.zeros(len(dia_sources),
-                                             dtype=np.uint64)
-        n_updated_dia_objects = 0
+        n_src = len(dia_sources)
+        n_obj = len(dia_objects)
+        if not pd.api.types.is_integer_dtype(dia_sources["diaObjectId"]):
+            raise ValueError(f"diaSource column diaObjectId must be an integer, "
+                             f"got {dia_sources['diaObjectId'].dtype} instead")
+        # Preserve the dtype of the incoming diaObjectId column so the
+        # output is concat-stable downstream (mixing uint64 and int64
+        # forces a silent promotion to float64 in pd.concat).
+        associated_dia_object_ids = np.zeros(n_src, dtype=dia_sources["diaObjectId"].dtype)
+        n_matched = 0
 
-        # We sort from best match to worst to effectively perform a
-        # "handshake" match where both the DIASources and DIAObjects agree
-        # their the best match. Sources with non-finite scores have no
-        # match and are skipped — they are left for the new-DIAObject loop.
-        finite_idx = np.flatnonzero(np.isfinite(score_struct.scores))
-        score_args = finite_idx[np.argsort(score_struct.scores[finite_idx])]
-        for score_idx in score_args:
-            dia_obj_idx = score_struct.obj_idxs[score_idx]
-            if used_dia_object[dia_obj_idx]:
-                continue
-            used_dia_object[dia_obj_idx] = True
-            used_dia_source[score_idx] = True
-            obj_id = score_struct.obj_ids[score_idx]
-            associated_dia_object_ids[score_idx] = obj_id
-            n_updated_dia_objects += 1
+        if n_src > 0:
+            # Per-source ghost edges to columns [n_obj, n_obj + n_src).
+            ghost_src = np.arange(n_src, dtype=np.int64)
+            ghost_obj = n_obj + ghost_src
+            ghost_cost = np.full(
+                n_src, score_struct.unmatched_cost, dtype=np.float64)
 
-        # Assign positionally rather than by label — score_idx values from
-        # argsort are 0..N-1, but dia_sources may have a non-contiguous
-        # label index after upstream NaN filtering.
+            # scipy's min_weight_full_bipartite_matching removes
+            # explicit-zero edges before solving. Nudge them off zero
+            # so that perfect-match candidates (chi^2 = 0) are still
+            # seen by the LAP.
+            real_weights = np.maximum(
+                score_struct.scores.astype(np.float64, copy=False), 1e-300)
+            rows = np.concatenate(
+                [score_struct.src_idx.astype(np.int64, copy=False),
+                 ghost_src])
+            cols = np.concatenate(
+                [score_struct.obj_idx.astype(np.int64, copy=False),
+                 ghost_obj])
+            weights = np.concatenate([real_weights, ghost_cost])
+
+            biadj = csr_matrix(
+                (weights, (rows, cols)),
+                shape=(n_src, n_obj + n_src))
+            match_src, match_dst = min_weight_full_bipartite_matching(biadj)
+
+            is_real = match_dst < n_obj
+            matched_src = match_src[is_real]
+            matched_obj = match_dst[is_real]
+            n_matched = int(matched_src.size)
+            if n_matched > 0:
+                associated_dia_object_ids[matched_src] = (
+                    dia_objects.index.to_numpy()[matched_obj])
+
         dia_sources = dia_sources.copy()
         dia_sources["diaObjectId"] = associated_dia_object_ids
 
         return pipeBase.Struct(
             diaSources=dia_sources,
-            nUpdatedDiaObjects=n_updated_dia_objects,
-            nUnassociatedDiaObjects=(n_previous_dia_objects
-                                     - n_updated_dia_objects))
+            nUpdatedDiaObjects=n_matched,
+            nUnassociatedDiaObjects=int(n_obj - n_matched))

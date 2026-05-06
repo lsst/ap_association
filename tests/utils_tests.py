@@ -103,6 +103,7 @@ def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False
     bbox = lsst.geom.Box2D(exposure.getBBox())
     rand_x = rng.uniform(bbox.getMinX(), bbox.getMaxX(), size=nSources)
     rand_y = rng.uniform(bbox.getMinY(), bbox.getMaxY(), size=nSources)
+    diaObjectIds = diaObjectIds.astype(np.int64)
     if randomizeObjects:
         objectIds = diaObjectIds[rng.integers(len(diaObjectIds), size=nSources)]
     else:
