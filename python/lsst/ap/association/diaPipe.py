@@ -1027,13 +1027,13 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             self.log.info("Not creating new diaObjects for %i unassociated diaSources due to %sFlux"
                           " signal to noise < %f",
                           np.sum(snr_flag), fluxField, snrThreshold)
-            flagged += snr_flag
+            flagged |= snr_flag
         if reliabilityThreshold > 0:
             reliability_flag = reliability < reliabilityThreshold
             self.log.info("Not creating new diaObjects for %i unassociated diaSources due to "
                           "reliability<%f",
                           np.sum(reliability_flag), reliabilityThreshold)
-            flagged += reliability_flag
+            flagged |= reliability_flag
         if min(lowReliabilitySnrThreshold, lowSnrReliabilityThreshold) > 0:
             # Only run the combined test if both thresholds are greater than zero
             lowSnrReliability_flag = ((signalToNoise < lowReliabilitySnrThreshold)
@@ -1044,7 +1044,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                           fluxField,
                           lowReliabilitySnrThreshold,
                           lowSnrReliabilityThreshold)
-            flagged += lowSnrReliability_flag
+            flagged |= lowSnrReliability_flag
 
         if np.count_nonzero(~flagged) > 0:
             goodSources = sources[~flagged].copy(deep=True)
