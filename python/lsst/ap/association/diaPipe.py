@@ -1366,7 +1366,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 "Duplicate DiaObjects loaded from the Apdb. This may cause "
                 "downstream pipeline issues. Dropping duplicated rows")
             # Drop duplicates via index and keep the first appearance.
-            diaObjects = diaObjects.groupby(diaObjects.index).first()
+            diaObjects = diaObjects[~diaObjects.index.duplicated(keep="first")]
         self.log.info("Loaded %d DiaObjects", len(diaObjects))
         refreshedDiaObjects = convertDataFrameToSdmSchema(self.schema, diaObjects, tableName="DiaObject",
                                                           skipIndex=True)
@@ -1563,9 +1563,10 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         updatedDiaObjects : `pandas.DataFrame`
             Table of DiaObjects updated with the number of associated DiaSources
         """
-        nDiaSources = diaSources[["diaSourceId"]].groupby("diaObjectId").agg(len)
-        nDiaSources.rename({"diaSourceId": "nDiaSources"}, errors="raise", axis="columns", inplace=True)
-        del diaObjects["nDiaSources"]
+        # Group on the index level explicitly since diaObjectId is both an
+        # index and a (duplicated) column
+        nDiaSources = diaSources.groupby(level="diaObjectId").size().rename("nDiaSources")
+        diaObjects = diaObjects.drop(columns="nDiaSources", errors="ignore")
         updatedDiaObjects = diaObjects.join(nDiaSources, how="left")
         return updatedDiaObjects
 

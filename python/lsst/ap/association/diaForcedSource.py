@@ -128,7 +128,7 @@ class DiaForcedSourceTask(pipeBase.Task):
             difference and direct images at DiaObject locations.
         """
         # Restrict forced source measurement to objects with sufficient history to be reliable.
-        objectTable = dia_objects.query(f'nDiaSources >= {self.config.historyThreshold}')
+        objectTable = dia_objects[dia_objects["nDiaSources"] >= self.config.historyThreshold]
         if objectTable.empty:
             # The dataframe will be coerced to the correct (empty) format in diaPipe.
             return pd.DataFrame()
