@@ -1497,6 +1497,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             DiaObjects loaded from the Apdb, restricted to the exposure
             bounding box.
         """
+        # Copy the bbox so the caller's box is not mutated by grow().
+        bbox = type(bbox)(bbox)
         try:
             bbox.grow(buffer)
             raVals = diaObjCat.ra.to_numpy()
