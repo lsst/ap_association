@@ -43,9 +43,18 @@ class AssociationConfig(pexConfig.Config):
 
     maxDistArcSeconds = pexConfig.Field(
         dtype=float,
-        doc="Maximum distance in arcseconds to test for a DIASource to be a "
-        "match to a DIAObject.",
+        doc="Maximum distance in arcseconds for a DIASource to be matched "
+        "to a DIAObject. This is the sole association radius: every "
+        "DIAObject within this distance is a match candidate, ranked by "
+        "position chi^2 when uncertainties are available and by angular "
+        "distance otherwise.",
         default=1.0,
+    )
+    sigmaFloorArcSeconds = pexConfig.Field(
+        dtype=float,
+        doc="Floor on the per-axis position uncertainty (arcsec) used when "
+        "computing chi^2.",
+        default=0.05,
     )
 
 
@@ -173,42 +182,57 @@ class AssociationTask(pipeBase.Task):
 
     @timeMethod
     def score(self, dia_objects, dia_sources, max_dist):
-        """Compute a quality score for each dia_source/dia_object pair
-        between this catalog of DIAObjects and the input DIASource catalog.
+        """Compute a quality score for each dia_source/dia_object pair.
 
-        ``max_dist`` sets maximum separation in arcseconds to consider a
-        dia_source a possible match to a dia_object. If the pair is
-        beyond this distance no score is computed.
+        The single nearest DIAObject within ``max_dist`` is selected per
+        DIASource via a 3D kd-tree on unit vectors. When both inputs
+        carry usable ``raErr``/``decErr`` columns, the score is the 2-DOF
+        position chi^2 (with non-finite or non-positive uncertainties
+        replaced by ``sigmaFloorArcSeconds`` and the combined per-axis
+        variance also floored at the same value), which is used only to
+        rank the match. ``max_dist`` is the sole association gate. When
+        the uncertainty columns are absent or empty, the kd-tree chord
+        distance (in radians) is used as the score instead — preserving
+        the pre-existing behaviour.
+
+        ``raErr`` and ``decErr`` are taken to follow the LSST DPDD
+        convention: each is the marginal uncertainty of the catalog
+        coordinate itself in degrees (no cos(dec) factor folded into
+        ``raErr``). Under that convention the cos(dec) factor cancels
+        between residual and uncertainty, and chi^2 reduces to
+        ``dRA^2 / sum(raErr^2) + dDec^2 / sum(decErr^2)``.
 
         Parameters
         ----------
         dia_objects : `pandas.DataFrame`
-            A contiguous catalog of DIAObjects to score against dia_sources.
+            DIAObjects to score against ``dia_sources``. Must contain
+            ``ra`` and ``dec``; ``raErr`` and ``decErr`` are used when
+            present.
         dia_sources : `pandas.DataFrame`
-            A contiguous catalog of dia_sources to "score" based on distance
-            and (in the future) other metrics.
+            DIASources to score. Must contain ``ra`` and ``dec``;
+            ``raErr`` and ``decErr`` are used when present.
         max_dist : `lsst.geom.Angle`
-            Maximum allowed distance to compute a score for a given DIAObject
-            DIASource pair.
+            Maximum allowed angular separation; pairs farther than this
+            are not considered regardless of their uncertainties.
 
         Returns
         -------
         result : `lsst.pipe.base.Struct`
             Results struct with components:
 
-            - ``scores``: array of floats of match quality updated DIAObjects
-                (array-like of `float`).
-            - ``obj_idxs``: indexes of the matched DIAObjects in the catalog.
-                (array-like of `int`)
-            - ``obj_ids``: array of floats of match quality updated DIAObjects
-                (array-like of `int`).
-
-            Default values for these arrays are
-            INF, -1, and -1 respectively for unassociated sources.
+            - ``scores`` : `numpy.ndarray` of `float`
+                Match quality (chi^2 if uncertainty-based, chord
+                distance otherwise). INF for unmatched sources.
+            - ``obj_idxs`` : `numpy.ndarray` of `int`
+                Positional indices of matched DIAObjects; -1 if
+                unmatched.
+            - ``obj_ids`` : `numpy.ndarray` of `int`
+                ``diaObjectId`` of matched DIAObjects; 0 if unmatched.
         """
-        scores = np.full(len(dia_sources), np.inf, dtype=np.float64)
-        obj_idxs = np.full(len(dia_sources), -1, dtype=np.int64)
-        obj_ids = np.full(len(dia_sources), 0, dtype=np.int64)
+        n_src = len(dia_sources)
+        scores = np.full(n_src, np.inf, dtype=np.float64)
+        obj_idxs = np.full(n_src, -1, dtype=np.int64)
+        obj_ids = np.full(n_src, 0, dtype=np.int64)
 
         if len(dia_objects) == 0:
             return pipeBase.Struct(
@@ -217,22 +241,100 @@ class AssociationTask(pipeBase.Task):
                 obj_ids=obj_ids)
 
         spatial_tree = self._make_spatial_tree(dia_objects)
-
         max_dist_rad = max_dist.asRadians()
-
         vectors = self._radec_to_xyz(dia_sources)
 
-        scores, obj_idxs = spatial_tree.query(
+        chord_dists, candidate_obj_idxs = spatial_tree.query(
             vectors,
             distance_upper_bound=max_dist_rad)
-        matched_src_idxs = np.argwhere(np.isfinite(scores))
-        obj_ids[matched_src_idxs] = dia_objects.index.to_numpy()[
-            obj_idxs[matched_src_idxs]]
+        matched = np.isfinite(chord_dists)
+        if not np.any(matched):
+            return pipeBase.Struct(
+                scores=scores,
+                obj_idxs=obj_idxs,
+                obj_ids=obj_ids)
+
+        use_chi2 = (self._has_position_errors(dia_sources)
+                    and self._has_position_errors(dia_objects))
+        if use_chi2:
+            src_idx = np.flatnonzero(matched)
+            obj_idx = candidate_obj_idxs[src_idx]
+            chi2 = self._chi2_position(
+                dia_sources, dia_objects, src_idx, obj_idx)
+            scores[src_idx] = chi2
+            obj_idxs[src_idx] = obj_idx
+            obj_ids[src_idx] = dia_objects.index.to_numpy()[obj_idx]
+        else:
+            scores[matched] = chord_dists[matched]
+            obj_idxs[matched] = candidate_obj_idxs[matched]
+            obj_ids[matched] = dia_objects.index.to_numpy()[
+                candidate_obj_idxs[matched]]
 
         return pipeBase.Struct(
             scores=scores,
             obj_idxs=obj_idxs,
             obj_ids=obj_ids)
+
+    @staticmethod
+    def _has_position_errors(catalog):
+        """Return True iff ``catalog`` carries ``raErr`` and ``decErr``
+        columns with at least one finite, positive value in each.
+        """
+        if "raErr" not in catalog.columns or "decErr" not in catalog.columns:
+            return False
+        raErr = catalog["raErr"].to_numpy()
+        decErr = catalog["decErr"].to_numpy()
+        return (bool(np.any(np.isfinite(raErr) & (raErr > 0.0)))
+                and bool(np.any(np.isfinite(decErr) & (decErr > 0.0))))
+
+    def _chi2_position(self, dia_sources, dia_objects, src_idx, obj_idx):
+        """Return the 2-DOF position chi^2 for paired DIASources/DIAObjects.
+
+        Non-finite or non-positive per-row uncertainties are replaced
+        with ``self.config.sigmaFloorArcSeconds``; the combined per-axis
+        variance is also floored at that same value to guard against
+        pathologically small reported errors.
+
+        Parameters
+        ----------
+        dia_sources, dia_objects : `pandas.DataFrame`
+            Catalogs containing ``ra``, ``dec``, ``raErr``, ``decErr``
+            (all in degrees).
+        src_idx, obj_idx : `numpy.ndarray` of `int`
+            Paired positional indices; ``src_idx[k]`` is matched against
+            ``obj_idx[k]``.
+
+        Returns
+        -------
+        chi2 : `numpy.ndarray` of `float`
+             2 degrees of freedom position chi^2, one value per pair.
+        """
+        sigma_floor_sq_deg = (self.config.sigmaFloorArcSeconds / 3600.0) ** 2
+
+        def err_sq(catalog, col, idx):
+            arr = catalog[col].to_numpy()[idx]
+            sq = np.square(arr)
+            return np.where(np.isfinite(sq) & (arr > 0.0),
+                            sq, sigma_floor_sq_deg)
+
+        src_ra = dia_sources["ra"].to_numpy()[src_idx]
+        src_dec = dia_sources["dec"].to_numpy()[src_idx]
+        obj_ra = dia_objects["ra"].to_numpy()[obj_idx]
+        obj_dec = dia_objects["dec"].to_numpy()[obj_idx]
+
+        # Make sure that the RA difference is never greater than +/-180 in
+        # either direction.
+        dra = ((src_ra - obj_ra) + 180.0) % 360.0 - 180.0
+        ddec = src_dec - obj_dec
+
+        var_ra = (err_sq(dia_sources, "raErr", src_idx)
+                  + err_sq(dia_objects, "raErr", obj_idx))
+        var_dec = (err_sq(dia_sources, "decErr", src_idx)
+                   + err_sq(dia_objects, "decErr", obj_idx))
+        var_ra = np.maximum(var_ra, sigma_floor_sq_deg)
+        var_dec = np.maximum(var_dec, sigma_floor_sq_deg)
+
+        return dra * dra / var_ra + ddec * ddec / var_dec
 
     def _make_spatial_tree(self, dia_objects):
         """Create a searchable kd-tree the input dia_object positions.

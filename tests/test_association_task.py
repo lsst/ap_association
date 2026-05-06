@@ -133,6 +133,96 @@ class TestAssociationTask(unittest.TestCase):
         out_dia_sources = assoc_task.check_dia_source_radec(self.diaSources)
         self.assertEqual(len(out_dia_sources), len(self.diaSources) - 3)
 
+    def test_score_falls_back_without_error_columns(self):
+        """Score uses chord distance when raErr/decErr columns are absent.
+        """
+        task = AssociationTask()
+        result = task.score(self.diaObjects, self.diaSources,
+                            1.0 * geom.arcseconds)
+        # 4 of 5 sources match (source 0 has no nearby object).
+        self.assertEqual(np.sum(np.isfinite(result.scores)), 4)
+        finite = result.scores[np.isfinite(result.scores)]
+        # Chord distance on the unit sphere — values are radians.
+        self.assertTrue(np.all(finite < 1e-3))
+
+    def test_score_falls_back_when_errors_all_nan(self):
+        """Empty (all-NaN) raErr/decErr columns trigger the chord fallback.
+        """
+        objects = self.diaObjects.copy()
+        objects["raErr"] = np.nan
+        objects["decErr"] = np.nan
+        sources = self.diaSources.copy()
+        sources["raErr"] = np.nan
+        sources["decErr"] = np.nan
+        task = AssociationTask()
+        result = task.score(objects, sources, 1.0 * geom.arcseconds)
+        finite = result.scores[np.isfinite(result.scores)]
+        self.assertEqual(len(finite), 4)
+        # Chord-distance regime, not chi^2.
+        self.assertTrue(np.all(finite < 1e-3))
+
+    def test_chi2_accepts_within_uncertainty(self):
+        """A 0.05" separation with 0.05" per-axis sigma yields chi^2 ~ 0.5.
+        """
+        sig_deg = 0.05 / 3600.0
+        objects = pd.DataFrame([
+            {"ra": 1.0, "dec": 1.0, "raErr": sig_deg, "decErr": sig_deg,
+             "diaObjectId": 1}
+        ]).set_index("diaObjectId", drop=False)
+        sources = pd.DataFrame([
+            {"ra": 1.0, "dec": 1.0 + 0.05 / 3600.0,
+             "raErr": sig_deg, "decErr": sig_deg,
+             "diaSourceId": 100, "diaObjectId": 0}
+        ])
+        task = AssociationTask()
+        result = task.score(objects, sources, 1.0 * geom.arcseconds)
+        self.assertTrue(np.isfinite(result.scores[0]))
+        # var per axis = 2 * sig^2 = 2*(0.05)^2 arcsec^2; dra=0, ddec=0.05".
+        # chi^2 = 0 + (0.05)^2 / (2 * 0.05^2) = 0.5.
+        self.assertAlmostEqual(result.scores[0], 0.5, places=6)
+
+    def test_within_maxdist_matches_despite_high_chi2(self):
+        """A 0.5" separation with 0.05" per-axis sigma (chi^2 ~ 50) is
+        still matched: the chi^2 only ranks the match, and
+        ``maxDistArcSeconds`` is the sole association gate.
+        """
+        sig_deg = 0.05 / 3600.0
+        objects = pd.DataFrame([
+            {"ra": 1.0, "dec": 1.0, "raErr": sig_deg, "decErr": sig_deg,
+             "diaObjectId": 1}
+        ]).set_index("diaObjectId", drop=False)
+        sources = pd.DataFrame([
+            {"ra": 1.0, "dec": 1.0 + sig_deg*10,  # 10 sigma in dec
+             "raErr": sig_deg, "decErr": sig_deg,
+             "diaSourceId": 100, "diaObjectId": 0}
+        ])
+        task = AssociationTask()
+        result = task.score(objects, sources, 1.0 * geom.arcseconds)
+        # Within the 1" gate, so it is scored (chi^2 ~ 50) and matched.
+        self.assertTrue(np.isfinite(result.scores[0]))
+        self.assertAlmostEqual(result.scores[0], 50.0, places=6)
+        self.assertEqual(result.obj_ids[0], 1)
+
+    def test_chi2_ra_wraparound(self):
+        """Pairs straddling RA=0/360 are scored correctly.
+        """
+        sig_deg = 0.05 / 3600.0
+        objects = pd.DataFrame([
+            {"ra": 359.99999, "dec": 0.0, "raErr": sig_deg, "decErr": sig_deg,
+             "diaObjectId": 1}
+        ]).set_index("diaObjectId", drop=False)
+        sources = pd.DataFrame([
+            {"ra": 0.00001, "dec": 0.0,
+             "raErr": sig_deg, "decErr": sig_deg,
+             "diaSourceId": 100, "diaObjectId": 0}
+        ])
+        task = AssociationTask()
+        result = task.score(objects, sources, 1.0 * geom.arcseconds)
+        # Separation is 0.02" of RA across the wrap; at dec=0 that's ~0.02"
+        # on-sky, well within both the geometric and chi^2 cuts.
+        self.assertTrue(np.isfinite(result.scores[0]))
+        self.assertEqual(result.obj_ids[0], 1)
+
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass
