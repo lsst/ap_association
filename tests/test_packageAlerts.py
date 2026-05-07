@@ -146,6 +146,10 @@ def mock_alert(dia_source_id):
             "snr": np.float32(6.7),
             "psfFlux": np.float32(700.0),
             "psfFluxErr": np.float32(90.0),
+            "psfNdata": int(25),
+            "dipoleNdata": int(43),
+            "trailNdata": int(5),
+            "bboxSize": int(50),
             # unlike in transformDiaSourceCatalog.py we need a timezone-aware
             # version because mock_alert does not go through pandas
             "timeProcessedMjdTai": DateTime.now().get(system=DateTime.MJD, scale=DateTime.TAI)
