@@ -1125,7 +1125,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             associatedSsSources = None
             unassociatedSsObjects = None
         # Associate new DiaSources with existing DiaObjects.
-        assocResults = self.associator.run(unAssocSSDiaSources, diaObjects)
+        assocResults = self.associator.run(unAssocSSDiaSources, diaObjects, schema=self.schema)
         createResults = self.createNewDiaObjects(assocResults.unAssocDiaSources)
 
         if not assocResults.matchedDiaSources.empty:

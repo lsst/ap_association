@@ -35,6 +35,7 @@ from scipy.spatial import cKDTree
 import lsst.geom as geom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
+from lsst.pipe.tasks.schemaUtils import column_dtype
 from lsst.utils.timer import timeMethod
 
 # Enforce an error for unsafe column/array value setting in pandas.
@@ -77,7 +78,8 @@ class AssociationTask(pipeBase.Task):
     @timeMethod
     def run(self,
             diaSources,
-            diaObjects):
+            diaObjects,
+            schema=None):
         """Associate the new DiaSources with existing DiaObjects.
 
         Parameters
@@ -86,6 +88,10 @@ class AssociationTask(pipeBase.Task):
             New DIASources to be associated with existing DIAObjects.
         diaObjects : `pandas.DataFrame`
             Existing diaObjects from the Apdb.
+        schema : `dict` [`str`, `felis.datamodel.Schema`] or `None`, optional
+            Dictionary of Schemas from ``sdm_schemas`` containing the table
+            definition to use. If `None`, dtypes for new columns are guessed
+            from the input tables.
 
         Returns
         -------
@@ -113,7 +119,7 @@ class AssociationTask(pipeBase.Task):
                 nUpdatedDiaObjects=0,
                 nUnassociatedDiaObjects=0)
 
-        matchResult = self.associate_sources(diaObjects, diaSources)
+        matchResult = self.associate_sources(diaObjects, diaSources, schema)
 
         mask = matchResult.diaSources["diaObjectId"] != 0
 
@@ -152,7 +158,7 @@ class AssociationTask(pipeBase.Task):
         return dia_sources
 
     @timeMethod
-    def associate_sources(self, dia_objects, dia_sources):
+    def associate_sources(self, dia_objects, dia_sources, schema=None):
         """Associate the input DIASources with the catalog of DIAObjects.
 
         DiaObject DataFrame must be indexed on ``diaObjectId``.
@@ -164,6 +170,9 @@ class AssociationTask(pipeBase.Task):
             DIASources into.
         dia_sources : `pandas.DataFrame`
             DIASources to associate into the DIAObjectCollection.
+        schema : `dict` [`str`, `felis.datamodel.Schema`] or `None`, optional
+            Dictionary of Schemas from ``sdm_schemas`` containing the table
+            definition to use.
 
         Returns
         -------
@@ -180,7 +189,7 @@ class AssociationTask(pipeBase.Task):
         scores = self.score(
             dia_objects, dia_sources,
             self.config.maxDistArcSeconds * geom.arcseconds)
-        match_result = self.match(dia_objects, dia_sources, scores)
+        match_result = self.match(dia_objects, dia_sources, scores, schema)
 
         return match_result
 
@@ -397,7 +406,7 @@ class AssociationTask(pipeBase.Task):
         return vectors
 
     @timeMethod
-    def match(self, dia_objects, dia_sources, score_struct):
+    def match(self, dia_objects, dia_sources, score_struct, schema=None):
         """Solve a min-cost bipartite matching between sources and objects.
 
         Each DIASource is given a synthetic 'no-match' alternative (a
@@ -414,9 +423,14 @@ class AssociationTask(pipeBase.Task):
         Parameters
         ----------
         dia_objects, dia_sources : `pandas.DataFrame`
+            Must contain ``ra`` and ``dec``; ``raErr`` and ``decErr`` are
+            used when present.
         score_struct : `lsst.pipe.base.Struct`
             Output of `score`: ``src_idx``, ``obj_idx``, ``scores``,
             ``unmatched_cost``.
+        schema : `dict` [`str`, `felis.datamodel.Schema`] or `None`, optional
+            Dictionary of Schemas from ``sdm_schemas`` containing the table
+            definition to use.
 
         Returns
         -------
@@ -434,10 +448,20 @@ class AssociationTask(pipeBase.Task):
         if not pd.api.types.is_integer_dtype(dia_sources["diaObjectId"]):
             raise ValueError(f"diaSource column diaObjectId must be an integer, "
                              f"got {dia_sources['diaObjectId'].dtype} instead")
-        # Preserve the dtype of the incoming diaObjectId column so the
-        # output is concat-stable downstream (mixing uint64 and int64
-        # forces a silent promotion to float64 in pd.concat).
-        associated_dia_object_ids = np.zeros(n_src, dtype=dia_sources["diaObjectId"].dtype)
+        # Set the diaObjectId dtype from the schema if available. Otherwise
+        # fall back on the dtype of the incoming diaObjectId column.
+        # If the dtype is incompatible with the final schema (uint vs int),
+        # then pandas will silently promote the column to a float.
+        if schema is not None and schema.get("DiaSource") is not None:
+            obj_id_col = next(
+                c for c in schema["DiaSource"].columns if c.name == "diaObjectId"
+            )
+            obj_id_dtype = column_dtype(obj_id_col.datatype, nullable=obj_id_col.nullable)
+        else:
+            obj_id_dtype = dia_sources["diaObjectId"].dtype
+        # Allocate via pandas so pandas-extension dtypes (e.g., "Int64")
+        # are supported alongside numpy dtypes.
+        associated_dia_object_ids = pd.array([0]*n_src, dtype=obj_id_dtype)
         n_matched = 0
 
         if n_src > 0:
