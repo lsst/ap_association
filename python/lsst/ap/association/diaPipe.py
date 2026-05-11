@@ -1381,14 +1381,12 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                           nUniqueRefreshed, len(preloadedDiaObjects))
         if nUniquePreloaded == 0:
             return refreshedDiaObjects
-        elif nUniqueRefreshed == 0:
-            return preloadedDiaObjects
-        else:
-            # We can get "preloaded" diaObjects that don't appear in the APDB with
-            # the CI datasets in ap_verify, since those are stored as a dataset and
-            # an empty APDB is created. In that case, combine the two catalogs.
-            # Precedence is given to the refreshed diaObject catalog.
-            return pd.concat([refreshedDiaObjects, preloadedDiaObjects.loc[~preloadedIsInRefreshed]])
+        # ap_verify CI datasets ship a preloaded diaObject catalog
+        # alongside an empty APDB, so some preloaded objects may not
+        # appear in the refresh. Combine the two, giving precedence to
+        # refreshed entries on overlap so that updated column values are
+        # not silently discarded when the refresh adds no new ids.
+        return pd.concat([refreshedDiaObjects, preloadedDiaObjects.loc[~preloadedIsInRefreshed]])
 
     @timeMethod
     def writeToApdb(self, updatedDiaObjects, associatedDiaSources, diaForcedSources):
