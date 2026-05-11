@@ -1135,7 +1135,11 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         if len(associatedCatalogs) == 0:
             associatedDiaSources = make_empty_catalog(self.schema, tableName="DiaSource")
         else:
-            associatedDiaSources = pd.concat(associatedCatalogs)
+            # Standardize each component to the schema before concatinating, so
+            # that type mis-matches are fixed as early as possible.
+            associatedDiaSources = pd.concat(
+                [convertDataFrameToSdmSchema(self.schema, df, tableName="DiaSource", skipIndex=True)
+                 for df in associatedCatalogs])
 
         self._add_association_meta_data(assocResults.nUpdatedDiaObjects,
                                         assocResults.nUnassociatedDiaObjects,
