@@ -128,15 +128,13 @@ class AssociationTask(pipeBase.Task):
             DataFrame of DiaSources trimmed of all entries with NaN values for
             RA/DEC.
         """
-        nan_mask = (dia_sources.loc[:, "ra"].isnull()
-                    | dia_sources.loc[:, "dec"].isnull())
-        if np.any(nan_mask):
-            nan_idxs = np.argwhere(nan_mask.to_numpy()).flatten()
-            for nan_idx in nan_idxs:
+        nan_mask = dia_sources["ra"].isnull() | dia_sources["dec"].isnull()
+        if nan_mask.any():
+            nan_ids = dia_sources.loc[nan_mask, "diaSourceId"]
+            for nan_id in nan_ids:
                 self.log.warning(
                     "DiaSource %i has NaN value for RA/DEC, "
-                    "dropping from association." %
-                    dia_sources.loc[nan_idx, "diaSourceId"])
+                    "dropping from association.", nan_id)
             dia_sources = dia_sources[~nan_mask]
         return dia_sources
 
