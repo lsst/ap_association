@@ -128,7 +128,7 @@ class DiaForcedSourceTask(pipeBase.Task):
             difference and direct images at DiaObject locations.
         """
         # Restrict forced source measurement to objects with sufficient history to be reliable.
-        objectTable = dia_objects.query(f'nDiaSources >= {self.config.historyThreshold}')
+        objectTable = dia_objects[dia_objects["nDiaSources"] >= self.config.historyThreshold]
         if objectTable.empty:
             # The dataframe will be coerced to the correct (empty) format in diaPipe.
             return pd.DataFrame()
@@ -188,13 +188,13 @@ class DiaForcedSourceTask(pipeBase.Task):
         outputCatalog = afwTable.SourceCatalog(schema)
         outputCatalog.reserve(len(input_objects))
 
-        for obj_id, df_row in input_objects.iterrows():
+        ras = input_objects["ra"].to_numpy()
+        decs = input_objects["dec"].to_numpy()
+        ids = input_objects.index.to_numpy()
+        for obj_id, ra, dec in zip(ids, ras, decs):
             outputRecord = outputCatalog.addNew()
-            outputRecord.setId(obj_id)
-            outputRecord.setCoord(
-                geom.SpherePoint(df_row["ra"],
-                                 df_row["dec"],
-                                 geom.degrees))
+            outputRecord.setId(int(obj_id))
+            outputRecord.setCoord(geom.SpherePoint(ra, dec, geom.degrees))
         return outputCatalog
 
     def _calibrate_and_merge(self,

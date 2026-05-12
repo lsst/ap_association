@@ -754,21 +754,14 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 # Append new forced sources to the full history
                 diaForcedSourcesFull = self.mergeCatalogs(preloadedDiaForcedSources, diaForcedSources,
                                                           tableName="DiaForcedSource")
-                if self.testDataFrameIndex(diaForcedSources):
+                if self.testDataFrameIndex(diaForcedSourcesFull):
                     self.log.warning(
                         "Duplicate DiaForcedSources created after merge with "
                         "history and new sources. This may cause downstream "
                         "problems. Dropping duplicates.")
                     # Drop duplicates via index and keep the first appearance.
-                    # Reset due to the index shape being slight different than
-                    # expected.
-                    diaForcedSourcesFull = diaForcedSourcesFull.groupby(
-                        diaForcedSourcesFull.index).first()
-                    diaForcedSourcesFull.reset_index(drop=True, inplace=True)
-                    diaForcedSourcesFull.set_index(
-                        ["diaObjectId", "diaForcedSourceId"],
-                        drop=False,
-                        inplace=True)
+                    diaForcedSourcesFull = diaForcedSourcesFull[
+                        ~diaForcedSourcesFull.index.duplicated(keep="first")]
 
                 self.alertPackager.run(assocResults.associatedDiaSources,
                                        updatedDiaObjects,
@@ -783,7 +776,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                        )
         except Exception as e:
             # Catch *any* error after we have updated the APDB
-            raise PostApdbUpdateError(errorMsg=repr(e))
+            raise PostApdbUpdateError(errorMsg=repr(e)) from e
 
         return associationResults
 
@@ -1027,13 +1020,13 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             self.log.info("Not creating new diaObjects for %i unassociated diaSources due to %sFlux"
                           " signal to noise < %f",
                           np.sum(snr_flag), fluxField, snrThreshold)
-            flagged += snr_flag
+            flagged |= snr_flag
         if reliabilityThreshold > 0:
             reliability_flag = reliability < reliabilityThreshold
             self.log.info("Not creating new diaObjects for %i unassociated diaSources due to "
                           "reliability<%f",
                           np.sum(reliability_flag), reliabilityThreshold)
-            flagged += reliability_flag
+            flagged |= reliability_flag
         if min(lowReliabilitySnrThreshold, lowSnrReliabilityThreshold) > 0:
             # Only run the combined test if both thresholds are greater than zero
             lowSnrReliability_flag = ((signalToNoise < lowReliabilitySnrThreshold)
@@ -1044,7 +1037,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                           fluxField,
                           lowReliabilitySnrThreshold,
                           lowSnrReliabilityThreshold)
-            flagged += lowSnrReliability_flag
+            flagged |= lowSnrReliability_flag
 
         if np.count_nonzero(~flagged) > 0:
             goodSources = sources[~flagged].copy(deep=True)
@@ -1142,7 +1135,11 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         if len(associatedCatalogs) == 0:
             associatedDiaSources = make_empty_catalog(self.schema, tableName="DiaSource")
         else:
-            associatedDiaSources = pd.concat(associatedCatalogs)
+            # Standardize each component to the schema before concatinating, so
+            # that type mis-matches are fixed as early as possible.
+            associatedDiaSources = pd.concat(
+                [convertDataFrameToSdmSchema(self.schema, df, tableName="DiaSource", skipIndex=True)
+                 for df in associatedCatalogs])
 
         self._add_association_meta_data(assocResults.nUpdatedDiaObjects,
                                         assocResults.nUnassociatedDiaObjects,
@@ -1373,7 +1370,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 "Duplicate DiaObjects loaded from the Apdb. This may cause "
                 "downstream pipeline issues. Dropping duplicated rows")
             # Drop duplicates via index and keep the first appearance.
-            diaObjects = diaObjects.groupby(diaObjects.index).first()
+            diaObjects = diaObjects[~diaObjects.index.duplicated(keep="first")]
         self.log.info("Loaded %d DiaObjects", len(diaObjects))
         refreshedDiaObjects = convertDataFrameToSdmSchema(self.schema, diaObjects, tableName="DiaObject",
                                                           skipIndex=True)
@@ -1388,14 +1385,12 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                           nUniqueRefreshed, len(preloadedDiaObjects))
         if nUniquePreloaded == 0:
             return refreshedDiaObjects
-        elif nUniqueRefreshed == 0:
-            return preloadedDiaObjects
-        else:
-            # We can get "preloaded" diaObjects that don't appear in the APDB with
-            # the CI datasets in ap_verify, since those are stored as a dataset and
-            # an empty APDB is created. In that case, combine the two catalogs.
-            # Precedence is given to the refreshed diaObject catalog.
-            return pd.concat([refreshedDiaObjects, preloadedDiaObjects.loc[~preloadedIsInRefreshed]])
+        # ap_verify CI datasets ship a preloaded diaObject catalog
+        # alongside an empty APDB, so some preloaded objects may not
+        # appear in the refresh. Combine the two, giving precedence to
+        # refreshed entries on overlap so that updated column values are
+        # not silently discarded when the refresh adds no new ids.
+        return pd.concat([refreshedDiaObjects, preloadedDiaObjects.loc[~preloadedIsInRefreshed]])
 
     @timeMethod
     def writeToApdb(self, updatedDiaObjects, associatedDiaSources, diaForcedSources):
@@ -1504,6 +1499,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             DiaObjects loaded from the Apdb, restricted to the exposure
             bounding box.
         """
+        # Copy the bbox so the caller's box is not mutated by grow().
+        bbox = type(bbox)(bbox)
         try:
             bbox.grow(buffer)
             raVals = diaObjCat.ra.to_numpy()
@@ -1524,8 +1521,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                   "before association, leaving %i in the catalog",
                                   nPurged, len(diaObjCat) - nPurged)
                 diaObjCat = diaObjCat[selector].copy()
-        except Exception as e:
-            self.log.warning("Error attempting to check diaObject history: %s", e)
+        except (AttributeError, KeyError, ValueError) as e:
+            self.log.warning("Error attempting to check diaObject history: %s", e, exc_info=e)
         return diaObjCat, diaObjectIds
 
     def mergeCatalogs(self, originalCatalog, newCatalog, tableName):
@@ -1570,9 +1567,10 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         updatedDiaObjects : `pandas.DataFrame`
             Table of DiaObjects updated with the number of associated DiaSources
         """
-        nDiaSources = diaSources[["diaSourceId"]].groupby("diaObjectId").agg(len)
-        nDiaSources.rename({"diaSourceId": "nDiaSources"}, errors="raise", axis="columns", inplace=True)
-        del diaObjects["nDiaSources"]
+        # Group on the index level explicitly since diaObjectId is both an
+        # index and a (duplicated) column
+        nDiaSources = diaSources.groupby(level="diaObjectId").size().rename("nDiaSources")
+        diaObjects = diaObjects.drop(columns="nDiaSources", errors="ignore")
         updatedDiaObjects = diaObjects.join(nDiaSources, how="left")
         return updatedDiaObjects
 
