@@ -457,6 +457,10 @@ class FilterDiaSourceReliabilityTask(pipeBase.PipelineTask):
         # Copy the scores in the output catalog
         if np.all(diaSourceCat['id'] == reliability['id']):
             diaSourceCat['reliability'] = reliability['score']
+            src_key = reliability.schema.find('version').key
+            dst_key = diaSourceCat.schema.find('reliabilityVersion').key
+            for i in range(len(diaSourceCat)):
+                diaSourceCat[i].set(dst_key, reliability[i].get(src_key))
         else:
             # If the identifiers do not match, we cannot filter reliably.
             raise ValueError(

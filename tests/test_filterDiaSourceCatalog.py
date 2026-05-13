@@ -85,6 +85,8 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
                         doc="Length of the source trail")
         schema.addField("reliability", type="F",
                         doc="Reliability of the source")
+        schema.addField("reliabilityVersion", type=str, size=7,
+                        doc="Version of the reliability model")
         _, self.diaSourceCat = dataset.realize(10.0, schema, randomSeed=1234)
 
         # set the sky_source flag for the first set
@@ -264,6 +266,8 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         schema = afwTable.SourceTable.makeMinimalSchema()
         schema.addField("score", type="F",
                         doc="Reliability of the source")
+        schema.addField("version", type=str, size=7,
+                        doc="Version of the reliability model.")
         reliabilityCat = afwTable.SourceCatalog(schema)
         reliabilityCat.reserve(self.nSources)
 
