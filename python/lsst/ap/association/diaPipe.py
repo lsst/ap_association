@@ -684,7 +684,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             mergedDiaObjects,
             mergedDiaSourceHistory,
             updatedDiaObjectIds,
-            [band])
+            self.config.validBands)
         updatedDiaObjects = convertDataFrameToSdmSchema(self.schema, diaCalResult.updatedDiaObjects,
                                                         tableName="DiaObject", skipIndex=True)
 
