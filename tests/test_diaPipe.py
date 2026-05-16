@@ -698,6 +698,110 @@ class TestDiaPipelineTask(unittest.TestCase):
         updatedDiaObjects = task.updateObjectTable(diaObjects, diaSources)
         self.assertTrue(np.all(updatedDiaObjects.nDiaSources.values == expectedSourcesPerObject))
 
+    def test_diaCalculationAllBands(self):
+        """Test that the full DiaPipelineTask.run computes per-band
+        psfFluxMean for all bands with source data and NaN where absent.
+        """
+        config = self._makeDefaultConfig(
+            config_file=self.config_file.name,
+            doPackageAlerts=False,
+            doSolarSystemAssociation=False,
+        )
+        task = DiaPipelineTask(config=config)
+        task.testDataFrameIndex = lambda x: False
+
+        nObjects = 3
+        diaObjects = makeDiaObjects(nObjects, self.exposure, self.rng)
+        diaObjectIds = diaObjects["diaObjectId"].to_numpy()
+
+        # Synthesize preloadedDiaSources in g, r, and i bands with known
+        # psfFlux values.  These represent the historical source catalog.
+        bands_with_data = ["g", "r", "i"]
+        rows = []
+        srcId = 1
+        for band in bands_with_data:
+            for i, objId in enumerate(diaObjectIds):
+                nSrc = 3
+                for j in range(nSrc):
+                    rows.append({
+                        "diaSourceId": srcId,
+                        "diaObjectId": objId,
+                        "band": band,
+                        "ra": diaObjects.iloc[i]["ra"],
+                        "dec": diaObjects.iloc[i]["dec"],
+                        "midpointMjdTai": 58000.0 + srcId,
+                        "psfFlux": 1000.0 + srcId * 10,
+                        "psfFluxErr": 10.0,
+                    })
+                    srcId += 1
+        preloadedDiaSources = pd.DataFrame(rows)
+        preloadedDiaSources = convertDataFrameToSdmSchema(
+            task.schema, preloadedDiaSources, "DiaSource", skipIndex=True
+        )
+        preloadedDiaSources.set_index(
+            ["diaObjectId", "band", "diaSourceId"], inplace=True, drop=False
+        )
+
+        # The new diaSourceTable for this visit (band=g) needs to associate
+        # with existing objects.  Use the same positions as the diaObjects.
+        newSrcRows = []
+        for i, objId in enumerate(diaObjectIds):
+            newSrcRows.append({
+                "diaSourceId": srcId,
+                "diaObjectId": 0,
+                "ssObjectId": 0,
+                "band": "g",
+                "ra": diaObjects.iloc[i]["ra"],
+                "dec": diaObjects.iloc[i]["dec"],
+                "midpointMjdTai": 58100.0,
+                "psfFlux": 1500.0,
+                "psfFluxErr": 15.0,
+            })
+            srcId += 1
+        diaSourceTable = pd.DataFrame(newSrcRows)
+
+        preloadedDiaForcedSources = pd.DataFrame(
+            columns=["diaObjectId", "diaForcedSourceId"]
+        ).set_index(["diaObjectId", "diaForcedSourceId"], drop=False)
+
+        with patch.multiple(task, apdb=DEFAULT, diaForcedSource=DEFAULT):
+            result = task.run(
+                diaSourceTable,
+                None,
+                self.diffim,
+                self.exposure,
+                self.template,
+                preloadedDiaObjects=diaObjects,
+                preloadedDiaSources=preloadedDiaSources,
+                preloadedDiaForcedSources=preloadedDiaForcedSources,
+                band="g",
+                idGenerator=IdGenerator(),
+            )
+
+        outputDiaObjects = result.diaObjects
+
+        # Bands with data should have finite psfFluxMean.
+        for band in bands_with_data:
+            col = f"{band}_psfFluxMean"
+            self.assertIn(col, outputDiaObjects.columns)
+            vals = outputDiaObjects[col].to_numpy()
+            self.assertTrue(
+                np.all(np.isfinite(vals)),
+                f"{col} should be finite for all objects but got {vals}"
+            )
+
+        # Bands without data should have NaN psfFluxMean.
+        bands_without_data = [b for b in config.validBands
+                              if b not in bands_with_data]
+        for band in bands_without_data:
+            col = f"{band}_psfFluxMean"
+            if col in outputDiaObjects.columns:
+                vals = outputDiaObjects[col].to_numpy()
+                self.assertTrue(
+                    np.all(np.isnan(vals)),
+                    f"{col} should be NaN (no data in {band}) but got {vals}"
+                )
+
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass
