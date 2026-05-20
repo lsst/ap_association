@@ -37,19 +37,6 @@ __all__ = ("DeduplicateAllSkyDiaObjectsTask", "DeduplicateAllSkyDiaObjectsConfig
 
 class DeduplicateAllSkyDiaObjectsConfig(pexConfig.Config):
     """Configuration for DeduplicateAllSkyDiaObjectsTask.
-
-    Parameters
-    ----------
-    maxClusteringDistance : `float`
-        Maximum distance to merge clusters of duplicate DiaObjects, in
-        arcseconds. Default is 1.5 arcseconds.
-    earliestMidpointMjdTai : `float`
-        MidpointMjdTai (Modified Julian Date in TAI scale) of the
-        earliest DiaSource to be reassigned during deduplication.
-        Default corresponds to 2025-09-01.
-    maxDiaObjects : `int`
-        Maximum number of DiaObjects to process. An exception is raised
-        if more DiaObjects are found to prevent excessive memory/computation.
     """
     apdb_config_url = pexConfig.Field(
         dtype=str,
@@ -70,13 +57,6 @@ class DeduplicateAllSkyDiaObjectsConfig(pexConfig.Config):
         default=Time('2025-09-01', scale='tai').mjd,
         doc="MidpointMjdTai of earliest DIASource to be reassigned during "
             "deduplication.",
-    )
-    maxDiaObjects = pexConfig.RangeField(
-        doc="Maximum number of DiaObjects to process. An exception is raised "
-            "if more DiaObjects are found to prevent excessive memory/computation.",
-        dtype=int,
-        default=1000000,
-        min=1,
     )
     nNeighborsConnectivity = pexConfig.RangeField(
         doc="Number of neighbors to use for clustering.  Larger values are more"
@@ -137,10 +117,6 @@ class DeduplicateAllSkyDiaObjectsTask(pipeBase.Task):
         # fix getDiaObjectsForDedup returning a non-unique pandas index
         all_diaObjects = all_diaObjects.reset_index().drop('index', axis=1)
 
-        if len(all_diaObjects) > self.config.maxDiaObjects:
-            raise RuntimeError(f"Found {len(all_diaObjects)} DiaObjects, which exceeds the "
-                               f"configured maximum of {self.config.maxDiaObjects}. "
-                               "Aborting to avoid excessive memory/computation.")
         self.log.info(f"Loaded {len(all_diaObjects)} DiaObjects.")
 
         # only keep the latest versions of the DIAObjects
@@ -324,7 +300,7 @@ class DeduplicateAllSkyDiaObjectsTask(pipeBase.Task):
         performance. However, it prevents objects from being grouped
         together if they are not among each other's k nearest
         neighbors, even if they fall within the desired distance
-        threshold. `radius_neighbors_graph with a distance threshold
+        threshold. `radius_neighbors_graph` with a distance threshold
         would avoid this issue but has proven computationally
         infeasible.
         """
@@ -374,8 +350,7 @@ class DeduplicateAllSkyDiaObjectsTask(pipeBase.Task):
             other_mask = ~partition_mask
             other_indices = np.where(other_mask)[0]
 
-#            if len(other_indices) > 0:
-            if False:
+            if len(other_indices) > 0:
                 other_coords = coords[other_indices]
 
                 # Use BallTree to find objects within threshold distance
