@@ -289,8 +289,6 @@ class TestDeduplicateAllSkyDiaObjects(unittest.TestCase):
         self.assertEqual(duplicate_count_large, 5)
 
 
-
-
 def _make_task(maxClusteringDistance=1.5, nNeighborsConnectivity=30,
                maxSubsetSize=50000):
     """Create a DeduplicateAllSkyDiaObjectsTask with given config values.
@@ -941,7 +939,6 @@ class TestClusterEdgeCases(unittest.TestCase):
 
         self.assertEqual(len(labels), 4)
         self.assertEqual(labels.iloc[0], labels.iloc[1])
-
 
 
 def setup_module(module):
