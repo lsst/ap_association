@@ -27,6 +27,8 @@ from lsst.ap.association.filterDiaSourceCatalog import (FilterDiaSourceCatalogCo
                                                         FilterDiaSourceReliabilityConfig,
                                                         FilterDiaSourceReliabilityTask)
 import lsst.geom as geom
+import lsst.afw.detection as afwDetect
+import lsst.afw.geom as afwGeom
 import lsst.meas.base.tests as measTests
 import lsst.utils.tests
 import lsst.afw.image as afwImage
@@ -69,6 +71,8 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
                         "centered at DiaSource position.")
         schema.addField("ip_diffim_forced_PsfFlux_instFluxErr", type="F",
                         doc="Estimated uncertainty of ip_diffim_forced_PsfFlux_instFlux.")
+        schema.addField('ext_trailedSources_Naive_flag', type="Flag",
+                        doc="General trail measurement failure flag")
         schema.addField('ext_trailedSources_Naive_flag_off_image', type="Flag",
                         doc="Trail extends off image")
         schema.addField('ext_trailedSources_Naive_flag_suspect_long_trail',
@@ -341,6 +345,162 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
         filterDiaSourceCatalogTask = FilterDiaSourceCatalogTask(config=self.config)
         scale = filterDiaSourceCatalogTask._estimate_pixel_scale(self.diaSourceCat)
         self.assertEqual(self.config.estimatedPixelScale, scale)
+
+    def test_run_with_filter_centroid_flag(self):
+        """Test that sources with slot_Centroid_flag set are filtered with the
+        default badFlagList configuration.
+        """
+        self.config.doRemoveSkySources = False
+        self.config.doRemoveNegativeDirectImageSources = False
+        self.config.doWriteRejectedSkySources = False
+        self.config.doTrailedSourceFilter = False
+        # Default badFlagList includes slot_Centroid_flag
+        self.assertIn("slot_Centroid_flag", self.config.badFlagList)
+
+        # Set slot_Centroid_flag on a few sources that aren't already flagged
+        nCentroidFlagged = 3
+        # Pick sources at the end that have no other badFlagList flags
+        trail_offset = (self.nSkySources + self.nCrCenterSources
+                        + self.nFakeFlagSources + self.nNegativeSources)
+        for i in range(nCentroidFlagged):
+            self.diaSourceCat[trail_offset + i]["slot_Centroid_flag"] = True
+
+        filterDiaSourceCatalogTask = FilterDiaSourceCatalogTask(config=self.config)
+        result = filterDiaSourceCatalogTask.run(self.diaSourceCat, self.visitInfo)
+        # Default badFlagList filters crCenter + slot_Centroid_flag + high_varianceCenterAll.
+        # crCenter flags were already set for nCrCenterSources.
+        # Our added centroid flags are on previously unflagged sources.
+        nExpectedFiltered = self.nSources - self.nCrCenterSources - nCentroidFlagged
+        self.assertEqual(len(result.filteredDiaSourceCat), nExpectedFiltered)
+
+    def test_check_dia_source_trail_bbox_no_flag(self):
+        """Test that sources without ext_trailedSources_Naive_flag are not
+        flagged by the bbox check, regardless of bbox size.
+        """
+        self.config.doTrailedSourceFilter = True
+        task = FilterDiaSourceCatalogTask(config=self.config)
+        exposure_time = self.visitInfo.getExposureTime()
+        # None of the sources have the trail flag set by default
+        bbox_mask = task._check_dia_source_trail_bbox(self.diaSourceCat, exposure_time)
+        self.assertEqual(np.sum(bbox_mask), 0)
+
+    def test_check_dia_source_trail_bbox_no_flag_large_bbox(self):
+        """Test that sources without ext_trailedSources_Naive_flag are not
+        flagged by the bbox check even when the bounding box is large enough
+        that it would otherwise trigger the bbox filter.
+        """
+        self.config.doTrailedSourceFilter = True
+        task = FilterDiaSourceCatalogTask(config=self.config)
+        exposure_time = self.visitInfo.getExposureTime()
+        pixelScale = task._estimate_pixel_scale(self.diaSourceCat)
+        max_length_pixels = self.config.max_trail_length * exposure_time / pixelScale
+
+        # Give source 0 a large footprint exceeding the threshold, but do NOT
+        # set ext_trailedSources_Naive_flag — the bbox check should be skipped.
+        srcIdx = 0
+        largeSpan = afwGeom.SpanSet(
+            geom.Box2I(geom.Point2I(0, 0),
+                       geom.Extent2I(int(max_length_pixels) + 10, 5))
+        )
+        footprint = afwDetect.Footprint(largeSpan)
+        self.diaSourceCat[srcIdx].setFootprint(footprint)
+        self.assertFalse(self.diaSourceCat[srcIdx]["ext_trailedSources_Naive_flag"])
+
+        bbox_mask = task._check_dia_source_trail_bbox(self.diaSourceCat, exposure_time)
+        self.assertFalse(bbox_mask[srcIdx])
+        self.assertEqual(np.sum(bbox_mask), 0)
+
+    def test_check_dia_source_trail_bbox_flag_small_bbox(self):
+        """Test that sources with ext_trailedSources_Naive_flag set but a small bounding
+        box are not flagged.
+        """
+        self.config.doTrailedSourceFilter = True
+        task = FilterDiaSourceCatalogTask(config=self.config)
+        exposure_time = self.visitInfo.getExposureTime()
+        # Set the trail flag on a source with a small footprint (PSF-sized)
+        self.diaSourceCat[0]["ext_trailedSources_Naive_flag"] = True
+        bbox_mask = task._check_dia_source_trail_bbox(self.diaSourceCat, exposure_time)
+        # The default PSF footprint is small (~7 pixels), well below the
+        # threshold for max_trail_length * exposure_time / pixelScale
+        self.assertFalse(bbox_mask[0])
+
+    def test_check_dia_source_trail_bbox_flag_large_bbox(self):
+        """Test that sources with ext_trailedSources_Naive_flag set and a
+        large bounding box are flagged.
+        """
+        self.config.doTrailedSourceFilter = True
+        task = FilterDiaSourceCatalogTask(config=self.config)
+        exposure_time = self.visitInfo.getExposureTime()
+        pixelScale = task._estimate_pixel_scale(self.diaSourceCat)
+        max_length_pixels = self.config.max_trail_length * exposure_time / pixelScale
+
+        # Set the trail flag on a source and give it a large footprint
+        srcIdx = 0
+        self.diaSourceCat[srcIdx]["ext_trailedSources_Naive_flag"] = True
+        largeSpan = afwGeom.SpanSet(
+            geom.Box2I(geom.Point2I(0, 0),
+                       geom.Extent2I(int(max_length_pixels) + 10, 5))
+        )
+        footprint = afwDetect.Footprint(largeSpan)
+        self.diaSourceCat[srcIdx].setFootprint(footprint)
+
+        bbox_mask = task._check_dia_source_trail_bbox(self.diaSourceCat, exposure_time)
+        self.assertTrue(bbox_mask[srcIdx])
+
+    def test_check_dia_source_trail_bbox_diagonal(self):
+        """Test a source with a large diagonal but small width/height should still
+        be flagged.
+        """
+        self.config.doTrailedSourceFilter = True
+        task = FilterDiaSourceCatalogTask(config=self.config)
+        exposure_time = self.visitInfo.getExposureTime()
+        pixelScale = task._estimate_pixel_scale(self.diaSourceCat)
+        max_length_pixels = self.config.max_trail_length * exposure_time / pixelScale
+
+        srcIdx = 1
+        self.diaSourceCat[srcIdx]["ext_trailedSources_Naive_flag"] = True
+        # Create a bbox whose individual sides are below max_length_pixels
+        # but whose diagonal exceeds it.
+        side = int(max_length_pixels * 0.8)
+        largeSpan = afwGeom.SpanSet(
+            geom.Box2I(geom.Point2I(0, 0), geom.Extent2I(side, side))
+        )
+        footprint = afwDetect.Footprint(largeSpan)
+        self.diaSourceCat[srcIdx].setFootprint(footprint)
+
+        bbox_mask = task._check_dia_source_trail_bbox(self.diaSourceCat, exposure_time)
+        # diagonal = side * sqrt(2) ~ max_length_pixels * 1.13 > max_length_pixels
+        self.assertTrue(bbox_mask[srcIdx])
+
+    def test_run_with_trail_and_bbox_filter(self):
+        """Test doTrailedSourceFilter=True filters sources
+        via both trail length and bbox fallback.
+        """
+        self.config.doRemoveSkySources = False
+        self.config.badFlagList = []
+        self.config.doRemoveNegativeDirectImageSources = False
+        self.config.doWriteRejectedSkySources = False
+        self.config.doTrailedSourceFilter = True
+        task = FilterDiaSourceCatalogTask(config=self.config)
+        exposure_time = self.visitInfo.getExposureTime()
+        pixelScale = task._estimate_pixel_scale(self.diaSourceCat)
+        max_length_pixels = self.config.max_trail_length * exposure_time / pixelScale
+
+        # Set the trail flag and give a large footprint to a source that
+        # wouldn't be caught by the trail length check (first source).
+        srcIdx = 0
+        self.diaSourceCat[srcIdx]["ext_trailedSources_Naive_flag"] = True
+        largeSpan = afwGeom.SpanSet(
+            geom.Box2I(geom.Point2I(0, 0),
+                       geom.Extent2I(int(max_length_pixels) + 10, 5))
+        )
+        footprint = afwDetect.Footprint(largeSpan)
+        self.diaSourceCat[srcIdx].setFootprint(footprint)
+
+        result = task.run(self.diaSourceCat, self.visitInfo)
+        # The bbox-flagged source should have been removed
+        nExpectedFiltered = self.nSources - self.nFilteredTrailedSources - 1
+        self.assertEqual(len(result.filteredDiaSourceCat), nExpectedFiltered)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
