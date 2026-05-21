@@ -26,6 +26,7 @@ import unittest
 import lsst.geom as geom
 import lsst.utils.tests
 from lsst.ap.association import AssociationTask
+from lsst.ap.association.association import AssociationConfig
 
 
 class TestAssociationTask(unittest.TestCase):
@@ -284,6 +285,54 @@ class TestAssociationTask(unittest.TestCase):
             sources_float = self.diaSources.copy()
             sources_float["diaObjectId"] = sources_float["diaObjectId"].astype(float)
             task.run(sources_float, self.diaObjects)
+
+    def test_fallback_sigma_scores_missing_error_pair(self):
+        """A pair whose errors are missing is scored using
+        ``fallbackSigmaArcSeconds``: a larger fallback yields a smaller
+        chi^2 for the same separation.
+        """
+        sig_deg = 0.05 / 3600.0
+        # One row in each catalog carries a real error so chi^2 mode
+        # triggers; the rows under test (id 100 / obj 1) have NaN errors.
+        objects = pd.DataFrame([
+            {"ra": 1.0, "dec": 1.0,
+             "raErr": np.nan, "decErr": np.nan, "diaObjectId": 1},
+            {"ra": 2.0, "dec": 2.0,
+             "raErr": sig_deg, "decErr": sig_deg, "diaObjectId": 2},
+        ]).set_index("diaObjectId", drop=False)
+        sources = pd.DataFrame([
+            {"ra": 1.0, "dec": 1.0 + 0.5 / 3600.0,
+             "raErr": np.nan, "decErr": np.nan,
+             "diaSourceId": 100, "diaObjectId": 0},
+            {"ra": 2.0, "dec": 2.0,
+             "raErr": sig_deg, "decErr": sig_deg,
+             "diaSourceId": 200, "diaObjectId": 0},
+        ])
+
+        def missing_pair_score(fallback):
+            cfg = AssociationConfig()
+            cfg.fallbackSigmaArcSeconds = fallback
+            result = AssociationTask(config=cfg).score(
+                objects, sources, 1.0 * geom.arcseconds)
+            # The missing-error pair is source row 0 -> object row 0.
+            mask = (result.src_idx == 0) & (result.obj_idx == 0)
+            self.assertEqual(int(mask.sum()), 1)
+            return float(result.scores[mask][0])
+
+        # var_dec = 2 * fallback^2 (floored at sigmaFloor=0.05"); ddec=0.5".
+        # fallback 0.05" -> chi^2 = 0.25 / (2*0.05^2) = 50.
+        self.assertAlmostEqual(missing_pair_score(0.05), 50.0, places=6)
+        # fallback 0.2"  -> chi^2 = 0.25 / (2*0.2^2)  = 3.125.
+        self.assertAlmostEqual(missing_pair_score(0.2), 3.125, places=6)
+
+        # Even with the small fallback (large chi^2) the pair is within
+        # maxDist, so it is still matched to its object.
+        cfg = AssociationConfig()
+        cfg.fallbackSigmaArcSeconds = 0.05
+        result = AssociationTask(config=cfg).run(sources, objects)
+        matched = result.matchedDiaSources.set_index("diaSourceId")
+        self.assertEqual(int(matched.loc[100, "diaObjectId"]), 1)
+        self.assertEqual(int(matched.loc[200, "diaObjectId"]), 2)
 
     def test_contention_leaves_extra_source_unassociated(self):
         """When two sources fall within ``maxDistArcSeconds`` of a single

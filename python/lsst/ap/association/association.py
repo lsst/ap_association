@@ -61,6 +61,16 @@ class AssociationConfig(pexConfig.Config):
         "computing chi^2.",
         default=0.05,
     )
+    fallbackSigmaArcSeconds = pexConfig.Field(
+        dtype=float,
+        doc="Per-axis position uncertainty (arcsec) substituted for "
+        "raErr/decErr values that are missing, non-finite, or "
+        "non-positive when computing chi^2. Should reflect a plausible "
+        "size for an unmeasured per-axis uncertainty (e.g., one LSSTCam "
+        "pixel ~= 0.2 arcsec). Has no effect on rows that carry valid "
+        "uncertainty values.",
+        default=0.2,
+    )
 
 
 class AssociationTask(pipeBase.Task):
@@ -320,9 +330,9 @@ class AssociationTask(pipeBase.Task):
         """Return the 2-DOF position chi^2 for paired DIASources/DIAObjects.
 
         Non-finite or non-positive per-row uncertainties are replaced
-        with ``self.config.sigmaFloorArcSeconds``; the combined per-axis
-        variance is also floored at that same value to guard against
-        pathologically small reported errors.
+        with ``self.config.fallbackSigmaArcSeconds``. The combined per-axis
+        variance is then floored at ``self.config.sigmaFloorArcSeconds``
+        to guard against pathologically small reported errors.
 
         Parameters
         ----------
@@ -339,12 +349,13 @@ class AssociationTask(pipeBase.Task):
              2 degrees of freedom position chi^2, one value per pair.
         """
         sigma_floor_sq_deg = (self.config.sigmaFloorArcSeconds / 3600.0) ** 2
+        fallback_sq_deg = (self.config.fallbackSigmaArcSeconds / 3600.0) ** 2
 
         def err_sq(catalog, col, idx):
             arr = catalog[col].to_numpy()[idx]
             sq = np.square(arr)
             return np.where(np.isfinite(sq) & (arr > 0.0),
-                            sq, sigma_floor_sq_deg)
+                            sq, fallback_sq_deg)
 
         src_ra = dia_sources["ra"].to_numpy()[src_idx]
         src_dec = dia_sources["dec"].to_numpy()[src_idx]
