@@ -1,7 +1,7 @@
 # Column names defined in http://ls.st/dpdd with some modification as needed
 # by database schema defined in lsst.dax.apdb
 funcs:
-    diaSourceId: # the index of deepCoadd_disSource IS the diaSourceId
+    diaSourceId: # the index of deepCoadd_diaSource IS the diaSourceId
         functor: Column
         args: id
     visit:
