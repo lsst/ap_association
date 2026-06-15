@@ -1,7 +1,7 @@
 # Column names defined in http://ls.st/dpdd with some modification as needed
 # by database schema defined in lsst.dax.apdb
 funcs:
-    diaSourceId: # the index of deepCoadd_disSource IS the diaSourceId
+    diaSourceId: # the index of deepCoadd_diaSource IS the diaSourceId
         functor: Column
         args: id
     visit:
@@ -279,6 +279,9 @@ funcs:
     reliability:
         functor: Column
         args: reliability
+    reliability_version:
+        functor: Column
+        args: reliability_version
     glint_trail:
         functor: Column
         args: glint_trail

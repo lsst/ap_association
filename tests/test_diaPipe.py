@@ -405,6 +405,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         glint_trail = np.zeros(nUnassociatedDiaSources, dtype=bool)
         glint_trail[12:16] = True  # add 4 glint trail sources
         diaSources["reliability"] = reliability
+        diaSources["reliability_version"] = '99.42'
         diaSources[config.newObjectFluxField] = flux
         diaSources[config.newObjectFluxField + "Err"] = fluxErr
         diaSources["glint_trail"] = glint_trail
@@ -505,12 +506,14 @@ class TestDiaPipelineTask(unittest.TestCase):
                                        flagList=config.forcedBadFlags)
         diaSourcesGood['reliability'] = (self.rng.random(nGoodDiaSources)*(1 - reliabilityThreshold)
                                          + reliabilityThreshold)
+        diaSourcesGood['reliability_version'] = '99.42'
         diaSourcesGood['trailLength'] = self.rng.random(nGoodDiaSources)*trailLengthThreshold
         diaSourcesBad = convertDataFrameToSdmSchema(task.schema, diaSourcesBad,
                                                     tableName="DiaSource", skipIndex=True)
 
         # Set some "bad" diaSources to have bad reliability, some good
         diaSourcesBad['reliability'] = self.rng.random(nBadDiaSources)
+        diaSourcesBad['reliability_version'] = '99.42'
         # Set some "bad" diaSources to have too long trail lengths, some acceptible
         diaSourcesBad['trailLength'] = self.rng.random(nBadDiaSources)*trailLengthThreshold + 0.5
         missingBadFlags = ((diaSourcesBad['reliability'] > reliabilityThreshold)
@@ -568,6 +571,7 @@ class TestDiaPipelineTask(unittest.TestCase):
 
         diaSources['reliability'] = (self.rng.random(nDiaSources)*(1 - reliabilityThreshold)
                                      + reliabilityThreshold)
+        diaSources['reliability_version'] = '99.42'
         diaSources['trailLength'] = self.rng.random(nDiaSources)*trailLengthThreshold
 
         diaSourcesMissingColumns['reliability'] = (self.rng.random(nDiaSources)*(1 - reliabilityThreshold)
@@ -579,6 +583,7 @@ class TestDiaPipelineTask(unittest.TestCase):
 
         diaSourcesNotMatched['reliability'] = (self.rng.random(nDiaSources)*(1 - reliabilityThreshold)
                                                + reliabilityThreshold)
+        diaSourcesNotMatched['reliability_version'] = '99.42'
         diaSourcesNotMatched['trailLength'] = self.rng.random(nDiaSources)*trailLengthThreshold
 
         diaSources = convertDataFrameToSdmSchema(task.schema, diaSources,
@@ -621,6 +626,7 @@ class TestDiaPipelineTask(unittest.TestCase):
 
         diaSources['reliability'] = (self.rng.random(nDiaSources)*(1 - reliabilityThreshold)
                                      + reliabilityThreshold)
+        diaSources['reliability_version'] = '99.42'
         diaSources['trailLength'] = self.rng.random(nDiaSources)*trailLengthThreshold
 
         diaSourcesNotMatched = makeDiaSources(nDiaSources, diaObjects["diaObjectId"].to_numpy() + 999,
@@ -628,6 +634,7 @@ class TestDiaPipelineTask(unittest.TestCase):
 
         diaSourcesNotMatched['reliability'] = (self.rng.random(nDiaSources)*(1 - reliabilityThreshold)
                                                + reliabilityThreshold)
+        diaSourcesNotMatched['reliability_version'] = '99.42'
         diaSourcesNotMatched['trailLength'] = self.rng.random(nDiaSources)*trailLengthThreshold
 
         diaSources = convertDataFrameToSdmSchema(task.schema, diaSources,
