@@ -177,9 +177,12 @@ class TestAssociationTask(unittest.TestCase):
         self.assertEqual(len(result.src_idx), 1)
         self.assertEqual(result.src_idx[0], 0)
         self.assertEqual(result.obj_idx[0], 0)
-        # var per axis = 2 * sig^2 = 2*(0.05)^2 arcsec^2; dra=0, ddec=0.05".
-        # chi^2 = 0 + (0.05)^2 / (2 * 0.05^2) = 0.5.
-        self.assertAlmostEqual(result.scores[0], 0.5, places=6)
+        # var per axis = 2 * sig^2 (above the floor); dra=0, ddec=0.05".
+        # chi^2 = (0.05)^2 / (2 * 0.05^2) = 0.5, and
+        # NLL = 0.5*chi^2 + 0.5*ln(var_ra * var_dec).
+        var = 2 * sig_deg ** 2
+        expected_nll = 0.5 * 0.5 + 0.5 * np.log(var * var)
+        self.assertAlmostEqual(result.scores[0], expected_nll, places=6)
 
     def test_within_maxdist_matches_despite_high_chi2(self):
         """A 0.5" separation with 0.05" per-axis sigma (chi^2 ~ 50, i.e.
@@ -198,14 +201,52 @@ class TestAssociationTask(unittest.TestCase):
         ])
         task = AssociationTask()
         result = task.score(objects, sources, 1.0 * geom.arcseconds)
-        # The pair is kept as a candidate and scored at its chi^2 (~50),
-        # despite the large offset.
+        # The pair is kept as a candidate despite the large offset
+        # (chi^2 ~ 50) since there is no significance cut.
         self.assertEqual(len(result.src_idx), 1)
-        self.assertAlmostEqual(result.scores[0], 50.0, places=6)
+        self.assertTrue(np.isfinite(result.scores[0]))
         # End-to-end the source is associated to the object.
         run_result = task.run(sources, objects)
         self.assertEqual(run_result.nUpdatedDiaObjects, 1)
         matched = run_result.matchedDiaSources.set_index("diaSourceId")
+        self.assertEqual(int(matched.loc[100, "diaObjectId"]), 1)
+
+    def test_nll_prefers_better_localized_object(self):
+        """With two candidate objects, the NLL cost associates to the
+        better-localized (tighter) object even though a bare chi^2 would
+        pick the looser, farther one, whose larger variance deflates its
+        chi^2.
+        """
+        src_sig = 0.05 / 3600.0
+        objects = pd.DataFrame([
+            {"ra": 1.0, "dec": 1.0 + 0.15 / 3600.0,  # tight and close
+             "raErr": 0.05 / 3600.0, "decErr": 0.05 / 3600.0,
+             "diaObjectId": 1},
+            {"ra": 1.0, "dec": 1.0 + 0.30 / 3600.0,  # loose and far
+             "raErr": 0.5 / 3600.0, "decErr": 0.5 / 3600.0,
+             "diaObjectId": 2},
+        ]).set_index("diaObjectId", drop=False)
+        sources = pd.DataFrame([
+            {"ra": 1.0, "dec": 1.0,
+             "raErr": src_sig, "decErr": src_sig,
+             "diaSourceId": 100, "diaObjectId": 0}
+        ])
+        # A bare chi^2 would prefer the loose object 2 (smaller chi^2)...
+        chi2_tight = (0.15 / 3600.0) ** 2 / (2 * (0.05 / 3600.0) ** 2)
+        chi2_loose = (0.30 / 3600.0) ** 2 / ((0.05 / 3600.0) ** 2
+                                             + (0.5 / 3600.0) ** 2)
+        self.assertLess(chi2_loose, chi2_tight)
+
+        task = AssociationTask()
+        score_struct = task.score(objects, sources, 1.0 * geom.arcseconds)
+        # ...but the NLL cost prefers the tight object 1. obj_idx are
+        # positional: 0 -> diaObjectId 1 (tight), 1 -> diaObjectId 2.
+        nll = {int(obj): float(score) for obj, score
+               in zip(score_struct.obj_idx, score_struct.scores)}
+        self.assertLess(nll[0], nll[1])
+        # End-to-end the source associates to the tighter object 1.
+        result = task.run(sources, objects)
+        matched = result.matchedDiaSources.set_index("diaSourceId")
         self.assertEqual(int(matched.loc[100, "diaObjectId"]), 1)
 
     def test_chi2_ra_wraparound(self):
@@ -288,8 +329,9 @@ class TestAssociationTask(unittest.TestCase):
 
     def test_fallback_sigma_scores_missing_error_pair(self):
         """A pair whose errors are missing is scored using
-        ``fallbackSigmaArcSeconds``: a larger fallback yields a smaller
-        chi^2 for the same separation.
+        ``fallbackSigmaArcSeconds``: the substituted per-axis uncertainty
+        sets the pair's score. The fallback affects only the score
+        (ranking), not whether the pair is a candidate.
         """
         sig_deg = 0.05 / 3600.0
         # One row in each catalog carries a real error so chi^2 mode
@@ -319,11 +361,17 @@ class TestAssociationTask(unittest.TestCase):
             self.assertEqual(int(mask.sum()), 1)
             return float(result.scores[mask][0])
 
-        # var_dec = 2 * fallback^2 (floored at sigmaFloor=0.05"); ddec=0.5".
-        # fallback 0.05" -> chi^2 = 0.25 / (2*0.05^2) = 50.
-        self.assertAlmostEqual(missing_pair_score(0.05), 50.0, places=6)
-        # fallback 0.2"  -> chi^2 = 0.25 / (2*0.2^2)  = 3.125.
-        self.assertAlmostEqual(missing_pair_score(0.2), 3.125, places=6)
+        def expected_nll(fallback, chi2):
+            # Both rows have missing errors, so the combined per-axis
+            # variance is 2 * fallback^2 (deg^2), above the 0.05" floor.
+            var = 2 * (fallback / 3600.0) ** 2
+            return 0.5 * chi2 + 0.5 * np.log(var * var)
+
+        # ddec = 0.5"; fallback 0.05" -> chi^2 = 50, fallback 0.2" -> 3.125.
+        self.assertAlmostEqual(
+            missing_pair_score(0.05), expected_nll(0.05, 50.0), places=6)
+        self.assertAlmostEqual(
+            missing_pair_score(0.2), expected_nll(0.2, 3.125), places=6)
 
         # Even with the small fallback (large chi^2) the pair is within
         # maxDist, so it is still matched to its object.

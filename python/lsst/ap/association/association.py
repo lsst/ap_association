@@ -212,8 +212,10 @@ class AssociationTask(pipeBase.Task):
         from a kd-tree on unit vectors. Each candidate pair is then scored:
 
         - If both inputs carry usable ``raErr``/``decErr`` columns, the
-          score is the 2-DOF position chi^2, so the match prefers the
-          best-fitting object rather than the merely-nearest one.
+          score is the 2D Gaussian negative log-likelihood of the
+          position residual (``0.5 * chi^2 + 0.5 * ln(var_ra * var_dec)``),
+          so the match prefers the most likely object, not merely the
+          nearest or the lowest-chi^2 one (see `_position_nll`).
         - Otherwise, the distance (in radians) is used as the score.
 
         No candidates are dropped by the score itself: every pair within
@@ -248,8 +250,9 @@ class AssociationTask(pipeBase.Task):
             - ``obj_idx`` : `numpy.ndarray` of `int`
                 Positional object index for each surviving pair.
             - ``scores`` : `numpy.ndarray` of `float`
-                Cost of each pair (chi^2 if uncertainty-based, chord
-                distance in radians otherwise). Lower is better.
+                Cost of each pair (position negative log-likelihood if
+                uncertainty-based, chord distance in radians otherwise).
+                Lower is better; NLL values may be negative.
             - ``unmatched_cost`` : `float`
                 Cost to assign to the synthetic 'no-match' alternative
                 in the linear-assignment match — set so that any
@@ -293,10 +296,9 @@ class AssociationTask(pipeBase.Task):
 
         if (self._has_position_errors(dia_sources)
                 and self._has_position_errors(dia_objects)):
-            scores = self._chi2_position(
-                dia_sources, dia_objects, src_idx, obj_idx)
+            scores = self._position_nll(dia_sources, dia_objects, src_idx, obj_idx)
             # ``max_dist`` is the sole association gate: every candidate
-            # pair is kept and the chi^2 only ranks them. Price the
+            # pair is kept and the NLL only ranks them. Price the
             # 'no-match' alternative just above the worst candidate so a
             # real match is always preferred. A diaSource will only not be
             # associated if there are more diaSources than diaObjects.
@@ -326,8 +328,24 @@ class AssociationTask(pipeBase.Task):
         return (bool(np.any(np.isfinite(raErr) & (raErr > 0.0)))
                 and bool(np.any(np.isfinite(decErr) & (decErr > 0.0))))
 
-    def _chi2_position(self, dia_sources, dia_objects, src_idx, obj_idx):
-        """Return the 2-DOF position chi^2 for paired DIASources/DIAObjects.
+    def _position_nll(self, dia_sources, dia_objects, src_idx, obj_idx):
+        """Return the position Gaussian negative log-likelihood (NLL) for
+        paired DIASources/DIAObjects, used as the match cost.
+
+        Under the hypothesis that the DIASource and DIAObject are the same
+        astrophysical object, each per-axis residual is a zero-mean
+        Gaussian whose variance is the sum of the two catalogs' squared
+        per-axis uncertainties. The cost is the negative log-likelihood of
+        the observed residual, dropping the constant ``ln(2*pi)`` term:
+
+            NLL = 0.5 * (dra^2 / var_ra + ddec^2 / var_dec)
+                  + 0.5 * ln(var_ra * var_dec).
+
+        The first term is half the 2-DOF position chi^2. The second is the
+        Gaussian normalization, which penalises poorly-localised
+        candidates: a bare chi^2 cost omits it, and since a larger
+        variance deflates chi^2 for a fixed separation, a bare chi^2 would
+        bias the match toward the more poorly-localised object.
 
         Non-finite or non-positive per-row uncertainties are replaced
         with ``self.config.fallbackSigmaArcSeconds``. The combined per-axis
@@ -345,8 +363,9 @@ class AssociationTask(pipeBase.Task):
 
         Returns
         -------
-        chi2 : `numpy.ndarray` of `float`
-             2 degrees of freedom position chi^2, one value per pair.
+        nll : `numpy.ndarray` of `float`
+            Position negative log-likelihood, one value per pair. Lower is
+            a better (more likely) match; values may be negative.
         """
         sigma_floor_sq_deg = (self.config.sigmaFloorArcSeconds / 3600.0) ** 2
         fallback_sq_deg = (self.config.fallbackSigmaArcSeconds / 3600.0) ** 2
@@ -374,7 +393,8 @@ class AssociationTask(pipeBase.Task):
         var_ra = np.maximum(var_ra, sigma_floor_sq_deg)
         var_dec = np.maximum(var_dec, sigma_floor_sq_deg)
 
-        return dra * dra / var_ra + ddec * ddec / var_dec
+        chi2 = dra**2/var_ra + ddec**2/var_dec
+        return 0.5*chi2 + 0.5*np.log(var_ra*var_dec)
 
     def _make_spatial_tree(self, dia_objects):
         """Create a searchable kd-tree the input dia_object positions.
@@ -482,12 +502,7 @@ class AssociationTask(pipeBase.Task):
             ghost_cost = np.full(
                 n_src, score_struct.unmatched_cost, dtype=np.float64)
 
-            # scipy's min_weight_full_bipartite_matching removes
-            # explicit-zero edges before solving. Nudge them off zero
-            # so that perfect-match candidates (chi^2 = 0) are still
-            # seen by the LAP.
-            real_weights = np.maximum(
-                score_struct.scores.astype(np.float64, copy=False), 1e-300)
+            real_weights = score_struct.scores.astype(np.float64, copy=False)
             rows = np.concatenate(
                 [score_struct.src_idx.astype(np.int64, copy=False),
                  ghost_src])
@@ -495,6 +510,14 @@ class AssociationTask(pipeBase.Task):
                 [score_struct.obj_idx.astype(np.int64, copy=False),
                  ghost_obj])
             weights = np.concatenate([real_weights, ghost_cost])
+
+            # scipy's min_weight_full_bipartite_matching treats an explicit
+            # zero as a missing edge, and the NLL cost can be negative or
+            # zero. A full matching uses exactly one edge per source, so
+            # shifting every stored weight by a constant leaves the optimal
+            # matching unchanged; rescale so the smallest weight is strictly
+            # positive and no real edge is dropped.
+            weights = weights - weights.min() + 1.0
 
             biadj = csr_matrix(
                 (weights, (rows, cols)),
