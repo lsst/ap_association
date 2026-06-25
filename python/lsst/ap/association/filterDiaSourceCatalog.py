@@ -160,7 +160,9 @@ class FilterDiaSourceCatalogConfig(
 
 
 class FilterDiaSourceCatalogTask(pipeBase.PipelineTask):
-    """Filter sources from a DiaSource catalog."""
+    """Filter sources from a DiaSource catalog based on their trail length,
+    sky sources, and bad flags.
+    """
 
     ConfigClass = FilterDiaSourceCatalogConfig
     _DefaultName = "filterDiaSourceCatalog"
@@ -168,6 +170,12 @@ class FilterDiaSourceCatalogTask(pipeBase.PipelineTask):
     @timeMethod
     def run(self, diaSourceCat, diffImVisitInfo):
         """Filter sources from the supplied DiaSource catalog.
+
+        DiaSources are filtered based on criteria including trail length,
+        whether they are a sky source, and whether they have one or more bad
+        flags. Any source which meets a filtering criteria is removed from the
+        main output catalog and optionally saved in one or more separate output
+        catalogs.
 
         Parameters
         ----------
@@ -210,14 +218,30 @@ class FilterDiaSourceCatalogTask(pipeBase.PipelineTask):
 
         if self.config.doTrailedSourceFilter:
             trail_mask = self._check_dia_source_trail(diaSourceCat, exposure_time)
+            bbox_mask = self._check_dia_source_trail_bbox(diaSourceCat, exposure_time)
+            num_trail_filtered = np.sum(trail_mask & ~bbox_mask)
+            num_bbox_filtered = np.sum(bbox_mask)
+            trail_mask |= bbox_mask
             longTrailedDiaSources = diaSourceCat[trail_mask].copy(deep=True)
             rejectedSources = diaSourceCat[rejected_mask].copy(deep=True)
             rejected_mask |= trail_mask
             diaSourceCat = diaSourceCat[~rejected_mask].copy(deep=True)
 
-            self.log.info("%i DiaSources exceed max_trail_length %f arcseconds per second, "
-                          "dropping from source catalog."
-                          % (len(longTrailedDiaSources), self.config.max_trail_length))
+            if num_trail_filtered > 0:
+
+                self.log.info("%i DiaSources exceed max_trail_length "
+                              "(%f arcseconds per second), dropping from "
+                              "source catalog. "
+                              % (num_trail_filtered, self.config.max_trail_length,))
+
+            if num_bbox_filtered > 0:
+                self.log.info(
+                    " %i DiaSources had no trail calculation and their bounding"
+                    " box exceeded max_trail_length (%f arcseconds per second) "
+                    "in either direction or across the diagonal, dropping from "
+                    "source catalog."
+                    % (num_bbox_filtered, self.config.max_trail_length))
+
             self.metadata.add("num_filtered", len(longTrailedDiaSources))
 
             if self.config.doWriteTrailedSources:
@@ -270,6 +294,42 @@ class FilterDiaSourceCatalogTask(pipeBase.PipelineTask):
                        & dia_sources['ext_trailedSources_Naive_flag_edge'])
 
         return trail_mask
+
+    def _check_dia_source_trail_bbox(self, dia_sources, exposure_time):
+        """Check bounding boxes of DiaSources with failed trail measurements.
+
+        For sources where the trail measurement flag is set (indicating the
+        trail length is unable to be measured), fall back to checking the footprint
+        bounding box dimensions against the max trail length threshold.
+
+        Parameters
+        ----------
+        dia_sources : `lsst.afw.table.SourceCatalog`
+            Input diaSources to check.
+        exposure_time : `float`
+            Exposure time from difference image.
+
+        Returns
+        -------
+        bbox_mask : `numpy.ndarray`
+            Boolean mask for diaSources whose footprint bounding box width,
+            height, or diagonal exceeds the max trail length threshold.
+        """
+        pixelScale = self._estimate_pixel_scale(dia_sources)
+        max_length_pixels = self.config.max_trail_length * exposure_time / pixelScale
+
+        trail_flag = dia_sources["ext_trailedSources_Naive_flag"]
+        bbox_mask = np.zeros(len(dia_sources), dtype=bool)
+
+        for i in np.where(trail_flag)[0]:
+            bbox = dia_sources[i].getFootprint().getBBox()
+            width = bbox.getWidth()
+            height = bbox.getHeight()
+            diagonal = np.sqrt(width ** 2 + height ** 2)
+            if diagonal >= max_length_pixels:
+                bbox_mask[i] = True
+
+        return bbox_mask
 
     def _estimate_pixel_scale(self, catalog):
         """Quickly calculate the pixel scale from catalog values
