@@ -197,7 +197,7 @@ class TestDiaPipelineTask(unittest.TestCase):
                                          associatedSsSources=_makeMockTable(),
                                          unassociatedSsObjects=_makeMockTable())
 
-        def associator_run(table, diaObjects):
+        def associator_run(table, diaObjects, schema=None):
             return lsst.pipe.base.Struct(nUpdatedDiaObjects=2, nUnassociatedDiaObjects=3,
                                          matchedDiaSources=_makeMockDataFrame(),
                                          unAssocDiaSources=_makeMockDataFrame())
