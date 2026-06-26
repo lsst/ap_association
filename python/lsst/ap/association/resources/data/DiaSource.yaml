@@ -136,6 +136,9 @@ funcs:
         functor: ConvertDetectorAngleErrToPositionAngleErr
         args:
             - ext_trailedSources_Naive_angleErr
+    trailAlgorithm:
+        functor: Column
+        args: ext_trailedSources_Naive_algorithmKey
     # trailChi2 not implemented
     # trailNdata not implemented
     dipoleMeanFlux:
@@ -279,6 +282,9 @@ funcs:
     reliability:
         functor: Column
         args: reliability
+    reliabilityVersion:
+        functor: Column
+        args: reliabilityVersion
     glint_trail:
         functor: Column
         args: glint_trail

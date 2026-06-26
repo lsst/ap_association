@@ -109,3 +109,6 @@ columns:
     - name: base_PixelFlags_flag_nodataCenter
       bit: 35
       doc: NO_DATA pixel in the 3x3 region around the centroid.
+    - name: ext_trailedSources_Naive_flag
+      bit: 36
+      doc: trailed source algorithm failed to find a good fit.
