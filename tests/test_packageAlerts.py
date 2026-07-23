@@ -297,6 +297,37 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         self.assertTrue(extent == geom.Extent2I(self.cutoutSize,
                                                 self.cutoutSize))
 
+    def testPsfSerializedAsFloat32Bitpix(self):
+        """Test that PSF is downcast to float32 and serialized with BITPIX=-32."""
+        from astropy.io import fits
+
+        packageAlerts = PackageAlertsTask()
+
+        diaSrcId = 1234
+        ccdData = packageAlerts.createCcdDataCutout(
+            self.exposure,
+            self.exposure.getWcs().getSkyOrigin(),
+            self.exposure.getWcs().getPixelOrigin(),
+            self.exposure.getBBox().getDimensions(),
+            self.exposure.getPhotoCalib(),
+            diaSrcId)
+
+        self.assertIsNotNone(ccdData)
+        self.assertIsNotNone(ccdData.psf)
+        self.assertEqual(ccdData.psf.dtype, np.float32)
+
+        cutoutBytes = packageAlerts.streamCcdDataToBytes(ccdData)
+
+        with io.BytesIO(cutoutBytes) as bytesIO:
+            with fits.open(bytesIO) as hdul:
+                self.assertIn("PSFIMAGE", hdul)
+                self.assertEqual(hdul["PSFIMAGE"].header["BITPIX"], -32)
+
+        with io.BytesIO(cutoutBytes) as bytesIO:
+            cutoutFromBytes = CCDData.read(bytesIO, format="fits")
+        self.assertIsNotNone(cutoutFromBytes.psf)
+        self.assertEqual(cutoutFromBytes.psf.dtype, '>f4')
+
     def testCreateCcdDataCutout(self):
         """Test that the data is being extracted into the CCDData cutout
         correctly.
@@ -318,8 +349,11 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                                      self.cutoutWcs.wcs.cd)
         self.assertFloatsAlmostEqual(ccdData.data,
                                      calibExposure.getImage().array)
-        self.assertFloatsAlmostEqual(ccdData.psf,
-                                     self.exposure.psf.computeKernelImage(self.center).array)
+        self.assertFloatsAlmostEqual(
+            ccdData.psf,
+            self.exposure.psf.computeKernelImage(self.center).array.astype(np.float32),
+            rtol=1e-6, atol=1e-6
+        )
 
         ccdData = packageAlerts.createCcdDataCutout(
             self.exposure,
