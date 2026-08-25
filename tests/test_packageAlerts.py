@@ -263,6 +263,14 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         self.cutoutWcs.wcs.cd = self.exposure.getWcs().getCdMatrix()
         self.cutoutWcs.wcs.ctype = ["RA---TAN", "DEC--TAN"]
 
+        # create a mask with planes=("BAD", "SATURATED", "EDGE")
+        bad_bit = self.exposure.mask.getMaskPlane("BAD")
+        self.exposure.mask.array[50:55, 100:110] |= bad_bit
+        saturated_bit = self.exposure.mask.getMaskPlane("SAT")
+        self.exposure.mask.array[10:25, 60:68] |= saturated_bit
+        edge_bit = self.exposure.mask.getMaskPlane("EDGE")
+        self.exposure.mask.array[0:5, ...] |= edge_bit
+
     def testCreateExtentMinimum(self):
         """Test the extent creation for the cutout bbox returns a cutout with
         the minimum cutouut size.
@@ -354,6 +362,13 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             self.exposure.psf.computeKernelImage(self.center).array.astype(np.float32),
             rtol=1e-6, atol=1e-6
         )
+        self.assertFloatsAlmostEqual(self.exposure.mask.array, ccdData.flags)
+
+        cutoutBytes = packageAlerts.streamCcdDataToBytes(ccdData)
+        readCcdData = CCDData.read(io.BytesIO(cutoutBytes), format="fits", hdu_flags='MASKPLANE')
+        self.assertFloatsAlmostEqual(self.exposure.mask.array, readCcdData.flags)
+        self.assertFloatsAlmostEqual(readCcdData.data, ccdData.data)
+        self.assertFloatsAlmostEqual(readCcdData.flags, ccdData.flags)
 
         ccdData = packageAlerts.createCcdDataCutout(
             self.exposure,
