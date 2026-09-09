@@ -45,6 +45,8 @@ from lsst.ap.association import (
     DiaForcedSourceTask,
     PackageAlertsTask)
 
+from lsst.ap.association.loadDiaCatalogs import loadDiaObjectsFromApdb, loadDiaSourcesFromApdb, \
+    loadDiaForcedSourcesFromApdb
 from lsst.ap.association.utils import makeEmptyForcedSourceTable, getRegion, paddedRegion, readSchemaFromApdb
 from lsst.daf.base import DateTime
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
@@ -224,6 +226,12 @@ class DiaPipelineConnections(
         if (not config.doWriteAssociatedSources) or (not config.doSolarSystemAssociation):
             self.outputs.remove("associatedSsSources")
             self.outputs.remove("unassociatedSsObjects")
+        if config.doReloadAllApdbCatalogs:
+            # If this is set, the complete history will be read from the APDB
+            # during association and the preloaded catalogs will not be used.
+            self.inputs.remove("preloadedDiaObjects")
+            self.inputs.remove("preloadedDiaSources")
+            self.inputs.remove("preloadedDiaForcedSources")
 
     def adjustQuantum(self, inputs, outputs, label, dataId):
         """Override to make adjustments to `lsst.daf.butler.DatasetRef` objects
@@ -339,10 +347,20 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         default=True,
         doc="Drop preloaded DiaObjects and reload them from the APDB?"
             "Used in production when the very latest objects from the APDB "
-            "are needed.",
+            "are needed. Ignored and superceded if `doReloadAllApdbCatalogs` "
+            "is set.",
+    )
+    doReloadAllApdbCatalogs = pexConfig.Field(
+        dtype=bool,
+        default=False,
+        doc="Read the complete DiaObject, DiaSource, and DiaForcedSource "
+            "history from the APDB during association? Use only during "
+            "reprocessing, and never in Prompt Processing.",
     )
     angleMargin = pexConfig.RangeField(
-        doc="Padding to add when loading diaObjects if `doReloadDiaObjects=True`",
+        doc="Padding to add when reloading catalogs from the APDB. "
+            "Smaller than the padding used for ``LoadDiaCatalogsTask`` because "
+            "this task is after astrometric calibration.",
         dtype=float,
         default=2,
         min=0,
@@ -554,11 +572,11 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             diffIm,
             exposure,
             template,
-            preloadedDiaObjects,
-            preloadedDiaSources,
-            preloadedDiaForcedSources,
-            band,
-            idGenerator,
+            preloadedDiaObjects=None,
+            preloadedDiaSources=None,
+            preloadedDiaForcedSources=None,
+            band=None,
+            idGenerator=None,
             solarSystemObjectTable=None,
             associationResults=None):
         """Process DiaSources and DiaObjects.
@@ -582,17 +600,22 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             ``diffIm``.
         template : `lsst.afw.image.ExposureF`
             Template exposure used to create diffIm.
-        preloadedDiaObjects : `pandas.DataFrame`
+        preloadedDiaObjects : `pandas.DataFrame`, optional
             Previously detected DiaObjects, loaded from the APDB.
-        preloadedDiaSources : `pandas.DataFrame`
+            `None` if ``doReloadAllApdbCatalogs`` is set.
+        preloadedDiaSources : `pandas.DataFrame`, optional
             Previously detected DiaSources, loaded from the APDB.
-        preloadedDiaForcedSources : `pandas.DataFrame`
-            Catalog of previously detected forced DiaSources, from the APDB
+            `None` if ``doReloadAllApdbCatalogs`` is set.
+        preloadedDiaForcedSources : `pandas.DataFrame`, optional
+            Catalog of previously detected forced DiaSources, from the APDB.
+            `None` if ``doReloadAllApdbCatalogs`` is set.
         band : `str`
-            The band in which the new DiaSources were detected.
+            The band in which the new DiaSources were detected. Required,
+            despite the `None` default.
         idGenerator : `lsst.meas.base.IdGenerator`
             Object that generates source IDs and random number generator seeds.
-        solarSystemObjectTable : `astropy.table.Table`
+            Required, despite the `None` default.
+        solarSystemObjectTable : `astropy.table.Table`, optional
             Preloaded Solar System objects expected to be visible in the image.
         associationResults : `lsst.pipe.base.Struct`, optional
             Result struct that is modified to allow saving of partial outputs
@@ -619,7 +642,16 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         ------
         RuntimeError
             Raised if duplicate DiaObjects or duplicate DiaSources are found.
+        ValueError
+            Raised if ``band`` or ``idGenerator`` is `None`.
         """
+        # These default to `None` only so that the preloaded catalogs, which
+        # precede them, can be omitted.
+        if band is None:
+            raise ValueError("band is required.")
+        if idGenerator is None:
+            raise ValueError("idGenerator is required.")
+
         if associationResults is None:
             associationResults = pipeBase.Struct()
         self._validateExposure(exposure, "Science")
@@ -629,10 +661,16 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # Accept either legacySolarSystemTable or optional solarSystemObjectTable.
         if legacySolarSystemTable is not None and solarSystemObjectTable is None:
             solarSystemObjectTable = Table.from_pandas(legacySolarSystemTable)
-        if self.config.doReloadDiaObjects:
+        region = getRegion(exposure)
+        if self.config.doReloadDiaObjects or self.config.doReloadAllApdbCatalogs:
             try:
-                preloadedDiaObjects = self.loadRefreshedDiaObjects(getRegion(exposure), preloadedDiaObjects)
+                preloadedDiaObjects = self.loadRefreshedDiaObjects(region, preloadedDiaObjects)
             except Exception as e:
+                if self.config.doReloadAllApdbCatalogs:
+                    # We can't continue if the diaObjects were not loaded and
+                    # ``doReloadAllApdbCatalogs`` is set, because there will be
+                    # no preloaded diaObjects to fall back on.
+                    raise
                 self.log.warning("Error encountered while attempting to load "
                                  "the latest diaObjects from the APDB. Processing "
                                  "will continue with only the diaObjects from "
@@ -646,6 +684,31 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         else:
             self.metadata["loadDiaObjectsDuration"] = -1
+
+        if self.config.doReloadAllApdbCatalogs:
+            # The metadata time records must use the same names as
+            # LoadDiaCatalogsTask to keep the metrics upload consistent.
+            visitTime = exposure.visitInfo.date.toAstropy()
+            try:
+                preloadedDiaSources = self.loadRefreshedDiaSources(region, preloadedDiaObjects, visitTime)
+            finally:
+                self.metadata["loadDiaSourcesDuration"] = duration_from_timeMethod(
+                    self.metadata, "loadRefreshedDiaSources", clock="Utc"
+                )
+                self.log.verbose("Re-loading DiaSources: Took %.4f seconds",
+                                 self.metadata["loadDiaSourcesDuration"])
+            try:
+                preloadedDiaForcedSources = self.loadRefreshedDiaForcedSources(
+                    region, preloadedDiaObjects, visitTime)
+            finally:
+                self.metadata["loadDiaForcedSourcesDuration"] = duration_from_timeMethod(
+                    self.metadata, "loadRefreshedDiaForcedSources", clock="Utc"
+                )
+                self.log.verbose("Re-loading DiaForcedSources: Took %.4f seconds",
+                                 self.metadata["loadDiaForcedSourcesDuration"])
+        else:
+            self.metadata["loadDiaSourcesDuration"] = -1
+            self.metadata["loadDiaForcedSourcesDuration"] = -1
 
         self.checkTableIndex(preloadedDiaSources, index=["diaObjectId", "band", "diaSourceId"])
         self.checkTableIndex(preloadedDiaObjects, index="diaObjectId")
@@ -1344,7 +1407,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         return diaForcedSources
 
     @timeMethod
-    def loadRefreshedDiaObjects(self, region, preloadedDiaObjects):
+    def loadRefreshedDiaObjects(self, region, preloadedDiaObjects=None):
         """Load DiaObjects from the Apdb based on their HTM location.
 
         Parameters
@@ -1352,28 +1415,20 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         region : `sphgeom.Region`
             Region containing the current exposure to load diaObjects from the
             APDB.
-        preloadedDiaObjects : `pandas.DataFrame`
-            Previously detected DiaObjects, loaded from the APDB.
+        preloadedDiaObjects : `pandas.DataFrame`, optional
+            Previously detected DiaObjects, loaded from the APDB. `None` if
+            the preloaded catalogs are not available.
 
         Returns
         -------
         diaObjects : `pandas.DataFrame`
             DiaObjects loaded from the Apdb that are within the area defined
-            by ``pixelRanges``.
+            by ``region``.
         """
-        angleMargin = lsst.sphgeom.Angle.fromDegrees(self.config.angleMargin/3600.)
-        diaObjects = self.apdb.getDiaObjects(paddedRegion(region, angleMargin))
-
-        diaObjects.set_index("diaObjectId", drop=False, inplace=True)
-        if diaObjects.index.has_duplicates:
-            self.log.warning(
-                "Duplicate DiaObjects loaded from the Apdb. This may cause "
-                "downstream pipeline issues. Dropping duplicated rows")
-            # Drop duplicates via index and keep the first appearance.
-            diaObjects = diaObjects[~diaObjects.index.duplicated(keep="first")]
-        self.log.info("Loaded %d DiaObjects", len(diaObjects))
-        refreshedDiaObjects = convertDataFrameToSdmSchema(self.schema, diaObjects, tableName="DiaObject",
-                                                          skipIndex=True)
+        refreshedDiaObjects = loadDiaObjectsFromApdb(self.apdb, self._paddedRegion(region), self.schema,
+                                                     self.log)
+        if preloadedDiaObjects is None:
+            return refreshedDiaObjects
 
         refreshedIsInPreloaded = refreshedDiaObjects.index.isin(preloadedDiaObjects.index)
         preloadedIsInRefreshed = preloadedDiaObjects.index.isin(refreshedDiaObjects.index)
@@ -1391,6 +1446,76 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # refreshed entries on overlap so that updated column values are
         # not silently discarded when the refresh adds no new ids.
         return pd.concat([refreshedDiaObjects, preloadedDiaObjects.loc[~preloadedIsInRefreshed]])
+
+    @timeMethod
+    def loadRefreshedDiaSources(self, region, diaObjects, visitTime):
+        """Reload the DiaSource history from the Apdb.
+
+        Used only in non-time-critical environments where it is more important
+        to load the most recent DiaSources than to save time by preloading
+        catalogs.
+
+        Parameters
+        ----------
+        region : `sphgeom.Region`
+            Region containing the current exposure to load the history from
+            the APDB.
+        diaObjects : `pandas.DataFrame`
+            DiaObjects to load the history for, indexed by ``diaObjectId``.
+        visitTime : `astropy.time.Time`
+            Time of the current visit.
+
+        Returns
+        -------
+        diaSources : `pandas.DataFrame`
+            DiaSource history loaded from the Apdb, indexed by
+            ``diaObjectId``, ``band``, and ``diaSourceId``.
+        """
+        return loadDiaSourcesFromApdb(self.apdb, self._paddedRegion(region),
+                                      diaObjects.loc[:, "diaObjectId"], visitTime, self.schema, self.log)
+
+    @timeMethod
+    def loadRefreshedDiaForcedSources(self, region, diaObjects, visitTime):
+        """Reload the DiaForcedSource history from the Apdb.
+
+        Used only in non-time-critical environments where it is more important
+        to load the most recent DiaForcedSources than to save time by preloading
+        catalogs.
+
+        Parameters
+        ----------
+        region : `sphgeom.Region`
+            Region containing the current exposure to load the history from
+            the APDB.
+        diaObjects : `pandas.DataFrame`
+            DiaObjects to load the history for, indexed by ``diaObjectId``.
+        visitTime : `astropy.time.Time`
+            Time of the current visit.
+
+        Returns
+        -------
+        diaForcedSources : `pandas.DataFrame`
+            DiaForcedSource history loaded from the Apdb, indexed by
+            ``diaObjectId`` and ``diaForcedSourceId``.
+        """
+        return loadDiaForcedSourcesFromApdb(self.apdb, self._paddedRegion(region),
+                                            diaObjects.loc[:, "diaObjectId"], visitTime, self.schema,
+                                            self.log)
+
+    def _paddedRegion(self, region):
+        """Pad a region by the configured margin.
+
+        Parameters
+        ----------
+        region : `sphgeom.Region`
+            Region containing the current exposure.
+
+        Returns
+        -------
+        region : `sphgeom.Region`
+            The region, expanded by ``config.angleMargin``.
+        """
+        return paddedRegion(region, lsst.sphgeom.Angle.fromDegrees(self.config.angleMargin/3600.))
 
     @timeMethod
     def writeToApdb(self, updatedDiaObjects, associatedDiaSources, diaForcedSources):
