@@ -19,14 +19,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import logging
 import os
 import astropy.units
 import numpy as np
+import pandas as pd
 import tempfile
 import unittest
 import yaml
 
 from lsst.ap.association import LoadDiaCatalogsTask
+from lsst.ap.association.loadDiaCatalogs import dropDuplicateRows
 from lsst.ap.association.utils import getMidpointFromTimespan, readSchemaFromApdb
 from lsst.dax.apdb import Apdb, ApdbSql, ApdbTables
 from lsst.resources import ResourcePath
@@ -146,6 +149,88 @@ class TestLoadDiaCatalogs(unittest.TestCase):
                 diaSourceColumns = [column for column in list(functor['funcs'].keys())
                                     if column not in self.ignoreColumns]
             self.assertLess(set(diaSourceColumns), set(apdbSchemaColumns))
+
+
+class TestDropDuplicateRows(unittest.TestCase):
+    """Tests of the deduplication shared by LoadDiaCatalogsTask and
+    DiaPipelineTask.
+    """
+
+    def setUp(self):
+        self.log = logging.getLogger("TestDropDuplicateRows")
+
+    def test_noDuplicates(self):
+        """Test that an already-unique catalog is only indexed.
+        """
+        catalog = pd.DataFrame({"diaObjectId": [3, 1, 2], "value": [30, 10, 20]})
+
+        result = dropDuplicateRows(catalog, "diaObjectId", "DiaObjects", self.log)
+
+        self.assertEqual(result.index.name, "diaObjectId")
+        # Order must follow the Apdb, not the sorted index.
+        self.assertEqual(list(result["diaObjectId"]), [3, 1, 2])
+
+    def test_keepsFirstRowWhole(self):
+        """Test that deduplication keeps whole rows.
+
+        Combining values across duplicates, as `groupby().first()` does,
+        would produce a row that the Apdb never held.
+        """
+        catalog = pd.DataFrame({"diaObjectId": [2, 1, 1],
+                                "a": [9.0, np.nan, 5.0],
+                                "b": [1, 2, 3]})
+
+        with self.assertLogs(self.log.name, level="WARNING"):
+            result = dropDuplicateRows(catalog, "diaObjectId", "DiaObjects", self.log)
+
+        self.assertFalse(result.index.has_duplicates)
+        self.assertEqual(list(result["diaObjectId"]), [2, 1])
+        # The row kept for diaObjectId=1 is the first one that is whole
+        # (including the NaN)  rather than "a" from one duplicate and "b" from
+        # the other.
+        self.assertTrue(np.isnan(result.loc[1, "a"]))
+        self.assertEqual(result.loc[1, "b"], 2)
+
+    def test_multiIndex(self):
+        """Test deduplication on the compound DiaSource index.
+        """
+        index = ["diaObjectId", "band", "diaSourceId"]
+        catalog = pd.DataFrame({"diaObjectId": [1, 1, 1],
+                                "band": ["g", "g", "r"],
+                                "diaSourceId": [10, 10, 11],
+                                "value": [1, 2, 3]})
+
+        with self.assertLogs(self.log.name, level="WARNING"):
+            result = dropDuplicateRows(catalog, index, "DiaSources", self.log)
+
+        self.assertEqual(list(result.index.names), index)
+        self.assertFalse(result.index.has_duplicates)
+        self.assertEqual(list(result["value"]), [1, 3])
+
+    def test_inputLeftUnchanged(self):
+        """Test that the input catalog is not modified.
+
+        The result is a new catalog that owns its data, so indexing it or
+        writing to it must leave the caller's catalog alone.
+        """
+        for label, ids in (("without duplicates", [3, 1, 2]), ("with duplicates", [1, 1, 2])):
+            with self.subTest(label):
+                catalog = pd.DataFrame({"diaObjectId": ids, "value": [10, 20, 30]})
+                hasDuplicates = len(set(ids)) < len(ids)
+
+                if hasDuplicates:
+                    with self.assertLogs(self.log.name, level="WARNING"):
+                        result = dropDuplicateRows(catalog, "diaObjectId", "DiaObjects", self.log)
+                else:
+                    result = dropDuplicateRows(catalog, "diaObjectId", "DiaObjects", self.log)
+
+                self.assertIsNot(result, catalog)
+                self.assertIsNone(catalog.index.name)
+                self.assertEqual(list(catalog["diaObjectId"]), ids)
+
+                # The result owns its data, so this write stays local to it.
+                result.loc[result.index[0], "value"] = 999
+                self.assertEqual(list(catalog["value"]), [10, 20, 30])
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

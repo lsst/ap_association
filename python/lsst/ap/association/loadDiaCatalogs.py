@@ -36,7 +36,132 @@ from lsst.utils.timer import timeMethod, duration_from_timeMethod
 from lsst.ap.association.utils import getMidpointFromTimespan, paddedRegion, readSchemaFromApdb
 from lsst.pipe.tasks.schemaUtils import convertDataFrameToSdmSchema
 
-__all__ = ("LoadDiaCatalogsTask", "LoadDiaCatalogsConfig")
+__all__ = ("LoadDiaCatalogsTask", "LoadDiaCatalogsConfig", "dropDuplicateRows",
+           "loadDiaObjectsFromApdb", "loadDiaSourcesFromApdb", "loadDiaForcedSourcesFromApdb")
+
+
+def dropDuplicateRows(catalog, index, name, log):
+    """Index a catalog loaded from the Apdb and drop any duplicate rows.
+
+    Where several rows share an index, the first is kept exactly as the Apdb
+    returned it and the others are discarded. The rows stay in the order the
+    Apdb returned them.
+
+    Parameters
+    ----------
+    catalog : `pandas.DataFrame`
+        Catalog loaded from the Apdb. Left unchanged.
+    index : `str` or `list` [`str`]
+        Column or columns to index the catalog on.
+    name : `str`
+        Name of the catalog, for logging.
+    log : `logging.Logger`
+        Log to report duplicates to.
+
+    Returns
+    -------
+    catalog : `pandas.DataFrame`
+        A new catalog, indexed by ``index`` and free of duplicates.
+    """
+    catalog = catalog.set_index(index, drop=False)
+    if catalog.index.has_duplicates:
+        log.warning("Duplicate %s loaded from the Apdb. This may cause "
+                    "downstream pipeline issues. Dropping duplicated rows.", name)
+        catalog = catalog[~catalog.index.duplicated(keep="first")]
+    return catalog
+
+
+def loadDiaObjectsFromApdb(apdb, region, schema, log):
+    """Load DiaObjects from the Apdb based on their HTM location.
+
+    Parameters
+    ----------
+    apdb : `lsst.dax.apdb.Apdb`
+        Database to load the DiaObjects from.
+    region : `sphgeom.Region`
+        Region of interest, including any padding.
+    schema : `dict` of `lsst.dax.apdb.apdbSchema.ApdbSchema`
+        A dict of the schemas in the apdb.
+    log : `logging.Logger`
+        Log to report the loaded catalog to.
+
+    Returns
+    -------
+    diaObjects : `pandas.DataFrame`
+        DiaObjects within ``region``, indexed by ``diaObjectId``.
+    """
+    diaObjects = apdb.getDiaObjects(region)
+    diaObjects = dropDuplicateRows(diaObjects, "diaObjectId", "DiaObjects", log)
+    log.info("Loaded %i DiaObjects", len(diaObjects))
+    return convertDataFrameToSdmSchema(schema, diaObjects, tableName="DiaObject", skipIndex=True)
+
+
+def loadDiaSourcesFromApdb(apdb, region, diaObjectIds, dateTime, schema, log):
+    """Load DiaSources from the Apdb based on their diaObjectId or location.
+
+    Parameters
+    ----------
+    apdb : `lsst.dax.apdb.Apdb`
+        Database to load the DiaSources from.
+    region : `sphgeom.Region`
+        Region of interest, including any padding.
+    diaObjectIds : `pandas.Series`
+        Ids of the DiaObjects to load the history for.
+    dateTime : `astropy.time.Time`
+        Time of the current visit.
+    schema : `dict` of `lsst.dax.apdb.apdbSchema.ApdbSchema`
+        A dict of the schemas in the apdb.
+    log : `logging.Logger`
+        Log to report the loaded catalog to.
+
+    Returns
+    -------
+    diaSources : `pandas.DataFrame`
+        DiaSource history, indexed by ``diaObjectId``, ``band``, and
+        ``diaSourceId``.
+    """
+    diaSources = apdb.getDiaSources(region, diaObjectIds, dateTime)
+    diaSources = dropDuplicateRows(diaSources, ["diaObjectId", "band", "diaSourceId"], "DiaSources", log)
+    log.info("Loaded %i DiaSources", len(diaSources))
+    return convertDataFrameToSdmSchema(schema, diaSources, tableName="DiaSource", skipIndex=True)
+
+
+def loadDiaForcedSourcesFromApdb(apdb, region, diaObjectIds, dateTime, schema, log):
+    """Load DiaForcedSources from the Apdb based on their diaObjectId.
+
+    Parameters
+    ----------
+    apdb : `lsst.dax.apdb.Apdb`
+        Database to load the DiaForcedSources from.
+    region : `sphgeom.Region`
+        Region of interest, including any padding.
+    diaObjectIds : `pandas.Series`
+        Ids of the DiaObjects to load the history for.
+    dateTime : `astropy.time.Time`
+        Time of the current visit.
+    schema : `dict` of `lsst.dax.apdb.apdbSchema.ApdbSchema`
+        A dict of the schemas in the apdb.
+    log : `logging.Logger`
+        Log to report the loaded catalog to.
+
+    Returns
+    -------
+    diaForcedSources : `pandas.DataFrame`
+        DiaForcedSource history, indexed by ``diaObjectId`` and
+        ``diaForcedSourceId``.
+    """
+    if len(diaObjectIds) == 0:
+        # If no diaObjects are available return an empty DataFrame with
+        # the minimal set of columns.
+        diaForcedSources = pd.DataFrame(columns=["diaObjectId", "diaForcedSourceId"])
+    else:
+        diaForcedSources = apdb.getDiaForcedSources(region, diaObjectIds, dateTime)
+    diaForcedSources = dropDuplicateRows(diaForcedSources, ["diaObjectId", "diaForcedSourceId"],
+                                         "DiaForcedSources", log)
+    nVisits = 0 if diaForcedSources.empty else len(set(diaForcedSources["visit"]))
+    log.info("Loaded %i DiaForcedSources from %i visits", len(diaForcedSources), nVisits)
+    return convertDataFrameToSdmSchema(schema, diaForcedSources, tableName="DiaForcedSource",
+                                       skipIndex=True)
 
 
 class LoadDiaCatalogsConnections(pipeBase.PipelineTaskConnections,
@@ -132,14 +257,16 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
             Results struct with components.
 
             - ``diaObjects`` : Complete set of DiaObjects covering the input
-              exposure padded by ``pixelMargin``. DataFrame is indexed by
+              exposure padded by ``angleMargin``. DataFrame is indexed by
               the ``diaObjectId`` column. (`pandas.DataFrame`)
             - ``diaSources`` : Complete set of DiaSources covering the input
-              exposure padded by ``pixelMargin``. DataFrame is indexed by
+              exposure padded by ``angleMargin``. DataFrame is indexed by
               ``diaObjectId``, ``band``, ``diaSourceId`` columns.
               (`pandas.DataFrame`)
-            - ``diaForcedSources`` : Complete set of forced photometered fluxes
-            on the past 12 months of difference images at DiaObject locations.
+            - ``diaForcedSources`` : Complete set of forced photometered
+              fluxes on the past 12 months of difference images at DiaObject
+              locations, indexed by ``diaObjectId`` and
+              ``diaForcedSourceId``. (`pandas.DataFrame`)
 
         Raises
         ------
@@ -209,34 +336,20 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
         Returns
         -------
         diaObjects : `pandas.DataFrame`
-            DiaObjects loaded from the Apdb that are within the area defined
-            by ``pixelRanges``.
+            DiaObjects loaded from the Apdb that are within ``region``,
+            indexed by ``diaObjectId``.
         """
-        diaObjects = self.apdb.getDiaObjects(region)
-
-        diaObjects.set_index("diaObjectId", drop=False, inplace=True)
-        if diaObjects.index.has_duplicates:
-            self.log.warning(
-                "Duplicate DiaObjects loaded from the Apdb. This may cause "
-                "downstream pipeline issues. Dropping duplicated rows")
-            # Drop duplicates via index and keep the first appearance.
-            diaObjects = diaObjects.groupby(diaObjects.index).first()
-        self.log.info("Loaded %i DiaObjects", len(diaObjects))
-
-        return convertDataFrameToSdmSchema(schema, diaObjects, tableName="DiaObject", skipIndex=True)
+        return loadDiaObjectsFromApdb(self.apdb, region, schema, self.log)
 
     @timeMethod
     def loadDiaSources(self, diaObjects, region, dateTime, schema):
         """Load DiaSources from the Apdb based on their diaObjectId or
         location.
 
-        Variable used to load sources is set in config.
-
         Parameters
         ----------
         diaObjects : `pandas.DataFrame`
-            DiaObjects loaded from the Apdb that are within the area defined
-            by ``pixelRanges``.
+            DiaObjects to load the history for, indexed by ``diaObjectId``.
         region : `sphgeom.Region`
             Region of interest.
         dateTime : `astropy.time.Time`
@@ -246,37 +359,22 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
 
         Returns
         -------
-        DiaSources : `pandas.DataFrame`
-            DiaSources loaded from the Apdb that are within the area defined
-            by ``pixelRange`` and associated with ``diaObjects``.
+        diaSources : `pandas.DataFrame`
+            DiaSources loaded from the Apdb that are within ``region`` and
+            associated with ``diaObjects``, indexed by ``diaObjectId``,
+            ``band``, and ``diaSourceId``.
         """
-        diaSources = self.apdb.getDiaSources(region, diaObjects.loc[:, "diaObjectId"], dateTime)
-
-        diaSources.set_index(["diaObjectId", "band", "diaSourceId"],
-                             drop=False,
-                             inplace=True)
-        if diaSources.index.has_duplicates:
-            self.log.warning(
-                "Duplicate DiaSources loaded from the Apdb. This may cause "
-                "downstream pipeline issues. Dropping duplicated rows")
-            # Drop duplicates via index and keep the first appearance. Reset
-            # due to the index shape being slight different thatn expected.
-            diaSources = diaSources.groupby(diaSources.index).first().reset_index(drop=True)
-            diaSources.set_index(["diaObjectId", "band", "diaSourceId"],
-                                 drop=False,
-                                 inplace=True)
-        self.log.info("Loaded %i DiaSources", len(diaSources))
-
-        return convertDataFrameToSdmSchema(schema, diaSources, tableName="DiaSource", skipIndex=True)
+        return loadDiaSourcesFromApdb(self.apdb, region, diaObjects.loc[:, "diaObjectId"], dateTime,
+                                      schema, self.log)
 
     @timeMethod
     def loadDiaForcedSources(self, diaObjects, region, dateTime, schema):
-        """Load DiaObjects from the Apdb based on their HTM location.
+        """Load DiaForcedSources from the Apdb based on their diaObjectId.
 
         Parameters
         ----------
         diaObjects : `pandas.DataFrame`
-            DiaObjects loaded from the Apdb.
+            DiaObjects to load the history for, indexed by ``diaObjectId``.
         region : `sphgeom.Region`
             Region of interest.
         dateTime : `astropy.time.Time`
@@ -286,38 +384,10 @@ class LoadDiaCatalogsTask(pipeBase.PipelineTask):
 
         Returns
         -------
-        diaObjects : `pandas.DataFrame`
-            DiaObjects loaded from the Apdb that are within the area defined
-            by ``pixelRanges``.
+        diaForcedSources : `pandas.DataFrame`
+            DiaForcedSources loaded from the Apdb that are associated with
+            ``diaObjects``, indexed by ``diaObjectId`` and
+            ``diaForcedSourceId``.
         """
-
-        if len(diaObjects) == 0:
-            # If no diaObjects are available return an empty DataFrame with
-            # the the column used for indexing later in AssociationTask.
-            diaForcedSources = pd.DataFrame(columns=["diaObjectId",
-                                                     "diaForcedSourceId"])
-        else:
-            diaForcedSources = self.apdb.getDiaForcedSources(
-                region,
-                diaObjects.loc[:, "diaObjectId"],
-                dateTime)
-
-        diaForcedSources.set_index(["diaObjectId", "diaForcedSourceId"],
-                                   drop=False,
-                                   inplace=True)
-        if diaForcedSources.index.has_duplicates:
-            self.log.warning(
-                "Duplicate DiaForcedSources loaded from the Apdb. This may "
-                "cause downstream pipeline issues. Dropping duplicated rows.")
-            # Drop duplicates via index and keep the first appearance. Reset
-            # due to the index shape being slightly different than expected.
-            diaForcedSources = diaForcedSources.groupby(diaForcedSources.index).first()
-            diaForcedSources.reset_index(drop=True, inplace=True)
-            diaForcedSources.set_index(["diaObjectId", "diaForcedSourceId"],
-                                       drop=False,
-                                       inplace=True)
-        nVisits = 0 if diaForcedSources.empty else len(set(diaForcedSources["visit"]))
-        self.log.info("Loaded %i DiaForcedSources from %i visits", len(diaForcedSources), nVisits)
-
-        return convertDataFrameToSdmSchema(schema, diaForcedSources, tableName="DiaForcedSource",
-                                           skipIndex=True)
+        return loadDiaForcedSourcesFromApdb(self.apdb, region, diaObjects.loc[:, "diaObjectId"],
+                                            dateTime, schema, self.log)
