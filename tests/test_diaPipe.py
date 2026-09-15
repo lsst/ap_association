@@ -28,16 +28,18 @@ import warnings
 import numpy as np
 import pandas as pd
 import astropy.table as tb
+import astropy.units as u
 
 import lsst.afw.table as afwTable
 import lsst.dax.apdb as daxApdb
-from lsst.meas.base import IdGenerator
+from lsst.meas.base import DetectorVisitIdGeneratorConfig, IdGenerator
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.utils.tests
 from lsst.pipe.base.testUtils import assertValidOutput
 
 from lsst.ap.association import DiaPipelineTask
+from lsst.ap.association.utils import getRegion
 from lsst.pipe.tasks.schemaUtils import convertDataFrameToSdmSchema
 from utils_tests import makeExposure, makeDiaObjects, makeDiaSources, makeDiaForcedSources, \
     makeSolarSystemSources
@@ -152,8 +154,26 @@ class TestDiaPipelineTask(unittest.TestCase):
                       doRunForcedMeasurement=False, subtasksToMock=["diaCalculation", ]
                       )
 
+    def testRunWithReloadAllApdbCatalogs(self):
+        """Test running with reloading the DiaSource history.
+        """
+        self._testRun(doPackageAlerts=False, doSolarSystemAssociation=False, doReloadDiaObjects=True,
+                      doReloadAllApdbCatalogs=True)
+
+    def testRunWithReloadAllApdbCatalogsAndAlerts(self):
+        """Test reloading the DiaSource history while packaging alerts.
+        """
+        self._testRun(doPackageAlerts=True, doSolarSystemAssociation=False, doReloadDiaObjects=True,
+                      doReloadAllApdbCatalogs=True)
+
+    def testRunWithReloadAllApdbCatalogsOnly(self):
+        """Test that reloading everything implies the DiaObject reload.
+        """
+        self._testRun(doPackageAlerts=False, doSolarSystemAssociation=False, doReloadDiaObjects=False,
+                      doReloadAllApdbCatalogs=True)
+
     def _testRun(self, doPackageAlerts=False, doSolarSystemAssociation=False,
-                 doReloadDiaObjects=False, subtasksToMock=None, **kwargs):
+                 doReloadDiaObjects=False, doReloadAllApdbCatalogs=False, subtasksToMock=None, **kwargs):
         """Test the normal workflow of each ap_pipe step.
         """
         config = self._makeDefaultConfig(
@@ -161,6 +181,7 @@ class TestDiaPipelineTask(unittest.TestCase):
             doPackageAlerts=doPackageAlerts,
             doSolarSystemAssociation=doSolarSystemAssociation,
             doReloadDiaObjects=doReloadDiaObjects,
+            doReloadAllApdbCatalogs=doReloadAllApdbCatalogs,
             **kwargs
         )
         task = DiaPipelineTask(config=config)
@@ -207,6 +228,16 @@ class TestDiaPipelineTask(unittest.TestCase):
             task.metadata['loadRefreshedDiaObjectsEndUtc'] = 5.678
             return self.diaObjects
 
+        def loadSources_run(region, diaObjects, visitTime):
+            task.metadata['loadRefreshedDiaSourcesStartUtc'] = 1.234
+            task.metadata['loadRefreshedDiaSourcesEndUtc'] = 5.678
+            return self.diaSources
+
+        def loadForcedSources_run(region, diaObjects, visitTime):
+            task.metadata['loadRefreshedDiaForcedSourcesStartUtc'] = 1.234
+            task.metadata['loadRefreshedDiaForcedSourcesEndUtc'] = 5.678
+            return self.diaForcedSources
+
         def updateObjectTableMock(diaObjects, diaSources):
             pass
 
@@ -222,7 +253,11 @@ class TestDiaPipelineTask(unittest.TestCase):
             patch('lsst.ap.association.diaPipe.DiaPipelineTask._selectGoodDiaObjects',
                   side_effect=_selectGoodDiaObjects), \
             patch('lsst.ap.association.diaPipe.DiaPipelineTask.loadRefreshedDiaObjects',
-                  side_effect=loadObjects_run), \
+                  side_effect=loadObjects_run) as loadObjectsRun, \
+            patch('lsst.ap.association.diaPipe.DiaPipelineTask.loadRefreshedDiaSources',
+                  side_effect=loadSources_run) as loadSourcesRun, \
+            patch('lsst.ap.association.diaPipe.DiaPipelineTask.loadRefreshedDiaForcedSources',
+                  side_effect=loadForcedSources_run) as loadForcedSourcesRun, \
             patch('lsst.ap.association.association.AssociationTask.run',
                   side_effect=associator_run) as mainRun, \
             patch('lsst.pipe.tasks.ssoAssociation.SolarSystemAssociationTask.run',
@@ -233,9 +268,12 @@ class TestDiaPipelineTask(unittest.TestCase):
                               self.diffim,
                               self.exposure,
                               self.template,
-                              preloadedDiaObjects=self.diaObjects,
-                              preloadedDiaSources=self.diaSources,
-                              preloadedDiaForcedSources=self.diaForcedSources,
+                              # `run` sees None when the preloaded
+                              # connections have been removed.
+                              preloadedDiaObjects=None if doReloadAllApdbCatalogs else self.diaObjects,
+                              preloadedDiaSources=None if doReloadAllApdbCatalogs else self.diaSources,
+                              preloadedDiaForcedSources=(
+                                  None if doReloadAllApdbCatalogs else self.diaForcedSources),
                               band="g",
                               idGenerator=IdGenerator(),
                               solarSystemObjectTable=ssObjects)
@@ -254,6 +292,151 @@ class TestDiaPipelineTask(unittest.TestCase):
                 ssRun.assert_called_once()
             else:
                 ssRun.assert_not_called()
+            # doReloadAllApdbCatalogs implies the DiaObject reload.
+            if doReloadDiaObjects or doReloadAllApdbCatalogs:
+                loadObjectsRun.assert_called_once()
+            else:
+                loadObjectsRun.assert_not_called()
+            # These key names are shared with LoadDiaCatalogsTask so that both
+            # tasks publish to the same Sasquatch topics.
+            if doReloadAllApdbCatalogs:
+                loadSourcesRun.assert_called_once()
+                loadForcedSourcesRun.assert_called_once()
+                self.assertGreater(meta["diaPipe.loadDiaSourcesDuration"], 0)
+                self.assertGreater(meta["diaPipe.loadDiaForcedSourcesDuration"], 0)
+            else:
+                loadSourcesRun.assert_not_called()
+                loadForcedSourcesRun.assert_not_called()
+                self.assertEqual(meta["diaPipe.loadDiaSourcesDuration"], -1)
+                self.assertEqual(meta["diaPipe.loadDiaForcedSourcesDuration"], -1)
+
+    def test_reloadAllApdbCatalogsRemovesPreloadedConnections(self):
+        """Test that reloading drops the preloaded catalog connections.
+        """
+        preloaded = {"preloadedDiaObjects", "preloadedDiaSources", "preloadedDiaForcedSources"}
+
+        config = self._makeDefaultConfig(config_file=self.config_file.name,
+                                         doReloadAllApdbCatalogs=False)
+        connections = config.connections.ConnectionsClass(config=config)
+        self.assertTrue(preloaded <= set(connections.inputs))
+
+        config = self._makeDefaultConfig(config_file=self.config_file.name,
+                                         doReloadAllApdbCatalogs=True)
+        connections = config.connections.ConnectionsClass(config=config)
+        self.assertFalse(preloaded & set(connections.inputs))
+
+    def test_runQuantumOmitsRemovedPreloadedInputs(self):
+        """Test that runQuantum passes only the preloaded inputs it has.
+
+        `run` defaults the preloaded catalogs to `None`, so runQuantum passes
+        just the connections that survived, and must leave the loaded catalogs
+        alone when they are present.
+        """
+        preloaded = ["preloadedDiaObjects", "preloadedDiaSources", "preloadedDiaForcedSources"]
+        loaded = {"preloadedDiaObjects": self.diaObjects,
+                  "preloadedDiaSources": self.diaSources,
+                  "preloadedDiaForcedSources": self.diaForcedSources}
+
+        def runQuantumKwargs(doReloadAllApdbCatalogs):
+            config = self._makeDefaultConfig(config_file=self.config_file.name,
+                                             doReloadAllApdbCatalogs=doReloadAllApdbCatalogs)
+            task = DiaPipelineTask(config=config)
+            # The quantum only carries the connections that survived.
+            inputs = {"diaSourceTable": _makeMockDataFrame(),
+                      "diffIm": self.diffim,
+                      "exposure": self.exposure,
+                      "template": self.template,
+                      "solarSystemObjectTable": _makeMockTable()}
+            if not doReloadAllApdbCatalogs:
+                inputs.update(loaded)
+            butlerQC = MagicMock()
+            butlerQC.get.return_value = inputs
+            with patch.object(DetectorVisitIdGeneratorConfig, "apply", return_value=IdGenerator()), \
+                    patch.object(DiaPipelineTask, "run") as mockRun:
+                task.runQuantum(butlerQC, MagicMock(), MagicMock())
+            return mockRun.call_args.kwargs
+
+        kwargs = runQuantumKwargs(True)
+        for name in preloaded:
+            self.assertNotIn(name, kwargs, msg=f"{name} should be left to the default")
+
+        kwargs = runQuantumKwargs(False)
+        for name in preloaded:
+            self.assertIs(kwargs[name], loaded[name], msg=f"{name} should be the loaded catalog")
+
+    def test_runRequiresBandAndIdGenerator(self):
+        """Test that `run` rejects the `None` defaults on required arguments.
+        """
+        config = self._makeDefaultConfig(config_file=self.config_file.name)
+        task = DiaPipelineTask(config=config)
+        kwargs = {"diaSourceTable": _makeMockDataFrame(),
+                  "legacySolarSystemTable": None,
+                  "diffIm": self.diffim,
+                  "exposure": self.exposure,
+                  "template": self.template,
+                  "band": "g",
+                  "idGenerator": IdGenerator()}
+
+        with self.assertRaisesRegex(ValueError, "band"):
+            task.run(**(kwargs | {"band": None}))
+        with self.assertRaisesRegex(ValueError, "idGenerator"):
+            task.run(**(kwargs | {"idGenerator": None}))
+
+    def test_loadRefreshedDiaObjectsNoPreloaded(self):
+        """Test reloading DiaObjects when no preloaded catalog is available.
+        """
+        config = self._makeDefaultConfig(config_file=self.config_file.name,
+                                         doReloadAllApdbCatalogs=True)
+        task = DiaPipelineTask(config=config)
+        task.apdb.store(self.exposure.visitInfo.date.toAstropy() - 30*u.day,
+                        self.diaObjects,
+                        self.diaSources,
+                        self.diaForcedSources)
+
+        diaObjects = task.loadRefreshedDiaObjects(getRegion(self.exposure))
+
+        self.assertEqual(len(diaObjects), len(self.diaObjects))
+        self.assertEqual(diaObjects.index.name, "diaObjectId")
+
+    def test_loadRefreshedDiaSources(self):
+        """Test that the DiaSource history is reloaded from the APDB.
+        """
+        config = self._makeDefaultConfig(config_file=self.config_file.name,
+                                         doReloadAllApdbCatalogs=True)
+        task = DiaPipelineTask(config=config)
+        visitTime = self.exposure.visitInfo.date.toAstropy()
+        # Store the history as though it were observed a month earlier.
+        task.apdb.store(visitTime - 30*u.day,
+                        self.diaObjects,
+                        self.diaSources,
+                        self.diaForcedSources)
+
+        region = getRegion(self.exposure)
+        diaSources = task.loadRefreshedDiaSources(region, self.diaObjects, visitTime)
+        diaForcedSources = task.loadRefreshedDiaForcedSources(region, self.diaObjects, visitTime)
+
+        self.assertEqual(len(diaSources), len(self.diaSources))
+        self.assertEqual(len(diaForcedSources), len(self.diaForcedSources))
+        self.assertEqual(list(diaSources.index.names), ["diaObjectId", "band", "diaSourceId"])
+        self.assertEqual(list(diaForcedSources.index.names), ["diaObjectId", "diaForcedSourceId"])
+        self.assertFalse(diaSources.index.has_duplicates)
+        self.assertFalse(diaForcedSources.index.has_duplicates)
+
+    def test_loadRefreshedDiaSourcesNoDiaObjects(self):
+        """Test reloading the history when no DiaObjects are in range.
+        """
+        config = self._makeDefaultConfig(config_file=self.config_file.name,
+                                         doReloadAllApdbCatalogs=True)
+        task = DiaPipelineTask(config=config)
+        emptyDiaObjects = self.diaObjects.iloc[:0]
+        region = getRegion(self.exposure)
+        visitTime = self.exposure.visitInfo.date.toAstropy()
+
+        diaSources = task.loadRefreshedDiaSources(region, emptyDiaObjects, visitTime)
+        diaForcedSources = task.loadRefreshedDiaForcedSources(region, emptyDiaObjects, visitTime)
+
+        self.assertTrue(diaSources.empty)
+        self.assertTrue(diaForcedSources.empty)
 
     def test_tooManyDiaObjectsError(self):
         maxNewDiaObjects = 100
