@@ -25,6 +25,9 @@ funcs:
     midpointMjdTai:
         functor: Column
         args: midpointMjdTai
+    exposureTime:
+        functor: Column
+        args: exposureTime
     bboxSize:
         functor: Column
         args: bboxSize
