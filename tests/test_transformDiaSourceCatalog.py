@@ -111,6 +111,8 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         np.testing.assert_array_equal(result.diaSourceTable["band"], [self.band]*self.nSources)
         np.testing.assert_array_equal(result.diaSourceTable["midpointMjdTai"],
                                       [self.date.get(system=dafBase.DateTime.MJD)]*self.nSources)
+        np.testing.assert_array_equal(result.diaSourceTable["exposureTime"],
+                                      [self.exposure.visitInfo.exposureTime]*self.nSources)
         np.testing.assert_array_equal(result.diaSourceTable["diaObjectId"], [0]*self.nSources)
         np.testing.assert_array_equal(result.diaSourceTable["x"], np.arange(self.nSources))
         # The final snr value should be NaN because it doesn't have a peak significance field.
@@ -139,6 +141,8 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         np.testing.assert_array_equal(result.diaSourceTable["band"], [self.band]*self.nSources)
         np.testing.assert_array_equal(result.diaSourceTable["midpointMjdTai"],
                                       [self.date.get(system=dafBase.DateTime.MJD)]*self.nSources)
+        np.testing.assert_array_equal(result.diaSourceTable["exposureTime"],
+                                      [self.exposure.visitInfo.exposureTime]*self.nSources)
         np.testing.assert_array_equal(result.diaSourceTable["diaObjectId"], [0]*self.nSources)
         np.testing.assert_array_equal(result.diaSourceTable["x"], np.arange(self.nSources))
         # The final snr value should be NaN because it doesn't have a peak significance field.
