@@ -29,6 +29,7 @@ import time
 from astropy import wcs
 import astropy.units as u
 from astropy.nddata import CCDData, VarianceUncertainty
+import numpy as np
 import pandas as pd
 import struct
 import fastavro
@@ -721,7 +722,7 @@ class PackageAlertsTask(pipeBase.Task):
             Input cutout serialized into byte data.
         """
         with io.BytesIO() as streamer:
-            cutout.write(streamer, format="fits")
+            cutout.write(streamer, format="fits", hdu_flags='MASKPLANE')
             cutoutBytes = streamer.getvalue()
         return cutoutBytes
 
@@ -850,4 +851,8 @@ class PackageAlertsTask(pipeBase.Task):
                 msg = "Could not calculate average PSF for the image"
             self.log.warning(msg)
             cutoutPsf = None
+        # Cast the PSF to float32 to reduce the size of the alert.
+        if cutoutPsf is not None:
+            cutoutPsf = cutoutPsf.astype(np.float32)
+
         return cutoutPsf
