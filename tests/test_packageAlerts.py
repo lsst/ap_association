@@ -263,6 +263,14 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         self.cutoutWcs.wcs.cd = self.exposure.getWcs().getCdMatrix()
         self.cutoutWcs.wcs.ctype = ["RA---TAN", "DEC--TAN"]
 
+        # create a mask with planes=("BAD", "SATURATED", "EDGE")
+        bad_bit = self.exposure.mask.getMaskPlane("BAD")
+        self.exposure.mask.array[50:55, 100:110] |= bad_bit
+        saturated_bit = self.exposure.mask.getMaskPlane("SAT")
+        self.exposure.mask.array[10:25, 60:68] |= saturated_bit
+        edge_bit = self.exposure.mask.getMaskPlane("EDGE")
+        self.exposure.mask.array[0:5, ...] |= edge_bit
+
     def testCreateExtentMinimum(self):
         """Test the extent creation for the cutout bbox returns a cutout with
         the minimum cutouut size.
@@ -297,6 +305,37 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         self.assertTrue(extent == geom.Extent2I(self.cutoutSize,
                                                 self.cutoutSize))
 
+    def testPsfSerializedAsFloat32Bitpix(self):
+        """Test that PSF is downcast to float32 and serialized with BITPIX=-32."""
+        from astropy.io import fits
+
+        packageAlerts = PackageAlertsTask()
+
+        diaSrcId = 1234
+        ccdData = packageAlerts.createCcdDataCutout(
+            self.exposure,
+            self.exposure.getWcs().getSkyOrigin(),
+            self.exposure.getWcs().getPixelOrigin(),
+            self.exposure.getBBox().getDimensions(),
+            self.exposure.getPhotoCalib(),
+            diaSrcId)
+
+        self.assertIsNotNone(ccdData)
+        self.assertIsNotNone(ccdData.psf)
+        self.assertEqual(ccdData.psf.dtype, np.float32)
+
+        cutoutBytes = packageAlerts.streamCcdDataToBytes(ccdData)
+
+        with io.BytesIO(cutoutBytes) as bytesIO:
+            with fits.open(bytesIO) as hdul:
+                self.assertIn("PSFIMAGE", hdul)
+                self.assertEqual(hdul["PSFIMAGE"].header["BITPIX"], -32)
+
+        with io.BytesIO(cutoutBytes) as bytesIO:
+            cutoutFromBytes = CCDData.read(bytesIO, format="fits")
+        self.assertIsNotNone(cutoutFromBytes.psf)
+        self.assertEqual(cutoutFromBytes.psf.dtype, '>f4')
+
     def testCreateCcdDataCutout(self):
         """Test that the data is being extracted into the CCDData cutout
         correctly.
@@ -318,8 +357,18 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
                                      self.cutoutWcs.wcs.cd)
         self.assertFloatsAlmostEqual(ccdData.data,
                                      calibExposure.getImage().array)
-        self.assertFloatsAlmostEqual(ccdData.psf,
-                                     self.exposure.psf.computeKernelImage(self.center).array)
+        self.assertFloatsAlmostEqual(
+            ccdData.psf,
+            self.exposure.psf.computeKernelImage(self.center).array.astype(np.float32),
+            rtol=1e-6, atol=1e-6
+        )
+        self.assertFloatsAlmostEqual(self.exposure.mask.array, ccdData.flags)
+
+        cutoutBytes = packageAlerts.streamCcdDataToBytes(ccdData)
+        readCcdData = CCDData.read(io.BytesIO(cutoutBytes), format="fits", hdu_flags='MASKPLANE')
+        self.assertFloatsAlmostEqual(self.exposure.mask.array, readCcdData.flags)
+        self.assertFloatsAlmostEqual(readCcdData.data, ccdData.data)
+        self.assertFloatsAlmostEqual(readCcdData.flags, ccdData.flags)
 
         ccdData = packageAlerts.createCcdDataCutout(
             self.exposure,
