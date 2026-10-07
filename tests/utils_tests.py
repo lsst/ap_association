@@ -331,3 +331,72 @@ def makeRegionTime(exposure=None, begin=None, end=None):
         end = exposure.visitInfo.date.toAstropy() + expTime/2
     timespan = dafButler.Timespan(begin=begin, end=end)
     return RegionTimeInfo(region=region, timespan=timespan)
+
+
+class FakeShutterTiming:
+    """Stand-in for `lsst.ip.isr.shutterTiming.ShutterTiming` with simple,
+    distinguishable per-source times.
+
+    ``tMidMjdTai(x, y) = base + (x + 1e-3 * y) * 1e-7`` (MJD), except NaN at
+    positions listed in ``nanX``; ``sourceStatus`` is UNAVAILABLE for
+    ``x < unavailableBelowX``, DEGRADED for ``x >= degradedAboveX``, OK
+    otherwise.  Every call's arguments are recorded in ``calls``.
+
+    Parameters
+    ----------
+    base : `float`
+        Time (MJD TAI) at pixel (0, 0).
+    status : `lsst.ip.isr.shutterTiming.ShutterTimingStatus`, optional
+        Detector-level status.
+    unavailableBelowX, degradedAboveX : `float`, optional
+        Per-source status thresholds in x.
+    nanX : sequence of `float`, optional
+        x positions at which the time is NaN (with an OK status).
+    nanWhereUnavailable : `bool`, optional
+        Return NaN where the per-source status is UNAVAILABLE (as the real
+        helper does); False returns finite times there, to test that callers
+        honour the status.
+    """
+
+    def __init__(self, base, status=None, unavailableBelowX=-np.inf, degradedAboveX=np.inf, nanX=(),
+                 nanWhereUnavailable=True):
+        from lsst.ip.isr.shutterTiming import ShutterTimingStatus
+        self.base = base
+        self.status = ShutterTimingStatus.OK if status is None else status
+        self.flags = 0 if self.status == ShutterTimingStatus.OK else 2
+        self.message = "" if self.status == ShutterTimingStatus.OK else "fake reason"
+        self.unavailableBelowX = unavailableBelowX
+        self.degradedAboveX = degradedAboveX
+        self.nanX = np.asarray(nanX, dtype=float)
+        self.nanWhereUnavailable = nanWhereUnavailable
+        self.calls = []
+
+    def expected(self, x, y):
+        """Noise-free times, without the NaN or status rules."""
+        return self.base + (np.asarray(x, dtype=float) + 1e-3*np.asarray(y, dtype=float))*1e-7
+
+    def tMidMjdTai(self, x, y):
+        from lsst.ip.isr.shutterTiming import ShutterTimingStatus
+        x = np.asarray(x, dtype=float)
+        self.calls.append(("tMidMjdTai", x.copy(), np.asarray(y, dtype=float).copy()))
+        t = self.expected(x, y)
+        t[np.isin(x, self.nanX)] = np.nan
+        if self.nanWhereUnavailable:
+            t[self.sourceStatus(x, y, record=False) == ShutterTimingStatus.UNAVAILABLE] = np.nan
+        return t
+
+    def sourceStatus(self, x, y, record=True):
+        from lsst.ip.isr.shutterTiming import ShutterTimingStatus
+        x = np.asarray(x, dtype=float)
+        if record:
+            self.calls.append(("sourceStatus", x.copy(), np.asarray(y, dtype=float).copy()))
+        status = np.full(x.shape, int(self.status), dtype=np.uint8)
+        if self.status != ShutterTimingStatus.UNAVAILABLE:
+            status[x >= self.degradedAboveX] = ShutterTimingStatus.DEGRADED
+            status[x < self.unavailableBelowX] = ShutterTimingStatus.UNAVAILABLE
+        return status
+
+    def summary(self):
+        return {"status": self.status.name, "flags": self.flags, "message": self.message,
+                "centerMjdTai": self.base, "focalPlaneMjdTai": self.base,
+                "centerMinusHeaderMid": 0.125, "maxAbsResidual": 0.0, "policy": "profile"}

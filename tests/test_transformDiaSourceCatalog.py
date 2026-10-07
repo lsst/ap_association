@@ -21,6 +21,7 @@
 
 import os
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -35,6 +36,9 @@ from lsst.pipe.base import Struct
 import lsst.utils.tests
 
 from lsst.ap.association.transformDiaSourceCatalog import UnpackApdbFlags
+from lsst.ip.isr.shutterTiming import ShutterTimingStatus
+
+from utils_tests import FakeShutterTiming
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -152,6 +156,130 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         expect_snr = np.array(expect_snr, dtype=np.float32)
         # Have to use allclose because assert_array_equal doesn't support equal_nan.
         np.testing.assert_allclose(result.diaSourceTable["snr"], expect_snr, equal_nan=True, rtol=0)
+
+    def _runShutterTiming(self, doShutterTiming=True, **patchKwargs):
+        """Run the transform with doShutterTiming and computeShutterTiming
+        patched with ``patchKwargs``; return the result, the task and the
+        mock.
+        """
+        self.config.doShutterTiming = doShutterTiming
+        transformTask = TransformDiaSourceCatalogTask(initInputs=self.initInputs, config=self.config)
+        with patch("lsst.ap.association.shutterTimingUtils.computeShutterTiming",
+                   **patchKwargs) as mockCompute:
+            result = transformTask.run(self.inputCatalog, self.exposure, self.band)
+        return result, transformTask, mockCompute
+
+    def test_run_shutter_timing_disabled(self):
+        """With doShutterTiming False (the default) the output is unchanged
+        and the helper is not called.
+        """
+        self.assertFalse(TransformDiaSourceCatalogConfig().doShutterTiming)
+        reference = TransformDiaSourceCatalogTask(initInputs=self.initInputs, config=self.config).run(
+            self.inputCatalog, self.exposure, self.band).diaSourceTable
+        result, task, mockCompute = self._runShutterTiming(doShutterTiming=False)
+        mockCompute.assert_not_called()
+        df = result.diaSourceTable
+        self.assertEqual(list(df.columns), list(reference.columns))
+        for column in df.columns:
+            if column != "timeProcessedMjdTai":
+                np.testing.assert_array_equal(df[column], reference[column], err_msg=column)
+        self.assertNotIn("shutterTimingStatus", task.metadata)
+        self.assertNotIn("nShutterCorrected", task.metadata)
+
+    def test_run_shutter_timing(self):
+        """Corrected per-source times; UNAVAILABLE and NaN fall back to the
+        header midpoint; DEGRADED keep the corrected time; metadata counts.
+        """
+        headerMid = self.date.get(system=dafBase.DateTime.MJD)
+        timing = FakeShutterTiming(headerMid + 1e-6, unavailableBelowX=2, degradedAboveX=8, nanX=[5])
+        result, task, mockCompute = self._runShutterTiming(return_value=timing)
+
+        mockCompute.assert_called_once()
+        args = mockCompute.call_args.args
+        self.assertIs(args[0], self.exposure.metadata)
+        self.assertEqual(args[1].getId(), self.exposure.detector.getId())
+        self.assertIs(args[2], task.config.shutterTiming)
+
+        df = result.diaSourceTable
+        x = df["x"].to_numpy()
+        y = df["y"].to_numpy()
+        expected = timing.expected(x, y)
+        fallback = (x < 2) | (x == 5)
+        expected[fallback] = headerMid
+        np.testing.assert_array_equal(df["midpointMjdTai"].to_numpy(), expected)
+        self.assertTrue(np.all(df["midpointMjdTai"].to_numpy()[~fallback] != headerMid))
+        # The helper saw the DiaSource positions.
+        np.testing.assert_array_equal(timing.calls[0][1], x)
+        np.testing.assert_array_equal(timing.calls[0][2], y)
+
+        self.assertEqual(task.metadata["shutterTimingStatus"], "OK")
+        self.assertEqual(task.metadata["shutterTimingFlags"], 0)
+        self.assertEqual(task.metadata["shutterTimingMessage"], "")
+        self.assertEqual(task.metadata["shutterTimingCenterMinusHeaderMid"], 0.125)
+        self.assertEqual(task.metadata["nShutterCorrected"], 5)
+        self.assertEqual(task.metadata["nShutterDegraded"], 2)
+        self.assertEqual(task.metadata["nShutterFallback"], 3)
+
+    def test_run_shutter_timing_status_honoured(self):
+        """UNAVAILABLE sources keep the header midpoint even if the helper
+        returned a finite time for them.
+        """
+        headerMid = self.date.get(system=dafBase.DateTime.MJD)
+        timing = FakeShutterTiming(headerMid + 1e-6, unavailableBelowX=3, nanWhereUnavailable=False)
+        result, task, _ = self._runShutterTiming(return_value=timing)
+        df = result.diaSourceTable
+        expected = timing.expected(df["x"], df["y"])
+        expected[df["x"].to_numpy() < 3] = headerMid
+        np.testing.assert_array_equal(df["midpointMjdTai"].to_numpy(), expected)
+        self.assertEqual(task.metadata["nShutterFallback"], 3)
+
+    def test_run_shutter_timing_with_schema(self):
+        """Corrected times survive the SDM schema conversion."""
+        self.config.doUseSchema = True
+        headerMid = self.date.get(system=dafBase.DateTime.MJD)
+        timing = FakeShutterTiming(headerMid + 1e-6)
+        result, task, _ = self._runShutterTiming(return_value=timing)
+        df = result.diaSourceTable
+        np.testing.assert_array_equal(df["midpointMjdTai"].to_numpy(), timing.expected(df["x"], df["y"]))
+        self.assertEqual(task.metadata["nShutterCorrected"], self.nSources)
+
+    def test_run_shutter_timing_unavailable(self):
+        """A detector-level UNAVAILABLE timing keeps the header midpoint
+        everywhere and logs a warning.
+        """
+        headerMid = self.date.get(system=dafBase.DateTime.MJD)
+        timing = FakeShutterTiming(headerMid + 1e-6, status=ShutterTimingStatus.UNAVAILABLE)
+        with self.assertLogs("lsst.transformDiaSourceCatalog", level="WARNING") as cm:
+            result, task, _ = self._runShutterTiming(return_value=timing)
+        self.assertTrue(any("UNAVAILABLE" in line for line in cm.output))
+        np.testing.assert_array_equal(result.diaSourceTable["midpointMjdTai"], [headerMid]*self.nSources)
+        self.assertEqual(task.metadata["shutterTimingStatus"], "UNAVAILABLE")
+        self.assertEqual(task.metadata["shutterTimingMessage"], "fake reason")
+        self.assertEqual(task.metadata["nShutterCorrected"], 0)
+        self.assertEqual(task.metadata["nShutterDegraded"], 0)
+        self.assertEqual(task.metadata["nShutterFallback"], self.nSources)
+
+    def test_run_shutter_timing_exception(self):
+        """A helper exception keeps the header midpoint and does not raise.
+        """
+        headerMid = self.date.get(system=dafBase.DateTime.MJD)
+        with self.assertLogs("lsst.transformDiaSourceCatalog", level="WARNING"):
+            result, task, _ = self._runShutterTiming(side_effect=RuntimeError("boom"))
+        np.testing.assert_array_equal(result.diaSourceTable["midpointMjdTai"], [headerMid]*self.nSources)
+        self.assertEqual(task.metadata["shutterTimingStatus"], "UNAVAILABLE")
+        self.assertIn("boom", task.metadata["shutterTimingMessage"])
+        self.assertEqual(task.metadata["nShutterFallback"], self.nSources)
+
+    def test_run_shutter_timing_evaluation_exception(self):
+        """An exception from the per-source evaluation keeps the header
+        midpoint and does not raise.
+        """
+        headerMid = self.date.get(system=dafBase.DateTime.MJD)
+        timing = FakeShutterTiming(headerMid + 1e-6)
+        timing.tMidMjdTai = unittest.mock.Mock(side_effect=ValueError("bad"))
+        result, task, _ = self._runShutterTiming(return_value=timing)
+        np.testing.assert_array_equal(result.diaSourceTable["midpointMjdTai"], [headerMid]*self.nSources)
+        self.assertEqual(task.metadata["nShutterFallback"], self.nSources)
 
     def test_run_dia_source_wrong_flags(self):
         """Test that the proper errors are thrown when requesting flag columns
