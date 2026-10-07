@@ -36,8 +36,6 @@ import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 from lsst.utils.timer import timeMethod
 
-from .shutterTimingUtils import ShutterTimingCounts, applyShutterTiming, recordShutterTimingMetadata
-
 
 class DiaForcedSourcedConfig(pexConfig.Config):
     """Configuration for the generic DiaForcedSourcedTask class.
@@ -124,12 +122,8 @@ class DiaForcedSourceTask(pipeBase.Task):
         idGenerator : `lsst.meas.base.IdGenerator`
             Object that generates source IDs and random number generator seeds.
         shutterTiming : `lsst.ip.isr.shutterTiming.ShutterTiming`, optional
-            Shutter-corrected times of this detector. If given, each forced
-            source's ``midpointMjdTai`` is the corrected time at its forced
-            position, except where the per-source status is UNAVAILABLE or
-            the time is not finite, which keep the header midpoint
-            (``exposure.visitInfo.date``); the counts go into the task
-            metadata. If `None`, every forced source gets the header midpoint.
+            Shutter-corrected times of this detector; if given, they replace
+            the header midpoint wherever they are finite.
 
         Returns
         -------
@@ -140,8 +134,6 @@ class DiaForcedSourceTask(pipeBase.Task):
         # Restrict forced source measurement to objects with sufficient history to be reliable.
         objectTable = dia_objects[dia_objects["nDiaSources"] >= self.config.historyThreshold]
         if objectTable.empty:
-            if shutterTiming is not None:
-                self._recordShutterTiming(shutterTiming, ShutterTimingCounts())
             # The dataframe will be coerced to the correct (empty) format in diaPipe.
             return pd.DataFrame()
 
@@ -175,27 +167,16 @@ class DiaForcedSourceTask(pipeBase.Task):
                                                        exposure)
         if shutterTiming is not None:
             # Must precede dropColumns, which removes x and y.
-            midpoints, counts = applyShutterTiming(shutterTiming,
-                                                   output_forced_sources["x"].to_numpy(),
-                                                   output_forced_sources["y"].to_numpy(),
-                                                   exposure.visitInfo.date.get(system=DateTime.MJD),
-                                                   self.log)
-            output_forced_sources["midpointMjdTai"] = midpoints
-            self._recordShutterTiming(shutterTiming, counts)
+            t = shutterTiming.tMidMjdTai(output_forced_sources["x"], output_forced_sources["y"])
+            corrected = np.isfinite(t)
+            output_forced_sources["midpointMjdTai"] = np.where(
+                corrected, t, output_forced_sources["midpointMjdTai"])
+            self.metadata["nShutterFallback"] = len(t) - int(np.count_nonzero(corrected))
         # Drop superfluous columns from output DataFrame.
         output_forced_sources.drop(columns=self.config.dropColumns, inplace=True)
         return output_forced_sources.set_index(
             ["diaObjectId", "diaForcedSourceId"],
             drop=False)
-
-    def _recordShutterTiming(self, shutterTiming, counts):
-        """Record the shutter-timing summary and counts in the task metadata
-        and log them (at VERBOSE: the calling task logs the per-quantum INFO
-        line and any UNAVAILABLE warning).
-        """
-        recordShutterTimingMetadata(self.metadata, shutterTiming, counts)
-        self.log.verbose("Shutter timing of DiaForcedSources: %d corrected, %d degraded, "
-                         "%d header midpoint.", counts.nCorrected, counts.nDegraded, counts.nFallback)
 
     def _convert_from_pandas(self, input_objects):
         """Create minimal schema SourceCatalog from a pandas DataFrame.

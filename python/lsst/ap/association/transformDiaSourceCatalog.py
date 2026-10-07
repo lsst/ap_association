@@ -31,7 +31,7 @@ import numpy as np
 
 from lsst.resources import ResourcePath
 from lsst.daf.base import DateTime
-from lsst.ip.isr.shutterTiming import ShutterTimingConfig
+from lsst.ip.isr.shutterTiming import ShutterTimingConfig, computeShutterTiming
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
@@ -40,9 +40,6 @@ from lsst.pipe.tasks.functors import Column
 from lsst.utils.timer import timeMethod
 
 from lsst.pipe.tasks.schemaUtils import convertDataFrameToSdmSchema, readSdmSchemaFile
-
-from .shutterTimingUtils import (applyShutterTiming, computeShutterTimingSafely, logShutterTiming,
-                                 recordShutterTimingMetadata)
 
 
 class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
@@ -135,10 +132,9 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
     doShutterTiming = pexConfig.Field(
         dtype=bool,
         default=False,
-        doc="Set each DiaSource's midpointMjdTai to the shutter-corrected mid-exposure time at its "
-            "position (lsst.ip.isr.shutterTiming), computed from the shutter cards in the "
-            "difference image metadata. Sources without a corrected time keep the header midpoint "
-            "(visitInfo.date). If False, every DiaSource gets the header midpoint.",
+        doc="Set each DiaSource's midpointMjdTai to the shutter-corrected time at its centroid "
+            "(lsst.ip.isr.shutterTiming); sources without one keep the header midpoint "
+            "(visitInfo.date).",
     )
     shutterTiming = pexConfig.ConfigField(
         dtype=ShutterTimingConfig,
@@ -268,10 +264,21 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         diaSourceDf["detector"] = np.int16(diffIm.detector.getId())
         diaSourceDf["band"] = band
         headerMid = diffIm.visitInfo.date.get(system=DateTime.MJD)
+        diaSourceDf["midpointMjdTai"] = headerMid
         if self.config.doShutterTiming:
-            diaSourceDf["midpointMjdTai"] = self._shutterCorrectedMidpoints(diaSourceDf, diffIm, headerMid)
-        else:
-            diaSourceDf["midpointMjdTai"] = headerMid
+            # The functors rename the centroid to x, y later.
+            timing = computeShutterTiming(diffIm.metadata, diffIm.detector, self.config.shutterTiming)
+            t = timing.tMidMjdTai(diaSourceDf["slot_Centroid_x"], diaSourceDf["slot_Centroid_y"])
+            corrected = np.isfinite(t)
+            diaSourceDf["midpointMjdTai"] = np.where(corrected, t, headerMid)
+            nFallback = len(t) - int(np.count_nonzero(corrected))
+            self.metadata["shutterTimingStatus"] = timing.status.name
+            self.metadata["shutterTimingFlags"] = int(timing.flags)
+            self.metadata["shutterTimingMessage"] = timing.message
+            self.metadata["nShutterFallback"] = nFallback
+            self.log.info("Shutter timing %s (flags %#x%s): %d DiaSources corrected, %d at the header "
+                          "midpoint.", timing.status.name, timing.flags,
+                          f"; {timing.message}" if timing.message else "", len(t) - nFallback, nFallback)
         diaSourceDf["exposureTime"] = diffIm.visitInfo.exposureTime
         diaSourceDf["diaObjectId"] = 0
         diaSourceDf["ssObjectId"] = 0
@@ -297,42 +304,6 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         return pipeBase.Struct(
             diaSourceTable=df,
         )
-
-    def _shutterCorrectedMidpoints(self, diaSourceDf, diffIm, headerMid):
-        """Per-source shutter-corrected mid-exposure times.
-
-        Records the summary in the task metadata and logs it. Never raises:
-        on any failure the sources keep the header midpoint.
-
-        Parameters
-        ----------
-        diaSourceDf : `pandas.DataFrame`
-            DiaSources, with the centroid in ``slot_Centroid_x`` and
-            ``slot_Centroid_y`` (pixels).
-        diffIm : `lsst.afw.image.Exposure`
-            Difference image; its metadata carries the shutter cards.
-        headerMid : `float`
-            Header midpoint (``visitInfo.date``), MJD TAI.
-
-        Returns
-        -------
-        midpoints : `numpy.ndarray`
-            Per-source ``midpointMjdTai``, MJD TAI.
-        """
-        timing, error = computeShutterTimingSafely(diffIm.metadata, diffIm.detector,
-                                                   self.config.shutterTiming, self.log)
-        try:
-            x = diaSourceDf["slot_Centroid_x"].to_numpy()
-            y = diaSourceDf["slot_Centroid_y"].to_numpy()
-        except KeyError as e:
-            self.log.warning("No centroid column %s in the DiaSource table; keeping the header midpoint.",
-                             e)
-            timing, error = None, f"no centroid column {e}"
-            x = y = np.zeros(len(diaSourceDf))
-        midpoints, counts = applyShutterTiming(timing, x, y, headerMid, self.log)
-        recordShutterTimingMetadata(self.metadata, timing, counts, error)
-        logShutterTiming(self.log, timing, counts, error, what="DiaSources")
-        return midpoints
 
     def addUnpackedFlagFunctors(self):
         """Add Column functor for each of the flags to the internal functor

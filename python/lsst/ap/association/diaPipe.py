@@ -47,11 +47,9 @@ from lsst.ap.association import (
 
 from lsst.ap.association.loadDiaCatalogs import loadDiaObjectsFromApdb, loadDiaSourcesFromApdb, \
     loadDiaForcedSourcesFromApdb
-from lsst.ap.association.shutterTimingUtils import computeShutterTimingSafely, logShutterTiming, \
-    recordShutterTimingMetadata
 from lsst.ap.association.utils import makeEmptyForcedSourceTable, getRegion, paddedRegion, readSchemaFromApdb
 from lsst.daf.base import DateTime
-from lsst.ip.isr.shutterTiming import ShutterTimingConfig
+from lsst.ip.isr.shutterTiming import ShutterTimingConfig, computeShutterTiming
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
     DiaObjectCalculationTask
 from lsst.pipe.tasks.schemaUtils import convertDataFrameToSdmSchema, checkSdmSchemaColumns, \
@@ -500,11 +498,9 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     doShutterTiming = pexConfig.Field(
         dtype=bool,
         default=False,
-        doc="Compute the shutter-corrected mid-exposure times of the detector "
-            "(lsst.ip.isr.shutterTiming) once from the difference image, and pass them to "
-            "forced measurement (per-source DiaForcedSource midpointMjdTai) and to solar system "
-            "association (per-source prediction epochs). If False, both use the header midpoint "
-            "(visitInfo.date).",
+        doc="Compute the detector's shutter-corrected times (lsst.ip.isr.shutterTiming) and use "
+            "them for DiaForcedSource midpointMjdTai and solar system prediction epochs, instead "
+            "of the header midpoint (visitInfo.date).",
     )
     shutterTiming = pexConfig.ConfigField(
         dtype=ShutterTimingConfig,
@@ -1134,14 +1130,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                badSources=badSources
                                )
 
-    @timeMethod
     def computeShutterTiming(self, diffIm):
-        """Compute the detector's shutter-corrected times, never raising.
-
-        Records the detector-level summary (``shutterTimingStatus``,
-        ``shutterTimingFlags``, ``shutterTimingMessage``,
-        ``shutterTimingCenterMinusHeaderMid``) in the task metadata, logs it,
-        and warns if it is UNAVAILABLE.
+        """Compute the detector's shutter-corrected times from the difference
+        image and record their summary in the task metadata.
 
         Parameters
         ----------
@@ -1150,16 +1141,18 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
         Returns
         -------
-        shutterTiming : `lsst.ip.isr.shutterTiming.ShutterTiming` or `None`
-            The timing, or `None` if its computation raised (logged; the
-            subtasks then use the header midpoint).
+        shutterTiming : `lsst.ip.isr.shutterTiming.ShutterTiming`
+            The detector's timing.
         """
-        shutterTiming, error = computeShutterTimingSafely(diffIm.metadata, diffIm.detector,
-                                                          self.config.shutterTiming, self.log)
-        recordShutterTimingMetadata(self.metadata, shutterTiming, error=error)
-        logShutterTiming(self.log, shutterTiming, error=error, what="DiaForcedSources and SSO predictions")
-        return shutterTiming
+        timing = computeShutterTiming(diffIm.metadata, diffIm.detector, self.config.shutterTiming)
+        self.metadata["shutterTimingStatus"] = timing.status.name
+        self.metadata["shutterTimingFlags"] = int(timing.flags)
+        self.metadata["shutterTimingMessage"] = timing.message
+        self.log.info("Shutter timing %s (flags %#x%s).", timing.status.name, timing.flags,
+                      f"; {timing.message}" if timing.message else "")
+        return timing
 
+    @timeMethod
     def associateDiaSources(self, diaSourceTable, solarSystemObjectTable, diffIm, diaObjects,
                             shutterTiming=None):
         """Associate DiaSources with DiaObjects.
@@ -1183,8 +1176,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         diaObjects : `pandas.DataFrame`
             Table of DiaObjects from preloaded DiaObjects.
         shutterTiming : `lsst.ip.isr.shutterTiming.ShutterTiming`, optional
-            Shutter-corrected times of this detector, passed to solar system
-            association as ``shutterTiming`` if not `None`.
+            Shutter-corrected times of this detector, for solar system
+            association.
 
         Returns
         -------
@@ -1211,16 +1204,13 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         associatedCatalogs = []
         # First associate diaSources with known asteroids
         if self.config.doSolarSystemAssociation and solarSystemObjectTable is not None:
-            # Only pass shutterTiming when set, so that a retargeted
-            # solarSystemAssociator whose run() does not take it still works.
-            ssoKwargs = {} if shutterTiming is None else {"shutterTiming": shutterTiming}
             ssoAssocResult = self.solarSystemAssociator.run(
                 Table.from_pandas(diaSourceTable),
                 solarSystemObjectTable,
                 diffIm.visitInfo,
                 diffIm.getBBox(),
                 diffIm.wcs,
-                **ssoKwargs
+                shutterTiming=shutterTiming,
             )
             nTotalSsObjects = ssoAssocResult.nTotalSsObjects
             nAssociatedSsObjects = ssoAssocResult.nAssociatedSsObjects
@@ -1441,8 +1431,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         idGenerator : `lsst.meas.base.IdGenerator`
             Object that generates source IDs and random number generator seeds.
         shutterTiming : `lsst.ip.isr.shutterTiming.ShutterTiming`, optional
-            Shutter-corrected times of this detector, passed to the forced
-            source subtask as ``shutterTiming`` if not `None`.
+            Shutter-corrected times of this detector, for forced sources.
 
         Returns
         -------
@@ -1450,7 +1439,6 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             Catalog of calibrated forced photometered fluxes on both the
             difference and direct images at DiaObject locations.
         """
-        forcedKwargs = {} if shutterTiming is None else {"shutterTiming": shutterTiming}
         # Force photometer on the Difference and Calibrated exposures using
         # the new and updated DiaObject locations.
         diaForcedSources = self.diaForcedSource.run(
@@ -1459,7 +1447,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             exposure,
             diffIm,
             idGenerator=idGenerator,
-            **forcedKwargs)
+            shutterTiming=shutterTiming)
         self.log.info(f"Updating {len(diaForcedSources)} diaForcedSources in the APDB")
         diaForcedSources = convertDataFrameToSdmSchema(self.schema, diaForcedSources,
                                                        tableName="DiaForcedSource", skipIndex=True)
