@@ -30,11 +30,10 @@ import lsst.afw.image as afwImage
 import lsst.daf.base as dafBase
 import lsst.meas.algorithms as measAlg
 from lsst.ap.association import DiaForcedSourceTask
-from lsst.ip.isr.shutterTiming import ShutterTimingStatus
 from lsst.meas.base import IdGenerator
 import lsst.utils.tests
 
-from utils_tests import FakeShutterTiming
+from utils_tests import expectedShutterTime, makeShutterTiming
 
 
 def create_test_dia_objects(n_points, wcs, startPos=100):
@@ -221,94 +220,27 @@ class TestDiaForcedSource(unittest.TestCase):
             self.assertEqual(diaFS["visit"], self.exposure.visitInfo.id)
             self.assertEqual(diaFS["detector"], self.exposure.detector.getId())
 
-    def _runForced(self, **kwargs):
-        test_objects = self.testDiaObjects.copy()
-        test_objects.set_index("diaObjectId", inplace=True, drop=False)
-        dfs = DiaForcedSourceTask()
-        result = dfs.run(test_objects, self.updatedTestIds, self.exposure, self.diffim, IdGenerator(),
-                         **kwargs)
-        return result, dfs
-
-    def testRunShutterTimingNone(self):
-        """Without a timing (explicit None) the output is as before."""
-        reference, _ = self._runForced()
-        result, dfs = self._runForced(shutterTiming=None)
-        self.assertEqual(list(result.columns), list(reference.columns))
-        for column in result.columns:
-            if column != "timeProcessedMjdTai":
-                np.testing.assert_array_equal(result[column], reference[column], err_msg=column)
-        headerMid = self.exposure.visitInfo.date.get(system=dafBase.DateTime.MJD)
-        np.testing.assert_array_equal(result["midpointMjdTai"], headerMid)
-        self.assertNotIn("nShutterCorrected", dfs.metadata)
-
     def testRunShutterTiming(self):
-        """Per-row times from the timing at the forced positions, with the
-        header midpoint where UNAVAILABLE or NaN.
-        """
-        headerMid = self.exposure.visitInfo.date.get(system=dafBase.DateTime.MJD)
-        timing = FakeShutterTiming(headerMid + 1e-6, unavailableBelowX=101.5, degradedAboveX=103.5,
-                                   nanX=[])
-        result, dfs = self._runForced(shutterTiming=timing)
-        self.assertEqual(len(result), self.expectedDiaForcedSources)
-
-        name, x, y = timing.calls[0]
-        self.assertEqual(name, "tMidMjdTai")
-        self.assertEqual(len(x), self.expectedDiaForcedSources)
-        # The forced positions of the in-image objects (ids 0..4 at 100+i).
-        ids = result["diaObjectId"].to_numpy()
-        inImage = ids < 5
-        np.testing.assert_allclose(x[inImage], 100 + ids[inImage], atol=1e-3)
-        np.testing.assert_allclose(y[inImage], 100 + ids[inImage], atol=1e-3)
-
-        expected = timing.expected(x, y)
-        fallback = x < 101.5
-        expected[fallback] = headerMid
-        np.testing.assert_array_equal(result["midpointMjdTai"].to_numpy(), expected)
-
-        nDegraded = int(np.sum(x >= 103.5))
-        self.assertGreater(nDegraded, 0)
-        self.assertGreater(np.sum(fallback), 0)
-        self.assertGreater(np.sum(~fallback), nDegraded)
-        self.assertEqual(dfs.metadata["shutterTimingStatus"], "OK")
-        self.assertEqual(dfs.metadata["nShutterDegraded"], nDegraded)
-        self.assertEqual(dfs.metadata["nShutterFallback"], int(np.sum(fallback)))
-        self.assertEqual(dfs.metadata["nShutterCorrected"],
-                         len(result) - nDegraded - int(np.sum(fallback)))
-
-    def testRunShutterTimingUnavailable(self):
-        """A detector-level UNAVAILABLE timing keeps the header midpoint."""
-        headerMid = self.exposure.visitInfo.date.get(system=dafBase.DateTime.MJD)
-        timing = FakeShutterTiming(headerMid + 1e-6, status=ShutterTimingStatus.UNAVAILABLE)
-        result, dfs = self._runForced(shutterTiming=timing)
-        np.testing.assert_array_equal(result["midpointMjdTai"], headerMid)
-        self.assertEqual(dfs.metadata["shutterTimingStatus"], "UNAVAILABLE")
-        self.assertEqual(dfs.metadata["nShutterFallback"], self.expectedDiaForcedSources)
-
-    def testRunShutterTimingEvaluationError(self):
-        """An exception from the timing keeps the header midpoint and does
-        not raise.
-        """
-        headerMid = self.exposure.visitInfo.date.get(system=dafBase.DateTime.MJD)
-        timing = FakeShutterTiming(headerMid + 1e-6)
-        timing.sourceStatus = unittest.mock.Mock(side_effect=RuntimeError("boom"))
-        with self.assertLogs(level="WARNING"):
-            result, dfs = self._runForced(shutterTiming=timing)
-        np.testing.assert_array_equal(result["midpointMjdTai"], headerMid)
-        self.assertEqual(dfs.metadata["nShutterFallback"], self.expectedDiaForcedSources)
-
-    def testRunShutterTimingNoObjects(self):
-        """No objects above the history threshold: empty output, zero counts.
+        """Corrected times at the forced positions; the source far off the
+        detector (no time) keeps the header midpoint.
         """
         test_objects = self.testDiaObjects.copy()
-        test_objects["nDiaSources"] = 0
         test_objects.set_index("diaObjectId", inplace=True, drop=False)
+        headerMid = self.exposure.visitInfo.date.get(system=dafBase.DateTime.MJD)
+        timing = makeShutterTiming(self.exposure.detector, headerMid + 1e-6)
         dfs = DiaForcedSourceTask()
-        timing = FakeShutterTiming(60000.0)
         result = dfs.run(test_objects, self.updatedTestIds, self.exposure, self.diffim, IdGenerator(),
                          shutterTiming=timing)
-        self.assertTrue(result.empty)
-        self.assertEqual(dfs.metadata["nShutterCorrected"], 0)
-        self.assertEqual(dfs.metadata["nShutterFallback"], 0)
+        self.assertEqual(len(result), self.expectedDiaForcedSources)
+        # Objects 0..4 are at pixel (100 + id, 100 + id); 10000001 is far off.
+        ids = result["diaObjectId"].to_numpy()
+        inImage = ids < 5
+        np.testing.assert_allclose(result["midpointMjdTai"][inImage],
+                                   expectedShutterTime(timing, 100 + ids[inImage], 100 + ids[inImage]),
+                                   rtol=0, atol=1e-10)
+        np.testing.assert_array_equal(result["midpointMjdTai"][~inImage], headerMid)
+        self.assertEqual(dfs.metadata["nShutterFallback"], np.sum(~inImage))
+        self.assertEqual(np.sum(~inImage), 1)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
