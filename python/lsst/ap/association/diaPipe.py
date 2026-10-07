@@ -1211,8 +1211,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         associatedCatalogs = []
         # First associate diaSources with known asteroids
         if self.config.doSolarSystemAssociation and solarSystemObjectTable is not None:
-            # Only pass shutterTiming when set: SolarSystemAssociationTask.run
-            # accepts it only from the shutter-timing pipe_tasks onwards.
+            # Only pass shutterTiming when set, so that a retargeted
+            # solarSystemAssociator whose run() does not take it still works.
             ssoKwargs = {} if shutterTiming is None else {"shutterTiming": shutterTiming}
             ssoAssocResult = self.solarSystemAssociator.run(
                 Table.from_pandas(diaSourceTable),
