@@ -34,6 +34,7 @@ import pandas as pd
 import struct
 import fastavro
 from confluent_kafka.cimpl import KafkaError
+from numpy.ma.core import MaskedConstant
 
 # confluent_kafka is not in the standard Rubin environment as it is a third
 # party package and is only needed when producing alerts.
@@ -283,8 +284,7 @@ class PackageAlertsTask(pipeBase.Task):
         diaForcedSources = diaForcedSources.astype('object')
 
         if ssSrc is not None:
-            ssSrc = ssSrc.set_index('diaSourceId')
-            ssSrc = ssSrc.astype('object')
+            ssSrc.add_index('diaSourceId')
 
         n_sources = len(diaSourceCat)
         self.log.info("Packaging alerts for %d DiaSources.", n_sources)
@@ -299,7 +299,7 @@ class PackageAlertsTask(pipeBase.Task):
                 diaObject = None
                 objSourceHistory = None
                 objDiaForcedSources = None
-                ssSource = ssSrc.loc[[alertId]].to_dict("records")[0]
+                ssSource = dict(ssSrc.loc[alertId])
             else:
                 ssSource = None
                 diaObject = diaObjectCat.loc[srcIndex[0]]
@@ -665,6 +665,8 @@ class PackageAlertsTask(pipeBase.Task):
             alert['ssSource'] = None
             alert['mpc_orbits'] = None
         else:
+            ssSource = {k: (None if isinstance(v, MaskedConstant)
+                            else v) for k, v in ssSource.items()}
             mpcorbColumns = [col for col in ssSource if col[:7] == 'MPCORB_']
             mpcOrbit = {key[7:]: ssSource[key] for key in mpcorbColumns}
 
