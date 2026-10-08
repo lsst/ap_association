@@ -31,6 +31,7 @@ from lsst.afw.coord import Observatory
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 from lsst.daf.base import DateTime, PropertySet
+from lsst.ip.isr.shutterTiming import ShutterTiming, ShutterTimingStatus, _DetectorGeometry
 import lsst.daf.butler as dafButler
 import lsst.geom
 import lsst.meas.algorithms as measAlg
@@ -331,3 +332,47 @@ def makeRegionTime(exposure=None, begin=None, end=None):
         end = exposure.visitInfo.date.toAstropy() + expTime/2
     timespan = dafButler.Timespan(begin=begin, end=end)
     return RegionTimeInfo(region=region, timespan=timespan)
+
+
+SHUTTER_COEFFICIENTS = (2e-4, 1e-7, -3e-5, 2e-8, 5e-8)
+"""Quadratic coefficients (s / pixel^n) of `makeShutterTiming`."""
+
+
+def makeShutterTiming(detector, centerMidpointMjdTai, status=None):
+    """Make a real `lsst.ip.isr.shutterTiming.ShutterTiming` with known
+    coefficients, blade axis x and the geometry of ``detector``.
+
+    Parameters
+    ----------
+    detector : `lsst.afw.cameraGeom.Detector`
+        Detector whose geometry to use.
+    centerMidpointMjdTai : `float`
+        Time at the detector centre (MJD TAI).
+    status : `lsst.ip.isr.shutterTiming.ShutterTimingStatus`, optional
+        Detector-level status (default OK).
+
+    Returns
+    -------
+    timing : `lsst.ip.isr.shutterTiming.ShutterTiming`
+        The timing.
+    """
+    if status is None:
+        status = ShutterTimingStatus.OK
+    message = "" if status == ShutterTimingStatus.OK else "test reason"
+
+    geometry = _DetectorGeometry.fromDetector(detector)
+    return ShutterTiming(status=status, message=message, detectorId=geometry.detectorId,
+                         centerMidpointMjdTai=centerMidpointMjdTai, coefficients=SHUTTER_COEFFICIENTS,
+                         axis="x", geometry=geometry)
+
+
+def expectedShutterTime(timing, x, y):
+    """Evaluate the quadratic of `makeShutterTiming` independently at pixel
+    positions ``x``, ``y`` (arrays).
+    """
+    cx, cy = timing.geometry.centerPixel
+    u = x - cx
+    v = y - cy
+
+    cu, cuu, cv, cuv, cvv = SHUTTER_COEFFICIENTS
+    return timing.centerMidpointMjdTai + (cu*u + cuu*u*u + cv*v + cuv*u*v + cvv*v*v)/86400

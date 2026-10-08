@@ -31,6 +31,7 @@ import numpy as np
 
 from lsst.resources import ResourcePath
 from lsst.daf.base import DateTime
+from lsst.ip.isr.shutterTiming import ShutterTimingConfig, ShutterTimingStatus, computeShutterTiming
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
@@ -128,6 +129,17 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
         default="ApdbSchema",
         deprecated="This config is no longer used, and will be removed after v30"
     )
+    doShutterTiming = pexConfig.Field(
+        dtype=bool,
+        default=False,
+        doc="Set each DiaSource's midpointMjdTai to the shutter-corrected time at its centroid "
+            "(lsst.ip.isr.shutterTiming); if the detector has none, keep the header "
+            "midpoint (visitInfo.date).",
+    )
+    shutterTiming = pexConfig.ConfigField(
+        dtype=ShutterTimingConfig,
+        doc="Configuration of the shutter-corrected times; used if doShutterTiming is True.",
+    )
 
     def setDefaults(self):
         super().setDefaults()
@@ -196,6 +208,9 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
         inputs["band"] = butlerQC.quantum.dataId["band"]
+        if self.config.doShutterTiming:
+            # EXPTIME is stripped from the exposure metadata at ingest.
+            inputs["requestedExposureTime"] = butlerQC.quantum.dataId.records["visit"].exposure_time
 
         outputs = self.run(**inputs)
 
@@ -206,7 +221,8 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             diaSourceCat,
             diffIm,
             band,
-            reliability=None):
+            reliability=None,
+            requestedExposureTime=None):
         """Convert input catalog to ParquetTable/Pandas and run functors.
 
         Additionally, add new columns for stripping information from the
@@ -223,6 +239,10 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         reliability : `lsst.afw.table.SourceCatalog`
             Reliability (e.g. real/bogus) scores, row-matched to
             ``diaSourceCat``.
+        requestedExposureTime : `float`, optional
+            Requested (nominal) exposure time of the visit (s), from the
+            ``visit`` dimension record; required if ``doShutterTiming`` is
+            set (``EXPTIME`` is stripped from exposure metadata at ingest).
 
         Returns
         -------
@@ -252,6 +272,22 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         diaSourceDf["detector"] = np.int16(diffIm.detector.getId())
         diaSourceDf["band"] = band
         diaSourceDf["midpointMjdTai"] = diffIm.visitInfo.date.get(system=DateTime.MJD)
+
+        if self.config.doShutterTiming:
+            # Per-source shutter-corrected times, where the detector has them.
+            timing = computeShutterTiming(diffIm.metadata, diffIm.detector, requestedExposureTime,
+                                          self.config.shutterTiming)
+            if timing.status != ShutterTimingStatus.UNAVAILABLE:
+                # The functors rename the centroid to x, y later.
+                diaSourceDf["midpointMjdTai"] = timing.midpointMjdTai(
+                    diaSourceDf["slot_Centroid_x"].to_numpy(), diaSourceDf["slot_Centroid_y"].to_numpy())
+
+            self.metadata["shutterTimingStatus"] = timing.status.name
+            self.metadata["shutterTimingFlags"] = int(timing.flags)
+            self.metadata["shutterTimingMessage"] = timing.message
+            self.log.info("Shutter timing %s (flags %#x)%s%s.", timing.status.name, timing.flags,
+                          ": " if timing.message else "", timing.message)
+
         diaSourceDf["exposureTime"] = diffIm.visitInfo.exposureTime
         diaSourceDf["diaObjectId"] = 0
         diaSourceDf["ssObjectId"] = 0
