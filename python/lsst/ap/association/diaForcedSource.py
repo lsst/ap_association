@@ -166,10 +166,12 @@ class DiaForcedSourceTask(pipeBase.Task):
         output_forced_sources = self._trim_to_exposure(output_forced_sources,
                                                        updatedDiaObjectIds,
                                                        exposure)
+
         if shutterTiming is not None and shutterTiming.status != ShutterTimingStatus.UNAVAILABLE:
             # Must precede dropColumns, which removes x and y.
-            output_forced_sources["midpointMjdTai"] = shutterTiming.tMidMjdTai(output_forced_sources["x"],
-                                                                               output_forced_sources["y"])
+            output_forced_sources["midpointMjdTai"] = shutterTiming.tMidMjdTai(
+                output_forced_sources["x"].to_numpy(), output_forced_sources["y"].to_numpy())
+
         # Drop superfluous columns from output DataFrame.
         output_forced_sources.drop(columns=self.config.dropColumns, inplace=True)
         return output_forced_sources.set_index(

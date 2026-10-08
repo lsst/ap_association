@@ -742,6 +742,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             self.log.info("Preloaded DiaObject table is empty.")
             diaObjects = preloadedDiaObjects
 
+        # Shutter-corrected times of this detector, for forced sources and
+        # solar system association.
         shutterTiming = None
         if self.config.doShutterTiming:
             shutterTiming = self.computeShutterTiming(diffIm, requestedExposureTime)
@@ -1158,11 +1160,13 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         """
         timing = computeShutterTiming(diffIm.metadata, diffIm.detector, requestedExposureTime,
                                       self.config.shutterTiming)
+
         self.metadata["shutterTimingStatus"] = timing.status.name
         self.metadata["shutterTimingFlags"] = int(timing.flags)
         self.metadata["shutterTimingMessage"] = timing.message
         self.log.info("Shutter timing %s (flags %#x%s).", timing.status.name, timing.flags,
                       f"; {timing.message}" if timing.message else "")
+
         return timing
 
     @timeMethod

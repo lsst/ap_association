@@ -226,10 +226,12 @@ class TestDiaForcedSource(unittest.TestCase):
         test_objects.set_index("diaObjectId", inplace=True, drop=False)
         headerMid = self.exposure.visitInfo.date.get(system=dafBase.DateTime.MJD)
         timing = makeShutterTiming(self.exposure.detector, headerMid + 1e-6)
+
         dfs = DiaForcedSourceTask()
         result = dfs.run(test_objects, self.updatedTestIds, self.exposure, self.diffim, IdGenerator(),
                          shutterTiming=timing)
         self.assertEqual(len(result), self.expectedDiaForcedSources)
+
         # Objects 0..4 are at pixel (100 + id, 100 + id); 10000001 is far off
         # the detector, which does not occur in processing.
         ids = result["diaObjectId"].to_numpy()

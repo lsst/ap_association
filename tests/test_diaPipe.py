@@ -177,6 +177,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         self.assertFalse(DiaPipelineTask.ConfigClass().doShutterTiming)
         with patch("lsst.ap.association.diaPipe.computeShutterTiming") as mockCompute:
             task, calls = self._testRun(doSolarSystemAssociation=True)
+
         mockCompute.assert_not_called()
         self.assertIsNone(calls["diaForcedSource"].kwargs["shutterTiming"])
         self.assertIsNone(calls["solarSystemAssociator"].kwargs["shutterTiming"])
@@ -190,17 +191,23 @@ class TestDiaPipelineTask(unittest.TestCase):
         with patch("lsst.ap.association.diaPipe.computeShutterTiming",
                    return_value=timing) as mockCompute:
             task, calls = self._testRun(doSolarSystemAssociation=True, doShutterTiming=True)
+
+        # Computed once, from the difference image.
         mockCompute.assert_called_once()
         args = mockCompute.call_args.args
         self.assertIs(args[0], self.diffim.metadata)
         self.assertEqual(args[1].getId(), self.diffim.detector.getId())
         self.assertEqual(args[2], 30.0)
         self.assertIs(args[3], task.config.shutterTiming)
+
+        # The same object goes to both subtasks.
         self.assertIs(calls["diaForcedSource"].kwargs["shutterTiming"], timing)
         self.assertIs(calls["solarSystemAssociator"].kwargs["shutterTiming"], timing)
+
         self.assertEqual(task.metadata["shutterTimingStatus"], "OK")
         self.assertEqual(task.metadata["shutterTimingFlags"], 0)
         self.assertEqual(task.metadata["shutterTimingMessage"], "")
+
         # associateDiaSources keeps its @timeMethod.
         self.assertIn("associateDiaSourcesStartCpuTime", task.metadata)
 
@@ -410,9 +417,11 @@ class TestDiaPipelineTask(unittest.TestCase):
         butlerQC = MagicMock()
         butlerQC.get.return_value = {}
         butlerQC.quantum.dataId.records = {"visit": MagicMock(exposure_time=30.0)}
+
         with patch.object(DetectorVisitIdGeneratorConfig, "apply", return_value=IdGenerator()), \
                 patch.object(DiaPipelineTask, "run") as mockRun:
             task.runQuantum(butlerQC, MagicMock(), MagicMock())
+
         self.assertEqual(mockRun.call_args.kwargs["requestedExposureTime"], 30.0)
 
     def test_runRequiresBandAndIdGenerator(self):

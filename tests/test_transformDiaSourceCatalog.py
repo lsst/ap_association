@@ -163,16 +163,19 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         """
         self.config.doShutterTiming = doShutterTiming
         transformTask = TransformDiaSourceCatalogTask(initInputs=self.initInputs, config=self.config)
+
         with patch("lsst.ap.association.transformDiaSourceCatalog.computeShutterTiming",
                    return_value=timing) as mockCompute:
             result = transformTask.run(self.inputCatalog, self.exposure, self.band,
                                        requestedExposureTime=30.0)
+
         return result, transformTask, mockCompute
 
     def test_run_shutter_timing_disabled(self):
         """By default, no timing is computed and the output is unchanged."""
         self.assertFalse(TransformDiaSourceCatalogConfig().doShutterTiming)
         result, task, mockCompute = self._runShutterTiming(doShutterTiming=False)
+
         mockCompute.assert_not_called()
         headerMid = self.date.get(system=dafBase.DateTime.MJD)
         np.testing.assert_array_equal(result.diaSourceTable["midpointMjdTai"], headerMid)
@@ -183,6 +186,8 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         headerMid = self.date.get(system=dafBase.DateTime.MJD)
         timing = makeShutterTiming(self.exposure.detector, headerMid + 1e-6)
         result, task, mockCompute = self._runShutterTiming(timing)
+
+        # Called with the difference image's metadata and detector.
         mockCompute.assert_called_once_with(self.exposure.metadata, ANY, 30.0,
                                             task.config.shutterTiming)
         self.assertEqual(mockCompute.call_args.args[1].getId(), self.exposure.detector.getId())
@@ -191,6 +196,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         expected = expectedShutterTime(timing, df["x"].to_numpy(), df["y"].to_numpy())
         np.testing.assert_allclose(df["midpointMjdTai"], expected, rtol=0, atol=1e-12)
         self.assertTrue(np.all(df["midpointMjdTai"] != headerMid))
+
         self.assertEqual(task.metadata["shutterTimingStatus"], "OK")
         self.assertEqual(task.metadata["shutterTimingFlags"], 0)
         self.assertEqual(task.metadata["shutterTimingMessage"], "")
@@ -203,6 +209,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         timing = makeShutterTiming(self.exposure.detector, headerMid + 1e-6,
                                    status=ShutterTimingStatus.UNAVAILABLE)
         result, task, _ = self._runShutterTiming(timing)
+
         np.testing.assert_array_equal(result.diaSourceTable["midpointMjdTai"], headerMid)
         self.assertEqual(task.metadata["shutterTimingStatus"], "UNAVAILABLE")
         self.assertEqual(task.metadata["shutterTimingMessage"], "test reason")
@@ -216,8 +223,10 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         butlerQC = MagicMock()
         butlerQC.get.return_value = {}
         butlerQC.quantum.dataId.records = {"visit": MagicMock(exposure_time=30.0)}
+
         with patch.object(TransformDiaSourceCatalogTask, "run") as mockRun:
             task.runQuantum(butlerQC, MagicMock(), MagicMock())
+
         self.assertEqual(mockRun.call_args.kwargs["requestedExposureTime"], 30.0)
 
     def test_run_dia_source_wrong_flags(self):

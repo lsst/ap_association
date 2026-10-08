@@ -272,18 +272,22 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         diaSourceDf["detector"] = np.int16(diffIm.detector.getId())
         diaSourceDf["band"] = band
         diaSourceDf["midpointMjdTai"] = diffIm.visitInfo.date.get(system=DateTime.MJD)
+
         if self.config.doShutterTiming:
+            # Per-source shutter-corrected times, where the detector has them.
             timing = computeShutterTiming(diffIm.metadata, diffIm.detector, requestedExposureTime,
                                           self.config.shutterTiming)
             if timing.status != ShutterTimingStatus.UNAVAILABLE:
                 # The functors rename the centroid to x, y later.
-                diaSourceDf["midpointMjdTai"] = timing.tMidMjdTai(diaSourceDf["slot_Centroid_x"],
-                                                                  diaSourceDf["slot_Centroid_y"])
+                diaSourceDf["midpointMjdTai"] = timing.tMidMjdTai(diaSourceDf["slot_Centroid_x"].to_numpy(),
+                                                                  diaSourceDf["slot_Centroid_y"].to_numpy())
+
             self.metadata["shutterTimingStatus"] = timing.status.name
             self.metadata["shutterTimingFlags"] = int(timing.flags)
             self.metadata["shutterTimingMessage"] = timing.message
             self.log.info("Shutter timing %s (flags %#x%s).", timing.status.name, timing.flags,
                           f"; {timing.message}" if timing.message else "")
+
         diaSourceDf["exposureTime"] = diffIm.visitInfo.exposureTime
         diaSourceDf["diaObjectId"] = 0
         diaSourceDf["ssObjectId"] = 0

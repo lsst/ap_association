@@ -350,18 +350,29 @@ def makeShutterTiming(detector, centerMjdTai, status=None):
         Time at the detector centre (MJD TAI).
     status : `lsst.ip.isr.shutterTiming.ShutterTimingStatus`, optional
         Detector-level status (default OK).
+
+    Returns
+    -------
+    timing : `lsst.ip.isr.shutterTiming.ShutterTiming`
+        The timing.
     """
+    if status is None:
+        status = ShutterTimingStatus.OK
+    message = "" if status == ShutterTimingStatus.OK else "test reason"
+
     geometry = _DetectorGeometry.fromDetector(detector)
-    status = ShutterTimingStatus.OK if status is None else status
-    return ShutterTiming(status=status, message="" if status == ShutterTimingStatus.OK else "test reason",
-                         detectorId=geometry.detectorId, centerMjdTai=centerMjdTai,
-                         coefficients=SHUTTER_COEFFICIENTS, axis="x", geometry=geometry)
+    return ShutterTiming(status=status, message=message, detectorId=geometry.detectorId,
+                         centerMjdTai=centerMjdTai, coefficients=SHUTTER_COEFFICIENTS, axis="x",
+                         geometry=geometry)
 
 
 def expectedShutterTime(timing, x, y):
-    """The quadratic of `makeShutterTiming`, evaluated independently."""
+    """The quadratic of `makeShutterTiming` at pixel positions ``x``, ``y``
+    (arrays), evaluated independently.
+    """
     cx, cy = timing.geometry.centerPixel
-    u = np.asarray(x, dtype=float) - cx
-    v = np.asarray(y, dtype=float) - cy
+    u = x - cx
+    v = y - cy
+
     cu, cuu, cv, cuv, cvv = SHUTTER_COEFFICIENTS
     return timing.centerMjdTai + (cu*u + cuu*u*u + cv*v + cuv*u*v + cvv*v*v)/86400
