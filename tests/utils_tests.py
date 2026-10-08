@@ -22,8 +22,6 @@
 """Helper functions for tests of DIA catalogs, including generating mock
 catalogs for simulated APDB access.
 """
-import dataclasses
-
 import astropy.units
 import pandas as pd
 import numpy as np
@@ -340,7 +338,7 @@ SHUTTER_COEFFICIENTS = (2e-4, 1e-7, -3e-5, 2e-8, 5e-8)
 """Quadratic coefficients (s / pixel^n) of `makeShutterTiming`."""
 
 
-def makeShutterTiming(detector, centerMjdTai, status=None, nx=None):
+def makeShutterTiming(detector, centerMjdTai, status=None):
     """Make a real `lsst.ip.isr.shutterTiming.ShutterTiming` with known
     coefficients, blade axis x and the geometry of ``detector``.
 
@@ -352,19 +350,12 @@ def makeShutterTiming(detector, centerMjdTai, status=None, nx=None):
         Time at the detector centre (MJD TAI).
     status : `lsst.ip.isr.shutterTiming.ShutterTimingStatus`, optional
         Detector-level status (default OK).
-    nx : `int`, optional
-        Override the detector width, so that positions beyond it (by more
-        than ``offDetectorLimit=0``) get no time.
     """
     geometry = _DetectorGeometry.fromDetector(detector)
-    kwargs = {}
-    if nx is not None:
-        geometry = dataclasses.replace(geometry, nx=nx)
-        kwargs["offDetectorLimit"] = 0.0
     status = ShutterTimingStatus.OK if status is None else status
     return ShutterTiming(status=status, message="" if status == ShutterTimingStatus.OK else "test reason",
                          detectorId=geometry.detectorId, centerMjdTai=centerMjdTai,
-                         coefficients=SHUTTER_COEFFICIENTS, axis="x", geometry=geometry, **kwargs)
+                         coefficients=SHUTTER_COEFFICIENTS, axis="x", geometry=geometry)
 
 
 def expectedShutterTime(timing, x, y):

@@ -221,9 +221,7 @@ class TestDiaForcedSource(unittest.TestCase):
             self.assertEqual(diaFS["detector"], self.exposure.detector.getId())
 
     def testRunShutterTiming(self):
-        """Corrected times at the forced positions; the source far off the
-        detector (no time) keeps the header midpoint.
-        """
+        """Corrected times at the forced positions."""
         test_objects = self.testDiaObjects.copy()
         test_objects.set_index("diaObjectId", inplace=True, drop=False)
         headerMid = self.exposure.visitInfo.date.get(system=dafBase.DateTime.MJD)
@@ -232,22 +230,14 @@ class TestDiaForcedSource(unittest.TestCase):
         result = dfs.run(test_objects, self.updatedTestIds, self.exposure, self.diffim, IdGenerator(),
                          shutterTiming=timing)
         self.assertEqual(len(result), self.expectedDiaForcedSources)
-        # Objects 0..4 are at pixel (100 + id, 100 + id); 10000001 is far off.
+        # Objects 0..4 are at pixel (100 + id, 100 + id); 10000001 is far off
+        # the detector, which does not occur in processing.
         ids = result["diaObjectId"].to_numpy()
         inImage = ids < 5
+        self.assertEqual(np.sum(inImage), 5)
         np.testing.assert_allclose(result["midpointMjdTai"][inImage],
                                    expectedShutterTime(timing, 100 + ids[inImage], 100 + ids[inImage]),
                                    rtol=0, atol=1e-10)
-        np.testing.assert_array_equal(result["midpointMjdTai"][~inImage], headerMid)
-        self.assertEqual(dfs.metadata["nShutterFallback"], np.sum(~inImage))
-        self.assertEqual(np.sum(~inImage), 1)
-
-        # No forced sources: the fallback count is still recorded, as 0.
-        dfs = DiaForcedSourceTask()
-        result = dfs.run(test_objects.iloc[:0], self.updatedTestIds, self.exposure, self.diffim,
-                         IdGenerator(), shutterTiming=timing)
-        self.assertEqual(len(result), 0)
-        self.assertEqual(dfs.metadata["nShutterFallback"], 0)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

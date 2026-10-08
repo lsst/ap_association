@@ -178,30 +178,26 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         self.assertNotIn("shutterTimingStatus", task.metadata)
 
     def test_run_shutter_timing(self):
-        """Corrected times at the centroids; sources without a time (here,
-        off the detector) keep the header midpoint.
-        """
+        """Corrected times at the centroids."""
         headerMid = self.date.get(system=dafBase.DateTime.MJD)
-        timing = makeShutterTiming(self.exposure.detector, headerMid + 1e-6, nx=5)
+        timing = makeShutterTiming(self.exposure.detector, headerMid + 1e-6)
         result, task, mockCompute = self._runShutterTiming(timing)
         mockCompute.assert_called_once_with(self.exposure.metadata, ANY,
                                             task.config.shutterTiming)
         self.assertEqual(mockCompute.call_args.args[1].getId(), self.exposure.detector.getId())
 
         df = result.diaSourceTable
-        x, y = df["x"].to_numpy(), df["y"].to_numpy()
-        fallback = x > 4.5
-        expected = np.where(fallback, headerMid, expectedShutterTime(timing, x, y))
+        expected = expectedShutterTime(timing, df["x"].to_numpy(), df["y"].to_numpy())
         np.testing.assert_allclose(df["midpointMjdTai"], expected, rtol=0, atol=1e-12)
-        self.assertTrue(np.all(df["midpointMjdTai"][~fallback] != headerMid))
+        self.assertTrue(np.all(df["midpointMjdTai"] != headerMid))
         self.assertEqual(task.metadata["shutterTimingStatus"], "OK")
         self.assertEqual(task.metadata["shutterTimingFlags"], 0)
         self.assertEqual(task.metadata["shutterTimingMessage"], "")
-        self.assertEqual(task.metadata["nShutterFallback"], np.sum(fallback))
-        self.assertGreater(np.sum(fallback), 0)
 
     def test_run_shutter_timing_unavailable(self):
-        """A detector-level UNAVAILABLE timing keeps the header midpoint."""
+        """A detector without a corrected time (e.g. an exposure without
+        shutter motion cards) keeps the header midpoint.
+        """
         headerMid = self.date.get(system=dafBase.DateTime.MJD)
         timing = makeShutterTiming(self.exposure.detector, headerMid + 1e-6,
                                    status=ShutterTimingStatus.UNAVAILABLE)
@@ -209,7 +205,6 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         np.testing.assert_array_equal(result.diaSourceTable["midpointMjdTai"], headerMid)
         self.assertEqual(task.metadata["shutterTimingStatus"], "UNAVAILABLE")
         self.assertEqual(task.metadata["shutterTimingMessage"], "test reason")
-        self.assertEqual(task.metadata["nShutterFallback"], self.nSources)
 
     def test_run_dia_source_wrong_flags(self):
         """Test that the proper errors are thrown when requesting flag columns

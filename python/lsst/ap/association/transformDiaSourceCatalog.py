@@ -31,7 +31,7 @@ import numpy as np
 
 from lsst.resources import ResourcePath
 from lsst.daf.base import DateTime
-from lsst.ip.isr.shutterTiming import ShutterTimingConfig, computeShutterTiming
+from lsst.ip.isr.shutterTiming import ShutterTimingConfig, ShutterTimingStatus, computeShutterTiming
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
@@ -133,8 +133,8 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
         dtype=bool,
         default=False,
         doc="Set each DiaSource's midpointMjdTai to the shutter-corrected time at its centroid "
-            "(lsst.ip.isr.shutterTiming); sources without one keep the header midpoint "
-            "(visitInfo.date).",
+            "(lsst.ip.isr.shutterTiming); if the detector has none, keep the header "
+            "midpoint (visitInfo.date).",
     )
     shutterTiming = pexConfig.ConfigField(
         dtype=ShutterTimingConfig,
@@ -263,22 +263,18 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         # int16 instead of uint8 because databases don't like unsigned bytes.
         diaSourceDf["detector"] = np.int16(diffIm.detector.getId())
         diaSourceDf["band"] = band
-        headerMid = diffIm.visitInfo.date.get(system=DateTime.MJD)
-        diaSourceDf["midpointMjdTai"] = headerMid
+        diaSourceDf["midpointMjdTai"] = diffIm.visitInfo.date.get(system=DateTime.MJD)
         if self.config.doShutterTiming:
-            # The functors rename the centroid to x, y later.
             timing = computeShutterTiming(diffIm.metadata, diffIm.detector, self.config.shutterTiming)
-            t = timing.tMidMjdTai(diaSourceDf["slot_Centroid_x"], diaSourceDf["slot_Centroid_y"])
-            corrected = np.isfinite(t)
-            diaSourceDf["midpointMjdTai"] = np.where(corrected, t, headerMid)
-            nFallback = len(t) - int(np.count_nonzero(corrected))
+            if timing.status != ShutterTimingStatus.UNAVAILABLE:
+                # The functors rename the centroid to x, y later.
+                diaSourceDf["midpointMjdTai"] = timing.tMidMjdTai(diaSourceDf["slot_Centroid_x"],
+                                                                  diaSourceDf["slot_Centroid_y"])
             self.metadata["shutterTimingStatus"] = timing.status.name
             self.metadata["shutterTimingFlags"] = int(timing.flags)
             self.metadata["shutterTimingMessage"] = timing.message
-            self.metadata["nShutterFallback"] = nFallback
-            self.log.info("Shutter timing %s (flags %#x%s): %d DiaSources corrected, %d at the header "
-                          "midpoint.", timing.status.name, timing.flags,
-                          f"; {timing.message}" if timing.message else "", len(t) - nFallback, nFallback)
+            self.log.info("Shutter timing %s (flags %#x%s).", timing.status.name, timing.flags,
+                          f"; {timing.message}" if timing.message else "")
         diaSourceDf["exposureTime"] = diffIm.visitInfo.exposureTime
         diaSourceDf["diaObjectId"] = 0
         diaSourceDf["ssObjectId"] = 0
