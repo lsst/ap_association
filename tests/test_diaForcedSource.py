@@ -242,6 +242,13 @@ class TestDiaForcedSource(unittest.TestCase):
         self.assertEqual(dfs.metadata["nShutterFallback"], np.sum(~inImage))
         self.assertEqual(np.sum(~inImage), 1)
 
+        # No forced sources: the fallback count is still recorded, as 0.
+        dfs = DiaForcedSourceTask()
+        result = dfs.run(test_objects.iloc[:0], self.updatedTestIds, self.exposure, self.diffim,
+                         IdGenerator(), shutterTiming=timing)
+        self.assertEqual(len(result), 0)
+        self.assertEqual(dfs.metadata["nShutterFallback"], 0)
+
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass

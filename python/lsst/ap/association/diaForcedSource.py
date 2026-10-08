@@ -134,6 +134,8 @@ class DiaForcedSourceTask(pipeBase.Task):
         # Restrict forced source measurement to objects with sufficient history to be reliable.
         objectTable = dia_objects[dia_objects["nDiaSources"] >= self.config.historyThreshold]
         if objectTable.empty:
+            if shutterTiming is not None:
+                self.metadata["nShutterFallback"] = 0
             # The dataframe will be coerced to the correct (empty) format in diaPipe.
             return pd.DataFrame()
 
