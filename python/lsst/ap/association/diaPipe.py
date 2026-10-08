@@ -554,6 +554,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         inputs["legacySolarSystemTable"] = None
         if not self.config.doSolarSystemAssociation:
             inputs["solarSystemObjectTable"] = None
+        if self.config.doShutterTiming:
+            # EXPTIME is stripped from the exposure metadata at ingest.
+            inputs["requestedExposureTime"] = butlerQC.quantum.dataId.records["visit"].exposure_time
 
         associationResults = pipeBase.Struct(
             apdbMarker=None,
@@ -590,7 +593,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             band=None,
             idGenerator=None,
             solarSystemObjectTable=None,
-            associationResults=None):
+            associationResults=None,
+            requestedExposureTime=None):
         """Process DiaSources and DiaObjects.
 
         Load previous DiaObjects and their DiaSource history. Calibrate the
@@ -633,6 +637,10 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             Result struct that is modified to allow saving of partial outputs
             for some failure conditions. If the task completes successfully,
             this is also returned.
+        requestedExposureTime : `float`, optional
+            Requested (nominal) exposure time of the visit (s), from the
+            ``visit`` dimension record; required if ``doShutterTiming`` is
+            set (``EXPTIME`` is stripped from exposure metadata at ingest).
 
         Returns
         -------
@@ -734,7 +742,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             self.log.info("Preloaded DiaObject table is empty.")
             diaObjects = preloadedDiaObjects
 
-        shutterTiming = self.computeShutterTiming(diffIm) if self.config.doShutterTiming else None
+        shutterTiming = None
+        if self.config.doShutterTiming:
+            shutterTiming = self.computeShutterTiming(diffIm, requestedExposureTime)
 
         # Associate DiaSources with DiaObjects
         assocResults = self.associateDiaSources(diaSourceTable, solarSystemObjectTable, diffIm, diaObjects,
@@ -1130,7 +1140,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                badSources=badSources
                                )
 
-    def computeShutterTiming(self, diffIm):
+    def computeShutterTiming(self, diffIm, requestedExposureTime):
         """Compute the detector's shutter-corrected times from the difference
         image and record their summary in the task metadata.
 
@@ -1138,13 +1148,16 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         ----------
         diffIm : `lsst.afw.image.ExposureF`
             Difference image; its metadata carries the shutter cards.
+        requestedExposureTime : `float`
+            Requested (nominal) exposure time of the visit (s).
 
         Returns
         -------
         shutterTiming : `lsst.ip.isr.shutterTiming.ShutterTiming`
             The detector's timing.
         """
-        timing = computeShutterTiming(diffIm.metadata, diffIm.detector, self.config.shutterTiming)
+        timing = computeShutterTiming(diffIm.metadata, diffIm.detector, requestedExposureTime,
+                                      self.config.shutterTiming)
         self.metadata["shutterTimingStatus"] = timing.status.name
         self.metadata["shutterTimingFlags"] = int(timing.flags)
         self.metadata["shutterTimingMessage"] = timing.message
