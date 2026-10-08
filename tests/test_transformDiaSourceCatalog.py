@@ -21,7 +21,7 @@
 
 import os
 import unittest
-from unittest.mock import ANY, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import numpy as np
 
@@ -165,7 +165,8 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         transformTask = TransformDiaSourceCatalogTask(initInputs=self.initInputs, config=self.config)
         with patch("lsst.ap.association.transformDiaSourceCatalog.computeShutterTiming",
                    return_value=timing) as mockCompute:
-            result = transformTask.run(self.inputCatalog, self.exposure, self.band)
+            result = transformTask.run(self.inputCatalog, self.exposure, self.band,
+                                       requestedExposureTime=30.0)
         return result, transformTask, mockCompute
 
     def test_run_shutter_timing_disabled(self):
@@ -182,7 +183,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         headerMid = self.date.get(system=dafBase.DateTime.MJD)
         timing = makeShutterTiming(self.exposure.detector, headerMid + 1e-6)
         result, task, mockCompute = self._runShutterTiming(timing)
-        mockCompute.assert_called_once_with(self.exposure.metadata, ANY,
+        mockCompute.assert_called_once_with(self.exposure.metadata, ANY, 30.0,
                                             task.config.shutterTiming)
         self.assertEqual(mockCompute.call_args.args[1].getId(), self.exposure.detector.getId())
 
@@ -205,6 +206,19 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         np.testing.assert_array_equal(result.diaSourceTable["midpointMjdTai"], headerMid)
         self.assertEqual(task.metadata["shutterTimingStatus"], "UNAVAILABLE")
         self.assertEqual(task.metadata["shutterTimingMessage"], "test reason")
+
+    def test_runQuantum_requested_exposure_time(self):
+        """runQuantum takes the requested exposure time from the visit
+        record, since EXPTIME is stripped from the exposure metadata.
+        """
+        self.config.doShutterTiming = True
+        task = TransformDiaSourceCatalogTask(initInputs=self.initInputs, config=self.config)
+        butlerQC = MagicMock()
+        butlerQC.get.return_value = {}
+        butlerQC.quantum.dataId.records = {"visit": MagicMock(exposure_time=30.0)}
+        with patch.object(TransformDiaSourceCatalogTask, "run") as mockRun:
+            task.runQuantum(butlerQC, MagicMock(), MagicMock())
+        self.assertEqual(mockRun.call_args.kwargs["requestedExposureTime"], 30.0)
 
     def test_run_dia_source_wrong_flags(self):
         """Test that the proper errors are thrown when requesting flag columns
