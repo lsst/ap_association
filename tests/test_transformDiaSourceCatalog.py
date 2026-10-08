@@ -172,7 +172,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         return result, transformTask, mockCompute
 
     def test_run_shutter_timing(self):
-        """Corrected times at the centroids."""
+        """Check the corrected times at the centroids."""
         headerMid = self.date.get(system=dafBase.DateTime.MJD)
         timing = makeShutterTiming(self.exposure.detector, headerMid + 1e-6)
         result, task, mockCompute = self._runShutterTiming(timing)
@@ -192,8 +192,8 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         self.assertEqual(task.metadata["shutterTimingMessage"], "")
 
     def test_run_shutter_timing_unavailable(self):
-        """A detector without a corrected time (e.g. an exposure without
-        shutter motion cards) keeps the header midpoint.
+        """Check that a detector without a corrected time (e.g. an exposure
+        without shutter motion cards) keeps the header midpoint.
         """
         headerMid = self.date.get(system=dafBase.DateTime.MJD)
         timing = makeShutterTiming(self.exposure.detector, headerMid + 1e-6,
@@ -205,8 +205,8 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         self.assertEqual(task.metadata["shutterTimingMessage"], "test reason")
 
     def test_runQuantum_requested_exposure_time(self):
-        """runQuantum takes the requested exposure time from the visit
-        record, since EXPTIME is stripped from the exposure metadata.
+        """Check that runQuantum takes the requested exposure time from the
+        visit record, since EXPTIME is stripped from the exposure metadata.
         """
         self.config.doShutterTiming = True
         task = TransformDiaSourceCatalogTask(initInputs=self.initInputs, config=self.config)

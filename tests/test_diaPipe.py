@@ -173,8 +173,9 @@ class TestDiaPipelineTask(unittest.TestCase):
                       doReloadAllApdbCatalogs=True)
 
     def testRunShutterTiming(self):
-        """The timing is computed once from the difference image and the same
-        object goes to forced measurement and solar system association.
+        """Check that the timing is computed once from the difference image
+        and the same object goes to forced measurement and solar system
+        association.
         """
         timing = makeShutterTiming(self.diffim.detector, 60000.0)
         with patch("lsst.ap.association.diaPipe.computeShutterTiming",
@@ -395,8 +396,8 @@ class TestDiaPipelineTask(unittest.TestCase):
             self.assertIs(kwargs[name], loaded[name], msg=f"{name} should be the loaded catalog")
 
     def test_runQuantumRequestedExposureTime(self):
-        """runQuantum takes the requested exposure time from the visit
-        record, since EXPTIME is stripped from the exposure metadata.
+        """Check that runQuantum takes the requested exposure time from the
+        visit record, since EXPTIME is stripped from the exposure metadata.
         """
         config = self._makeDefaultConfig(config_file=self.config_file.name, doShutterTiming=True)
         task = DiaPipelineTask(config=config)

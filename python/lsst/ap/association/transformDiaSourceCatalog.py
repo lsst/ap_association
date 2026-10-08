@@ -285,8 +285,8 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             self.metadata["shutterTimingStatus"] = timing.status.name
             self.metadata["shutterTimingFlags"] = int(timing.flags)
             self.metadata["shutterTimingMessage"] = timing.message
-            self.log.info("Shutter timing %s (flags %#x%s).", timing.status.name, timing.flags,
-                          f"; {timing.message}" if timing.message else "")
+            self.log.info("Shutter timing %s (flags %#x)%s%s.", timing.status.name, timing.flags,
+                          ": " if timing.message else "", timing.message)
 
         diaSourceDf["exposureTime"] = diffIm.visitInfo.exposureTime
         diaSourceDf["diaObjectId"] = 0

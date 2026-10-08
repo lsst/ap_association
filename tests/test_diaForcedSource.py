@@ -221,7 +221,7 @@ class TestDiaForcedSource(unittest.TestCase):
             self.assertEqual(diaFS["detector"], self.exposure.detector.getId())
 
     def testRunShutterTiming(self):
-        """Corrected times at the forced positions."""
+        """Check the corrected times at the forced positions."""
         test_objects = self.testDiaObjects.copy()
         test_objects.set_index("diaObjectId", inplace=True, drop=False)
         headerMid = self.exposure.visitInfo.date.get(system=dafBase.DateTime.MJD)

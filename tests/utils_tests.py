@@ -367,8 +367,8 @@ def makeShutterTiming(detector, centerMidpointMjdTai, status=None):
 
 
 def expectedShutterTime(timing, x, y):
-    """The quadratic of `makeShutterTiming` at pixel positions ``x``, ``y``
-    (arrays), evaluated independently.
+    """Evaluate the quadratic of `makeShutterTiming` independently at pixel
+    positions ``x``, ``y`` (arrays).
     """
     cx, cy = timing.geometry.centerPixel
     u = x - cx
