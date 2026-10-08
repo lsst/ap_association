@@ -42,7 +42,7 @@ from lsst.ap.association import DiaPipelineTask
 from lsst.ap.association.utils import getRegion
 from lsst.pipe.tasks.schemaUtils import convertDataFrameToSdmSchema
 from utils_tests import makeExposure, makeDiaObjects, makeDiaSources, makeDiaForcedSources, \
-    makeSolarSystemSources
+    makeSolarSystemSources, makeShutterTiming
 
 
 def _makeMockDataFrame():
@@ -172,6 +172,32 @@ class TestDiaPipelineTask(unittest.TestCase):
         self._testRun(doPackageAlerts=False, doSolarSystemAssociation=False, doReloadDiaObjects=False,
                       doReloadAllApdbCatalogs=True)
 
+    def testRunShutterTiming(self):
+        """Check that the timing is computed once from the difference image
+        and the same object goes to forced measurement and solar system
+        association.
+        """
+        timing = makeShutterTiming(self.diffim.detector, 60000.0)
+        with patch("lsst.ap.association.diaPipe.computeShutterTiming",
+                   return_value=timing) as mockCompute:
+            task, calls = self._testRun(doSolarSystemAssociation=True, doShutterTiming=True)
+
+        # Computed once, from the difference image.
+        mockCompute.assert_called_once()
+        args = mockCompute.call_args.args
+        self.assertIs(args[0], self.diffim.metadata)
+        self.assertEqual(args[1].getId(), self.diffim.detector.getId())
+        self.assertEqual(args[2], 30.0)
+        self.assertIs(args[3], task.config.shutterTiming)
+
+        # The same object goes to both subtasks.
+        self.assertIs(calls["diaForcedSource"].kwargs["shutterTiming"], timing)
+        self.assertIs(calls["solarSystemAssociator"].kwargs["shutterTiming"], timing)
+
+        self.assertEqual(task.metadata["shutterTimingStatus"], "OK")
+        self.assertEqual(task.metadata["shutterTimingFlags"], 0)
+        self.assertEqual(task.metadata["shutterTimingMessage"], "")
+
     def _testRun(self, doPackageAlerts=False, doSolarSystemAssociation=False,
                  doReloadDiaObjects=False, doReloadAllApdbCatalogs=False, subtasksToMock=None, **kwargs):
         """Test the normal workflow of each ap_pipe step.
@@ -210,7 +236,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         # Mock out the run() methods of these Tasks to ensure they
         # return data in the correct form.
         def solarSystemAssociator_run(unAssocDiaSources, solarSystemObjectTable, visitInfo,
-                                      bbox, wcs):
+                                      bbox, wcs, shutterTiming=None):
             return lsst.pipe.base.Struct(nTotalSsObjects=42,
                                          nAssociatedSsObjects=30,
                                          ssoAssocDiaSources=_makeMockTable(),
@@ -276,9 +302,13 @@ class TestDiaPipelineTask(unittest.TestCase):
                                   None if doReloadAllApdbCatalogs else self.diaForcedSources),
                               band="g",
                               idGenerator=IdGenerator(),
-                              solarSystemObjectTable=ssObjects)
+                              solarSystemObjectTable=ssObjects,
+                              requestedExposureTime=30.0)
             for subtaskName in subtasksToMock:
                 getattr(task, subtaskName).run.assert_called_once()
+            subtaskCalls = {subtaskName: getattr(task, subtaskName).run.call_args
+                            for subtaskName in subtasksToMock}
+            subtaskCalls["solarSystemAssociator"] = ssRun.call_args
             assertValidOutput(task, result)
             # Exact type and contents of apdbMarker are undefined.
             self.assertIsInstance(result.apdbMarker, pexConfig.Config)
@@ -309,6 +339,7 @@ class TestDiaPipelineTask(unittest.TestCase):
                 loadForcedSourcesRun.assert_not_called()
                 self.assertEqual(meta["diaPipe.loadDiaSourcesDuration"], -1)
                 self.assertEqual(meta["diaPipe.loadDiaForcedSourcesDuration"], -1)
+        return task, subtaskCalls
 
     def test_reloadAllApdbCatalogsRemovesPreloadedConnections(self):
         """Test that reloading drops the preloaded catalog connections.
@@ -363,6 +394,22 @@ class TestDiaPipelineTask(unittest.TestCase):
         kwargs = runQuantumKwargs(False)
         for name in preloaded:
             self.assertIs(kwargs[name], loaded[name], msg=f"{name} should be the loaded catalog")
+
+    def test_runQuantumRequestedExposureTime(self):
+        """Check that runQuantum takes the requested exposure time from the
+        visit record, since EXPTIME is stripped from the exposure metadata.
+        """
+        config = self._makeDefaultConfig(config_file=self.config_file.name, doShutterTiming=True)
+        task = DiaPipelineTask(config=config)
+        butlerQC = MagicMock()
+        butlerQC.get.return_value = {}
+        butlerQC.quantum.dataId.records = {"visit": MagicMock(exposure_time=30.0)}
+
+        with patch.object(DetectorVisitIdGeneratorConfig, "apply", return_value=IdGenerator()), \
+                patch.object(DiaPipelineTask, "run") as mockRun:
+            task.runQuantum(butlerQC, MagicMock(), MagicMock())
+
+        self.assertEqual(mockRun.call_args.kwargs["requestedExposureTime"], 30.0)
 
     def test_runRequiresBandAndIdGenerator(self):
         """Test that `run` rejects the `None` defaults on required arguments.
