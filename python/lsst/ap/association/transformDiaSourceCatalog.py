@@ -279,8 +279,8 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
                                           self.config.shutterTiming)
             if timing.status != ShutterTimingStatus.UNAVAILABLE:
                 # The functors rename the centroid to x, y later.
-                diaSourceDf["midpointMjdTai"] = timing.tMidMjdTai(diaSourceDf["slot_Centroid_x"].to_numpy(),
-                                                                  diaSourceDf["slot_Centroid_y"].to_numpy())
+                diaSourceDf["midpointMjdTai"] = timing.midpointMjdTai(
+                    diaSourceDf["slot_Centroid_x"].to_numpy(), diaSourceDf["slot_Centroid_y"].to_numpy())
 
             self.metadata["shutterTimingStatus"] = timing.status.name
             self.metadata["shutterTimingFlags"] = int(timing.flags)

@@ -169,7 +169,7 @@ class DiaForcedSourceTask(pipeBase.Task):
 
         if shutterTiming is not None and shutterTiming.status != ShutterTimingStatus.UNAVAILABLE:
             # Must precede dropColumns, which removes x and y.
-            output_forced_sources["midpointMjdTai"] = shutterTiming.tMidMjdTai(
+            output_forced_sources["midpointMjdTai"] = shutterTiming.midpointMjdTai(
                 output_forced_sources["x"].to_numpy(), output_forced_sources["y"].to_numpy())
 
         # Drop superfluous columns from output DataFrame.

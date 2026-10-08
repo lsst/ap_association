@@ -338,7 +338,7 @@ SHUTTER_COEFFICIENTS = (2e-4, 1e-7, -3e-5, 2e-8, 5e-8)
 """Quadratic coefficients (s / pixel^n) of `makeShutterTiming`."""
 
 
-def makeShutterTiming(detector, centerMjdTai, status=None):
+def makeShutterTiming(detector, centerMidpointMjdTai, status=None):
     """Make a real `lsst.ip.isr.shutterTiming.ShutterTiming` with known
     coefficients, blade axis x and the geometry of ``detector``.
 
@@ -346,7 +346,7 @@ def makeShutterTiming(detector, centerMjdTai, status=None):
     ----------
     detector : `lsst.afw.cameraGeom.Detector`
         Detector whose geometry to use.
-    centerMjdTai : `float`
+    centerMidpointMjdTai : `float`
         Time at the detector centre (MJD TAI).
     status : `lsst.ip.isr.shutterTiming.ShutterTimingStatus`, optional
         Detector-level status (default OK).
@@ -362,8 +362,8 @@ def makeShutterTiming(detector, centerMjdTai, status=None):
 
     geometry = _DetectorGeometry.fromDetector(detector)
     return ShutterTiming(status=status, message=message, detectorId=geometry.detectorId,
-                         centerMjdTai=centerMjdTai, coefficients=SHUTTER_COEFFICIENTS, axis="x",
-                         geometry=geometry)
+                         centerMidpointMjdTai=centerMidpointMjdTai, coefficients=SHUTTER_COEFFICIENTS,
+                         axis="x", geometry=geometry)
 
 
 def expectedShutterTime(timing, x, y):
@@ -375,4 +375,4 @@ def expectedShutterTime(timing, x, y):
     v = y - cy
 
     cu, cuu, cv, cuv, cvv = SHUTTER_COEFFICIENTS
-    return timing.centerMjdTai + (cu*u + cuu*u*u + cv*v + cuv*u*v + cvv*v*v)/86400
+    return timing.centerMidpointMjdTai + (cu*u + cuu*u*u + cv*v + cuv*u*v + cvv*v*v)/86400

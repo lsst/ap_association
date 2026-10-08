@@ -1142,6 +1142,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                badSources=badSources
                                )
 
+    @timeMethod
     def computeShutterTiming(self, diffIm, requestedExposureTime):
         """Compute the detector's shutter-corrected times from the difference
         image and record their summary in the task metadata.
