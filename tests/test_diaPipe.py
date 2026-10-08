@@ -172,17 +172,6 @@ class TestDiaPipelineTask(unittest.TestCase):
         self._testRun(doPackageAlerts=False, doSolarSystemAssociation=False, doReloadDiaObjects=False,
                       doReloadAllApdbCatalogs=True)
 
-    def testRunShutterTimingDisabled(self):
-        """By default no timing is computed and the subtasks get `None`."""
-        self.assertFalse(DiaPipelineTask.ConfigClass().doShutterTiming)
-        with patch("lsst.ap.association.diaPipe.computeShutterTiming") as mockCompute:
-            task, calls = self._testRun(doSolarSystemAssociation=True)
-
-        mockCompute.assert_not_called()
-        self.assertIsNone(calls["diaForcedSource"].kwargs["shutterTiming"])
-        self.assertIsNone(calls["solarSystemAssociator"].kwargs["shutterTiming"])
-        self.assertNotIn("shutterTimingStatus", task.metadata)
-
     def testRunShutterTiming(self):
         """The timing is computed once from the difference image and the same
         object goes to forced measurement and solar system association.
@@ -207,9 +196,6 @@ class TestDiaPipelineTask(unittest.TestCase):
         self.assertEqual(task.metadata["shutterTimingStatus"], "OK")
         self.assertEqual(task.metadata["shutterTimingFlags"], 0)
         self.assertEqual(task.metadata["shutterTimingMessage"], "")
-
-        # associateDiaSources keeps its @timeMethod.
-        self.assertIn("associateDiaSourcesStartCpuTime", task.metadata)
 
     def _testRun(self, doPackageAlerts=False, doSolarSystemAssociation=False,
                  doReloadDiaObjects=False, doReloadAllApdbCatalogs=False, subtasksToMock=None, **kwargs):

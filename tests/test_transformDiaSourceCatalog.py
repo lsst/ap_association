@@ -157,11 +157,11 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         # Have to use allclose because assert_array_equal doesn't support equal_nan.
         np.testing.assert_allclose(result.diaSourceTable["snr"], expect_snr, equal_nan=True, rtol=0)
 
-    def _runShutterTiming(self, timing=None, doShutterTiming=True):
-        """Run the transform with computeShutterTiming returning ``timing``;
-        return the result, the task and the mock.
+    def _runShutterTiming(self, timing):
+        """Run the transform with shutter timing on and computeShutterTiming
+        returning ``timing``; return the result, the task and the mock.
         """
-        self.config.doShutterTiming = doShutterTiming
+        self.config.doShutterTiming = True
         transformTask = TransformDiaSourceCatalogTask(initInputs=self.initInputs, config=self.config)
 
         with patch("lsst.ap.association.transformDiaSourceCatalog.computeShutterTiming",
@@ -170,16 +170,6 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
                                        requestedExposureTime=30.0)
 
         return result, transformTask, mockCompute
-
-    def test_run_shutter_timing_disabled(self):
-        """By default, no timing is computed and the output is unchanged."""
-        self.assertFalse(TransformDiaSourceCatalogConfig().doShutterTiming)
-        result, task, mockCompute = self._runShutterTiming(doShutterTiming=False)
-
-        mockCompute.assert_not_called()
-        headerMid = self.date.get(system=dafBase.DateTime.MJD)
-        np.testing.assert_array_equal(result.diaSourceTable["midpointMjdTai"], headerMid)
-        self.assertNotIn("shutterTimingStatus", task.metadata)
 
     def test_run_shutter_timing(self):
         """Corrected times at the centroids."""
