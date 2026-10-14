@@ -30,7 +30,6 @@ import pandas as pd
 
 import lsst.afw.table as afwTable
 from lsst.daf.base import DateTime
-from lsst.ip.isr.shutterTiming import ShutterTimingStatus
 import lsst.geom as geom
 from lsst.meas.base import ForcedMeasurementTask
 import lsst.pex.config as pexConfig
@@ -123,8 +122,8 @@ class DiaForcedSourceTask(pipeBase.Task):
         idGenerator : `lsst.meas.base.IdGenerator`
             Object that generates source IDs and random number generator seeds.
         shutterTiming : `lsst.ip.isr.shutterTiming.ShutterTiming`, optional
-            Shutter-corrected times of this detector; if given and not
-            UNAVAILABLE, they replace the header midpoint.
+            Shutter-corrected times of this detector; if given and
+            available, they replace the header midpoint.
 
         Returns
         -------
@@ -167,7 +166,7 @@ class DiaForcedSourceTask(pipeBase.Task):
                                                        updatedDiaObjectIds,
                                                        exposure)
 
-        if shutterTiming is not None and shutterTiming.status != ShutterTimingStatus.UNAVAILABLE:
+        if shutterTiming is not None and shutterTiming.isAvailable:
             # Must precede dropColumns, which removes x and y.
             output_forced_sources["midpointMjdTai"] = shutterTiming.midpointMjdTai(
                 output_forced_sources["x"].to_numpy(), output_forced_sources["y"].to_numpy())

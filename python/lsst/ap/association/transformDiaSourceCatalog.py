@@ -31,7 +31,7 @@ import numpy as np
 
 from lsst.resources import ResourcePath
 from lsst.daf.base import DateTime
-from lsst.ip.isr.shutterTiming import ShutterTimingConfig, ShutterTimingStatus, computeShutterTiming
+from lsst.ip.isr.shutterTiming import ShutterTimingConfig, computeShutterTiming
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
@@ -277,16 +277,15 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             # Per-source shutter-corrected times, where the detector has them.
             timing = computeShutterTiming(diffIm.metadata, diffIm.detector, requestedExposureTime,
                                           self.config.shutterTiming)
-            if timing.status != ShutterTimingStatus.UNAVAILABLE:
+            if timing.isAvailable:
                 # The functors rename the centroid to x, y later.
                 diaSourceDf["midpointMjdTai"] = timing.midpointMjdTai(
                     diaSourceDf["slot_Centroid_x"].to_numpy(), diaSourceDf["slot_Centroid_y"].to_numpy())
 
-            self.metadata["shutterTimingStatus"] = timing.status.name
+            self.metadata["shutterTimingAvailable"] = timing.isAvailable
             self.metadata["shutterTimingFlags"] = int(timing.flags)
-            self.metadata["shutterTimingMessage"] = timing.message
-            self.log.info("Shutter timing %s (flags %#x)%s%s.", timing.status.name, timing.flags,
-                          ": " if timing.message else "", timing.message)
+            self.log.info("Shutter-corrected times %s (flags %r).",
+                          "available" if timing.isAvailable else "unavailable", timing.flags)
 
         diaSourceDf["exposureTime"] = diffIm.visitInfo.exposureTime
         diaSourceDf["diaObjectId"] = 0

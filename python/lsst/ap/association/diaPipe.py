@@ -1162,11 +1162,10 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         timing = computeShutterTiming(diffIm.metadata, diffIm.detector, requestedExposureTime,
                                       self.config.shutterTiming)
 
-        self.metadata["shutterTimingStatus"] = timing.status.name
+        self.metadata["shutterTimingAvailable"] = timing.isAvailable
         self.metadata["shutterTimingFlags"] = int(timing.flags)
-        self.metadata["shutterTimingMessage"] = timing.message
-        self.log.info("Shutter timing %s (flags %#x)%s%s.", timing.status.name, timing.flags,
-                      ": " if timing.message else "", timing.message)
+        self.log.info("Shutter-corrected times %s (flags %r).",
+                      "available" if timing.isAvailable else "unavailable", timing.flags)
 
         return timing
 

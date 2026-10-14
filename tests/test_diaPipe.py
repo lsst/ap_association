@@ -194,9 +194,8 @@ class TestDiaPipelineTask(unittest.TestCase):
         self.assertIs(calls["diaForcedSource"].kwargs["shutterTiming"], timing)
         self.assertIs(calls["solarSystemAssociator"].kwargs["shutterTiming"], timing)
 
-        self.assertEqual(task.metadata["shutterTimingStatus"], "OK")
+        self.assertTrue(task.metadata["shutterTimingAvailable"])
         self.assertEqual(task.metadata["shutterTimingFlags"], 0)
-        self.assertEqual(task.metadata["shutterTimingMessage"], "")
 
     def _testRun(self, doPackageAlerts=False, doSolarSystemAssociation=False,
                  doReloadDiaObjects=False, doReloadAllApdbCatalogs=False, subtasksToMock=None, **kwargs):

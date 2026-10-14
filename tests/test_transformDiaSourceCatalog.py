@@ -36,7 +36,6 @@ from lsst.pipe.base import Struct
 import lsst.utils.tests
 
 from lsst.ap.association.transformDiaSourceCatalog import UnpackApdbFlags
-from lsst.ip.isr.shutterTiming import ShutterTimingStatus
 
 from utils_tests import expectedShutterTime, makeShutterTiming
 
@@ -187,22 +186,20 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         np.testing.assert_allclose(df["midpointMjdTai"], expected, rtol=0, atol=1e-12)
         self.assertTrue(np.all(df["midpointMjdTai"] != headerMid))
 
-        self.assertEqual(task.metadata["shutterTimingStatus"], "OK")
+        self.assertTrue(task.metadata["shutterTimingAvailable"])
         self.assertEqual(task.metadata["shutterTimingFlags"], 0)
-        self.assertEqual(task.metadata["shutterTimingMessage"], "")
 
     def test_run_shutter_timing_unavailable(self):
         """Check that a detector without a corrected time (e.g. an exposure
         without shutter motion cards) keeps the header midpoint.
         """
         headerMid = self.date.get(system=dafBase.DateTime.MJD)
-        timing = makeShutterTiming(self.exposure.detector, headerMid + 1e-6,
-                                   status=ShutterTimingStatus.UNAVAILABLE)
+        timing = makeShutterTiming(self.exposure.detector, headerMid + 1e-6, available=False)
         result, task, _ = self._runShutterTiming(timing)
 
         np.testing.assert_array_equal(result.diaSourceTable["midpointMjdTai"], headerMid)
-        self.assertEqual(task.metadata["shutterTimingStatus"], "UNAVAILABLE")
-        self.assertEqual(task.metadata["shutterTimingMessage"], "test reason")
+        self.assertFalse(task.metadata["shutterTimingAvailable"])
+        self.assertEqual(task.metadata["shutterTimingFlags"], 1)
 
     def test_runQuantum_requested_exposure_time(self):
         """Check that runQuantum takes the requested exposure time from the
