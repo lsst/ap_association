@@ -35,6 +35,7 @@ import lsst.dax.apdb as daxApdb
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, IdGenerator
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
+from lsst.ip.isr.shutterTiming import writeShutterTiming
 import lsst.utils.tests
 from lsst.pipe.base.testUtils import assertValidOutput
 
@@ -173,24 +174,18 @@ class TestDiaPipelineTask(unittest.TestCase):
                       doReloadAllApdbCatalogs=True)
 
     def testRunShutterTiming(self):
-        """Check that the timing is computed once from the difference image
-        and the same object goes to forced measurement and solar system
-        association.
+        """Check that the times ISR recorded in the difference image go to
+        forced measurement and solar system association.
         """
         timing = makeShutterTiming(self.diffim.detector, 60000.0)
-        with patch("lsst.ap.association.diaPipe.computeShutterTiming",
-                   return_value=timing) as mockCompute:
-            task, calls = self._testRun(doSolarSystemAssociation=True, doShutterTiming=True)
+        writeShutterTiming(self.diffim.metadata, timing)
+        task, calls = self._testRun(doSolarSystemAssociation=True, doShutterTiming=True)
 
-        # Computed once, from the difference image.
-        mockCompute.assert_called_once()
-        args = mockCompute.call_args.args
-        self.assertIs(args[0], self.diffim)
-        self.assertIs(args[1], task.config.shutterTiming)
-
-        # The same object goes to both subtasks.
-        self.assertIs(calls["diaForcedSource"].kwargs["shutterTiming"], timing)
-        self.assertIs(calls["solarSystemAssociator"].kwargs["shutterTiming"], timing)
+        # The same times go to both subtasks.
+        received = calls["diaForcedSource"].kwargs["shutterTiming"]
+        self.assertIs(calls["solarSystemAssociator"].kwargs["shutterTiming"], received)
+        y = np.array([0.0, 1000.0])
+        np.testing.assert_array_equal(received.midpointMjdTai(y, y), timing.midpointMjdTai(y, y))
 
         self.assertTrue(task.metadata["shutterTimingAvailable"])
 

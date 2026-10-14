@@ -31,7 +31,7 @@ import numpy as np
 
 from lsst.resources import ResourcePath
 from lsst.daf.base import DateTime
-from lsst.ip.isr.shutterTiming import ShutterTimingConfig, computeShutterTiming
+from lsst.ip.isr.shutterTiming import ShutterTimingConfig, getShutterTiming
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
@@ -138,7 +138,8 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
     )
     shutterTiming = pexConfig.ConfigField(
         dtype=ShutterTimingConfig,
-        doc="Configuration of the shutter-corrected times; used if doShutterTiming is True.",
+        doc="Configuration of the shutter-corrected times, for difference images without the times "
+            "recorded by ISR; used if doShutterTiming is True.",
     )
 
     def setDefaults(self):
@@ -267,7 +268,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
 
         if self.config.doShutterTiming:
             # Per-source shutter-corrected times, where the detector has them.
-            timing = computeShutterTiming(diffIm, self.config.shutterTiming)
+            timing = getShutterTiming(diffIm, self.config.shutterTiming)
             self.metadata["shutterTimingAvailable"] = timing is not None
             if timing is not None:
                 # The functors rename the centroid to x, y later.

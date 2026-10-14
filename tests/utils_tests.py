@@ -26,7 +26,6 @@ import astropy.units
 import pandas as pd
 import numpy as np
 
-from lsst.afw.cameraGeom import FOCAL_PLANE, PIXELS
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 from lsst.afw.coord import Observatory
 import lsst.afw.geom as afwGeom
@@ -335,13 +334,13 @@ def makeRegionTime(exposure=None, begin=None, end=None):
     return RegionTimeInfo(region=region, timespan=timespan)
 
 
-SHUTTER_SLOPE = 1.4e-3
-"""Time gradient (s per mm of focal-plane y) of `makeShutterTiming`."""
+SHUTTER_SLOPE = 1.4e-5
+"""Time gradient (s per pixel of y) of `makeShutterTiming`."""
 
 
 def makeShutterTiming(detector, centerMidpointMjdTai):
     """Make a real `lsst.ip.isr.shutterTiming.ShutterTiming` whose time grows
-    linearly with focal-plane y, on the geometry of ``detector``.
+    linearly with pixel y over ``detector``.
 
     Parameters
     ----------
@@ -355,18 +354,14 @@ def makeShutterTiming(detector, centerMidpointMjdTai):
     timing : `lsst.ip.isr.shutterTiming.ShutterTiming`
         The timing.
     """
-    centerY = detector.getCenter(FOCAL_PLANE).getY()
-    focalPlaneY = np.array([centerY - 400.0, centerY + 400.0])
-    return ShutterTiming(centerMidpointMjdTai=centerMidpointMjdTai, focalPlaneY=focalPlaneY,
-                         midpointOffsets=SHUTTER_SLOPE*(focalPlaneY - centerY),
-                         pixelToFocalPlane=detector.getTransform(PIXELS, FOCAL_PLANE))
+    halfHeight = 0.5*detector.getBBox().getHeight()
+    return ShutterTiming(centerMidpointMjdTai=centerMidpointMjdTai,
+                         chebyshevCoefficients=np.array([0.0, SHUTTER_SLOPE*halfHeight, 0.0, 0.0, 0.0, 0.0]),
+                         chebyshevYCenter=detector.getBBox().getCenterY(), chebyshevYHalfRange=halfHeight)
 
 
 def expectedShutterTime(timing, x, y):
-    """Evaluate the times of `makeShutterTiming` independently, point by
-    point, at pixel positions ``x``, ``y`` (arrays).
+    """Evaluate the times of `makeShutterTiming` independently at pixel
+    positions ``x``, ``y`` (arrays).
     """
-    centerY = np.mean(timing.focalPlaneY)
-    focalPlaneY = np.array([timing.pixelToFocalPlane.applyForward(lsst.geom.Point2D(a, b)).getY()
-                            for a, b in zip(x, y)])
-    return timing.centerMidpointMjdTai + SHUTTER_SLOPE*(focalPlaneY - centerY)/86400
+    return timing.centerMidpointMjdTai + SHUTTER_SLOPE*(y - timing.chebyshevYCenter)/86400
