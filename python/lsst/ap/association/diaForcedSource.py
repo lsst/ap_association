@@ -122,8 +122,8 @@ class DiaForcedSourceTask(pipeBase.Task):
         idGenerator : `lsst.meas.base.IdGenerator`
             Object that generates source IDs and random number generator seeds.
         shutterTiming : `lsst.ip.isr.shutterTiming.ShutterTiming`, optional
-            Shutter-corrected times of this detector; if given and
-            available, they replace the header midpoint.
+            Shutter-corrected times of this detector; if given, they replace
+            the header midpoint.
 
         Returns
         -------
@@ -166,7 +166,7 @@ class DiaForcedSourceTask(pipeBase.Task):
                                                        updatedDiaObjectIds,
                                                        exposure)
 
-        if shutterTiming is not None and shutterTiming.isAvailable:
+        if shutterTiming is not None:
             # Must precede dropColumns, which removes x and y.
             output_forced_sources["midpointMjdTai"] = shutterTiming.midpointMjdTai(
                 output_forced_sources["x"].to_numpy(), output_forced_sources["y"].to_numpy())

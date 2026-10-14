@@ -47,9 +47,10 @@ from lsst.ap.association import (
 
 from lsst.ap.association.loadDiaCatalogs import loadDiaObjectsFromApdb, loadDiaSourcesFromApdb, \
     loadDiaForcedSourcesFromApdb
-from lsst.ap.association.utils import makeEmptyForcedSourceTable, getRegion, paddedRegion, readSchemaFromApdb
+from lsst.ap.association.utils import makeEmptyForcedSourceTable, getRegion, paddedRegion, \
+    readSchemaFromApdb, computeAndRecordShutterTiming
 from lsst.daf.base import DateTime
-from lsst.ip.isr.shutterTiming import ShutterTimingConfig, computeShutterTiming
+from lsst.ip.isr.shutterTiming import ShutterTimingConfig
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
     DiaObjectCalculationTask
 from lsst.pipe.tasks.schemaUtils import convertDataFrameToSdmSchema, checkSdmSchemaColumns, \
@@ -746,7 +747,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # solar system association.
         shutterTiming = None
         if self.config.doShutterTiming:
-            shutterTiming = self.computeShutterTiming(diffIm, requestedExposureTime)
+            shutterTiming = computeAndRecordShutterTiming(diffIm, requestedExposureTime,
+                                                          self.config.shutterTiming, self.metadata)
 
         # Associate DiaSources with DiaObjects
         assocResults = self.associateDiaSources(diaSourceTable, solarSystemObjectTable, diffIm, diaObjects,
@@ -1141,32 +1143,6 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         return pipeBase.Struct(goodSources=goodSources,
                                badSources=badSources
                                )
-
-    @timeMethod
-    def computeShutterTiming(self, diffIm, requestedExposureTime):
-        """Compute the detector's shutter-corrected times from the difference
-        image and record their summary in the task metadata.
-
-        Parameters
-        ----------
-        diffIm : `lsst.afw.image.ExposureF`
-            Difference image; its metadata carries the shutter cards.
-        requestedExposureTime : `float`
-            Requested (nominal) exposure time of the visit (s).
-
-        Returns
-        -------
-        shutterTiming : `lsst.ip.isr.shutterTiming.ShutterTiming`
-            The detector's timing.
-        """
-        timing = computeShutterTiming(diffIm, requestedExposureTime, self.config.shutterTiming)
-
-        self.metadata["shutterTimingAvailable"] = timing.isAvailable
-        self.metadata["shutterTimingFlags"] = int(timing.flags)
-        self.log.info("Shutter-corrected times %s (flags %r).",
-                      "available" if timing.isAvailable else "unavailable", timing.flags)
-
-        return timing
 
     @timeMethod
     def associateDiaSources(self, diaSourceTable, solarSystemObjectTable, diffIm, diaObjects,

@@ -163,7 +163,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         self.config.doShutterTiming = True
         transformTask = TransformDiaSourceCatalogTask(initInputs=self.initInputs, config=self.config)
 
-        with patch("lsst.ap.association.transformDiaSourceCatalog.computeShutterTiming",
+        with patch("lsst.ap.association.utils.computeShutterTiming",
                    return_value=timing) as mockCompute:
             result = transformTask.run(self.inputCatalog, self.exposure, self.band,
                                        requestedExposureTime=30.0)
@@ -185,19 +185,17 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         self.assertTrue(np.all(df["midpointMjdTai"] != headerMid))
 
         self.assertTrue(task.metadata["shutterTimingAvailable"])
-        self.assertEqual(task.metadata["shutterTimingFlags"], 0)
+        self.assertFalse(task.metadata["shutterTimingReanchored"])
 
     def test_run_shutter_timing_unavailable(self):
         """Check that a detector without a corrected time (e.g. an exposure
         without shutter motion cards) keeps the header midpoint.
         """
         headerMid = self.date.get(system=dafBase.DateTime.MJD)
-        timing = makeShutterTiming(self.exposure.detector, headerMid + 1e-6, available=False)
-        result, task, _ = self._runShutterTiming(timing)
+        result, task, _ = self._runShutterTiming(None)
 
         np.testing.assert_array_equal(result.diaSourceTable["midpointMjdTai"], headerMid)
         self.assertFalse(task.metadata["shutterTimingAvailable"])
-        self.assertEqual(task.metadata["shutterTimingFlags"], 1)
 
     def test_runQuantum_requested_exposure_time(self):
         """Check that runQuantum takes the requested exposure time from the

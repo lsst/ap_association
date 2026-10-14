@@ -178,7 +178,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         association.
         """
         timing = makeShutterTiming(self.diffim.detector, 60000.0)
-        with patch("lsst.ap.association.diaPipe.computeShutterTiming",
+        with patch("lsst.ap.association.utils.computeShutterTiming",
                    return_value=timing) as mockCompute:
             task, calls = self._testRun(doSolarSystemAssociation=True, doShutterTiming=True)
 
@@ -194,7 +194,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         self.assertIs(calls["solarSystemAssociator"].kwargs["shutterTiming"], timing)
 
         self.assertTrue(task.metadata["shutterTimingAvailable"])
-        self.assertEqual(task.metadata["shutterTimingFlags"], 0)
+        self.assertFalse(task.metadata["shutterTimingReanchored"])
 
     def _testRun(self, doPackageAlerts=False, doSolarSystemAssociation=False,
                  doReloadDiaObjects=False, doReloadAllApdbCatalogs=False, subtasksToMock=None, **kwargs):

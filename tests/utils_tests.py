@@ -32,7 +32,7 @@ from lsst.afw.coord import Observatory
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 from lsst.daf.base import DateTime, PropertySet
-from lsst.ip.isr.shutterTiming import ShutterTiming, ShutterTimingFlag
+from lsst.ip.isr.shutterTiming import ShutterTiming
 import lsst.daf.butler as dafButler
 import lsst.geom
 import lsst.meas.algorithms as measAlg
@@ -339,7 +339,7 @@ SHUTTER_SLOPE = 1.4e-3
 """Time gradient (s per mm of focal-plane y) of `makeShutterTiming`."""
 
 
-def makeShutterTiming(detector, centerMidpointMjdTai, available=True):
+def makeShutterTiming(detector, centerMidpointMjdTai):
     """Make a real `lsst.ip.isr.shutterTiming.ShutterTiming` whose time grows
     linearly with focal-plane y, on the geometry of ``detector``.
 
@@ -349,18 +349,12 @@ def makeShutterTiming(detector, centerMidpointMjdTai, available=True):
         Detector whose geometry to use.
     centerMidpointMjdTai : `float`
         Time at the detector centre (MJD TAI).
-    available : `bool`, optional
-        Whether the detector has corrected times; if not, the timing is that
-        of an exposure without shutter cards.
 
     Returns
     -------
     timing : `lsst.ip.isr.shutterTiming.ShutterTiming`
         The timing.
     """
-    if not available:
-        return ShutterTiming(flags=ShutterTimingFlag.NO_PROFILE)
-
     centerY = detector.getCenter(FOCAL_PLANE).getY()
     focalPlaneY = np.array([centerY - 400.0, centerY + 400.0])
     return ShutterTiming(centerMidpointMjdTai=centerMidpointMjdTai, focalPlaneY=focalPlaneY,
