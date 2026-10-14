@@ -498,9 +498,9 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     doShutterTiming = pexConfig.Field(
         dtype=bool,
         default=False,
-        doc="Get the detector's shutter-corrected times (lsst.ip.isr.shutterTiming) and use "
-            "them for DiaForcedSource midpointMjdTai and solar system prediction epochs, instead "
-            "of the header midpoint (visitInfo.date).",
+        doc="Use the detector's shutter-corrected times (lsst.ip.isr.shutterTiming) for "
+            "DiaForcedSource midpointMjdTai and solar system prediction epochs; if the detector has "
+            "none, keep the header midpoint (visitInfo.date).",
     )
     shutterTiming = pexConfig.ConfigField(
         dtype=ShutterTimingConfig,

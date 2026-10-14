@@ -357,8 +357,7 @@ def makeShutterTiming(detector, centerMidpointMjdTai):
     halfHeight = 0.5*detector.getBBox().getHeight()
     return ShutterTiming(centerMidpointMjdTai=centerMidpointMjdTai,
                          chebyshevCoefficients=np.array([0.0, SHUTTER_SLOPE*halfHeight, 0.0, 0.0, 0.0, 0.0]),
-                         chebyshevYCenter=detector.getBBox().getCenterY(), chebyshevYHalfRange=halfHeight,
-                         reanchored=False, source="header")
+                         chebyshevYCenter=detector.getBBox().getCenterY(), chebyshevYHalfRange=halfHeight)
 
 
 def expectedShutterTime(timing, x, y):
