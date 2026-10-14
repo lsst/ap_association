@@ -186,8 +186,7 @@ class TestDiaPipelineTask(unittest.TestCase):
         mockCompute.assert_called_once()
         args = mockCompute.call_args.args
         self.assertIs(args[0], self.diffim)
-        self.assertEqual(args[1], 30.0)
-        self.assertIs(args[2], task.config.shutterTiming)
+        self.assertIs(args[1], task.config.shutterTiming)
 
         # The same object goes to both subtasks.
         self.assertIs(calls["diaForcedSource"].kwargs["shutterTiming"], timing)
@@ -299,8 +298,7 @@ class TestDiaPipelineTask(unittest.TestCase):
                                   None if doReloadAllApdbCatalogs else self.diaForcedSources),
                               band="g",
                               idGenerator=IdGenerator(),
-                              solarSystemObjectTable=ssObjects,
-                              requestedExposureTime=30.0)
+                              solarSystemObjectTable=ssObjects)
             for subtaskName in subtasksToMock:
                 getattr(task, subtaskName).run.assert_called_once()
             subtaskCalls = {subtaskName: getattr(task, subtaskName).run.call_args
@@ -391,22 +389,6 @@ class TestDiaPipelineTask(unittest.TestCase):
         kwargs = runQuantumKwargs(False)
         for name in preloaded:
             self.assertIs(kwargs[name], loaded[name], msg=f"{name} should be the loaded catalog")
-
-    def test_runQuantumRequestedExposureTime(self):
-        """Check that runQuantum takes the requested exposure time from the
-        visit record, since EXPTIME is stripped from the exposure metadata.
-        """
-        config = self._makeDefaultConfig(config_file=self.config_file.name, doShutterTiming=True)
-        task = DiaPipelineTask(config=config)
-        butlerQC = MagicMock()
-        butlerQC.get.return_value = {}
-        butlerQC.quantum.dataId.records = {"visit": MagicMock(exposure_time=30.0)}
-
-        with patch.object(DetectorVisitIdGeneratorConfig, "apply", return_value=IdGenerator()), \
-                patch.object(DiaPipelineTask, "run") as mockRun:
-            task.runQuantum(butlerQC, MagicMock(), MagicMock())
-
-        self.assertEqual(mockRun.call_args.kwargs["requestedExposureTime"], 30.0)
 
     def test_runRequiresBandAndIdGenerator(self):
         """Test that `run` rejects the `None` defaults on required arguments.

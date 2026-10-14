@@ -554,9 +554,6 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         inputs["legacySolarSystemTable"] = None
         if not self.config.doSolarSystemAssociation:
             inputs["solarSystemObjectTable"] = None
-        if self.config.doShutterTiming:
-            # EXPTIME is stripped from the exposure metadata at ingest.
-            inputs["requestedExposureTime"] = butlerQC.quantum.dataId.records["visit"].exposure_time
 
         associationResults = pipeBase.Struct(
             apdbMarker=None,
@@ -593,8 +590,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             band=None,
             idGenerator=None,
             solarSystemObjectTable=None,
-            associationResults=None,
-            requestedExposureTime=None):
+            associationResults=None):
         """Process DiaSources and DiaObjects.
 
         Load previous DiaObjects and their DiaSource history. Calibrate the
@@ -637,10 +633,6 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             Result struct that is modified to allow saving of partial outputs
             for some failure conditions. If the task completes successfully,
             this is also returned.
-        requestedExposureTime : `float`, optional
-            Requested (nominal) exposure time of the visit (s), from the
-            ``visit`` dimension record; required if ``doShutterTiming`` is
-            set (``EXPTIME`` is stripped from exposure metadata at ingest).
 
         Returns
         -------
@@ -746,7 +738,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # solar system association.
         shutterTiming = None
         if self.config.doShutterTiming:
-            shutterTiming = computeShutterTiming(diffIm, requestedExposureTime, self.config.shutterTiming)
+            shutterTiming = computeShutterTiming(diffIm, self.config.shutterTiming)
             self.metadata["shutterTimingAvailable"] = shutterTiming is not None
 
         # Associate DiaSources with DiaObjects

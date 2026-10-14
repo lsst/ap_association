@@ -208,9 +208,6 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
         inputs["band"] = butlerQC.quantum.dataId["band"]
-        if self.config.doShutterTiming:
-            # EXPTIME is stripped from the exposure metadata at ingest.
-            inputs["requestedExposureTime"] = butlerQC.quantum.dataId.records["visit"].exposure_time
 
         outputs = self.run(**inputs)
 
@@ -221,8 +218,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             diaSourceCat,
             diffIm,
             band,
-            reliability=None,
-            requestedExposureTime=None):
+            reliability=None):
         """Convert input catalog to ParquetTable/Pandas and run functors.
 
         Additionally, add new columns for stripping information from the
@@ -239,10 +235,6 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         reliability : `lsst.afw.table.SourceCatalog`
             Reliability (e.g. real/bogus) scores, row-matched to
             ``diaSourceCat``.
-        requestedExposureTime : `float`, optional
-            Requested (nominal) exposure time of the visit (s), from the
-            ``visit`` dimension record; required if ``doShutterTiming`` is
-            set (``EXPTIME`` is stripped from exposure metadata at ingest).
 
         Returns
         -------
@@ -275,7 +267,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
 
         if self.config.doShutterTiming:
             # Per-source shutter-corrected times, where the detector has them.
-            timing = computeShutterTiming(diffIm, requestedExposureTime, self.config.shutterTiming)
+            timing = computeShutterTiming(diffIm, self.config.shutterTiming)
             self.metadata["shutterTimingAvailable"] = timing is not None
             if timing is not None:
                 # The functors rename the centroid to x, y later.

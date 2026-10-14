@@ -21,7 +21,7 @@
 
 import os
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 
@@ -165,8 +165,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
 
         with patch("lsst.ap.association.transformDiaSourceCatalog.computeShutterTiming",
                    return_value=timing) as mockCompute:
-            result = transformTask.run(self.inputCatalog, self.exposure, self.band,
-                                       requestedExposureTime=30.0)
+            result = transformTask.run(self.inputCatalog, self.exposure, self.band)
 
         return result, transformTask, mockCompute
 
@@ -177,7 +176,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         result, task, mockCompute = self._runShutterTiming(timing)
 
         # Called with the difference image.
-        mockCompute.assert_called_once_with(self.exposure, 30.0, task.config.shutterTiming)
+        mockCompute.assert_called_once_with(self.exposure, task.config.shutterTiming)
 
         df = result.diaSourceTable
         expected = expectedShutterTime(timing, df["x"].to_numpy(), df["y"].to_numpy())
@@ -195,21 +194,6 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
 
         np.testing.assert_array_equal(result.diaSourceTable["midpointMjdTai"], headerMid)
         self.assertFalse(task.metadata["shutterTimingAvailable"])
-
-    def test_runQuantum_requested_exposure_time(self):
-        """Check that runQuantum takes the requested exposure time from the
-        visit record, since EXPTIME is stripped from the exposure metadata.
-        """
-        self.config.doShutterTiming = True
-        task = TransformDiaSourceCatalogTask(initInputs=self.initInputs, config=self.config)
-        butlerQC = MagicMock()
-        butlerQC.get.return_value = {}
-        butlerQC.quantum.dataId.records = {"visit": MagicMock(exposure_time=30.0)}
-
-        with patch.object(TransformDiaSourceCatalogTask, "run") as mockRun:
-            task.runQuantum(butlerQC, MagicMock(), MagicMock())
-
-        self.assertEqual(mockRun.call_args.kwargs["requestedExposureTime"], 30.0)
 
     def test_run_dia_source_wrong_flags(self):
         """Test that the proper errors are thrown when requesting flag columns
