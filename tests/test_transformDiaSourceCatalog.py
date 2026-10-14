@@ -157,13 +157,13 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         np.testing.assert_allclose(result.diaSourceTable["snr"], expect_snr, equal_nan=True, rtol=0)
 
     def _runShutterTiming(self, timing):
-        """Run the transform with shutter timing on and computeShutterTiming
+        """Run the transform with shutter timing on and getShutterTiming
         returning ``timing``; return the result, the task and the mock.
         """
         self.config.doShutterTiming = True
         transformTask = TransformDiaSourceCatalogTask(initInputs=self.initInputs, config=self.config)
 
-        with patch("lsst.ap.association.transformDiaSourceCatalog.computeShutterTiming",
+        with patch("lsst.ap.association.transformDiaSourceCatalog.getShutterTiming",
                    return_value=timing) as mockCompute:
             result = transformTask.run(self.inputCatalog, self.exposure, self.band)
 

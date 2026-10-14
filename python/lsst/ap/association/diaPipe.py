@@ -49,7 +49,7 @@ from lsst.ap.association.loadDiaCatalogs import loadDiaObjectsFromApdb, loadDiaS
     loadDiaForcedSourcesFromApdb
 from lsst.ap.association.utils import makeEmptyForcedSourceTable, getRegion, paddedRegion, readSchemaFromApdb
 from lsst.daf.base import DateTime
-from lsst.ip.isr.shutterTiming import ShutterTimingConfig, computeShutterTiming
+from lsst.ip.isr.shutterTiming import ShutterTimingConfig, getShutterTiming
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
     DiaObjectCalculationTask
 from lsst.pipe.tasks.schemaUtils import convertDataFrameToSdmSchema, checkSdmSchemaColumns, \
@@ -498,13 +498,14 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
     doShutterTiming = pexConfig.Field(
         dtype=bool,
         default=False,
-        doc="Compute the detector's shutter-corrected times (lsst.ip.isr.shutterTiming) and use "
+        doc="Get the detector's shutter-corrected times (lsst.ip.isr.shutterTiming) and use "
             "them for DiaForcedSource midpointMjdTai and solar system prediction epochs, instead "
             "of the header midpoint (visitInfo.date).",
     )
     shutterTiming = pexConfig.ConfigField(
         dtype=ShutterTimingConfig,
-        doc="Configuration of the shutter-corrected times; used if doShutterTiming is True.",
+        doc="Configuration of the shutter-corrected times, for difference images without the times "
+            "recorded by ISR; used if doShutterTiming is True.",
     )
 
     def setDefaults(self):
@@ -738,7 +739,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # solar system association.
         shutterTiming = None
         if self.config.doShutterTiming:
-            shutterTiming = computeShutterTiming(diffIm, self.config.shutterTiming)
+            shutterTiming = getShutterTiming(diffIm, self.config.shutterTiming)
             self.metadata["shutterTimingAvailable"] = shutterTiming is not None
 
         # Associate DiaSources with DiaObjects

@@ -173,16 +173,16 @@ class TestDiaPipelineTask(unittest.TestCase):
                       doReloadAllApdbCatalogs=True)
 
     def testRunShutterTiming(self):
-        """Check that the timing is computed once from the difference image
+        """Check that the timing is read once from the difference image
         and the same object goes to forced measurement and solar system
         association.
         """
         timing = makeShutterTiming(self.diffim.detector, 60000.0)
-        with patch("lsst.ap.association.diaPipe.computeShutterTiming",
+        with patch("lsst.ap.association.diaPipe.getShutterTiming",
                    return_value=timing) as mockCompute:
             task, calls = self._testRun(doSolarSystemAssociation=True, doShutterTiming=True)
 
-        # Computed once, from the difference image.
+        # Read once, from the difference image.
         mockCompute.assert_called_once()
         args = mockCompute.call_args.args
         self.assertIs(args[0], self.diffim)
