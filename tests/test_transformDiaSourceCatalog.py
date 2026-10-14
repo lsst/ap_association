@@ -21,6 +21,7 @@
 
 import os
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -35,6 +36,8 @@ from lsst.pipe.base import Struct
 import lsst.utils.tests
 
 from lsst.ap.association.transformDiaSourceCatalog import UnpackApdbFlags
+
+from utils_tests import expectedShutterTime, makeShutterTiming
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -152,6 +155,45 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         expect_snr = np.array(expect_snr, dtype=np.float32)
         # Have to use allclose because assert_array_equal doesn't support equal_nan.
         np.testing.assert_allclose(result.diaSourceTable["snr"], expect_snr, equal_nan=True, rtol=0)
+
+    def _runShutterTiming(self, timing):
+        """Run the transform with shutter timing on and computeShutterTiming
+        returning ``timing``; return the result, the task and the mock.
+        """
+        self.config.doShutterTiming = True
+        transformTask = TransformDiaSourceCatalogTask(initInputs=self.initInputs, config=self.config)
+
+        with patch("lsst.ap.association.transformDiaSourceCatalog.computeShutterTiming",
+                   return_value=timing) as mockCompute:
+            result = transformTask.run(self.inputCatalog, self.exposure, self.band)
+
+        return result, transformTask, mockCompute
+
+    def test_run_shutter_timing(self):
+        """Check the corrected times at the centroids."""
+        headerMid = self.date.get(system=dafBase.DateTime.MJD)
+        timing = makeShutterTiming(self.exposure.detector, headerMid + 1e-6)
+        result, task, mockCompute = self._runShutterTiming(timing)
+
+        # Called with the difference image.
+        mockCompute.assert_called_once_with(self.exposure, task.config.shutterTiming)
+
+        df = result.diaSourceTable
+        expected = expectedShutterTime(timing, df["x"].to_numpy(), df["y"].to_numpy())
+        np.testing.assert_allclose(df["midpointMjdTai"], expected, rtol=0, atol=1e-12)
+        self.assertTrue(np.all(df["midpointMjdTai"] != headerMid))
+
+        self.assertTrue(task.metadata["shutterTimingAvailable"])
+
+    def test_run_shutter_timing_unavailable(self):
+        """Check that a detector without a corrected time (e.g. an exposure
+        without shutter motion cards) keeps the header midpoint.
+        """
+        headerMid = self.date.get(system=dafBase.DateTime.MJD)
+        result, task, _ = self._runShutterTiming(None)
+
+        np.testing.assert_array_equal(result.diaSourceTable["midpointMjdTai"], headerMid)
+        self.assertFalse(task.metadata["shutterTimingAvailable"])
 
     def test_run_dia_source_wrong_flags(self):
         """Test that the proper errors are thrown when requesting flag columns

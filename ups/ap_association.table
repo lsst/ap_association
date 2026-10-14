@@ -8,6 +8,7 @@
 setupRequired(afw)
 setupRequired(alert_packet)
 setupRequired(dax_apdb)
+setupRequired(ip_isr)
 setupRequired(meas_algorithms)
 setupRequired(meas_base)
 setupRequired(pex_config)

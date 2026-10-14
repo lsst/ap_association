@@ -31,6 +31,7 @@ import numpy as np
 
 from lsst.resources import ResourcePath
 from lsst.daf.base import DateTime
+from lsst.ip.isr.shutterTiming import ShutterTimingConfig, computeShutterTiming
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as connTypes
@@ -127,6 +128,17 @@ class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
         doc="Name of the table in the schema file to read.",
         default="ApdbSchema",
         deprecated="This config is no longer used, and will be removed after v30"
+    )
+    doShutterTiming = pexConfig.Field(
+        dtype=bool,
+        default=False,
+        doc="Set each DiaSource's midpointMjdTai to the shutter-corrected time at its centroid "
+            "(lsst.ip.isr.shutterTiming); if the detector has none, keep the header "
+            "midpoint (visitInfo.date).",
+    )
+    shutterTiming = pexConfig.ConfigField(
+        dtype=ShutterTimingConfig,
+        doc="Configuration of the shutter-corrected times; used if doShutterTiming is True.",
     )
 
     def setDefaults(self):
@@ -252,6 +264,16 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         diaSourceDf["detector"] = np.int16(diffIm.detector.getId())
         diaSourceDf["band"] = band
         diaSourceDf["midpointMjdTai"] = diffIm.visitInfo.date.get(system=DateTime.MJD)
+
+        if self.config.doShutterTiming:
+            # Per-source shutter-corrected times, where the detector has them.
+            timing = computeShutterTiming(diffIm, self.config.shutterTiming)
+            self.metadata["shutterTimingAvailable"] = timing is not None
+            if timing is not None:
+                # The functors rename the centroid to x, y later.
+                diaSourceDf["midpointMjdTai"] = timing.midpointMjdTai(
+                    diaSourceDf["slot_Centroid_x"].to_numpy(), diaSourceDf["slot_Centroid_y"].to_numpy())
+
         diaSourceDf["exposureTime"] = diffIm.visitInfo.exposureTime
         diaSourceDf["diaObjectId"] = 0
         diaSourceDf["ssObjectId"] = 0

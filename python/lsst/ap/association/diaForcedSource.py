@@ -101,7 +101,8 @@ class DiaForcedSourceTask(pipeBase.Task):
             updatedDiaObjectIds,
             exposure,
             diffim,
-            idGenerator):
+            idGenerator,
+            shutterTiming=None):
         """Measure forced sources on the direct and difference images.
 
         Parameters
@@ -120,6 +121,9 @@ class DiaForcedSourceTask(pipeBase.Task):
             Difference image.
         idGenerator : `lsst.meas.base.IdGenerator`
             Object that generates source IDs and random number generator seeds.
+        shutterTiming : `lsst.ip.isr.shutterTiming.ShutterTiming`, optional
+            Shutter-corrected times of this detector; if given, they replace
+            the header midpoint.
 
         Returns
         -------
@@ -161,6 +165,12 @@ class DiaForcedSourceTask(pipeBase.Task):
         output_forced_sources = self._trim_to_exposure(output_forced_sources,
                                                        updatedDiaObjectIds,
                                                        exposure)
+
+        if shutterTiming is not None:
+            # Must precede dropColumns, which removes x and y.
+            output_forced_sources["midpointMjdTai"] = shutterTiming.midpointMjdTai(
+                output_forced_sources["x"].to_numpy(), output_forced_sources["y"].to_numpy())
+
         # Drop superfluous columns from output DataFrame.
         output_forced_sources.drop(columns=self.config.dropColumns, inplace=True)
         return output_forced_sources.set_index(

@@ -49,6 +49,7 @@ from lsst.ap.association.loadDiaCatalogs import loadDiaObjectsFromApdb, loadDiaS
     loadDiaForcedSourcesFromApdb
 from lsst.ap.association.utils import makeEmptyForcedSourceTable, getRegion, paddedRegion, readSchemaFromApdb
 from lsst.daf.base import DateTime
+from lsst.ip.isr.shutterTiming import ShutterTimingConfig, computeShutterTiming
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
     DiaObjectCalculationTask
 from lsst.pipe.tasks.schemaUtils import convertDataFrameToSdmSchema, checkSdmSchemaColumns, \
@@ -494,6 +495,17 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
         "use for checking the signal-to-noise before creating new diaObjects.",
     )
     idGenerator = DetectorVisitIdGeneratorConfig.make_field()
+    doShutterTiming = pexConfig.Field(
+        dtype=bool,
+        default=False,
+        doc="Compute the detector's shutter-corrected times (lsst.ip.isr.shutterTiming) and use "
+            "them for DiaForcedSource midpointMjdTai and solar system prediction epochs, instead "
+            "of the header midpoint (visitInfo.date).",
+    )
+    shutterTiming = pexConfig.ConfigField(
+        dtype=ShutterTimingConfig,
+        doc="Configuration of the shutter-corrected times; used if doShutterTiming is True.",
+    )
 
     def setDefaults(self):
         self.diaCalculation.plugins = ["ap_meanPosition",
@@ -722,8 +734,16 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             self.log.info("Preloaded DiaObject table is empty.")
             diaObjects = preloadedDiaObjects
 
+        # Shutter-corrected times of this detector, for forced sources and
+        # solar system association.
+        shutterTiming = None
+        if self.config.doShutterTiming:
+            shutterTiming = computeShutterTiming(diffIm, self.config.shutterTiming)
+            self.metadata["shutterTimingAvailable"] = shutterTiming is not None
+
         # Associate DiaSources with DiaObjects
-        assocResults = self.associateDiaSources(diaSourceTable, solarSystemObjectTable, diffIm, diaObjects)
+        assocResults = self.associateDiaSources(diaSourceTable, solarSystemObjectTable, diffIm, diaObjects,
+                                                shutterTiming=shutterTiming)
 
         # Set unassociated diaObjectIds and ssObjectIds to NULL, and convert to SDM schema format
         standardizedAssociatedDiaSources = self.standardizeDataFrame(
@@ -767,7 +787,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         if self.config.doRunForcedMeasurement:
             diaObjectsForced = self._selectGoodDiaObjects(diaCalResult.diaObjectCat, mergedDiaSourceHistory)
             diaForcedSources = self.runForcedMeasurement(
-                diaObjectsForced, updatedDiaObjects, exposure, diffIm, idGenerator
+                diaObjectsForced, updatedDiaObjects, exposure, diffIm, idGenerator,
+                shutterTiming=shutterTiming,
             )
             forcedSourceHistoryThreshold = self.diaForcedSource.config.historyThreshold
         else:
@@ -1115,7 +1136,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                )
 
     @timeMethod
-    def associateDiaSources(self, diaSourceTable, solarSystemObjectTable, diffIm, diaObjects):
+    def associateDiaSources(self, diaSourceTable, solarSystemObjectTable, diffIm, diaObjects,
+                            shutterTiming=None):
         """Associate DiaSources with DiaObjects.
 
         Associate new DiaSources with existing DiaObjects. Create new
@@ -1136,6 +1158,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             were detected.
         diaObjects : `pandas.DataFrame`
             Table of DiaObjects from preloaded DiaObjects.
+        shutterTiming : `lsst.ip.isr.shutterTiming.ShutterTiming`, optional
+            Shutter-corrected times of this detector, for solar system
+            association.
 
         Returns
         -------
@@ -1167,7 +1192,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                 solarSystemObjectTable,
                 diffIm.visitInfo,
                 diffIm.getBBox(),
-                diffIm.wcs
+                diffIm.wcs,
+                shutterTiming=shutterTiming,
             )
             nTotalSsObjects = ssoAssocResult.nTotalSsObjects
             nAssociatedSsObjects = ssoAssocResult.nAssociatedSsObjects
@@ -1366,7 +1392,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         return (mergedDiaSourceHistory, mergedUpdatedDiaObjects, updatedDiaObjectIds)
 
     @timeMethod
-    def runForcedMeasurement(self, diaObjects, updatedDiaObjects, exposure, diffIm, idGenerator):
+    def runForcedMeasurement(self, diaObjects, updatedDiaObjects, exposure, diffIm, idGenerator,
+                             shutterTiming=None):
         """Forced Source Measurement
 
         Forced photometry on the difference and calibrated exposures using the
@@ -1386,6 +1413,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             were detected.
         idGenerator : `lsst.meas.base.IdGenerator`
             Object that generates source IDs and random number generator seeds.
+        shutterTiming : `lsst.ip.isr.shutterTiming.ShutterTiming`, optional
+            Shutter-corrected times of this detector, for forced sources.
 
         Returns
         -------
@@ -1400,7 +1429,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
             updatedDiaObjects.loc[:, "diaObjectId"].to_numpy(),
             exposure,
             diffIm,
-            idGenerator=idGenerator)
+            idGenerator=idGenerator,
+            shutterTiming=shutterTiming)
         self.log.info(f"Updating {len(diaForcedSources)} diaForcedSources in the APDB")
         diaForcedSources = convertDataFrameToSdmSchema(self.schema, diaForcedSources,
                                                        tableName="DiaForcedSource", skipIndex=True)
