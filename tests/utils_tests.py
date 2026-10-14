@@ -26,12 +26,13 @@ import astropy.units
 import pandas as pd
 import numpy as np
 
+from lsst.afw.cameraGeom import FOCAL_PLANE, PIXELS
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 from lsst.afw.coord import Observatory
 import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 from lsst.daf.base import DateTime, PropertySet
-from lsst.ip.isr.shutterTiming import ShutterTiming, ShutterTimingStatus, _DetectorGeometry
+from lsst.ip.isr.shutterTiming import ShutterTiming, ShutterTimingStatus
 import lsst.daf.butler as dafButler
 import lsst.geom
 import lsst.meas.algorithms as measAlg
@@ -334,13 +335,13 @@ def makeRegionTime(exposure=None, begin=None, end=None):
     return RegionTimeInfo(region=region, timespan=timespan)
 
 
-SHUTTER_COEFFICIENTS = (2e-4, 1e-7, -3e-5, 2e-8, 5e-8)
-"""Quadratic coefficients (s / pixel^n) of `makeShutterTiming`."""
+SHUTTER_SLOPE = 1.4e-3
+"""Time gradient (s per mm of focal-plane y) of `makeShutterTiming`."""
 
 
 def makeShutterTiming(detector, centerMidpointMjdTai, status=None):
-    """Make a real `lsst.ip.isr.shutterTiming.ShutterTiming` with known
-    coefficients, blade axis x and the geometry of ``detector``.
+    """Make a real `lsst.ip.isr.shutterTiming.ShutterTiming` whose time grows
+    linearly with focal-plane y, on the geometry of ``detector``.
 
     Parameters
     ----------
@@ -360,19 +361,19 @@ def makeShutterTiming(detector, centerMidpointMjdTai, status=None):
         status = ShutterTimingStatus.OK
     message = "" if status == ShutterTimingStatus.OK else "test reason"
 
-    geometry = _DetectorGeometry.fromDetector(detector)
-    return ShutterTiming(status=status, message=message, detectorId=geometry.detectorId,
-                         centerMidpointMjdTai=centerMidpointMjdTai, coefficients=SHUTTER_COEFFICIENTS,
-                         axis="x", geometry=geometry)
+    centerY = detector.getCenter(FOCAL_PLANE).getY()
+    focalPlaneY = np.array([centerY - 400.0, centerY + 400.0])
+    return ShutterTiming(status=status, message=message, detectorId=detector.getId(),
+                         centerMidpointMjdTai=centerMidpointMjdTai, focalPlaneY=focalPlaneY,
+                         midpointOffsets=SHUTTER_SLOPE*(focalPlaneY - centerY),
+                         pixelToFocalPlane=detector.getTransform(PIXELS, FOCAL_PLANE))
 
 
 def expectedShutterTime(timing, x, y):
-    """Evaluate the quadratic of `makeShutterTiming` independently at pixel
-    positions ``x``, ``y`` (arrays).
+    """Evaluate the times of `makeShutterTiming` independently, point by
+    point, at pixel positions ``x``, ``y`` (arrays).
     """
-    cx, cy = timing.geometry.centerPixel
-    u = x - cx
-    v = y - cy
-
-    cu, cuu, cv, cuv, cvv = SHUTTER_COEFFICIENTS
-    return timing.centerMidpointMjdTai + (cu*u + cuu*u*u + cv*v + cuv*u*v + cvv*v*v)/86400
+    centerY = np.mean(timing.focalPlaneY)
+    focalPlaneY = np.array([timing.pixelToFocalPlane.applyForward(lsst.geom.Point2D(a, b)).getY()
+                            for a, b in zip(x, y)])
+    return timing.centerMidpointMjdTai + SHUTTER_SLOPE*(focalPlaneY - centerY)/86400
