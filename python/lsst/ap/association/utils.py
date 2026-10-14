@@ -22,18 +22,15 @@
 """Utilities for working with the APDB.
 """
 __all__ = ("getMidpointFromTimespan", "makeEmptyForcedSourceTable", "getRegion", "paddedRegion",
-           "readSchemaFromApdb", "computeAndRecordShutterTiming")
+           "readSchemaFromApdb")
 
 
 import math
 import pandas as pd
 
-from lsst.afw.image import Exposure
 from lsst.daf.butler import Timespan
 from lsst.dax.apdb import Apdb, ApdbTables, schema_model
 import lsst.geom
-from lsst.ip.isr.shutterTiming import ShutterTiming, ShutterTimingConfig, computeShutterTiming
-from lsst.pipe.base import TaskMetadata
 import lsst.sphgeom
 
 from lsst.pipe.tasks.schemaUtils import convertDataFrameToSdmSchema
@@ -160,38 +157,3 @@ def paddedRegion(region, margin):
         return region.dilatedBy(margin)
     else:
         return region.getBoundingCircle().dilatedBy(margin)
-
-
-def computeAndRecordShutterTiming(
-    diffIm: Exposure,
-    requestedExposureTime: float,
-    config: ShutterTimingConfig,
-    metadata: TaskMetadata,
-) -> ShutterTiming | None:
-    """Compute a detector's shutter-corrected times and record in the task
-    metadata whether there are any.
-
-    Parameters
-    ----------
-    diffIm : `lsst.afw.image.Exposure`
-        Difference image; its metadata carries the shutter cards.
-    requestedExposureTime : `float`
-        Requested exposure time of the visit (s).
-    config : `lsst.ip.isr.shutterTiming.ShutterTimingConfig`
-        Configuration of the shutter-corrected times.
-    metadata : `lsst.pipe.base.TaskMetadata`
-        Task metadata, which gets ``shutterTimingAvailable`` and
-        ``shutterTimingReanchored``.
-
-    Returns
-    -------
-    timing : `lsst.ip.isr.shutterTiming.ShutterTiming` or `None`
-        The detector's times, or `None` if it has none (the reason is
-        logged).
-    """
-    timing = computeShutterTiming(diffIm, requestedExposureTime, config)
-
-    metadata["shutterTimingAvailable"] = timing is not None
-    metadata["shutterTimingReanchored"] = timing is not None and timing.reanchored
-
-    return timing

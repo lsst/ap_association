@@ -47,10 +47,9 @@ from lsst.ap.association import (
 
 from lsst.ap.association.loadDiaCatalogs import loadDiaObjectsFromApdb, loadDiaSourcesFromApdb, \
     loadDiaForcedSourcesFromApdb
-from lsst.ap.association.utils import makeEmptyForcedSourceTable, getRegion, paddedRegion, \
-    readSchemaFromApdb, computeAndRecordShutterTiming
+from lsst.ap.association.utils import makeEmptyForcedSourceTable, getRegion, paddedRegion, readSchemaFromApdb
 from lsst.daf.base import DateTime
-from lsst.ip.isr.shutterTiming import ShutterTimingConfig
+from lsst.ip.isr.shutterTiming import ShutterTimingConfig, computeShutterTiming
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
     DiaObjectCalculationTask
 from lsst.pipe.tasks.schemaUtils import convertDataFrameToSdmSchema, checkSdmSchemaColumns, \
@@ -747,8 +746,8 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         # solar system association.
         shutterTiming = None
         if self.config.doShutterTiming:
-            shutterTiming = computeAndRecordShutterTiming(diffIm, requestedExposureTime,
-                                                          self.config.shutterTiming, self.metadata)
+            shutterTiming = computeShutterTiming(diffIm, requestedExposureTime, self.config.shutterTiming)
+            self.metadata["shutterTimingAvailable"] = shutterTiming is not None
 
         # Associate DiaSources with DiaObjects
         assocResults = self.associateDiaSources(diaSourceTable, solarSystemObjectTable, diffIm, diaObjects,

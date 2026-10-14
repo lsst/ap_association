@@ -163,7 +163,7 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         self.config.doShutterTiming = True
         transformTask = TransformDiaSourceCatalogTask(initInputs=self.initInputs, config=self.config)
 
-        with patch("lsst.ap.association.utils.computeShutterTiming",
+        with patch("lsst.ap.association.transformDiaSourceCatalog.computeShutterTiming",
                    return_value=timing) as mockCompute:
             result = transformTask.run(self.inputCatalog, self.exposure, self.band,
                                        requestedExposureTime=30.0)
@@ -185,7 +185,6 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         self.assertTrue(np.all(df["midpointMjdTai"] != headerMid))
 
         self.assertTrue(task.metadata["shutterTimingAvailable"])
-        self.assertFalse(task.metadata["shutterTimingReanchored"])
 
     def test_run_shutter_timing_unavailable(self):
         """Check that a detector without a corrected time (e.g. an exposure
