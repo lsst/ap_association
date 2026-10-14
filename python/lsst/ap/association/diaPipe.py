@@ -31,6 +31,8 @@ __all__ = ("DiaPipelineConfig",
            "DiaPipelineConnections")
 
 
+import dataclasses
+
 import lsst.dax.apdb as daxApdb
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
@@ -209,6 +211,11 @@ class DiaPipelineConnections(
     def __init__(self, *, config=None):
         super().__init__(config=config)
 
+        if config.input_image_type == "future":
+            self.diffIm = dataclasses.replace(self.diffIm, storageClass="DifferenceImage")
+            self.exposure = dataclasses.replace(self.exposure, storageClass="VisitImage")
+            self.template = dataclasses.replace(self.template, storageClass="DifferenceImage")
+
         if not config.doWriteAssociatedSources:
             self.outputs.remove("associatedDiaSources")
             self.outputs.remove("diaForcedSources")
@@ -305,6 +312,18 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
                         pipelineConnections=DiaPipelineConnections):
     """Config for DiaPipelineTask.
     """
+    input_image_type = pexConfig.ChoiceField[str](
+        doc="Type of the input images. run() takes lsst.afw.image.ExposureF"
+            " either way.",
+        allowed={
+            "legacy": "Read `lsst.afw.image.ExposureF`.",
+            "future": "Read `lsst.images.VisitImage` for the science image and"
+                      " `lsst.images.DifferenceImage` for the difference image and"
+                      " template.",
+        },
+        optional=False,
+        default="legacy",
+    )
     coaddName = pexConfig.Field(
         doc="coadd name: typically one of deep, goodSeeing, or dcr",
         dtype=str,
@@ -537,6 +556,9 @@ class DiaPipelineTask(pipeBase.PipelineTask):
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
+        if self.config.input_image_type == "future":
+            for name in ("diffIm", "exposure", "template"):
+                inputs[name] = inputs[name].to_legacy()
         inputs["idGenerator"] = self.config.idGenerator.apply(butlerQC.quantum.dataId)
         inputs["band"] = butlerQC.quantum.dataId["band"]
         inputs["legacySolarSystemTable"] = None
