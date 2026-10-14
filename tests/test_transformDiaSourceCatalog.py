@@ -21,7 +21,7 @@
 
 import os
 import unittest
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 
@@ -176,10 +176,8 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         timing = makeShutterTiming(self.exposure.detector, headerMid + 1e-6)
         result, task, mockCompute = self._runShutterTiming(timing)
 
-        # Called with the difference image's metadata and detector.
-        mockCompute.assert_called_once_with(self.exposure.metadata, ANY, 30.0,
-                                            task.config.shutterTiming)
-        self.assertEqual(mockCompute.call_args.args[1].getId(), self.exposure.detector.getId())
+        # Called with the difference image.
+        mockCompute.assert_called_once_with(self.exposure, 30.0, task.config.shutterTiming)
 
         df = result.diaSourceTable
         expected = expectedShutterTime(timing, df["x"].to_numpy(), df["y"].to_numpy())

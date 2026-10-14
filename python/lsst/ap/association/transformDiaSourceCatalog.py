@@ -275,8 +275,7 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
 
         if self.config.doShutterTiming:
             # Per-source shutter-corrected times, where the detector has them.
-            timing = computeShutterTiming(diffIm.metadata, diffIm.detector, requestedExposureTime,
-                                          self.config.shutterTiming)
+            timing = computeShutterTiming(diffIm, requestedExposureTime, self.config.shutterTiming)
             if timing.isAvailable:
                 # The functors rename the centroid to x, y later.
                 diaSourceDf["midpointMjdTai"] = timing.midpointMjdTai(

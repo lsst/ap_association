@@ -1159,8 +1159,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         shutterTiming : `lsst.ip.isr.shutterTiming.ShutterTiming`
             The detector's timing.
         """
-        timing = computeShutterTiming(diffIm.metadata, diffIm.detector, requestedExposureTime,
-                                      self.config.shutterTiming)
+        timing = computeShutterTiming(diffIm, requestedExposureTime, self.config.shutterTiming)
 
         self.metadata["shutterTimingAvailable"] = timing.isAvailable
         self.metadata["shutterTimingFlags"] = int(timing.flags)

@@ -185,10 +185,9 @@ class TestDiaPipelineTask(unittest.TestCase):
         # Computed once, from the difference image.
         mockCompute.assert_called_once()
         args = mockCompute.call_args.args
-        self.assertIs(args[0], self.diffim.metadata)
-        self.assertEqual(args[1].getId(), self.diffim.detector.getId())
-        self.assertEqual(args[2], 30.0)
-        self.assertIs(args[3], task.config.shutterTiming)
+        self.assertIs(args[0], self.diffim)
+        self.assertEqual(args[1], 30.0)
+        self.assertIs(args[2], task.config.shutterTiming)
 
         # The same object goes to both subtasks.
         self.assertIs(calls["diaForcedSource"].kwargs["shutterTiming"], timing)
