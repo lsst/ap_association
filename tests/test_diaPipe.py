@@ -364,6 +364,43 @@ class TestDiaPipelineTask(unittest.TestCase):
         for name in preloaded:
             self.assertIs(kwargs[name], loaded[name], msg=f"{name} should be the loaded catalog")
 
+    def test_connectionsImageType(self):
+        """Test that input_image_type sets the storage class of each image.
+        """
+        expected = {"legacy": {"diffIm": "ExposureF", "exposure": "ExposureF", "template": "ExposureF"},
+                    "future": {"diffIm": "DifferenceImage", "exposure": "VisitImage",
+                               "template": "DifferenceImage"}}
+        for image_type, storageClasses in expected.items():
+            with self.subTest(image_type=image_type):
+                config = self._makeDefaultConfig(config_file=self.config_file.name,
+                                                 input_image_type=image_type)
+                connections = config.connections.ConnectionsClass(config=config)
+                for name, storageClass in storageClasses.items():
+                    self.assertEqual(getattr(connections, name).storageClass, storageClass)
+
+    def test_runQuantumFutureImages(self):
+        """Test that runQuantum passes run() the legacy form of each
+        future-mode image.
+        """
+        config = self._makeDefaultConfig(config_file=self.config_file.name, input_image_type="future")
+        task = DiaPipelineTask(config=config)
+        legacy = {"diffIm": self.diffim, "exposure": self.exposure, "template": self.template}
+        inputs = {"diaSourceTable": _makeMockDataFrame(),
+                  "solarSystemObjectTable": _makeMockTable(),
+                  "preloadedDiaObjects": self.diaObjects,
+                  "preloadedDiaSources": self.diaSources,
+                  "preloadedDiaForcedSources": self.diaForcedSources}
+        for name, image in legacy.items():
+            inputs[name] = MagicMock()
+            inputs[name].to_legacy.return_value = image
+        butlerQC = MagicMock()
+        butlerQC.get.return_value = inputs
+        with patch.object(DetectorVisitIdGeneratorConfig, "apply", return_value=IdGenerator()), \
+                patch.object(DiaPipelineTask, "run") as mockRun:
+            task.runQuantum(butlerQC, MagicMock(), MagicMock())
+        for name, image in legacy.items():
+            self.assertIs(mockRun.call_args.kwargs[name], image)
+
     def test_runRequiresBandAndIdGenerator(self):
         """Test that `run` rejects the `None` defaults on required arguments.
         """

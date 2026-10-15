@@ -24,6 +24,7 @@ __all__ = ("TransformDiaSourceCatalogConnections",
            "TransformDiaSourceCatalogTask",
            "UnpackApdbFlags")
 
+import dataclasses
 import os
 import yaml
 
@@ -68,9 +69,24 @@ class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
         dimensions=("instrument", "visit", "detector"),
     )
 
+    def __init__(self, *, config=None):
+        super().__init__(config=config)
+        if config.input_image_type == "future":
+            self.diffIm = dataclasses.replace(self.diffIm, storageClass="DifferenceImage")
+
 
 class TransformDiaSourceCatalogConfig(TransformCatalogBaseConfig,
                                       pipelineConnections=TransformDiaSourceCatalogConnections):
+    input_image_type = pexConfig.ChoiceField[str](
+        doc="Type of the input difference image. run() takes an"
+            " lsst.afw.image.Exposure either way.",
+        allowed={
+            "legacy": "Read an `lsst.afw.image.Exposure`.",
+            "future": "Read an `lsst.images.DifferenceImage`.",
+        },
+        optional=False,
+        default="legacy",
+    )
     flagMap = pexConfig.Field(
         dtype=str,
         doc="Yaml file specifying SciencePipelines flag fields to bit packs.",
@@ -196,6 +212,8 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
         inputs["band"] = butlerQC.quantum.dataId["band"]
+        if self.config.input_image_type == "future":
+            inputs["diffIm"] = inputs["diffIm"].to_legacy()
 
         outputs = self.run(**inputs)
 
