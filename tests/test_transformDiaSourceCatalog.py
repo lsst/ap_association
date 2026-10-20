@@ -21,6 +21,7 @@
 
 import os
 import unittest
+from unittest import mock
 
 import numpy as np
 
@@ -120,6 +121,30 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         expect_snr.append(np.nan)
         # Have to use allclose because assert_array_equal doesn't support equal_nan.
         np.testing.assert_allclose(result.diaSourceTable["snr"], expect_snr, equal_nan=True, rtol=0)
+
+    def test_connections_image_type(self):
+        """Test that input_image_type sets the storage class of diffIm."""
+        for image_type, storageClass in [("legacy", "ExposureF"), ("future", "DifferenceImage")]:
+            with self.subTest(image_type=image_type):
+                self.config.input_image_type = image_type
+                connections = self.config.connections.ConnectionsClass(config=self.config)
+                self.assertEqual(connections.diffIm.storageClass, storageClass)
+
+    def test_run_quantum_future(self):
+        """Test that runQuantum passes run() the legacy form of a
+        future-mode difference image.
+        """
+        self.config.input_image_type = "future"
+        task = TransformDiaSourceCatalogTask(initInputs=self.initInputs, config=self.config)
+        diffIm = mock.Mock()
+        diffIm.to_legacy.return_value = self.exposure
+        butlerQC = mock.Mock()
+        butlerQC.get.return_value = {"diaSourceCat": self.inputCatalog, "diffIm": diffIm}
+        butlerQC.quantum.dataId = {"band": self.band}
+        with mock.patch.object(task, "run") as run:
+            task.runQuantum(butlerQC, mock.Mock(), mock.Mock())
+        self.assertIs(run.call_args.kwargs["diffIm"], self.exposure)
+        self.assertEqual(run.call_args.kwargs["band"], self.band)
 
     def test_run_with_apdb_schema(self):
         """Test output dataFrame is created and values are correctly inserted
