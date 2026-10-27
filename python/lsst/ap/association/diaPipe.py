@@ -516,6 +516,7 @@ class DiaPipelineConfig(pipeBase.PipelineTaskConfig,
 
     def setDefaults(self):
         self.diaCalculation.plugins = ["ap_meanPosition",
+                                       "ap_firstLastDiaSourceTime",
                                        "ap_nDiaSources",
                                        "ap_meanFlux",
                                        "ap_sigmaFlux",
