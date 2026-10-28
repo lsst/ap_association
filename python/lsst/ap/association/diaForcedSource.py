@@ -59,7 +59,8 @@ class DiaForcedSourcedConfig(pexConfig.Config):
 
     def setDefaults(self):
         self.forcedMeasurement.plugins = ["base_TransformedCentroidFromCoord",
-                                          "base_PsfFlux"]
+                                          "base_PsfFlux",
+                                          "base_PixelFlags"]
         self.forcedMeasurement.doReplaceWithNoise = False
         self.forcedMeasurement.copyColumns = {
             "id": "diaObjectId",
