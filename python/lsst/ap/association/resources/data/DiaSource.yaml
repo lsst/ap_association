@@ -108,9 +108,15 @@ funcs:
     trailRa:
         functor: Column
         args: ext_trailedSources_Naive_ra
+    trailRaErr:
+        functor: Column
+        args: ext_trailedSources_Naive_raErr
     trailDec:
         functor: Column
         args: ext_trailedSources_Naive_dec
+    trailDecErr:
+        functor: Column
+        args: ext_trailedSources_Naive_decErr
     trailLength:
         functor: ConvertPixelToArcseconds
         args:
