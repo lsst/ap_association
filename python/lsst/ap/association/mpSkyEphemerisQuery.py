@@ -126,7 +126,7 @@ class MPSkyEphemerisQueryConfig(
     mpSkyFallbackURL = pexConfig.Field(
         dtype=str,
         doc="mpSky default URL if MP_SKY_URL environment variable unset",
-        default="http://sdfiana014.sdf.slac.stanford.edu:3666/ephemerides/"
+        default="http://usdf-mpsky.sdf.slac.stanford.edu/ephemerides/"
     )
     mpcorb_prefix = pexConfig.Field(
         dtype=str,
