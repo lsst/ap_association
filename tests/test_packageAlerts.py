@@ -150,6 +150,9 @@ def mock_alert(dia_source_id):
             "dipoleNdata": int(43),
             "trailNdata": int(5),
             "bboxSize": int(50),
+            "templateInstrument": "TESTCam",
+            "templateVersion": 0,
+            "mixedInstruments": False,
             # unlike in transformDiaSourceCatalog.py we need a timezone-aware
             # version because mock_alert does not go through pandas
             "timeProcessedMjdTai": DateTime.now().get(system=DateTime.MJD, scale=DateTime.TAI)

@@ -41,6 +41,11 @@ from lsst.utils.timer import timeMethod
 
 from lsst.pipe.tasks.schemaUtils import convertDataFrameToSdmSchema, readSdmSchemaFile
 
+_UNKNOWN_INSTRUMENT = "UNKNOWN"
+"""Name of the template instrument when it is not known, as recorded by
+`lsst.images.DifferenceImageTemplateInfo`.
+"""
+
 
 class TransformDiaSourceCatalogConnections(pipeBase.PipelineTaskConnections,
                                            dimensions=("instrument", "visit", "detector"),
@@ -212,7 +217,12 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
         inputs["band"] = butlerQC.quantum.dataId["band"]
+        inputs["instrument"] = butlerQC.quantum.dataId["instrument"]
         if self.config.input_image_type == "future":
+            # Templates are required to all use the same instrument.
+            templates = getattr(inputs["diffIm"], "templates", None)
+            if templates:
+                inputs["templateInstrument"] = templates[0].instrument
             inputs["diffIm"] = inputs["diffIm"].to_legacy()
 
         outputs = self.run(**inputs)
@@ -224,7 +234,9 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
             diaSourceCat,
             diffIm,
             band,
-            reliability=None):
+            reliability=None,
+            instrument=None,
+            templateInstrument=None):
         """Convert input catalog to ParquetTable/Pandas and run functors.
 
         Additionally, add new columns for stripping information from the
@@ -241,6 +253,11 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         reliability : `lsst.afw.table.SourceCatalog`
             Reliability (e.g. real/bogus) scores, row-matched to
             ``diaSourceCat``.
+        instrument : `str`, optional
+            Name of the instrument that took the science image.
+        templateInstrument : `str`, optional
+            Name of the instrument recorded for the template, or `None` if it
+            is not known.
 
         Returns
         -------
@@ -273,6 +290,13 @@ class TransformDiaSourceCatalogTask(TransformCatalogBaseTask):
         diaSourceDf["exposureTime"] = diffIm.visitInfo.exposureTime
         diaSourceDf["diaObjectId"] = 0
         diaSourceDf["ssObjectId"] = 0
+        templateInstrument = templateInstrument or _UNKNOWN_INSTRUMENT
+        mixedInstruments = (instrument is not None
+                            and templateInstrument not in (_UNKNOWN_INSTRUMENT, instrument))
+        diaSourceDf["templateInstrument"] = templateInstrument
+        diaSourceDf["mixedInstruments"] = mixedInstruments
+        # Only templates from another instrument have a nonzero version for now.
+        diaSourceDf["templateVersion"] = 1 if mixedInstruments else 0
 
         # TODO: this has been formally deprecated and should be removed too
         if self.config.doPackFlags:

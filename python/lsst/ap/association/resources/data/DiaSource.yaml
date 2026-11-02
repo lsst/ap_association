@@ -300,3 +300,12 @@ funcs:
     templateMjdMax:
         functor: Column
         args: templateMjdMax
+    templateInstrument:
+        functor: Column
+        args: templateInstrument
+    templateVersion:
+        functor: Column
+        args: templateVersion
+    mixedInstruments:
+        functor: Column
+        args: mixedInstruments
