@@ -418,6 +418,17 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
             cutoutFromBytes = CCDData.read(bytesIO, format="fits")
         self.assertFloatsAlmostEqual(cutoutCcdData.data, cutoutFromBytes.data)
 
+    def testFindMissingDiaSourceColumns(self):
+        """Test that only the DiaSource columns that alerts require are
+        reported missing.
+        """
+        packageAlerts = PackageAlertsTask()
+        self.assertEqual(packageAlerts.findMissingDiaSourceColumns(self.diaSources), [])
+        # templateMjdMean accepts null, so it may be absent.
+        incomplete = self.diaSources.drop(columns=["mixedInstruments", "templateMjdMean", "templateVersion"])
+        self.assertEqual(packageAlerts.findMissingDiaSourceColumns(incomplete),
+                         ["templateVersion", "mixedInstruments"])
+
     def testMakeAlertDict(self):
         """Test stripping data from the various data products and into a
         dictionary "alert".

@@ -737,6 +737,16 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         self.checkTableIndex(preloadedDiaObjects, index="diaObjectId")
         self.checkTableIndex(preloadedDiaForcedSources, index=["diaObjectId", "diaForcedSourceId"])
 
+        # Alerts include the DiaSource history, so check that it has every
+        # column they require while the image can still be retried.
+        if self.config.doPackageAlerts and not preloadedDiaSources.empty:
+            missing = self.alertPackager.findMissingDiaSourceColumns(preloadedDiaSources)
+            if missing:
+                raise ValueError(
+                    "Aborting before writing to the APDB: the DiaSource history lacks columns that "
+                    f"alerts require: {', '.join(missing)}. It may predate these columns in the APDB schema."
+                )
+
         if not preloadedDiaObjects.empty:
             # Include a small buffer outside the image so that we can associate sources near the edge
             diaObjects, _ = self.purgeDiaObjects(diffIm.getBBox(), diffIm.getWcs(), preloadedDiaObjects,

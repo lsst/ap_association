@@ -392,6 +392,28 @@ class PackageAlertsTask(pipeBase.Task):
         """
         diaSources["programId"] = 0
 
+    def findMissingDiaSourceColumns(self, diaSources):
+        """Check that a DiaSource catalog has the correct schema for alerts.
+
+        Parameters
+        ----------
+        diaSources : `pandas.DataFrame`
+            DiaSources to include in alerts.
+
+        Returns
+        -------
+        missing : `list` [`str`]
+            Names of the DiaSource fields in the alert schema that have no
+            default, do not accept null, and are not columns of
+            ``diaSources``, in schema order.
+        """
+        diaSourceSchema = next(field["type"] for field in self.alertSchema.definition["fields"]
+                               if field["name"] == "diaSource")
+        return [field["name"] for field in diaSourceSchema["fields"]
+                if "default" not in field
+                and not (isinstance(field["type"], list) and "null" in field["type"])
+                and field["name"] not in diaSources.columns]
+
     def createDiaSourceExtent(self, bboxSize):
         """Create an extent for a box for the cutouts given the size of the
         square BBox that covers the source footprint.
