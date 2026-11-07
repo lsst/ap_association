@@ -136,7 +136,10 @@ def makeDiaSources(nSources, diaObjectIds, exposure, rng, randomizeObjects=False
                      "psfNdata": 0,
                      "bboxSize": 23,
                      "trailNdata": 0,
-                     "dipoleNdata": 0}
+                     "dipoleNdata": 0,
+                     "templateInstrument": "TESTCam",
+                     "templateVersion": 0,
+                     "mixedInstruments": False}
         data.append(diaSource | flags)
 
     return pd.DataFrame(data=data).set_index(["diaObjectId", "band", "diaSourceId"], drop=False)

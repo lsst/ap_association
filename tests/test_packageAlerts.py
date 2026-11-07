@@ -150,6 +150,9 @@ def mock_alert(dia_source_id):
             "dipoleNdata": int(43),
             "trailNdata": int(5),
             "bboxSize": int(50),
+            "templateInstrument": "TESTCam",
+            "templateVersion": 0,
+            "mixedInstruments": False,
             # unlike in transformDiaSourceCatalog.py we need a timezone-aware
             # version because mock_alert does not go through pandas
             "timeProcessedMjdTai": DateTime.now().get(system=DateTime.MJD, scale=DateTime.TAI)
@@ -414,6 +417,17 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
         with io.BytesIO(cutoutBytes) as bytesIO:
             cutoutFromBytes = CCDData.read(bytesIO, format="fits")
         self.assertFloatsAlmostEqual(cutoutCcdData.data, cutoutFromBytes.data)
+
+    def testFindMissingDiaSourceColumns(self):
+        """Test that only the DiaSource columns that alerts require are
+        reported missing.
+        """
+        packageAlerts = PackageAlertsTask()
+        self.assertEqual(packageAlerts.findMissingDiaSourceColumns(self.diaSources), [])
+        # templateMjdMean accepts null, so it may be absent.
+        incomplete = self.diaSources.drop(columns=["mixedInstruments", "templateMjdMean", "templateVersion"])
+        self.assertEqual(packageAlerts.findMissingDiaSourceColumns(incomplete),
+                         ["templateVersion", "mixedInstruments"])
 
     def testMakeAlertDict(self):
         """Test stripping data from the various data products and into a
