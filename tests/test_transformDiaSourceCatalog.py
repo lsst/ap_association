@@ -121,6 +121,32 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
         expect_snr.append(np.nan)
         # Have to use allclose because assert_array_equal doesn't support equal_nan.
         np.testing.assert_allclose(result.diaSourceTable["snr"], expect_snr, equal_nan=True, rtol=0)
+        np.testing.assert_array_equal(result.diaSourceTable["templateInstrument"],
+                                      ["UNKNOWN"]*self.nSources)
+        np.testing.assert_array_equal(result.diaSourceTable["mixedInstruments"], [False]*self.nSources)
+        np.testing.assert_array_equal(result.diaSourceTable["templateVersion"], [0]*self.nSources)
+
+    def test_run_template_instrument(self):
+        """Test that the template instrument columns follow the instruments
+        of the science image and the template.
+        """
+        self.config.doUseSchema = True
+        transformTask = TransformDiaSourceCatalogTask(initInputs=self.initInputs,
+                                                      config=self.config)
+        # instrument, templateInstrument, expected column values
+        cases = [("LSSTCam", "LSSTCam", ("LSSTCam", False, 0)),
+                 ("LSSTCam", "LSSTComCam", ("LSSTComCam", True, 1)),
+                 ("LSSTCam", None, ("UNKNOWN", False, 0)),
+                 ("LSSTCam", "UNKNOWN", ("UNKNOWN", False, 0)),
+                 (None, "LSSTComCam", ("LSSTComCam", False, 0))]
+        for instrument, templateInstrument, expected in cases:
+            with self.subTest(instrument=instrument, templateInstrument=templateInstrument):
+                result = transformTask.run(self.inputCatalog, self.exposure, self.band,
+                                           instrument=instrument, templateInstrument=templateInstrument)
+                table = result.diaSourceTable
+                for name, value in zip(("templateInstrument", "mixedInstruments", "templateVersion"),
+                                       expected):
+                    np.testing.assert_array_equal(table[name], [value]*self.nSources, err_msg=name)
 
     def test_connections_image_type(self):
         """Test that input_image_type sets the storage class of diffIm."""
@@ -132,19 +158,30 @@ class TestTransformDiaSourceCatalogTask(unittest.TestCase):
 
     def test_run_quantum_future(self):
         """Test that runQuantum passes run() the legacy form of a
-        future-mode difference image.
+        future-mode difference image, the science instrument, and the
+        instrument recorded for the template, if any.
         """
         self.config.input_image_type = "future"
         task = TransformDiaSourceCatalogTask(initInputs=self.initInputs, config=self.config)
-        diffIm = mock.Mock()
-        diffIm.to_legacy.return_value = self.exposure
-        butlerQC = mock.Mock()
-        butlerQC.get.return_value = {"diaSourceCat": self.inputCatalog, "diffIm": diffIm}
-        butlerQC.quantum.dataId = {"band": self.band}
-        with mock.patch.object(task, "run") as run:
-            task.runQuantum(butlerQC, mock.Mock(), mock.Mock())
-        self.assertIs(run.call_args.kwargs["diffIm"], self.exposure)
-        self.assertEqual(run.call_args.kwargs["band"], self.band)
+        for recorded in (True, False):
+            with self.subTest(recorded=recorded):
+                diffIm = mock.Mock()
+                diffIm.to_legacy.return_value = self.exposure
+                if recorded:
+                    diffIm.templates = [mock.Mock(instrument="LSSTComCam")]
+                else:
+                    # Accessing the templates of an image without them raises.
+                    del diffIm.templates
+                butlerQC = mock.Mock()
+                butlerQC.get.return_value = {"diaSourceCat": self.inputCatalog, "diffIm": diffIm}
+                butlerQC.quantum.dataId = {"band": self.band, "instrument": "LSSTCam"}
+                with mock.patch.object(task, "run") as run:
+                    task.runQuantum(butlerQC, mock.Mock(), mock.Mock())
+                kwargs = run.call_args.kwargs
+                self.assertIs(kwargs["diffIm"], self.exposure)
+                self.assertEqual(kwargs["band"], self.band)
+                self.assertEqual(kwargs["instrument"], "LSSTCam")
+                self.assertEqual(kwargs.get("templateInstrument"), "LSSTComCam" if recorded else None)
 
     def test_run_with_apdb_schema(self):
         """Test output dataFrame is created and values are correctly inserted

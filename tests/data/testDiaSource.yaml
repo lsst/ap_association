@@ -38,3 +38,12 @@ funcs:
     reliability:
         functor: Column
         args: reliability
+    templateInstrument:
+        functor: Column
+        args: templateInstrument
+    templateVersion:
+        functor: Column
+        args: templateVersion
+    mixedInstruments:
+        functor: Column
+        args: mixedInstruments

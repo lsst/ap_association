@@ -112,3 +112,6 @@ columns:
     - name: ext_trailedSources_Naive_flag
       bit: 36
       doc: trailed source algorithm failed to find a good fit.
+    - name: base_PixelFlags_flag_spike
+      bit: 37
+      doc: Diffraction spike of a bright star in the source footprint.

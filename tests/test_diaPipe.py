@@ -262,6 +262,8 @@ class TestDiaPipelineTask(unittest.TestCase):
                   side_effect=associator_run) as mainRun, \
             patch('lsst.pipe.tasks.ssoAssociation.SolarSystemAssociationTask.run',
                   side_effect=solarSystemAssociator_run) as ssRun:
+            if doPackageAlerts:
+                task.alertPackager.findMissingDiaSourceColumns.return_value = []
 
             result = task.run(diaSrc,
                               None,
@@ -309,6 +311,31 @@ class TestDiaPipelineTask(unittest.TestCase):
                 loadForcedSourcesRun.assert_not_called()
                 self.assertEqual(meta["diaPipe.loadDiaSourcesDuration"], -1)
                 self.assertEqual(meta["diaPipe.loadDiaForcedSourcesDuration"], -1)
+
+    def test_runRejectsIncompleteDiaSourceHistory(self):
+        """Test that DiaSource history lacking columns that alerts require
+        stops processing before anything is written to the APDB.
+        """
+        config = self._makeDefaultConfig(config_file=self.config_file.name,
+                                         doPackageAlerts=True,
+                                         doReloadDiaObjects=False)
+        task = DiaPipelineTask(config=config)
+        history = self.diaSources.drop(columns=["templateVersion", "mixedInstruments"])
+        with patch.object(task, "apdb") as apdb, \
+                self.assertRaisesRegex(ValueError, "before writing to the APDB.*: "
+                                                   "templateVersion, mixedInstruments\\."):
+            task.run(_makeMockDataFrame(),
+                     None,
+                     self.diffim,
+                     self.exposure,
+                     self.template,
+                     preloadedDiaObjects=self.diaObjects,
+                     preloadedDiaSources=history,
+                     preloadedDiaForcedSources=self.diaForcedSources,
+                     band="g",
+                     idGenerator=IdGenerator(),
+                     solarSystemObjectTable=_makeMockTable())
+        apdb.store.assert_not_called()
 
     def test_reloadAllApdbCatalogsRemovesPreloadedConnections(self):
         """Test that reloading drops the preloaded catalog connections.

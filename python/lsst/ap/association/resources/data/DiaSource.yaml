@@ -291,3 +291,21 @@ funcs:
     glint_trail:
         functor: Column
         args: glint_trail
+    templateMjdMean:
+        functor: Column
+        args: templateMjdMean
+    templateMjdMin:
+        functor: Column
+        args: templateMjdMin
+    templateMjdMax:
+        functor: Column
+        args: templateMjdMax
+    templateInstrument:
+        functor: Column
+        args: templateInstrument
+    templateVersion:
+        functor: Column
+        args: templateVersion
+    mixedInstruments:
+        functor: Column
+        args: mixedInstruments
