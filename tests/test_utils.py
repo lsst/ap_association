@@ -19,11 +19,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import tempfile
 import unittest
 
 import lsst.daf.butler as dafButler
+from lsst.dax.apdb import Apdb, ApdbSql
 
-from lsst.ap.association.utils import getMidpointFromTimespan
+from lsst.ap.association.utils import getMidpointFromTimespan, readMpcOrbitsSchema
 from utils_tests import makeExposure, makeRegionTime
 
 
@@ -65,3 +67,15 @@ class TestUtils(unittest.TestCase):
             getMidpointFromTimespan(timespan_none_both, allowUnbounded=True)
         with self.assertRaises(ValueError):
             getMidpointFromTimespan(timespan_none_both, allowUnbounded=False)
+
+    def test_readMpcOrbitsSchema(self):
+        """Test reading the mpc_orbits schema from the APDB schema file.
+        """
+        with tempfile.NamedTemporaryFile() as tmpFile:
+            apdb = Apdb.from_config(ApdbSql.init_database(db_url="sqlite:///" + tmpFile.name))
+            table = readMpcOrbitsSchema(apdb)
+        self.assertEqual(table.name, "mpc_orbits")
+        columns = {column.name: column for column in table.columns}
+        self.assertEqual(columns["u_param"].datatype, "int")
+        self.assertTrue(columns["u_param"].nullable)
+        self.assertFalse(columns["id"].nullable)

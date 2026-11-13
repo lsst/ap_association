@@ -166,6 +166,22 @@ class TestDiaPipelineTask(unittest.TestCase):
         self._testRun(doPackageAlerts=True, doSolarSystemAssociation=False, doReloadDiaObjects=True,
                       doReloadAllApdbCatalogs=True)
 
+    def testMissingMpcOrbitsSchema(self):
+        """Test that packaging solar system alerts requires an mpc_orbits
+        table schema.
+        """
+        with patch("lsst.ap.association.diaPipe.readMpcOrbitsSchema", return_value=None):
+            config = self._makeDefaultConfig(config_file=self.config_file.name,
+                                             doPackageAlerts=True, doSolarSystemAssociation=True)
+            with self.assertRaisesRegex(ValueError, "mpc_orbits"):
+                DiaPipelineTask(config=config)
+            for doPackageAlerts, doSolarSystemAssociation in [(True, False), (False, True)]:
+                config = self._makeDefaultConfig(config_file=self.config_file.name,
+                                                 doPackageAlerts=doPackageAlerts,
+                                                 doSolarSystemAssociation=doSolarSystemAssociation)
+                task = DiaPipelineTask(config=config)
+                self.assertIsNone(task.schema["mpc_orbits"])
+
     def testRunWithReloadAllApdbCatalogsOnly(self):
         """Test that reloading everything implies the DiaObject reload.
         """

@@ -49,7 +49,8 @@ from lsst.ap.association import (
 
 from lsst.ap.association.loadDiaCatalogs import loadDiaObjectsFromApdb, loadDiaSourcesFromApdb, \
     loadDiaForcedSourcesFromApdb
-from lsst.ap.association.utils import makeEmptyForcedSourceTable, getRegion, paddedRegion, readSchemaFromApdb
+from lsst.ap.association.utils import makeEmptyForcedSourceTable, getRegion, paddedRegion, \
+    readMpcOrbitsSchema, readSchemaFromApdb
 from lsst.daf.base import DateTime
 from lsst.meas.base import DetectorVisitIdGeneratorConfig, \
     DiaObjectCalculationTask
@@ -537,6 +538,13 @@ class DiaPipelineTask(pipeBase.PipelineTask):
         super().__init__(**kwargs)
         self.apdb = daxApdb.Apdb.from_uri(self.config.apdb_config_url)
         self.schema = readSchemaFromApdb(self.apdb)
+        # Alerts include mpc_orbits records, which the APDB does not store.
+        self.schema["mpc_orbits"] = readMpcOrbitsSchema(self.apdb)
+        # Fail at startup rather than after the first APDB write.
+        if (self.config.doPackageAlerts and self.config.doSolarSystemAssociation
+                and self.schema["mpc_orbits"] is None):
+            raise ValueError(f"APDB schema file {self.apdb.getConfig().schema_file} has no mpc_orbits "
+                             "table, which alerts for solar system sources require.")
         self.makeSubtask("associator")
         self.makeSubtask("diaCalculation")
         if self.config.doRunForcedMeasurement:
@@ -869,6 +877,7 @@ class DiaPipelineTask(pipeBase.PipelineTask):
                                        ssSrc=associatedSsSourcesPlusMpcorb,
                                        doRunForcedMeasurement=self.config.doRunForcedMeasurement,
                                        forcedSourceHistoryThreshold=forcedSourceHistoryThreshold,
+                                       schema=self.schema,
                                        )
         except Exception as e:
             # Catch *any* error after we have updated the APDB
