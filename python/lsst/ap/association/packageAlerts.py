@@ -56,6 +56,44 @@ import lsst.utils.logging
 from lsst.utils.timer import timeMethod
 
 
+def _toAlertValues(catalog):
+    """Convert a catalog to object dtype holding values that Avro accepts.
+
+    Parameters
+    ----------
+    catalog : `pandas.DataFrame`
+        Catalog to convert.
+
+    Returns
+    -------
+    values : `pandas.DataFrame`
+        Copy of ``catalog`` with object dtype. Nulls in columns that are not
+        floating point are `None`, and timestamps are timezone-aware UTC.
+
+    Notes
+    -----
+    Object dtype stops pandas from coercing a row to a common dtype (e.g.
+    nullable ``Float64``) when single rows are selected. Avro rejects
+    `pandas.NA` and `pandas.NaT` in nullable fields but accepts NaN in
+    ``float`` and ``double`` fields, so NaN in floating-point columns is
+    kept. Naive timestamps are UTC in the SDM schemas, while Avro treats
+    naive datetimes as local time.
+    """
+    catalog = catalog.copy()
+    for name, column in catalog.items():
+        if column.dtype.kind == "M" and column.dt.tz is None:
+            catalog[name] = column.dt.tz_localize("UTC")
+        elif column.dtype.kind == "f" and isinstance(column.dtype, pd.api.extensions.ExtensionDtype):
+            catalog[name] = column.to_numpy(dtype=column.dtype.numpy_dtype, na_value=np.nan)
+    values = catalog.astype("object")
+    for name, column in catalog.items():
+        if column.dtype.kind != "f":
+            nulls = column.isna().to_numpy()
+            if nulls.any():
+                values.loc[nulls, name] = None
+    return values
+
+
 class PackageAlertsConfig(pexConfig.Config):
     """Config class for AssociationTask.
     """
@@ -275,16 +313,14 @@ class PackageAlertsTask(pipeBase.Task):
         sciencePsf = self._computePsf(calexp, calexp.psf.getAveragePosition())
         templatePsf = self._computePsf(template, template.psf.getAveragePosition())
 
-        # cast to object; works around pandas coercing Series to nullable
-        # Float64 type when selecting single rows below
-        diaSourceCat = diaSourceCat.astype('object')
-        diaObjectCat = diaObjectCat.astype('object')
-        diaSrcHistory = diaSrcHistory.astype('object')
-        diaForcedSources = diaForcedSources.astype('object')
+        diaSourceCat = _toAlertValues(diaSourceCat)
+        diaObjectCat = _toAlertValues(diaObjectCat)
+        diaSrcHistory = _toAlertValues(diaSrcHistory)
+        diaForcedSources = _toAlertValues(diaForcedSources)
 
         if ssSrc is not None:
             ssSrc = ssSrc.set_index('diaSourceId')
-            ssSrc = ssSrc.astype('object')
+            ssSrc = _toAlertValues(ssSrc)
 
         n_sources = len(diaSourceCat)
         self.log.info("Packaging alerts for %d DiaSources.", n_sources)

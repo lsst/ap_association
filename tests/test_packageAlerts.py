@@ -38,6 +38,7 @@ except ImportError:
 
 import lsst.alert.packet as alertPack
 from lsst.ap.association import PackageAlertsConfig, PackageAlertsTask
+from lsst.ap.association.packageAlerts import _toAlertValues
 from lsst.ap.association.utils import readSchemaFromApdb
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.image as afwImage
@@ -513,6 +514,30 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
 
             self.assertEqual(alert["observation_reason"], obs_reason)
             self.assertEqual(alert["target_name"], target)
+
+    def testToAlertValues(self):
+        """Test that nulls become None except in floating-point columns, and
+        that timestamps become UTC.
+        """
+        catalog = pd.DataFrame({
+            "nullableInt": pd.Series([1, pd.NA], dtype="Int64"),
+            "nullableFloat": pd.Series([2.0, pd.NA], dtype="Float64"),
+            "float": [3.0, np.nan],
+            "bool": pd.Series([True, pd.NA], dtype="boolean"),
+            "string": ["a", np.nan],
+            "time": pd.Series([0, pd.NaT], dtype="datetime64[ms]"),
+        })
+        values = _toAlertValues(catalog)
+
+        self.assertTrue((values.dtypes == object).all())
+        self.assertEqual(values["nullableInt"].tolist(), [1, None])
+        self.assertEqual(values["bool"].tolist(), [True, None])
+        self.assertEqual(values["string"].tolist(), ["a", None])
+        self.assertEqual(values["time"].tolist(),
+                         [pd.Timestamp(0, tz="UTC"), None])
+        for name in ["nullableFloat", "float"]:
+            self.assertEqual(values[name][0], catalog[name][0])
+            self.assertTrue(np.isnan(values[name][1]))
 
     def testCutoutRotpa(self):
         """Test that the ROTPA header keyword matches the boresightRotAngle from visitInfo.
