@@ -52,8 +52,47 @@ import lsst.pex.config as pexConfig
 from lsst.pex.exceptions import InvalidParameterError
 import lsst.pipe.base as pipeBase
 from lsst.pipe.tasks.associationUtils import ss_object_id_to_obj_id
+from lsst.pipe.tasks.schemaUtils import checkDataFrameAgainstSdmSchema, convertDataFrameToSdmSchema
 import lsst.utils.logging
 from lsst.utils.timer import timeMethod
+
+
+def _toAlertValues(catalog):
+    """Convert a catalog to object dtype holding values that Avro accepts.
+
+    Parameters
+    ----------
+    catalog : `pandas.DataFrame`
+        Catalog to convert.
+
+    Returns
+    -------
+    values : `pandas.DataFrame`
+        Copy of ``catalog`` with object dtype. Nulls in columns that are not
+        floating point are `None`, and timestamps are timezone-aware UTC.
+
+    Notes
+    -----
+    Object dtype stops pandas from coercing a row to a common dtype (e.g.
+    nullable ``Float64``) when single rows are selected. Avro rejects
+    `pandas.NA` and `pandas.NaT` in nullable fields but accepts NaN in
+    ``float`` and ``double`` fields, so NaN in floating-point columns is
+    kept. Naive timestamps are UTC in the SDM schemas, while Avro treats
+    naive datetimes as local time.
+    """
+    catalog = catalog.copy()
+    for name, column in catalog.items():
+        if column.dtype.kind == "M" and column.dt.tz is None:
+            catalog[name] = column.dt.tz_localize("UTC")
+        elif column.dtype.kind == "f" and isinstance(column.dtype, pd.api.extensions.ExtensionDtype):
+            catalog[name] = column.to_numpy(dtype=column.dtype.numpy_dtype, na_value=np.nan)
+    values = catalog.astype("object")
+    for name, column in catalog.items():
+        if column.dtype.kind != "f":
+            nulls = column.isna().to_numpy()
+            if nulls.any():
+                values.loc[nulls, name] = None
+    return values
 
 
 class PackageAlertsConfig(pexConfig.Config):
@@ -216,6 +255,7 @@ class PackageAlertsTask(pipeBase.Task):
             ssSrc=None,
             doRunForcedMeasurement=True,
             forcedSourceHistoryThreshold=0,
+            schema=None,
             ):
         """Package DiaSources/Object and exposure data into Avro alerts.
 
@@ -247,7 +287,7 @@ class PackageAlertsTask(pipeBase.Task):
             Calexp used to create the ``diffIm``.
         template : `lsst.afw.image.ExposureF` or `None`
             Template image used to create the ``diffIm``.
-        ssSrc : `astropy.table.Table`, optional
+        ssSrc : `pandas.DataFrame`, optional
             Solar system specific information for diaSources associated to ssObjects.
         doRunForcedMeasurement : `bool`, optional
             Flag to indicate whether forced measurement was run.
@@ -257,6 +297,19 @@ class PackageAlertsTask(pipeBase.Task):
         forcedSourceHistoryThreshold : `int`, optional
             Minimum number of detections of a diaObject required
             to run forced photometry. Set to 1 to include all diaObjects.
+        schema : `dict` [`str`, `lsst.dax.apdb.schema_model.Table` \
+                 or `felis.datamodel.Table`], optional
+            Table schemas keyed by table name, as used by
+            `lsst.ap.association.DiaPipelineTask`. Required if ``ssSrc`` has
+            MPCORB columns, which are converted to the ``mpc_orbits`` table
+            types.
+
+        Raises
+        ------
+        ValueError
+            Raised if ``ssSrc`` has MPCORB columns and ``schema`` has no
+            ``mpc_orbits`` table, or if a column cannot be converted to its
+            schema type.
         """
 
         alerts = []
@@ -275,16 +328,15 @@ class PackageAlertsTask(pipeBase.Task):
         sciencePsf = self._computePsf(calexp, calexp.psf.getAveragePosition())
         templatePsf = self._computePsf(template, template.psf.getAveragePosition())
 
-        # cast to object; works around pandas coercing Series to nullable
-        # Float64 type when selecting single rows below
-        diaSourceCat = diaSourceCat.astype('object')
-        diaObjectCat = diaObjectCat.astype('object')
-        diaSrcHistory = diaSrcHistory.astype('object')
-        diaForcedSources = diaForcedSources.astype('object')
+        diaSourceCat = _toAlertValues(diaSourceCat)
+        diaObjectCat = _toAlertValues(diaObjectCat)
+        diaSrcHistory = _toAlertValues(diaSrcHistory)
+        diaForcedSources = _toAlertValues(diaForcedSources)
 
         if ssSrc is not None:
+            ssSrc = self.standardizeMpcOrbits(ssSrc, schema)
             ssSrc = ssSrc.set_index('diaSourceId')
-            ssSrc = ssSrc.astype('object')
+            ssSrc = _toAlertValues(ssSrc)
 
         n_sources = len(diaSourceCat)
         self.log.info("Packaging alerts for %d DiaSources.", n_sources)
@@ -391,6 +443,50 @@ class PackageAlertsTask(pipeBase.Task):
             DataFrame of DiaSources to patch.
         """
         diaSources["programId"] = 0
+
+    def standardizeMpcOrbits(self, ssSources, schema):
+        """Convert the MPCORB columns of solar system sources to the
+        ``mpc_orbits`` column types.
+
+        Parameters
+        ----------
+        ssSources : `pandas.DataFrame`
+            Solar system sources, with ``mpc_orbits`` columns prefixed by
+            ``MPCORB_``.
+        schema : `dict` [`str`, `lsst.dax.apdb.schema_model.Table` \
+                 or `felis.datamodel.Table`] or `None`
+            Table schemas keyed by table name.
+
+        Returns
+        -------
+        ssSources : `pandas.DataFrame`
+            Copy of ``ssSources`` with the MPCORB columns converted, and any
+            ``mpc_orbits`` columns that were missing added as null (or zero,
+            if not nullable). Returned unchanged if there are no MPCORB
+            columns.
+
+        Raises
+        ------
+        ValueError
+            Raised if there are MPCORB columns and ``schema`` has no
+            ``mpc_orbits`` table, or if a column cannot be converted to its
+            schema type.
+        """
+        prefix = "MPCORB_"
+        mpcorbColumns = [col for col in ssSources.columns if col.startswith(prefix)]
+        if not mpcorbColumns:
+            return ssSources
+        if schema is None or schema.get("mpc_orbits") is None:
+            raise ValueError("An APDB schema with an mpc_orbits table is required to package MPCORB columns.")
+        mpcOrbits = ssSources[mpcorbColumns].rename(columns=lambda col: col[len(prefix):])
+        # The alert record always carries id 0; the ephemeris service id
+        # is a string and does not convert to the schema's int.
+        mpcOrbits["id"] = 0
+        mpcOrbits = convertDataFrameToSdmSchema(schema, mpcOrbits, "mpc_orbits", skipIndex=True)
+        # convertDataFrameToSdmSchema leaves a column's dtype unchanged when
+        # the cast to a nullable type is unsafe, so check the result.
+        checkDataFrameAgainstSdmSchema(schema, mpcOrbits, "mpc_orbits")
+        return ssSources.drop(columns=mpcorbColumns).join(mpcOrbits.add_prefix(prefix))
 
     def findMissingDiaSourceColumns(self, diaSources):
         """Check that a DiaSource catalog has the correct schema for alerts.
@@ -689,16 +785,6 @@ class PackageAlertsTask(pipeBase.Task):
         else:
             mpcorbColumns = [col for col in ssSource if col[:7] == 'MPCORB_']
             mpcOrbit = {key[7:]: ssSource[key] for key in mpcorbColumns}
-
-            fields_to_cast = [
-                "arc_length_total", "arc_length_sel", "a", "mean_anomaly", "period", "mean_motion", "a_unc",
-                "mean_anomaly_unc", "period_unc", "mean_motion_unc", "yarkovsky", "srp", "a1", "a2", "a3",
-                "dt", "yarkovsky_unc", "srp_unc", "a1_unc", "a2_unc", "a3_unc", "dt_unc",
-                "not_normalized_rms", "earth_moid"
-            ]
-            for key in fields_to_cast:
-                if key in mpcOrbit and mpcOrbit[key] is not None:
-                    mpcOrbit[key] = float(mpcOrbit[key])
 
             if 'packed_primary_provisional_designation' not in mpcOrbit:
                 unpacked_desig = ssSource['designation']

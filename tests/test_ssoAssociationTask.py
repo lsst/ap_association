@@ -20,7 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import numpy as np
-from astropy.table import Table
+from astropy.table import MaskedColumn, Table
 import astropy.table as tb
 import astropy.units as u
 import unittest
@@ -111,6 +111,25 @@ class TestSolarSystemAssociation(unittest.TestCase):
         self.assertEqual(results.ssoAssocDiaSources['ra'][0], 45.0)
         self.assertEqual(results.ssoAssocDiaSources['dec'][0], 45.0)
         self.assertEqual(results.ssoAssocDiaSources['ssObjectId'][0], 21164728253101137)
+
+    def test_run_null_u_param(self):
+        """Test that a null MPCORB u_param stays NaN instead of becoming a
+        bogus integer.
+        """
+        # mpSkyEphemerisQuery delivers datetimes as masked strings and null
+        # ints as float NaN.
+        for col in ["MPCORB_created_at", "MPCORB_updated_at", "MPCORB_fitting_datetime"]:
+            self.testSsObjects[col] = MaskedColumn([""], mask=[True])
+        self.testSsObjects["MPCORB_orbit_type_int"] = [11]
+        self.testSsObjects["MPCORB_u_param"] = [np.nan]
+        ssAssocTask = SolarSystemAssociationTask()
+        results = ssAssocTask.run(self.testDiaSources,
+                                  self.testSsObjects,
+                                  self.exposure.visitInfo,
+                                  self.exposure.getBBox(),
+                                  self.exposure.wcs)
+        self.assertEqual(len(results.associatedSsSources), 1)
+        self.assertTrue(np.isnan(results.associatedSsSources["MPCORB_u_param"][0]))
 
     def test_mask(self):
         """Test that masking against the CCD bounding box works as expected.

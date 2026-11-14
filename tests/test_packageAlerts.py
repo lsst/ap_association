@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import datetime
+from decimal import Decimal
 import io
 import os
 
@@ -38,7 +40,8 @@ except ImportError:
 
 import lsst.alert.packet as alertPack
 from lsst.ap.association import PackageAlertsConfig, PackageAlertsTask
-from lsst.ap.association.utils import readSchemaFromApdb
+from lsst.ap.association.packageAlerts import _toAlertValues
+from lsst.ap.association.utils import readMpcOrbitsSchema, readSchemaFromApdb
 from lsst.afw.cameraGeom.testUtils import DetectorWrapper
 import lsst.afw.image as afwImage
 from lsst.daf.base import DateTime
@@ -118,6 +121,17 @@ def _roundTripThroughApdb(objects, sources, forcedSources, dateTime):
                                                    skipIndex=True)
 
     return (diaObjects, diaSources, diaForcedSources)
+
+
+def _makeApdbSchema():
+    """Return the table schemas of a new APDB, as DiaPipelineTask builds
+    them.
+    """
+    with tempfile.NamedTemporaryFile() as tmpFile:
+        apdb = Apdb.from_config(ApdbSql.init_database(db_url="sqlite:///" + tmpFile.name))
+        schema = readSchemaFromApdb(apdb)
+        schema["mpc_orbits"] = readMpcOrbitsSchema(apdb)
+        return schema
 
 
 VISIT = 2
@@ -205,6 +219,11 @@ def _deserialize_alert(alert_bytes):
 
 
 class TestPackageAlerts(lsst.utils.tests.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.apdbSchema = _makeApdbSchema()
+
     def setUp(self):
         # Create an instance of random generator with fixed seed.
         rng = np.random.default_rng(1234)
@@ -513,6 +532,93 @@ class TestPackageAlerts(lsst.utils.tests.TestCase):
 
             self.assertEqual(alert["observation_reason"], obs_reason)
             self.assertEqual(alert["target_name"], target)
+
+    def _makeSsSrc(self, **mpcOrbitUpdates):
+        """Make a one-row solar system source catalog with MPCORB columns
+        shaped like the ephemeris service output.
+        """
+        mockAlert = mock_ss_alert(1, 1)
+        mpcOrbit = dict(mockAlert["mpc_orbits"], id="1234", u_param=np.nan, nopp=1.0,
+                        a=Decimal("2.5"), created_at=0, updated_at=0, fitting_datetime=0)
+        mpcOrbit.update(mpcOrbitUpdates)
+        row = dict(mockAlert["ssSource"])
+        row.update({f"MPCORB_{key}": value for key, value in mpcOrbit.items()})
+        return pd.DataFrame({key: [value] for key, value in row.items()})
+
+    def testToAlertValues(self):
+        """Test that nulls become None except in floating-point columns, and
+        that timestamps become UTC.
+        """
+        catalog = pd.DataFrame({
+            "nullableInt": pd.Series([1, pd.NA], dtype="Int64"),
+            "nullableFloat": pd.Series([2.0, pd.NA], dtype="Float64"),
+            "float": [3.0, np.nan],
+            "bool": pd.Series([True, pd.NA], dtype="boolean"),
+            "string": ["a", np.nan],
+            "time": pd.Series([0, pd.NaT], dtype="datetime64[ms]"),
+        })
+        values = _toAlertValues(catalog)
+
+        self.assertTrue((values.dtypes == object).all())
+        self.assertEqual(values["nullableInt"].tolist(), [1, None])
+        self.assertEqual(values["bool"].tolist(), [True, None])
+        self.assertEqual(values["string"].tolist(), ["a", None])
+        self.assertEqual(values["time"].tolist(),
+                         [pd.Timestamp(0, tz="UTC"), None])
+        for name in ["nullableFloat", "float"]:
+            self.assertEqual(values[name][0], catalog[name][0])
+            self.assertTrue(np.isnan(values[name][1]))
+
+    def testStandardizeMpcOrbits(self):
+        """Test converting MPCORB columns to the SDM mpc_orbits types.
+        """
+        packageAlerts = PackageAlertsTask()
+        ssSrc = packageAlerts.standardizeMpcOrbits(self._makeSsSrc(), self.apdbSchema)
+
+        self.assertEqual(ssSrc["MPCORB_u_param"].dtype, "Int32")
+        self.assertTrue(pd.isna(ssSrc["MPCORB_u_param"][0]))
+        self.assertEqual(ssSrc["MPCORB_nopp"].dtype, "Int32")
+        self.assertEqual(ssSrc["MPCORB_nopp"][0], 1)
+        self.assertEqual(ssSrc["MPCORB_a"].dtype, np.float64)
+        self.assertEqual(ssSrc["MPCORB_a"][0], 2.5)
+        self.assertEqual(ssSrc["MPCORB_id"][0], 0)
+        # Columns missing from the input are added as null.
+        self.assertTrue(np.isnan(ssSrc["MPCORB_earth_moid"][0]))
+        # Other columns are kept.
+        self.assertEqual(ssSrc["ssObjectId"][0], 1)
+
+        noOrbits = pd.DataFrame({"diaSourceId": [1]})
+        self.assertIs(packageAlerts.standardizeMpcOrbits(noOrbits, None), noOrbits)
+
+    def testStandardizeMpcOrbitsInvalid(self):
+        """Test that values that do not fit the schema type raise.
+        """
+        packageAlerts = PackageAlertsTask()
+        for name, value in [("u_param", np.int64(-2**63)), ("nopp", 1.5)]:
+            with self.subTest(name=name):
+                with self.assertRaisesRegex(ValueError, name):
+                    packageAlerts.standardizeMpcOrbits(self._makeSsSrc(**{name: value}), self.apdbSchema)
+        with self.assertRaisesRegex(ValueError, "mpc_orbits"):
+            packageAlerts.standardizeMpcOrbits(self._makeSsSrc(), None)
+
+    def testSerializeStandardizedMpcOrbits(self):
+        """Test that an alert built from standardized MPCORB columns
+        serializes, with nulls as null.
+        """
+        packageAlerts = PackageAlertsTask()
+        ssSrc = packageAlerts.standardizeMpcOrbits(self._makeSsSrc(), self.apdbSchema)
+        ssSrc = _toAlertValues(ssSrc.set_index("diaSourceId"))
+        ssSource = ssSrc.loc[[1]].to_dict("records")[0]
+        diaSource = pd.Series(mock_alert(1)["diaSource"], dtype=object)
+        alert = packageAlerts.makeAlertDict(1, "", "", diaSource, None, None, None,
+                                            None, None, None, ssSource=ssSource)
+
+        mpcOrbit = _deserialize_alert(packageAlerts._serializeAlert(alert))["mpc_orbits"]
+        self.assertIsNone(mpcOrbit["u_param"])
+        self.assertTrue(np.isnan(mpcOrbit["earth_moid"]))
+        self.assertEqual(mpcOrbit["nopp"], 1)
+        self.assertEqual(mpcOrbit["a"], 2.5)
+        self.assertEqual(mpcOrbit["created_at"], datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc))
 
     def testCutoutRotpa(self):
         """Test that the ROTPA header keyword matches the boresightRotAngle from visitInfo.

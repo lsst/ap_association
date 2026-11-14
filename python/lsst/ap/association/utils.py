@@ -22,10 +22,12 @@
 """Utilities for working with the APDB.
 """
 __all__ = ("getMidpointFromTimespan", "makeEmptyForcedSourceTable", "getRegion", "paddedRegion",
-           "readSchemaFromApdb")
+           "readSchemaFromApdb", "readMpcOrbitsSchema")
 
 
 import math
+
+import felis.datamodel
 import pandas as pd
 
 from lsst.daf.butler import Timespan
@@ -33,7 +35,7 @@ from lsst.dax.apdb import Apdb, ApdbTables, schema_model
 import lsst.geom
 import lsst.sphgeom
 
-from lsst.pipe.tasks.schemaUtils import convertDataFrameToSdmSchema
+from lsst.pipe.tasks.schemaUtils import convertDataFrameToSdmSchema, readSdmSchemaFile
 
 
 def readSchemaFromApdb(apdb: Apdb) -> dict[str, schema_model.Table | None]:
@@ -50,6 +52,26 @@ def readSchemaFromApdb(apdb: Apdb) -> dict[str, schema_model.Table | None]:
         A dict of the schemas in the given table defined in the specified file.
     """
     return {table.table_name(): apdb.tableDef(table) for table in ApdbTables}
+
+
+def readMpcOrbitsSchema(apdb: Apdb) -> felis.datamodel.Table | None:
+    """Read the ``mpc_orbits`` table schema from the schema file of an APDB.
+
+    This needs a special read function, since the APDB does not store
+    ``mpc_orbits`` and `readSchemaFromApdb` can't return it.
+
+    Parameters
+    ----------
+    apdb : `lsst.dax.apdb.Apdb`
+        AP database connection object.
+
+    Returns
+    -------
+    table : `felis.datamodel.Table` or `None`
+        Schema of the ``mpc_orbits`` table, or `None` if the APDB schema file
+        does not define it.
+    """
+    return readSdmSchemaFile(apdb.getConfig().schema_file).get("mpc_orbits")
 
 
 def getMidpointFromTimespan(timespan, allowUnbounded=True):
