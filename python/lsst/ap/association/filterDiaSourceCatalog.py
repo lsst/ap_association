@@ -110,7 +110,8 @@ class FilterDiaSourceCatalogConfig(
         default=[
             "slot_Centroid_flag",
             "base_PixelFlags_flag_crCenter",
-            "base_PixelFlags_flag_high_varianceCenterAll"
+            "base_PixelFlags_flag_high_varianceCenterAll",
+            "base_PixelFlags_flag_rejected_templateCenter",
         ],
         doc="List of flags which cause a source to be removed.",
     )
