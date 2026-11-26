@@ -64,6 +64,9 @@ class TestFilterDiaSourceCatalogTask(unittest.TestCase):
                         "and interpolated in this object's center.")
         schema.addField("base_PixelFlags_flag_high_varianceCenterAll", type="Flag", doc="The object was "
                         "detected in a region with exceptionally high template variance.")
+        schema.addField("base_PixelFlags_flag_rejected_templateCenter", type="Flag",
+                        doc="The object's center is on a template source where the template PSF"
+                        " differs from a smooth model of its spatial variation.")
         schema.addField("fakeBadFlag", type="Flag", doc="A fake flag to test a badFlagList longer "
                         "than one item.")
         schema.addField("ip_diffim_forced_PsfFlux_instFlux", type="F",
